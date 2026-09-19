@@ -1,0 +1,81 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 18
+VisualStudioVersion = 18.0.11217.181
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}"
+	ProjectSection(SolutionItems) = preProject
+		ReadMe.txt = ReadMe.txt
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "IDP", "IDP", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Shell", "Shell", "{75ED99DE-4C56-42B1-9EBB-A8419F6BDCF9}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Microservices", "Microservices", "{CBC6E967-2CC1-4ED3-876F-E9B0FC408F4C}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "CustomerKyc", "CustomerKyc", "{E389E252-8CEB-4090-AEF4-BC357626440E}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Common", "Common", "{9EC15191-6AEF-4D48-970D-94423699D05B}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "CustomerOnboarding", "CustomerOnboarding", "{C01F5E38-53DB-4738-A5EE-18506BC9AF74}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Scripts", "Scripts", "{4569E0B8-050F-4FC4-864D-21BD5191BF6D}"
+	ProjectSection(SolutionItems) = preProject
+		CleanThisLoctionForFreshCopyFromZIPFile.ps1 = CleanThisLoctionForFreshCopyFromZIPFile.ps1
+		CompileAndExportBFFClients.ps1 = CompileAndExportBFFClients.ps1
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Accounts", "Accounts", "{E9F5595F-7192-4693-B3B7-7685A5B64DA6}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Payments", "Payments", "{4D51713E-8EE7-472D-B4A8-DEA272422284}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EnterpriseWebPlatform.BSS.BFFWeb", "src\Shell\EnterpriseWebPlatform.BSS.BFFWeb.csproj", "{6D451711-D6CE-E9AE-3E26-E55355E02AB6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EnterpriseWebPlatform.IdentityServer", "src\IDP\EnterpriseWebPlatform.IdentityServer.csproj", "{862B5F77-0E62-584A-90F4-E4FB1FFD44F2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EnterpriseWebPlatform.Common.Landscape", "src\Common\Landscape\EnterpriseWebPlatform.Common.Landscape.csproj", "{A0F127D5-3AA5-123F-6CBA-1CAFD0BB51FC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EnterpriseWebPlatform.Common.WebUtilties", "src\Common\WebUtilities\EnterpriseWebPlatform.Common.WebUtilties.csproj", "{E0285AFC-E93E-0747-7724-71C0772496D2}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{6D451711-D6CE-E9AE-3E26-E55355E02AB6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6D451711-D6CE-E9AE-3E26-E55355E02AB6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6D451711-D6CE-E9AE-3E26-E55355E02AB6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6D451711-D6CE-E9AE-3E26-E55355E02AB6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{862B5F77-0E62-584A-90F4-E4FB1FFD44F2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{862B5F77-0E62-584A-90F4-E4FB1FFD44F2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{862B5F77-0E62-584A-90F4-E4FB1FFD44F2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{862B5F77-0E62-584A-90F4-E4FB1FFD44F2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A0F127D5-3AA5-123F-6CBA-1CAFD0BB51FC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A0F127D5-3AA5-123F-6CBA-1CAFD0BB51FC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A0F127D5-3AA5-123F-6CBA-1CAFD0BB51FC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A0F127D5-3AA5-123F-6CBA-1CAFD0BB51FC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E0285AFC-E93E-0747-7724-71C0772496D2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E0285AFC-E93E-0747-7724-71C0772496D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E0285AFC-E93E-0747-7724-71C0772496D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E0285AFC-E93E-0747-7724-71C0772496D2}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{E389E252-8CEB-4090-AEF4-BC357626440E} = {CBC6E967-2CC1-4ED3-876F-E9B0FC408F4C}
+		{C01F5E38-53DB-4738-A5EE-18506BC9AF74} = {CBC6E967-2CC1-4ED3-876F-E9B0FC408F4C}
+		{4569E0B8-050F-4FC4-864D-21BD5191BF6D} = {8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}
+		{E9F5595F-7192-4693-B3B7-7685A5B64DA6} = {CBC6E967-2CC1-4ED3-876F-E9B0FC408F4C}
+		{4D51713E-8EE7-472D-B4A8-DEA272422284} = {CBC6E967-2CC1-4ED3-876F-E9B0FC408F4C}
+		{6D451711-D6CE-E9AE-3E26-E55355E02AB6} = {75ED99DE-4C56-42B1-9EBB-A8419F6BDCF9}
+		{862B5F77-0E62-584A-90F4-E4FB1FFD44F2} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{A0F127D5-3AA5-123F-6CBA-1CAFD0BB51FC} = {9EC15191-6AEF-4D48-970D-94423699D05B}
+		{E0285AFC-E93E-0747-7724-71C0772496D2} = {9EC15191-6AEF-4D48-970D-94423699D05B}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {87247D15-4A26-4F71-9688-4EB6CB5E41CE}
+	EndGlobalSection
+EndGlobal

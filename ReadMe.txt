@@ -1,0 +1,234 @@
+0) This project requires dedicated hostnames for the individual tiers of the solution.
+
+	This is important because browser cookies are scoped by hostname, not by port. When all applications use localhost on different ports, cookies created by the different applications can be sent together with requests to other localhost applications. Over time, authentication, correlation, nonce, session, and BFF cookies can accumulate in the request's Cookie header.
+
+	In our local development setup, this resulted in the request headers becoming large enough to cause:
+
+		HTTP 400 - Request Too Long
+
+	with the message:
+
+		The size of the request headers is too long.
+
+	Therefore, each major tier is given its own dedicated hostname, while all hostnames still resolve to 127.0.0.1. This gives each application an independent browser cookie namespace and prevents cookie collisions between the tiers.
+	
+	Please follow the steps mentioned below to accomplish this:
+
+	a) Go to the folder `C:\Windows\System32\drivers\etc\`, and open the `hosts` file in Notepad++.
+	
+	b) Ensure that you add the following hostname mappings to 127.0.0.1 for each tier in this solution at the end of the `hosts` file.
+		
+		127.0.0.1    idp.dev.localhost
+		127.0.0.1    shell.dev.localhost
+		127.0.0.1    customer.dev.localhost
+		127.0.0.1    kyc.dev.localhost
+		127.0.0.1    accounts.dev.localhost
+		127.0.0.1    payments.dev.localhost
+
+		127.0.0.1    customer-api.dev.localhost
+		127.0.0.1    kyc-api.dev.localhost
+		127.0.0.1    accounts-api.dev.localhost
+		127.0.0.1    payments-api.dev.localhost
+
+	c) Test them using ping commands. Each hostname should resolve to 127.0.0.1 and return a valid ping response.
+	
+		ping idp.dev.localhost
+		ping shell.dev.localhost
+
+		ping customer.dev.localhost
+		ping customer-api.dev.localhost
+
+		ping kyc.dev.localhost
+		ping kyc-api.dev.localhost
+
+		ping accounts.dev.localhost
+		ping accounts-api.dev.localhost
+
+		ping payments.dev.localhost
+		ping payments-api.dev.localhost
+		
+	d) The new URLs for various tiers are going to be like this:
+	
+		Shell BFF				-		https://shell.dev.localhost:44367
+		Shell SPA				-		Not there, as `pnpm run export` creates the `out` folder.		
+		
+		IDP						-		https://idp.dev.localhost:44392	
+		
+		Customer Onboarding BFF	-		https://customer.dev.localhost:44311
+		Customer Onboarding SPA	-		Not there, as `pnpm run export` creates the `out` folder.
+		Customer Onboarding API	-		https://customer-api.dev.localhost:44363
+		
+		Customer KYC BFF		-		https://kyc.dev.localhost:33800
+		Customer KYC SPA		-		Not there, as `pnpm run export` creates the `out` folder.
+		Customer KYC API		-		https://kyc-api.dev.localhost:44305
+		
+		Accounts BFF			-		https://accounts.dev.localhost:45456
+		Accounts SPA			-		Not there, as `pnpm run export` creates the `out` folder.
+		Accounts API			-		https://accounts-api.dev.localhost:48486
+		
+		Payments BFF			-		https://payments.dev.localhost:44388
+		Payments SPA			-		NextJS - present, add URL here later.
+		Payments API			-		https://payments-api.dev.localhost:44488
+		
+	e) Also, in order for HTTPS communication between the various tiers to work correctly, please ensure that the ASP.NET Core applications are run using the Kestrel server (i.e., NOT IIS Express). Please use the "https" Project profile in launchSettings.json for these projects:
+
+		1. Shell BFF
+		2. Customer Onboarding BFF & API
+		3. Customer KYC BFF & API
+		4. Accounts BFF & API
+		5. Payments API
+
+	   The "https" Project profile uses Kestrel and the ASP.NET Core HTTPS development certificate, which includes *.dev.localhost in its Subject Alternative Names (SANs).
+
+	   The Payments MFE and Payments BFF are going to be using NextJS and NestJS respectively, so their HTTPS configuration is different.
+
+1) Technology Stack:
+
+	a) Duende IdentityServer 8 based IDP that runs on ASP.NET Core 10.
+		- Has its own SQLite-based user database (see the .db file under `UserDB` folder in the IDP project).
+		- Supports OpenID Connect and OAuth 2.1 protocols.
+		- Grant type: Authorization Code Flow with PKCE.
+		- Supports refresh tokens for Identity Tokens that are about to expire.
+		- Supports role-based access control (R-BAC) by embedding role claims onto the ID Token and Access Token.
+		- Supports User Consent page.
+
+	b) Master application: Platform Administration System (PAS), which is a Shell SPA Frontend
+		- Runs on Next.js 14 with app directory structure.
+		- Uses ASP.NET Core 10 for "Backend for Frontend" (BFF).
+
+	c) Microservices:
+
+		1) Products Microservice
+			- Frontend:
+				- SPA: Next.js 14 with app directory structure.
+				- BFF: ASP.NET Core 10 with REST edge APIs.
+			- Backend / App Tier:
+				- API: ASP.NET Core 10 with REST response.
+
+		2) Orders Microservice
+			- Frontend: 
+				- SPA: Next.js 14 with app directory structure.
+				- BFF: Nest.js 10 with REST edge APIs.
+			- Backend / App Tier:
+				- API: ASP.NET Core 10 with GraphQL response.
+
+		3) Payments Microservice (yet to be implemented)
+			- Frontend:
+				- SPA: React.js 18.
+				- BFF: Python / Flask BFF server with REST response.
+			- Backend / App Tier:
+				- API: Nest.js 10 with GraphQL response.
+
+2) What to do after cloning the repository:
+	a) Ensure that you have exited Visual Studio 2026 and Visual Studio Code IDEs.
+
+	b) Ensure that the Certificates of Orders micro-frontend are imported to Windows 11 Certificate store. Steps:
+
+		1) Go to ~\BackendForFrontEnd_V2\src\Microservices\Orders\BFF.Web\certs\ location.
+
+		2) Run the `certlm.msc` snap-in to import certificates on the "local machine" (not per-user, but for the system).
+		
+		3) Expand "Trusted Root Certification Authorities" and click the "Certificates" folder underneath it. This is the store Windows (and anything that defers to Windows, like Edge and Opera) checks when validating a server's TLS certificate.
+
+		4) Right-click the Certificates folder → All Tasks → Import.
+		
+		5) Follow the wizard: browse and pick Microservice.Orders.CA.crt. In the "next" screen, select the "Place all certificates in the following store" option, and ensure that the Certificate Store Name is "Trusted Root Certification Authorities" in the field below the radio button.
+
+		6) Finish the wizard — Windows will show a security warning asking you to confirm you trust this CA; confirm it.
+
+	c) Open the PS1 script file "CompileAndExportBFFClients.ps1" at repo root folder inside PowerShell ISE and run it. This will:
+		1) trigger running the "npm install" command for:
+			- PAS Shell BFF Frontend (Next.js)
+			- Products Microservice SPA Frontend (Next.js)
+			- Orders Microservice SPA Frontend (Next.js)
+			- Orders Microservice BFF Server (Nest.js)
+
+		2) trigger the "Build and export" task by running the command "npm run export" on the NextJS SPA projects, which builds static files in the "out" folder under the "app" folder under their respective host ASP.NET Core BFF projects.
+			- PAS Shell SPA Frontend
+			- Products Microservice SPA Frontend.
+
+	d) Now, it is time to run the "Orders" SPA, BFF and App!
+		- Invoke a Visual Studio Code IDE at "Orders" Microservice BFF.Web folder:
+		- Open Terminal 1 at location "BFF.Web", and run the ".\buildnow.bat" to run the Nest.js BFF application.
+		- Open Terminal 2 at location "BFF.Web\client-app" and run ".\buildnow.bat" to run the NextJS SPA application.
+
+	e) Open the "FW.PAS.sln" solution file in Visual Studio 2025 IDE.
+
+		- Right-click on the solution node in the Solution Explorer and select "Restore NuGet Packages".
+		- Right-click on the solution node in the Solution Explorer and choose "Configure Startup Projects...", and ensure that "Multiple startup projects" is selected with the following order:
+
+			1) IDP - Start - self-hosted.
+			2) Products Microservice API - Start - IIS Express.
+			3) Orders Microservice API - Start - IIS Express.
+			4) Products Microservice BFF Frontend - Start - IIS Express.
+			5) (Note! The Orders Microservice BFF Frontend is a Nest.js application that must be started separately in VS Code, which you are doing anyway above (- Right-click step)).
+			6) PAS Shell BFF Frontend - Start - IIS Express.
+
+	f) Run the "FW.PAS.sln" solution in Debug mode (F5).
+
+		- Since the IDP project is "self-hosted", a console window will open for the IDP project, showing logs.
+		- The IDP shall be running at the default Duende IdentityServer port, which is 44392 (https://localhost:44392).
+
+	g) Open the web browser, and ensure that cookies and history ("from all time") are cleared before starting the testing.
+
+	h) Navigate to the URL of the PAS Shell BFF Frontend application at "https://localhost:44367". The expected behavior:
+
+		- Since "authentication cookie" is not present in the request from the web browser, the Shell BFF server will redirect the browser to the IDP login page at "idp.dev.localhost:44392".
+		- The browser gets a 302 - Redirect response from the Shell BFF server, and navigates to the IDP login page.
+		- The user is presented with the IDP login page.
+		- The user enters the credentials for "JuliaRob" user:
+			- Username: JuliaRob
+			- Password: JuliaRob123
+		- After successful login, the IDP presents the "consent" page to the user, asking for consent to share profile data with the Shell BFF application.
+		- After giving consent, the IDP redirects the browser back to the Shell BFF's "callback" endpoint with an authorization code.
+		- The browser gets a 302 - Redirect response from the IDP, and navigates to the Shell BFF's "callback" endpoint.
+		- The browser navigates to the Shell BFF's "callback" endpoint with the "authorization code" in the query string (which is PKCE protected).
+		- The Shell BFF server exchanges the authorization code for ID Token and Access Token from the IDP.
+		- Once the ID and Access Tokens are received, the Shell BFF extracts the "claims" and "scopes" from the tokens, and creates an authentication cookie for the user.
+		- The Shell BFF server returns a 200 - OK with the contents of the landing page along with the authentication cookie in the response.
+		- The browser displays the landing page of the Shell BFF Frontend application.
+			* In all subsequent requests from the browser to the Shell BFF server, the authentication cookie is sent along with the request, and the user is authenticated and authorized based on the roles present in the claims.
+		- The left-pane of the Shell BFF Frontend application shows the available Microservices and Management Areas based on the user's roles.
+		- When clicked on a menu item, a JavaScript in the Shell BFF application sets an iFrame's "src" attribute to the URL of the respective Microservice BFF Frontend application.
+			* This Microservice BFF Frontend URL will try to perform a silent authentication using the existing session at the IDP (since the IDP cookie is also present in the browser).
+		- Once the silent authentication is successful, the Microservice BFF Frontend application creates its own authentication cookie for the user, and presents the page requested in the iFrame.
+
+	i) The following are the logout behavior:
+		- When the user clicks on the "Sign Out" button in the Shell BFF Frontend application, the Shell BFF server clears its authentication cookie, and redirects the browser to the IDP's "end session" endpoint.
+		- Before doing the above step, the Shell BFF server also sends a back-channel logout request to all involved Microservice BFF Frontend applications to do a "silent-logout, and clear their authentication cookies for the user.
+		- The IDP clears its session cookie, and presents a logout confirmation page to the user.
+		- After confirming logout, the IDP redirects the browser to the login page.
+
+3) Final touches required (not urgent, only after all modules are implemented):
+   - Teraform scripts must be written to provision all required infrastructure in a cloud provider (e.g., Azure, AWS, GCP).
+
+4) Troubleshooting:
+	* Unresponsive modules (such as, the Products links, when clicked, take a long time, but nothing gets rendered inside the iFrmae):
+
+		- Come out of Visual Studio 2026.
+		- Go to the repository root folder.
+		- Locate the ".vs" folder over there.
+		- SHIFT+Delete that folder.
+		- Invoke the FW.PAS.sln solution in Visual Studio 2026 again.
+			! The "Configure Startup projects ..." would have changed by now.
+		- Right-click on the solution node in Solution Explorer, and go to "Configure Startup Projects ... " menu.
+		- Re-specify the dependency order of projects to be started (just click on the appropriate radio button).
+		- Clean the solution.
+		- Run the solution.
+
+	* "Orders" Microservice API not contactable:
+
+		- The "NestJS" BFF type-script code takes the "Orders Microservice API" URL from the .env file.
+		- However, it has been observed that even though the "launchSettings.json" file of the "Orders" Microservice GraphQL API is set to a particular HTTPS port number,
+		  while running the Visual Studio 2026 solution "FW.PAS.sln", Visual Studio 2026 IDE changes the port to some other number without a specific reason.
+		- This will cause the "NestJS" BFF of the "Orders" Microservice web frontend to result in "404 - Not Found" response from the Orders Microservice API.
+		- What to do in this context:
+			1) Check what is the new port number in the launchSettings.json file of the "Orders" Microservice API. Note down this port number.
+			2) Come to the .env file of the "NestJS" BFF of the "Orders" Microservice web front-end, and change accordingly (the last line in the .env file - `ORDERS_MICROSERVICE_API_URL=https://localhost:44380`).
+			3) If the NestJS BFF is already running in a Terminal (under .\BFF.Web\ folder), CTRL+C it, and do a rerun by entering ".\buildnow.bat".
+			4) Test the Orders Microservice menu item in the PAS application.
+
+4) Important Gotchas and relevant URLs:
+	- Cookie names of BFF projects must begin with "__". If not, there can be issues with signing in and out from Duende IDP server.
+		- Shell BFF UI cookie name: "__PAS-Shell-Host-bff"
+		- Products BFF UI cookie name: "__PAS-Microservice-Products-Host-bff"
