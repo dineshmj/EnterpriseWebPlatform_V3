@@ -5,6 +5,7 @@
 /.vs
 /src/BFF.Web/bin/Debug/net8.0
 /src/BFF.Web/obj
+/src/IDP/tempkey.jwk
 /src/IdentityServer/bin/Debug/net8.0
 /src/IdentityServer/obj
 /src/Microservices/Orders.API/bin/Debug/net8.0
