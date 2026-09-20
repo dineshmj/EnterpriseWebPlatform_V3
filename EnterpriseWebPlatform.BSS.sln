@@ -38,6 +38,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EnterpriseWebPlatform.Commo
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EnterpriseWebPlatform.Common.WebUtilties", "src\Common\WebUtilities\EnterpriseWebPlatform.Common.WebUtilties.csproj", "{E0285AFC-E93E-0747-7724-71C0772496D2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Api", "src\Microservices\CustomerOnboarding\API\EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Api.csproj", "{DB42142B-B1B0-AF7D-635D-E19710480ADD}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -60,6 +62,10 @@ Global
 		{E0285AFC-E93E-0747-7724-71C0772496D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E0285AFC-E93E-0747-7724-71C0772496D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E0285AFC-E93E-0747-7724-71C0772496D2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DB42142B-B1B0-AF7D-635D-E19710480ADD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DB42142B-B1B0-AF7D-635D-E19710480ADD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DB42142B-B1B0-AF7D-635D-E19710480ADD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DB42142B-B1B0-AF7D-635D-E19710480ADD}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -74,6 +80,7 @@ Global
 		{862B5F77-0E62-584A-90F4-E4FB1FFD44F2} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 		{A0F127D5-3AA5-123F-6CBA-1CAFD0BB51FC} = {9EC15191-6AEF-4D48-970D-94423699D05B}
 		{E0285AFC-E93E-0747-7724-71C0772496D2} = {9EC15191-6AEF-4D48-970D-94423699D05B}
+		{DB42142B-B1B0-AF7D-635D-E19710480ADD} = {C01F5E38-53DB-4738-A5EE-18506BC9AF74}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {87247D15-4A26-4F71-9688-4EB6CB5E41CE}

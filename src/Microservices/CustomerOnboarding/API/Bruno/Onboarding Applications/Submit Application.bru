@@ -1,0 +1,21 @@
+meta {
+  name: Submit Onboarding Application
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{customer_api_base_url}}/v1/onboarding/applications/{{application_id}}/submit
+  body: none
+  auth: oauth2
+}
+
+headers {
+  Accept: application/json
+}
+
+tests {
+  test("Application submission returns HTTP 200", function() {
+    expect(res.status).to.equal(200);
+  });
+}

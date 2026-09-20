@@ -1,0 +1,67 @@
+meta {
+  name: Customer Onboarding API
+  type: http
+  seq: 1
+}
+
+auth {
+  mode: oauth2
+}
+
+auth:oauth2 {
+  grant_type: authorization_code
+  callback_url: bruno://auth
+  authorization_url: {{idp_base_url}}/connect/authorize
+  access_token_url: {{idp_base_url}}/connect/token
+  refresh_token_url: {{idp_base_url}}/connect/token
+  client_id: {{idp_client_id}}
+  client_secret:
+  scope: {{idp_scope}}
+  state:
+  pkce: true
+  credentials_placement: body
+  credentials_id: customer_onboarding
+  token_placement: header
+  token_header_prefix: Bearer
+  auto_fetch_token: true
+  auto_refresh_token: true
+}
+
+docs {
+  # Customer Onboarding API
+
+  V3 Customer Onboarding bounded-context API.
+
+  ## Authentication
+
+  The collection uses native Bruno OAuth 2.0 Authorization Code + PKCE.
+
+  Bruno opens the Duende IdentityServer authorization endpoint, obtains an
+  authorization code, performs the PKCE token exchange, and attaches the
+  resulting access token as a Bearer token.
+
+  No API endpoint in this collection bypasses `[Authorize]`.
+
+  ## Local endpoints
+
+  API:
+  `https://customer-api.dev.localhost:44363`
+
+  IdentityServer:
+  `https://idp.dev.localhost:44392`
+
+  ## Test persona
+
+  The intended initial test persona is the Customer Service Agent:
+
+  `sophie.cs`
+
+  The password is deliberately not stored in this collection. Bruno's native
+  OAuth browser flow presents the IdentityServer login page and the tester
+  enters the credential there.
+
+  ## OAuth client
+
+  `idp_client_id` and `idp_scope` are environment values because the exact
+  client registration remains owned by the Duende IdentityServer configuration.
+}

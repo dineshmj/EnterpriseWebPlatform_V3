@@ -1,0 +1,33 @@
+meta {
+  name: Create Customer
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{customer_api_base_url}}/v1/customers
+  body: json
+  auth: oauth2
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "firstName": "Bruno",
+    "lastName": "Test Customer",
+    "email": "bruno.test@example.local",
+    "phoneNumber": "+919900000000",
+    "customerType": 0,
+    "branchId": 1
+  }
+}
+
+tests {
+  test("Customer creation returns HTTP 201", function() {
+    expect(res.status).to.equal(201);
+  });
+}

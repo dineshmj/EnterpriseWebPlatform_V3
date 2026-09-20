@@ -1,0 +1,21 @@
+meta {
+  name: Get Onboarding Applications
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{customer_api_base_url}}/v1/onboarding/applications
+  body: none
+  auth: oauth2
+}
+
+headers {
+  Accept: application/json
+}
+
+tests {
+  test("HTTP status is successful", function() {
+    expect(res.status).to.be.oneOf([200, 204]);
+  });
+}

@@ -1,0 +1,28 @@
+meta {
+  name: Create Onboarding Application
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{customer_api_base_url}}/v1/onboarding/applications
+  body: json
+  auth: oauth2
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "customerId": {{customer_id}}
+  }
+}
+
+tests {
+  test("Onboarding application creation returns HTTP 201", function() {
+    expect(res.status).to.equal(201);
+  });
+}

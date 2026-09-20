@@ -1,0 +1,41 @@
+meta {
+  name: Get Customers
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{customer_api_base_url}}/v1/customers
+  body: none
+  auth: oauth2
+}
+
+headers {
+  Accept: application/json
+}
+
+auth:oauth2 {
+  grant_type: authorization_code
+  callback_url: 
+  authorization_url: https://idp.dev.localhost:44392/connect/authorize
+  access_token_url: https://idp.dev.localhost:44392/connect/token
+  refresh_token_url: https://idp.dev.localhost:44392/connect/token
+  client_id: BSS.ApiTesting.Bruno.ClientID
+  client_secret: 
+  scope: openid profile email roles
+  state: 
+  pkce: true
+  credentials_placement: body
+  credentials_id: credentials
+  token_source: access_token
+  token_placement: header
+  token_header_prefix: Bearer
+  auto_fetch_token: true
+  auto_refresh_token: false
+}
+
+tests {
+  test("HTTP status is successful", function() {
+    expect(res.status).to.be.oneOf([200, 204]);
+  });
+}

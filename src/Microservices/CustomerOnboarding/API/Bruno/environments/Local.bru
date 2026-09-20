@@ -1,0 +1,15 @@
+vars {
+  customer_api_base_url: https://customer-api.dev.localhost:44363
+  idp_base_url: https://idp.dev.localhost:44392
+
+  # Set these to the exact Duende client registration used for the BSS user flow.
+  # Example only; do not assume this value is the real client ID.
+  idp_client_id: REPLACE_WITH_BSS_CLIENT_ID
+
+  # Keep this aligned with the scopes actually granted by the Duende client.
+  idp_scope: openid profile customer.read customer.write onboarding.read onboarding.write
+}
+
+vars:secret [
+  idp_client_id
+]

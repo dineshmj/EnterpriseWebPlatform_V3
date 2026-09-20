@@ -607,3 +607,464 @@
 	- Add Terraform scripts to provision the required cloud infrastructure.
 	- Add production secret-management integration.
 	- Add deployment-specific configuration for Azure/AWS/GCP as appropriate.
+
+13) Bruno API Testing
+    ------------------
+
+    This section explains how to configure Bruno for testing the Microservice
+    API endpoints using the OAuth 2.0 Authorization Code + PKCE flow provided
+    by EnterpriseWebPlatform.IdentityServer.
+
+
+    a) Register a dedicated Bruno client in IdentityServer
+
+       Ensure that IdentityServer's Config.cs has one dedicated public client
+       registered for Bruno.
+
+       Client ID:
+
+           BSS.ApiTesting.Bruno.ClientID
+
+       The client should be configured as follows:
+
+           AllowedGrantTypes:
+               Authorization Code
+
+           RequirePkce:
+               true
+
+           RequireClientSecret:
+               false
+
+           RedirectUris:
+               http://127.0.0.1:3000/callback
+
+       The client should be allowed to request the required identity scopes:
+
+           openid
+           profile
+           email
+           roles
+
+       and the Microservice API scopes that are required for testing.
+
+       For Customer Onboarding:
+
+           customer-onboarding.read
+           customer-onboarding.write
+
+       WHY:
+       Bruno is treated as a public OAuth client. Authorization Code + PKCE
+       avoids the need to store a client secret in the developer workstation.
+
+       IF NOT:
+       IdentityServer will reject the OAuth authorization request because the
+       client is unknown, disabled, or not permitted to use the requested
+       grant/scopes.
+
+
+    b) Configure OAuth 2.0 in Bruno
+
+       In Bruno, configure the request/collection to use:
+
+           Grant Type:
+               Authorization Code
+
+           Authorization URL:
+               https://idp.dev.localhost:44392/connect/authorize
+
+           Access Token URL:
+               https://idp.dev.localhost:44392/connect/token
+
+           Client ID:
+               BSS.ApiTesting.Bruno.ClientID
+
+           Client Secret:
+               Leave empty
+
+           Use PKCE:
+               Enabled
+
+           Callback URL:
+               http://127.0.0.1:3000/callback
+
+       The access token should be added to the request as:
+
+           Authorization: Bearer <access-token>
+
+
+    c) Configure the OAuth Scope in Bruno
+
+       This is an important Bruno/IdentityServer distinction.
+
+       IdentityServer's AllowedScopes determine which scopes the Bruno client
+       IS ALLOWED TO REQUEST.
+
+       Bruno's OAuth "Scope" field determines which scopes Bruno ACTUALLY
+       REQUESTS during the authorization flow.
+
+       For example, for testing the Customer Onboarding GET endpoints, the
+       Bruno Scope must explicitly contain:
+
+           openid profile email roles customer-onboarding.read
+
+       For a write operation, request the corresponding write scope:
+
+           openid profile email roles customer-onboarding.write
+
+       Do not assume that adding a scope to IdentityServer's AllowedScopes
+       automatically causes that scope to appear in the access token.
+
+       During testing, the initial token contained only:
+
+           openid
+           profile
+           email
+           roles
+
+       because Bruno was requesting only those scopes.
+
+       The token therefore did not contain:
+
+           customer-onboarding.read
+
+       After adding customer-onboarding.read to Bruno's OAuth Scope and
+       obtaining a new token, the access token contained the expected API
+       scope.
+
+
+    d) Clear Bruno's OAuth token cache after configuration changes
+
+       Bruno caches OAuth access tokens.
+
+       Whenever the OAuth configuration, requested scopes, IdentityServer
+       client configuration, or related IdentityServer configuration changes,
+       use Bruno's:
+
+           Clear Cache
+
+       option before obtaining a new token.
+
+       Then authenticate again and obtain a fresh access token.
+
+       WHY:
+       An already-issued access token does not change when IdentityServer
+       configuration changes.
+
+
+    e) Verify the access token before troubleshooting the API
+
+       Decode the JWT access token and verify the important claims.
+
+       For Customer Onboarding API testing, the token should contain:
+
+           iss:
+               https://idp.dev.localhost:44392
+
+           aud:
+               customer-onboarding-api
+
+           scope:
+               customer-onboarding.read
+
+       When testing with the Sophie user, the token should also contain the
+       expected identity information, including the user's role.
+
+       This makes it possible to distinguish an OAuth/IdentityServer/Bruno
+       problem from an API authentication or authorization problem.
+
+
+    f) OAuth callback - Bruno hosted callback
+
+       Bruno can use its hosted OAuth callback:
+
+           https://oauth.usebruno.com/callback
+
+       During our V3 testing, the browser successfully completed the
+       IdentityServer login and redirected to the hosted callback, but remained
+       on:
+
+           Redirecting to Bruno...
+
+       and did not return control to Bruno.
+
+       Browser developer tools did not show useful network activity while the
+       page remained in this state.
+
+       Therefore, for local development we moved to Bruno's local callback
+       server.
+
+
+    g) Local OAuth callback server
+
+       Start Bruno's OAuth callback server from a terminal:
+
+           npx @usebruno/oauth2-callback-server --port 3000
+
+       The installed callback server reported:
+
+           OAuth2 callback server running at
+           http://127.0.0.1:3000/callback
+
+       Therefore, the IdentityServer client's RedirectUris must contain the
+       exact URI reported by the callback server:
+
+           http://127.0.0.1:3000/callback
+
+       IMPORTANT:
+       The callback path can differ between Bruno documentation and the
+       installed callback-server package/version.
+
+       Always use the endpoint reported by the callback server that is
+       actually running.
+
+       During this testing session, the actual endpoint was:
+
+           /callback
+
+       NOT:
+
+           /oauth/callback
+
+
+    h) Do not use Bruno's custom protocol as the IdentityServer Redirect URI
+
+       Bruno uses a custom protocol internally:
+
+           bruno://app/oauth2/callback
+
+       Manual testing confirmed that this protocol was correctly registered
+       with Windows. Opening the URI caused Edge to ask whether Bruno should
+       be opened, and selecting "Open" launched Bruno.
+
+       However, this does NOT mean that the IdentityServer client RedirectUri
+       should simply be changed to:
+
+           bruno://app/oauth2/callback
+
+       The hosted/local callback mechanism is responsible for forwarding the
+       OAuth result back to Bruno.
+
+       For our local setup, use:
+
+           http://127.0.0.1:3000/callback
+
+
+    i) Bruno system browser vs embedded browser
+
+       Bruno provides an option:
+
+           Use system browser for OAuth
+
+       During testing, the system-browser flow reached the hosted callback but
+       remained at:
+
+           Redirecting to Bruno...
+
+       For local troubleshooting, disable:
+
+           Use system browser for OAuth
+
+       This allows Bruno's embedded browser to perform the complete OAuth flow:
+
+           Bruno
+             |
+             v
+           IdentityServer Login
+             |
+             v
+           Authentication
+             |
+             v
+           OAuth Consent (if enabled)
+             |
+             v
+           Callback
+             |
+             v
+           Bruno
+             |
+             v
+           API Request
+
+       This successfully completed the OAuth flow during V3 development.
+
+
+    j) IdentityServer consent
+
+       If the Bruno client has:
+
+           RequireConsent = true
+
+       the IdentityServer consent page is displayed during authentication.
+
+       This is useful for demonstrating the OAuth consent process.
+
+       For troubleshooting, RequireConsent can temporarily be set to false so
+       that successful authentication proceeds directly to the callback.
+
+       Consent configuration does not replace or bypass API authorization.
+
+
+    k) Use the correct test user
+
+       For Customer Onboarding Customer Read testing, use the demo user:
+
+           Username:
+               sophie.cs
+
+           Password:
+               sophie.cs@bss
+
+       Sophie represents the:
+
+           customer_service_agent
+
+       role.
+
+       When testing a specific Microservice endpoint, make sure that the
+       selected demo user's role is appropriate for the operation being tested.
+
+
+    l) Expected troubleshooting progression
+
+       During the initial Bruno setup, the following problems were encountered:
+
+       1. IdentityServer returned:
+
+              unauthorized_client
+              Unknown client or client not enabled
+
+          Cause:
+              The Bruno client had not yet been registered in IdentityServer.
+
+          Resolution:
+              Register BSS.ApiTesting.Bruno.ClientID.
+
+
+       2. Bruno/browser remained at:
+
+              Redirecting to Bruno...
+
+          Cause:
+              The hosted/system-browser callback did not return control to
+              Bruno during local development.
+
+          Resolution:
+              Use the local OAuth callback server and/or Bruno's embedded
+              browser.
+
+
+       3. The JWT did not contain:
+
+              customer-onboarding.read
+
+          Cause:
+              Bruno's OAuth Scope field did not request the API scope.
+
+          Resolution:
+              Explicitly add the required API scope to Bruno's Scope field and
+              clear Bruno's OAuth cache before obtaining a new token.
+
+
+       4. The API subsequently returned:
+
+              401 Unauthorized
+
+          At this point the API was receiving a token, but the token did not
+          yet represent the required Customer Onboarding API access.
+
+
+       5. After requesting customer-onboarding.read, the JWT contained:
+
+              aud:
+                  customer-onboarding-api
+
+              scope:
+                  customer-onboarding.read
+
+          The API authentication/scope portion of the flow was then working.
+
+
+       6. The API subsequently returned:
+
+              403 Forbidden
+
+          This indicated that authentication had succeeded but the authenticated
+          user did not satisfy the API's authorization requirements.
+
+          Testing with the appropriate Customer Onboarding demo user then
+          allowed the request to reach the controller.
+
+
+    m) Successful end-to-end Bruno flow
+
+       The final successful flow is:
+
+           Bruno
+             |
+             | Authorization Code + PKCE
+             v
+           IdentityServer
+             |
+             | Login as sophie.cs
+             v
+           OAuth authorization
+             |
+             | customer-onboarding.read
+             v
+           Access Token
+             |
+             +--> aud = customer-onboarding-api
+             |
+             +--> scope = customer-onboarding.read
+             |
+             +--> role = customer_service_agent
+             |
+             v
+           Customer Onboarding API
+             |
+             v
+           GET /v1/customers
+             |
+             v
+           CustomerController
+
+
+    n) General rule for future Microservice APIs
+
+       The same Bruno client can be used to test the other V3 Microservice APIs.
+
+       Only the requested API scope needs to change.
+
+       Examples:
+
+           Customer Onboarding:
+               customer-onboarding.read
+               customer-onboarding.write
+
+           Customer KYC:
+               customer-kyc.read
+               customer-kyc.write
+
+           Accounts:
+               accounts.read
+               accounts.write
+
+           Payments:
+               payments.read
+               payments.write
+
+       The corresponding API resource/audience must also be present in the
+       issued access token.
+
+       Therefore, when troubleshooting a new Microservice API, always verify:
+
+           1. Bruno client is registered.
+           2. Redirect URI matches exactly.
+           3. PKCE is enabled.
+           4. Bruno requests the required scope.
+           5. Bruno OAuth cache is cleared after configuration changes.
+           6. The access token contains the expected scope.
+           7. The access token contains the expected audience.
+           8. The appropriate demo user is being used.

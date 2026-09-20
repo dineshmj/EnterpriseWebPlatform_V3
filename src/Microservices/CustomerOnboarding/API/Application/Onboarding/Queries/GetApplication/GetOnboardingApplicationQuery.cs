@@ -1,0 +1,3 @@
+namespace EnterpriseWebPlatform.CustomerOnboarding.Application.Onboarding.Queries.GetApplication;
+
+public sealed record GetOnboardingApplicationQuery(long ApplicationId);

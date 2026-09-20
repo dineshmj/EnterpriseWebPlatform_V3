@@ -1,0 +1,21 @@
+meta {
+  name: Get Customer
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{customer_api_base_url}}/v1/customers/{{customer_id}}
+  body: none
+  auth: oauth2
+}
+
+headers {
+  Accept: application/json
+}
+
+tests {
+  test("HTTP status is successful", function() {
+    expect(res.status).to.equal(200);
+  });
+}

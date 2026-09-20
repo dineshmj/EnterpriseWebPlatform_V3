@@ -1,0 +1,47 @@
+﻿@page
+@model EnterpriseWebPlatform.IdentityServer.Pages.Home.ErrorModel
+
+@{
+    ViewData["Title"] = "Identity Server Error";
+}
+
+<div class="container mt-4">
+
+    <h2>Identity Server Error</h2>
+
+    <div class="alert alert-danger">
+        <strong>@Model.Error</strong>
+
+        @if (!string.IsNullOrWhiteSpace(Model.ErrorDescription))
+        {
+            <div class="mt-2">
+                @Model.ErrorDescription
+            </div>
+        }
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.RequestId))
+    {
+        <p>
+            <strong>Request ID:</strong>
+            @Model.RequestId
+        </p>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Model.ClientId))
+    {
+        <p>
+            <strong>Client ID:</strong>
+            @Model.ClientId
+        </p>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Model.RedirectUri))
+    {
+        <p>
+            <strong>Redirect URI:</strong>
+            @Model.RedirectUri
+        </p>
+    }
+
+</div>

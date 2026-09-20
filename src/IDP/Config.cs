@@ -16,41 +16,208 @@ public static class Config
 
     public static IEnumerable<ApiScope> ApiScopes =>
         [
-            new (MicroserviceApiResources.CUSTOMER_ONBOARDING_API, "Customer Onboarding API")
+            // Customer Onboarding API
+            new(
+                MicroserviceApiResources.CUSTOMER_ONBOARDING_READ,
+                "Customer Onboarding API - Read")
             {
                 UserClaims = { "role", "name", "email" }
             },
-			new (MicroserviceApiResources.CUSTOMER_KYC_API, "Customer KYC API")
-			{
-				UserClaims = { "role", "name", "email" }
-			},
-			new (MicroserviceApiResources.ACCOUNTS_API, "Accounts API")
-			{
-				UserClaims = { "role", "name", "email" }
-			}
-		];
+
+            new(
+                MicroserviceApiResources.CUSTOMER_ONBOARDING_WRITE,
+                "Customer Onboarding API - Write")
+            {
+                UserClaims = { "role", "name", "email" }
+            },
+
+
+            // Customer KYC API
+            new(
+                MicroserviceApiResources.CUSTOMER_KYC_READ,
+                "Customer KYC API - Read")
+            {
+                UserClaims = { "role", "name", "email" }
+            },
+
+            new(
+                MicroserviceApiResources.CUSTOMER_KYC_WRITE,
+                "Customer KYC API - Write")
+            {
+                UserClaims = { "role", "name", "email" }
+            },
+
+
+            // Accounts API
+            new(
+                MicroserviceApiResources.ACCOUNTS_READ,
+                "Accounts API - Read")
+            {
+                UserClaims = { "role", "name", "email" }
+            },
+
+            new(
+                MicroserviceApiResources.ACCOUNTS_WRITE,
+                "Accounts API - Write")
+            {
+                UserClaims = { "role", "name", "email" }
+            },
+
+
+            // Payments API
+            new(
+                MicroserviceApiResources.PAYMENTS_READ,
+                "Payments API - Read")
+            {
+                UserClaims = { "role", "name", "email" }
+            },
+
+            new(
+                MicroserviceApiResources.PAYMENTS_WRITE,
+                "Payments API - Write")
+            {
+                UserClaims = { "role", "name", "email" }
+            }
+        ];
 
     public static IEnumerable<ApiResource> ApiResources =>
         [
-            new (MicroserviceApiResources.CUSTOMER_ONBOARDING_API, "Customer Onboarding API")
+            new(
+                MicroserviceApiResources.CUSTOMER_ONBOARDING_API,
+                "Customer Onboarding API")
             {
-                Scopes = { MicroserviceApiResources.CUSTOMER_ONBOARDING_API },
-                UserClaims = { "role", "name", "email" }
+                Scopes =
+                {
+                    MicroserviceApiResources.CUSTOMER_ONBOARDING_READ,
+                    MicroserviceApiResources.CUSTOMER_ONBOARDING_WRITE
+                },
+
+                UserClaims =
+                {
+                    "role",
+                    "name",
+                    "email"
+                }
             },
-		    new (MicroserviceApiResources.CUSTOMER_KYC_API, "Customer KYC API")
-			{
-				Scopes = { MicroserviceApiResources.CUSTOMER_KYC_API },
-				UserClaims = { "role", "name", "email" }
-			},
-		    new (MicroserviceApiResources.ACCOUNTS_API, "Accounts API")
-			{
-				Scopes = { MicroserviceApiResources.ACCOUNTS_API },
-				UserClaims = { "role", "name", "email" }
-			}
-		];
+
+
+            new(
+                MicroserviceApiResources.CUSTOMER_KYC_API,
+                "Customer KYC API")
+            {
+                Scopes =
+                {
+                    MicroserviceApiResources.CUSTOMER_KYC_READ,
+                    MicroserviceApiResources.CUSTOMER_KYC_WRITE
+                },
+
+                UserClaims =
+                {
+                    "role",
+                    "name",
+                    "email"
+                }
+            },
+
+
+            new(
+                MicroserviceApiResources.ACCOUNTS_API,
+                "Accounts API")
+            {
+                Scopes =
+                {
+                    MicroserviceApiResources.ACCOUNTS_READ,
+                    MicroserviceApiResources.ACCOUNTS_WRITE
+                },
+
+                UserClaims =
+                {
+                    "role",
+                    "name",
+                    "email"
+                }
+            },
+
+
+            new(
+                MicroserviceApiResources.PAYMENTS_API,
+                "Payments API")
+            {
+                Scopes =
+                {
+                    MicroserviceApiResources.PAYMENTS_READ,
+                    MicroserviceApiResources.PAYMENTS_WRITE
+                },
+
+                UserClaims =
+                {
+                    "role",
+                    "name",
+                    "email"
+                }
+            }
+        ];
 
     public static IEnumerable<Client> Clients =>
         [
+            // Customer Onboarding API - Bruno OAuth 2.0 client
+            new()
+            {
+                ClientId = "BSS.ApiTesting.Bruno.ClientID",
+                ClientName = "BSS API Testing Bruno Client",
+
+                // 🡡__ WHY   : Bruno is acting as a public client. It cannot safely keep a
+                //              client secret because the OAuth client is running interactively
+                //              on the developer's machine.
+                // 🡡__ IF NOT: Adding a client secret would make this a confidential-client
+                //              arrangement and would not provide meaningful protection for
+                //              a secret distributed to a developer workstation.
+
+                AllowedGrantTypes = GrantTypes.Code,
+
+                // 🡡__ WHY   : Authorization Code + PKCE is the appropriate flow for a
+                //              public interactive client.
+                // 🡡__ IF NOT: Without PKCE, an intercepted authorization code could be
+                //              exchanged by another party.
+
+                RequirePkce = true,
+                RequireClientSecret = false,
+
+                RedirectUris =
+                {
+                    "https://oauth.usebruno.com/callback"
+                    // "http://localhost:3000/oauth/callback"
+                    // "http://127.0.0.1:3000/callback"
+                },
+
+                AllowedScopes =
+                {
+                    IdentityServerConstants.StandardScopes.OpenId,
+                    IdentityServerConstants.StandardScopes.Profile,
+                    IdentityServerConstants.StandardScopes.Email,
+                    "roles",
+                    MicroserviceApiResources.CUSTOMER_ONBOARDING_READ,
+                    MicroserviceApiResources.CUSTOMER_ONBOARDING_WRITE,
+
+                    MicroserviceApiResources.CUSTOMER_KYC_READ,
+                    MicroserviceApiResources.CUSTOMER_KYC_WRITE,
+
+                    MicroserviceApiResources.ACCOUNTS_READ,
+                    MicroserviceApiResources.ACCOUNTS_WRITE,
+
+                    MicroserviceApiResources.PAYMENTS_READ,
+                    MicroserviceApiResources.PAYMENTS_WRITE
+                },
+
+                // Bruno doesn't need refresh-token support for our API testing client.
+                AllowOfflineAccess = false,
+
+                // Keep this true initially so we can explicitly see the consent step
+                // while validating the OAuth configuration.
+                RequireConsent = false
+            },
+
+
             // Shell BFF Client (BFF using ASP.NET Core 10)
             new()
             {

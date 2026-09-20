@@ -1,0 +1,32 @@
+meta {
+  name: Update Customer
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{customer_api_base_url}}/v1/customers/{{customer_id}}
+  body: json
+  auth: oauth2
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "firstName": "Bruno",
+    "lastName": "Updated Customer",
+    "email": "bruno.updated@example.local",
+    "phoneNumber": "+919900000001",
+    "branchId": 1
+  }
+}
+
+tests {
+  test("Customer update returns HTTP 200", function() {
+    expect(res.status).to.equal(200);
+  });
+}

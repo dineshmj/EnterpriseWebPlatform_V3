@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <RootNamespace>EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Api</RootNamespace>
+    <AssemblyName>EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Api</AssemblyName>
+
+    <!-- WHY:
+         This is a single-project microservice. API, Application, Domain and
+         Infrastructure are architectural folders within the same deployable
+         ASP.NET Core project rather than separate projects. -->
+
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
+
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Common\Landscape\EnterpriseWebPlatform.Common.Landscape.csproj" />
+  </ItemGroup>
+
+</Project>
