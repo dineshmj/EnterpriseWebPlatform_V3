@@ -13,6 +13,4 @@ public sealed class MenuDetail
     public string UrlRelativePath { get; set; } = string.Empty;
 
     public string IconName { get; set; } = string.Empty;
-
-    public string RoleShortName { get; set; } = string.Empty;
 }

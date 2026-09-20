@@ -1,77 +1,83 @@
-version: '3.8'
-
 services:
-  identityserver:
-    build:
-      context: ./src/IdentityServer
-      dockerfile: Dockerfile
-    ports:
-      - "5000:5000"
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=https://+:5000
-    networks:
-      - bff-network
 
-  orders-api:
-    build:
-      context: ./src/Microservices/Orders.API
-      dockerfile: Dockerfile
-    ports:
-      - "5001:5001"
+  postgres:
+    image: postgres:18
+    container_name: ewp-postgres
+    restart: unless-stopped
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=https://+:5001
-    depends_on:
-      - identityserver
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: EwpIdentityAccessDb
+    ports:
+      - "5432:5432"
+    volumes:
+      - ewp-postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d EwpIdentityAccessDb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
-      - bff-network
+      - ewp-v3-network
 
-  products-api:
-    build:
-      context: ./src/Microservices/Products.API
-      dockerfile: Dockerfile
-    ports:
-      - "5002:5002"
+  kafka:
+    image: apache/kafka:4.0.1
+    container_name: ewp-kafka
+    restart: unless-stopped
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=https://+:5002
-    depends_on:
-      - identityserver
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    ports:
+      - "9092:9092"
+    volumes:
+      - ewp-kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
     networks:
-      - bff-network
+      - ewp-v3-network
 
-  payments-api:
-    build:
-      context: ./src/Microservices/Payments.API
-      dockerfile: Dockerfile
-    ports:
-      - "5003:5003"
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=https://+:5003
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: ewp-kafka-ui
+    restart: unless-stopped
     depends_on:
-      - identityserver
-    networks:
-      - bff-network
-
-  bff-web:
-    build:
-      context: ./src/BFF.Web
-      dockerfile: Dockerfile
-    ports:
-      - "5005:5005"
+      kafka:
+        condition: service_healthy
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=https://+:5005
-    depends_on:
-      - identityserver
-      - orders-api
-      - products-api
-      - payments-api
+      KAFKA_CLUSTERS_0_NAME: enterprise-web-platform-v3
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      DYNAMIC_CONFIG_ENABLED: "true"
+    ports:
+      - "8080:8080"
     networks:
-      - bff-network
+      - ewp-v3-network
 
 networks:
-  bff-network:
+  ewp-v3-network:
+    name: ewp-v3-network
     driver: bridge
+
+volumes:
+  ewp-postgres-data:
+    name: ewp-postgres-data
+
+  ewp-kafka-data:
+    name: ewp-kafka-data

@@ -17,31 +17,33 @@ public sealed class MenuRepository : IMenuRepository
     // The authoritative RBAC/ABAC/ReBAC checks remain in the BFF/API layers.
     private const string MenuSqlQuery = """
         SELECT
-            ms."Name"              AS "Microservice",
-            ms."BaseURL"           AS "BaseURL",
-            ma."Name"              AS "ManagementAreaName",
-            mi."TaskName"          AS "TaskName",
-            mi."UrlRelativePath"   AS "UrlRelativePath",
-            mi."IconName"          AS "IconName",
-            mir."RoleShortName"    AS "RoleShortName"
+            ms.name              AS "Microservice",
+            ms.base_url          AS "BaseURL",
+            ma.name              AS "ManagementAreaName",
+            mi.task_name         AS "TaskName",
+            mi.url_relative_path AS "UrlRelativePath",
+            mi.icon_name         AS "IconName"
         FROM
-            "Microservices" ms
+            microservices ms
         INNER JOIN
-            "ManagementAreas" ma
-                ON ma."MicroserviceID" = ms."ID"
+            management_areas ma
+                ON ma.microservice_id = ms.id
         INNER JOIN
-            "MenuItems" mi
-                ON mi."ManagementAreaID" = ma."ID"
-        INNER JOIN
-            "MenuItemsAndRoles" mir
-                ON mir."MenuItemID" = mi."ID"
-        WHERE
-            mir."RoleShortName" IN ({0})
+            menu_items mi
+                ON mi.management_area_id = ma.id
+        WHERE EXISTS
+        (
+            SELECT 1
+            FROM
+                menu_items_and_roles mir
+            WHERE
+                mir.menu_item_id = mi.id
+                AND mir.role_short_name IN ({0})
+        )
         ORDER BY
-            ms."ID",
-            ma."ID",
-            mi."ID",
-            mir."RoleShortName";
+            ms.id,
+            ma.id,
+            mi.id;
         """;
 
     public async Task<List<MenuDetail>> GetAuthorizedMenuAsync(

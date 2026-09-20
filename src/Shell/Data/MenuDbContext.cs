@@ -38,9 +38,6 @@ public sealed class MenuDbContext : DbContext
 
             entity.Property(e => e.IconName)
                 .HasColumnName("IconName");
-
-            entity.Property(e => e.RoleShortName)
-                .HasColumnName("RoleShortName");
         });
     }
 }

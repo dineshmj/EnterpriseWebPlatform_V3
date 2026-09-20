@@ -1,6 +1,8 @@
-0) This project requires dedicated hostnames for the individual tiers of the solution.
+0) Local Development Hostnames and HTTPS:
 
-	This is important because browser cookies are scoped by hostname, not by port. When all applications use localhost on different ports, cookies created by the different applications can be sent together with requests to other localhost applications. Over time, authentication, correlation, nonce, session, and BFF cookies can accumulate in the request's Cookie header.
+	This project uses dedicated hostnames for the individual tiers of the solution.
+
+	This is important because browser cookies are scoped by hostname, not by port. When multiple applications use "localhost" on different ports, cookies created by the different applications can be sent with requests to other "localhost" applications. Authentication, correlation, nonce, session, and BFF cookies can therefore accumulate in the request's Cookie header.
 
 	In our local development setup, this resulted in the request headers becoming large enough to cause:
 
@@ -11,15 +13,17 @@
 		The size of the request headers is too long.
 
 	Therefore, each major tier is given its own dedicated hostname, while all hostnames still resolve to 127.0.0.1. This gives each application an independent browser cookie namespace and prevents cookie collisions between the tiers.
-	
+
 	Please follow the steps mentioned below to accomplish this:
 
-	a) Go to the folder `C:\Windows\System32\drivers\etc\`, and open the `hosts` file in Notepad++.
-	
-	b) Ensure that you add the following hostname mappings to 127.0.0.1 for each tier in this solution at the end of the `hosts` file.
-		
+	a) Go to the folder "C:\Windows\System32\drivers\etc\", and open the "hosts" file in Notepad++.
+
+	b) Ensure that you add the following hostname mappings to 127.0.0.1 for each tier in this solution at the end of the "hosts" file.
+
 		127.0.0.1    idp.dev.localhost
+		
 		127.0.0.1    shell.dev.localhost
+		
 		127.0.0.1    customer.dev.localhost
 		127.0.0.1    kyc.dev.localhost
 		127.0.0.1    accounts.dev.localhost
@@ -31,7 +35,7 @@
 		127.0.0.1    payments-api.dev.localhost
 
 	c) Test them using ping commands. Each hostname should resolve to 127.0.0.1 and return a valid ping response.
-	
+
 		ping idp.dev.localhost
 		ping shell.dev.localhost
 
@@ -46,189 +50,560 @@
 
 		ping payments.dev.localhost
 		ping payments-api.dev.localhost
-		
-	d) The new URLs for various tiers are going to be like this:
-	
-		Shell BFF				-		https://shell.dev.localhost:44367
-		Shell SPA				-		Not there, as `pnpm run export` creates the `out` folder.		
-		
-		IDP						-		https://idp.dev.localhost:44392	
-		
-		Customer Onboarding BFF	-		https://customer.dev.localhost:44311
-		Customer Onboarding SPA	-		Not there, as `pnpm run export` creates the `out` folder.
-		Customer Onboarding API	-		https://customer-api.dev.localhost:44363
-		
-		Customer KYC BFF		-		https://kyc.dev.localhost:33800
-		Customer KYC SPA		-		Not there, as `pnpm run export` creates the `out` folder.
-		Customer KYC API		-		https://kyc-api.dev.localhost:44305
-		
-		Accounts BFF			-		https://accounts.dev.localhost:45456
-		Accounts SPA			-		Not there, as `pnpm run export` creates the `out` folder.
-		Accounts API			-		https://accounts-api.dev.localhost:48486
-		
-		Payments BFF			-		https://payments.dev.localhost:44388
-		Payments SPA			-		NextJS - present, add URL here later.
-		Payments API			-		https://payments-api.dev.localhost:44488
-		
-	e) Also, in order for HTTPS communication between the various tiers to work correctly, please ensure that the ASP.NET Core applications are run using the Kestrel server (i.e., NOT IIS Express). Please use the "https" Project profile in launchSettings.json for these projects:
 
-		1. Shell BFF
-		2. Customer Onboarding BFF & API
-		3. Customer KYC BFF & API
-		4. Accounts BFF & API
-		5. Payments API
+	d) The local HTTPS URLs for the tiers are:
 
-	   The "https" Project profile uses Kestrel and the ASP.NET Core HTTPS development certificate, which includes *.dev.localhost in its Subject Alternative Names (SANs).
+		Shell BFF				-	https://shell.dev.localhost:44367
+		Shell SPA				-	Static export served by the Shell BFF
 
-	   The Payments MFE and Payments BFF are going to be using NextJS and NestJS respectively, so their HTTPS configuration is different.
+		IDP						-	https://idp.dev.localhost:44392
 
-1) Technology Stack:
+		Customer Onboarding BFF	-	https://customer.dev.localhost:44311
+		Customer Onboarding SPA	-	Static export served by the Customer Onboarding BFF
+		Customer Onboarding API	-	https://customer-api.dev.localhost:44363
 
-	a) Duende IdentityServer 8 based IDP that runs on ASP.NET Core 10.
-		- Has its own SQLite-based user database (see the .db file under `UserDB` folder in the IDP project).
-		- Supports OpenID Connect and OAuth 2.1 protocols.
+		Customer KYC BFF		-	https://kyc.dev.localhost:33800
+		Customer KYC SPA		-	Static export served by the Customer KYC BFF
+		Customer KYC API		-	https://kyc-api.dev.localhost:44305
+
+		Accounts BFF			-	https://accounts.dev.localhost:45456
+		Accounts SPA			-	Static export served by the Accounts BFF
+		Accounts API			-	https://accounts-api.dev.localhost:48486
+
+		Payments BFF			-	https://payments.dev.localhost:44388
+		Payments SPA			-	Next.js application; URL to be added when the local HTTPS configuration is finalized
+		Payments API			-	https://payments-api.dev.localhost:44488
+
+	e) For ASP.NET Core applications, use the Kestrel server for local development rather than IIS Express. Select the "https" Project profile in launchSettings.json for:
+
+		1) Shell BFF
+		2) Customer Onboarding BFF & API
+		3) Customer KYC BFF & API
+		4) Accounts BFF & API
+		5) Payments API
+
+		The "https" Project profile uses Kestrel and the ASP.NET Core HTTPS development certificate. The development certificate includes "*.dev.localhost" in its Subject Alternative Names (SANs).
+
+		The Payments MFE and Payments BFF use Next.js and NestJS respectively, so their HTTPS configuration is separate from the ASP.NET Core applications.
+
+		NOTE:
+		The use of Kestrel for V3 is intentional. In the previous version, IIS Express was used for several applications mainly to avoid opening multiple console windows. V3 uses dedicated hostnames and Kestrel-based HTTPS for the ASP.NET Core tiers so that the local topology is explicit and consistent.
+
+1) Technology Stack and V3 Architecture:
+
+	a) Identity Provider (IDP):
+
+		- Duende IdentityServer 8 running on ASP.NET Core 10.
+		- Uses PostgreSQL for the Identity and Authorization database.
+		- Database: EwpIdentityAccessDb.
+		- Supports OpenID Connect and OAuth 2.x protocols.
 		- Grant type: Authorization Code Flow with PKCE.
-		- Supports refresh tokens for Identity Tokens that are about to expire.
-		- Supports role-based access control (R-BAC) by embedding role claims onto the ID Token and Access Token.
-		- Supports User Consent page.
+		- Supports refresh tokens where configured.
+		- Supports role-based access control (R-BAC) using role claims.
+		- Supports a consent page.
+		- Uses a stable opaque SubjectId as the external OIDC "sub" identifier.
+		- Identity data is kept separate from business microservice databases.
 
-	b) Master application: Platform Administration System (PAS), which is a Shell SPA Frontend
-		- Runs on Next.js 14 with app directory structure.
-		- Uses ASP.NET Core 10 for "Backend for Frontend" (BFF).
+	b) Banking Services System (BSS):
 
-	c) Microservices:
+		The BSS Shell is the master/composition application for the Banking Services System.
 
-		1) Products Microservice
-			- Frontend:
-				- SPA: Next.js 14 with app directory structure.
-				- BFF: ASP.NET Core 10 with REST edge APIs.
-			- Backend / App Tier:
-				- API: ASP.NET Core 10 with REST response.
+		- Shell SPA: Next.js.
+		- Shell BFF: ASP.NET Core 10.
+		- The Shell composes Microservice experiences and owns the application workspace.
+		- The Shell does not directly own or query Microservice business databases.
+		- Microservice URLs are obtained from the Shell Menu DB rather than hard-coded into the Shell application.
+		- The Application Workspace exchanges opaque structured context between MFEs without requiring the Shell to understand business identifiers.
 
-		2) Orders Microservice
-			- Frontend: 
-				- SPA: Next.js 14 with app directory structure.
-				- BFF: Nest.js 10 with REST edge APIs.
-			- Backend / App Tier:
-				- API: ASP.NET Core 10 with GraphQL response.
+	c) Microservices / Bounded Contexts:
 
-		3) Payments Microservice (yet to be implemented)
-			- Frontend:
-				- SPA: React.js 18.
-				- BFF: Python / Flask BFF server with REST response.
-			- Backend / App Tier:
-				- API: Nest.js 10 with GraphQL response.
+		1) Customer Onboarding:
 
-2) What to do after cloning the repository:
-	a) Ensure that you have exited Visual Studio 2026 and Visual Studio Code IDEs.
+			- Bounded Context: Customer Onboarding.
+			- MFE: Next.js.
+			- BFF: ASP.NET Core.
+			- API: ASP.NET Core.
+			- Database: CustomerDb.
+			- Owns customer profile, contact/address information, onboarding applications and onboarding workflow state.
 
-	b) Ensure that the Certificates of Orders micro-frontend are imported to Windows 11 Certificate store. Steps:
+		2) Customer KYC:
 
-		1) Go to ~\BackendForFrontEnd_V2\src\Microservices\Orders\BFF.Web\certs\ location.
+			- Bounded Context: Customer KYC.
+			- MFE: Next.js.
+			- BFF: NestJS.
+			- API: ASP.NET Core.
+			- Database: KycDb.
+			- Owns KYC cases, identity/document checks, AML screening, risk assessment and compliance decisions.
 
-		2) Run the `certlm.msc` snap-in to import certificates on the "local machine" (not per-user, but for the system).
-		
-		3) Expand "Trusted Root Certification Authorities" and click the "Certificates" folder underneath it. This is the store Windows (and anything that defers to Windows, like Edge and Opera) checks when validating a server's TLS certificate.
+		3) Accounts:
 
-		4) Right-click the Certificates folder → All Tasks → Import.
-		
-		5) Follow the wizard: browse and pick Microservice.Orders.CA.crt. In the "next" screen, select the "Place all certificates in the following store" option, and ensure that the Certificate Store Name is "Trusted Root Certification Authorities" in the field below the radio button.
+			- Bounded Context: Accounts.
+			- MFE: Next.js.
+			- BFF: ASP.NET Core.
+			- API: ASP.NET Core.
+			- Database: AccountsDb.
+			- Owns account applications, accounts, account holders and account lifecycle.
+			- This PoC does not implement a real core-banking ledger.
 
-		6) Finish the wizard — Windows will show a security warning asking you to confirm you trust this CA; confirm it.
+		4) Payments:
 
-	c) Open the PS1 script file "CompileAndExportBFFClients.ps1" at repo root folder inside PowerShell ISE and run it. This will:
-		1) trigger running the "npm install" command for:
-			- PAS Shell BFF Frontend (Next.js)
-			- Products Microservice SPA Frontend (Next.js)
-			- Orders Microservice SPA Frontend (Next.js)
-			- Orders Microservice BFF Server (Nest.js)
+			- Bounded Context: Payments.
+			- MFE: Next.js.
+			- BFF: NestJS.
+			- API: ASP.NET Core.
+			- Database: PaymentsDb.
+			- Owns payment instructions, beneficiaries, payment attempts and payment-processing state.
+			- This is an architectural PoC and not a real banking payment system.
 
-		2) trigger the "Build and export" task by running the command "npm run export" on the NextJS SPA projects, which builds static files in the "out" folder under the "app" folder under their respective host ASP.NET Core BFF projects.
-			- PAS Shell SPA Frontend
-			- Products Microservice SPA Frontend.
+	d) Messaging and distributed workflows:
 
-	d) Now, it is time to run the "Orders" SPA, BFF and App!
-		- Invoke a Visual Studio Code IDE at "Orders" Microservice BFF.Web folder:
-		- Open Terminal 1 at location "BFF.Web", and run the ".\buildnow.bat" to run the Nest.js BFF application.
-		- Open Terminal 2 at location "BFF.Web\client-app" and run ".\buildnow.bat" to run the NextJS SPA application.
+		- Apache Kafka is used as the event/message backbone.
+		- Producers use the Transactional Outbox pattern.
+		- Consumers use the Inbox / Processed Messages pattern to support idempotent processing.
+		- At-least-once delivery is assumed.
+		- Customer Onboarding demonstrates a Saga workflow across the Customer, KYC and Accounts bounded contexts.
+		- Saga compensation is demonstrated for failure scenarios.
+		- Choreography is used where simple event reactions are more appropriate.
+		- SignalR is used by the Shell to receive workflow-completion notifications.
+		- CorrelationId, TraceId, SagaId and CausationId are propagated across the workflow.
 
-	e) Open the "FW.PAS.sln" solution file in Visual Studio 2025 IDE.
+	e) Application architecture:
 
-		- Right-click on the solution node in the Solution Explorer and select "Restore NuGet Packages".
-		- Right-click on the solution node in the Solution Explorer and choose "Configure Startup Projects...", and ensure that "Multiple startup projects" is selected with the following order:
+		Each business microservice follows a layered / clean architecture structure:
 
-			1) IDP - Start - self-hosted.
-			2) Products Microservice API - Start - IIS Express.
-			3) Orders Microservice API - Start - IIS Express.
-			4) Products Microservice BFF Frontend - Start - IIS Express.
-			5) (Note! The Orders Microservice BFF Frontend is a Nest.js application that must be started separately in VS Code, which you are doing anyway above (- Right-click step)).
-			6) PAS Shell BFF Frontend - Start - IIS Express.
+			Service
+			├── Domain
+			│   ├── Entities / Aggregates
+			│   ├── Value Objects
+			│   ├── Domain Events
+			│   └── Business Rules
+			├── Application
+			│   ├── Commands
+			│   ├── Queries
+			│   ├── Handlers
+			│   └── DTOs
+			├── Infrastructure
+			│   ├── EF Core
+			│   ├── Outbox
+			│   ├── Inbox
+			│   ├── Kafka
+			│   └── External Services
+			└── API
+				├── Controllers / Endpoints
+				└── Authorization
 
-	f) Run the "FW.PAS.sln" solution in Debug mode (F5).
+		Domain entities are owned by their bounded context. Business-domain entities are not shared between microservices.
 
-		- Since the IDP project is "self-hosted", a console window will open for the IDP project, showing logs.
-		- The IDP shall be running at the default Duende IdentityServer port, which is 44392 (https://localhost:44392).
+	f) Data access:
 
-	g) Open the web browser, and ensure that cookies and history ("from all time") are cleared before starting the testing.
+		- PostgreSQL is the database platform.
+		- EF Core is used for data access.
+		- Each bounded context owns its own database.
+		- There is no cross-service database access.
+		- PostgreSQL table and column names use lowercase snake_case.
+		- C# types and properties use normal .NET PascalCase naming.
+		- EF Core migrations are used for database schema evolution.
+		- Transactions are used where business state and Outbox records must be committed atomically.
+		- Optimistic concurrency is used where appropriate.
+		- Stored procedures are not used for ordinary CRUD operations.
 
-	h) Navigate to the URL of the PAS Shell BFF Frontend application at "https://localhost:44367". The expected behavior:
+	g) Security and authorization:
 
-		- Since "authentication cookie" is not present in the request from the web browser, the Shell BFF server will redirect the browser to the IDP login page at "idp.dev.localhost:44392".
-		- The browser gets a 302 - Redirect response from the Shell BFF server, and navigates to the IDP login page.
-		- The user is presented with the IDP login page.
-		- The user enters the credentials for "JuliaRob" user:
-			- Username: JuliaRob
-			- Password: JuliaRob123
-		- After successful login, the IDP presents the "consent" page to the user, asking for consent to share profile data with the Shell BFF application.
-		- After giving consent, the IDP redirects the browser back to the Shell BFF's "callback" endpoint with an authorization code.
-		- The browser gets a 302 - Redirect response from the IDP, and navigates to the Shell BFF's "callback" endpoint.
-		- The browser navigates to the Shell BFF's "callback" endpoint with the "authorization code" in the query string (which is PKCE protected).
-		- The Shell BFF server exchanges the authorization code for ID Token and Access Token from the IDP.
-		- Once the ID and Access Tokens are received, the Shell BFF extracts the "claims" and "scopes" from the tokens, and creates an authentication cookie for the user.
-		- The Shell BFF server returns a 200 - OK with the contents of the landing page along with the authentication cookie in the response.
-		- The browser displays the landing page of the Shell BFF Frontend application.
-			* In all subsequent requests from the browser to the Shell BFF server, the authentication cookie is sent along with the request, and the user is authenticated and authorized based on the roles present in the claims.
-		- The left-pane of the Shell BFF Frontend application shows the available Microservices and Management Areas based on the user's roles.
-		- When clicked on a menu item, a JavaScript in the Shell BFF application sets an iFrame's "src" attribute to the URL of the respective Microservice BFF Frontend application.
-			* This Microservice BFF Frontend URL will try to perform a silent authentication using the existing session at the IDP (since the IDP cookie is also present in the browser).
-		- Once the silent authentication is successful, the Microservice BFF Frontend application creates its own authentication cookie for the user, and presents the page requested in the iFrame.
+		- Human authentication is handled by the IDP.
+		- BFFs represent the browser-facing security boundary.
+		- Service-to-service communication can use M2M client-credentials tokens where appropriate.
+		- Authorization is not based on RBAC alone.
+		- The intended authorization pipeline is:
 
-	i) The following are the logout behavior:
-		- When the user clicks on the "Sign Out" button in the Shell BFF Frontend application, the Shell BFF server clears its authentication cookie, and redirects the browser to the IDP's "end session" endpoint.
-		- Before doing the above step, the Shell BFF server also sends a back-channel logout request to all involved Microservice BFF Frontend applications to do a "silent-logout, and clear their authentication cookies for the user.
-		- The IDP clears its session cookie, and presents a logout confirmation page to the user.
-		- After confirming logout, the IDP redirects the browser to the login page.
+			Authenticated User
+			        ↓
+			      R-BAC
+			        ↓
+			      A-BAC
+			        ↓
+			      Re-BAC
+			        ↓
+			   Workflow State
+			        ↓
+			       SoD
+			        ↓
+			 Authorization Decision
 
-3) Final touches required (not urgent, only after all modules are implemented):
-   - Teraform scripts must be written to provision all required infrastructure in a cloud provider (e.g., Azure, AWS, GCP).
+		- R-BAC: Role-Based Access Control.
+		- A-BAC: Attribute-Based Access Control.
+		- Re-BAC: Relationship-Based Access Control.
+		- SoD: Separation of Duties.
+		- Menu visibility is not the authoritative authorization mechanism. BFF/API authorization remains authoritative.
+		- Audit information is propagated with relevant business and security events.
 
-4) Troubleshooting:
-	* Unresponsive modules (such as, the Products links, when clicked, take a long time, but nothing gets rendered inside the iFrmae):
+	h) Resilience and observability:
 
-		- Come out of Visual Studio 2026.
-		- Go to the repository root folder.
-		- Locate the ".vs" folder over there.
-		- SHIFT+Delete that folder.
-		- Invoke the FW.PAS.sln solution in Visual Studio 2026 again.
-			! The "Configure Startup projects ..." would have changed by now.
-		- Right-click on the solution node in Solution Explorer, and go to "Configure Startup Projects ... " menu.
-		- Re-specify the dependency order of projects to be started (just click on the appropriate radio button).
-		- Clean the solution.
-		- Run the solution.
+		- Retry with appropriate limits.
+		- Timeout.
+		- Circuit breaker.
+		- Bulkhead where appropriate.
+		- Fallback / compensation for supported failure scenarios.
+		- Idempotency.
+		- Structured logging.
+		- Correlation and distributed tracing.
+		- Health checks.
+		- Rate limiting.
+		- Secure secret handling.
+		- Input validation and appropriate HTTP security controls.
+		- Simulated external KYC/AML providers are used to demonstrate failure, timeout and transient-error handling.
 
-	* "Orders" Microservice API not contactable:
+2) Databases and Initial Infrastructure:
 
-		- The "NestJS" BFF type-script code takes the "Orders Microservice API" URL from the .env file.
-		- However, it has been observed that even though the "launchSettings.json" file of the "Orders" Microservice GraphQL API is set to a particular HTTPS port number,
-		  while running the Visual Studio 2026 solution "FW.PAS.sln", Visual Studio 2026 IDE changes the port to some other number without a specific reason.
-		- This will cause the "NestJS" BFF of the "Orders" Microservice web frontend to result in "404 - Not Found" response from the Orders Microservice API.
-		- What to do in this context:
-			1) Check what is the new port number in the launchSettings.json file of the "Orders" Microservice API. Note down this port number.
-			2) Come to the .env file of the "NestJS" BFF of the "Orders" Microservice web front-end, and change accordingly (the last line in the .env file - `ORDERS_MICROSERVICE_API_URL=https://localhost:44380`).
-			3) If the NestJS BFF is already running in a Terminal (under .\BFF.Web\ folder), CTRL+C it, and do a rerun by entering ".\buildnow.bat".
-			4) Test the Orders Microservice menu item in the PAS application.
+	a) PostgreSQL is used as the primary relational database platform.
 
-4) Important Gotchas and relevant URLs:
-	- Cookie names of BFF projects must begin with "__". If not, there can be issues with signing in and out from Duende IDP server.
-		- Shell BFF UI cookie name: "__PAS-Shell-Host-bff"
-		- Products BFF UI cookie name: "__PAS-Microservice-Products-Host-bff"
+	b) The current databases are:
+
+		- EwpIdentityAccessDb
+			Identity, users, roles, permissions and authorization relationships.
+
+		- EwpBssShellDb
+			Shell navigation/menu metadata.
+
+		The business databases will be:
+
+		- CustomerDb
+		- KycDb
+		- AccountsDb
+		- PaymentsDb
+
+	c) The database-per-service rule applies to the business bounded contexts. A single local PostgreSQL server/instance may host the individual databases during development.
+
+	d) Kafka and Kafka UI will be introduced as local Docker-based infrastructure as the messaging portion of V3 is implemented.
+
+3) What to do after cloning the repository:
+
+	a) Ensure that the required .NET 10 SDK, Node.js, pnpm and PostgreSQL installations are available.
+
+	b) Configure the Windows hosts file as described in section 0.
+
+	c) Ensure that the ASP.NET Core HTTPS development certificate is installed and trusted.
+
+		To check the certificate:
+
+			dotnet dev-certs https --check
+
+		To trust it when required:
+
+			dotnet dev-certs https --trust
+
+	d) Ensure that PostgreSQL is running on:
+
+			Host: localhost
+			Port: 5432
+
+	e) Create/restore the following databases before starting the applications:
+
+			EwpIdentityAccessDb
+			EwpBssShellDb
+
+		The database scripts in the repository contain the schema and seed data for the current V3 foundation.
+
+	f) IMPORTANT:
+		The PostgreSQL credentials currently used by the local development configuration are development-only credentials. Do not use these credentials in a real environment. Production/deployment secrets must be supplied through an appropriate secret-management mechanism.
+
+	g) Open the solution in Visual Studio and restore the NuGet packages.
+
+	h) For ASP.NET Core applications, use the "https" Project profile rather than IIS Express.
+
+	i) The IDP is self-hosted and therefore opens its own console window. The other ASP.NET Core applications are intended to run using their Kestrel "https" Project profiles.
+
+	j) The Next.js / NestJS applications are started using their respective package-manager commands as their implementations become available.
+
+4) Current V3 Local Development URLs:
+
+	Shell BFF:
+		https://shell.dev.localhost:44367
+
+	IDP:
+		https://idp.dev.localhost:44392
+
+	Customer Onboarding BFF:
+		https://customer.dev.localhost:44311
+
+	Customer Onboarding API:
+		https://customer-api.dev.localhost:44363
+
+	Customer KYC BFF:
+		https://kyc.dev.localhost:33800
+
+	Customer KYC API:
+		https://kyc-api.dev.localhost:44305
+
+	Accounts BFF:
+		https://accounts.dev.localhost:45456
+
+	Accounts API:
+		https://accounts-api.dev.localhost:48486
+
+	Payments BFF:
+		https://payments.dev.localhost:44388
+
+	Payments API:
+		https://payments-api.dev.localhost:44488
+
+	NOTE:
+		Some of the above applications are reserved/future V3 endpoints. The URL list represents the intended local topology and will be updated as each application is implemented.
+
+5) Current V3 Foundation:
+
+	a) IDP:
+
+		- PostgreSQL Identity/Authorization database.
+		- Users, roles, permissions and authorization relationships.
+		- OIDC Authorization Code Flow with PKCE.
+		- Demo users representing the intended banking-services personas.
+		- Stable opaque OIDC SubjectId values.
+		- Role claims available to the BSS Shell.
+
+	b) BSS Shell:
+
+		- Banking Services System branding.
+		- Shell BFF authentication.
+		- PostgreSQL-backed menu repository.
+		- Role-aware Microservice menu.
+		- Application Workspace.
+		- Structured context exchange between Shell and MFEs.
+		- Dedicated local hostname.
+		- Kestrel HTTPS development profile.
+
+	c) Shell Menu DB:
+
+		The Shell Menu database uses PostgreSQL lowercase snake_case identifiers:
+
+			microservices
+			management_areas
+			menu_items
+			menu_items_and_roles
+
+		The Shell queries the menu metadata through the BSS Shell BFF. Menu visibility is based on the user's roles, but this visibility does not replace authorization enforcement in the downstream BFF/API.
+
+6) Application Workspace:
+
+	The Application Workspace is intentionally separate from the Microservice navigation menu.
+
+	The Microservice menu is responsible for navigation.
+
+	The Application Workspace is responsible for showing contextual information associated with the user's current work.
+
+	The intended context model is:
+
+		persistentContext
+			Context that remains visible while the user moves between MFEs.
+
+		currentContext
+			The entity currently receiving the user's focus.
+
+		retainedContext
+			Previously established context that remains available for reuse.
+
+	The Shell treats this context as opaque data. The MFE that owns the business semantics is responsible for creating and updating it.
+
+7) Planned V3 Customer Onboarding Workflow:
+
+	The flagship distributed workflow is Customer Onboarding:
+
+		Customer MFE
+		    ↓
+		Customer BFF
+		    ↓
+		Customer API
+		    ↓
+		Business state + Outbox transaction
+		    ↓
+		Kafka
+		    ↓
+		KYC consumer
+		    ↓
+		KYC state + Outbox
+		    ↓
+		Kafka
+		    ↓
+		Compliance / AML processing
+		    ↓
+		Kafka
+		    ↓
+		Accounts consumer
+		    ↓
+		Account opening
+		    ↓
+		Workflow completion
+		    ↓
+		SignalR
+		    ↓
+		BSS Shell
+
+	The workflow is intended to expose:
+
+		- Application ID
+		- Saga ID
+		- Correlation ID
+		- Current workflow status
+		- Individual workflow steps
+		- Event counts
+		- Outbox activity
+		- Retry activity
+		- Compensation activity
+
+8) Planned Authorization Demonstrations:
+
+	The intended personas include:
+
+		customer
+		customer_service_agent
+		kyc_officer
+		compliance_officer
+		account_officer
+		payments_officer
+		operations_administrator
+		auditor
+		platform_administrator
+
+	Examples of authorization attributes include:
+
+		User:
+			employeeId
+			department
+			branch
+			region
+			employmentType
+			clearanceLevel
+
+		Resource:
+			customerId
+			branchId
+			riskLevel
+			classification
+			paymentAmount
+			workflowStatus
+			assignedOfficerId
+
+		Relationship:
+			works_at
+			assigned_to
+			manages
+			owns
+
+		Separation-of-Duties examples will ensure that a user cannot perform prohibited combinations of actions merely because the user happens to possess multiple roles.
+
+9) Logout:
+
+	The BSS Shell owns the user-facing logout operation.
+
+	The intended logout sequence is:
+
+		- Clear the Shell authentication session.
+		- Initiate OIDC logout with the IDP.
+		- Perform the required back-channel/silent logout processing for participating Microservice BFFs.
+		- Clear their local authentication sessions.
+		- Allow the IDP to terminate its session.
+
+	Authentication cookies must remain isolated between the dedicated local hostnames.
+
+10) Troubleshooting:
+
+	a) "HTTP 400 - Request Too Long" / "The size of the request headers is too long":
+
+		- Confirm that the applications are being accessed using their dedicated *.dev.localhost hostnames rather than localhost.
+		- Do not work around the problem by simply increasing server request-header limits.
+		- Clear the cookies for the affected development host if stale OIDC correlation/nonce cookies are present.
+		- Restart the affected application and repeat the authentication flow.
+
+	b) HTTPS certificate warning for a *.dev.localhost URL:
+
+		- Confirm that the ASP.NET Core application is running with the "https" Project profile.
+		- Do not use the IIS Express profile for the ASP.NET Core V3 applications.
+		- Run:
+
+			dotnet dev-certs https --check
+
+		- If necessary:
+
+			dotnet dev-certs https --trust
+
+		- Confirm that the requested hostname is under *.dev.localhost.
+
+	c) A hostname does not resolve:
+
+		- Check the Windows hosts file.
+		- Run the relevant ping command.
+		- Ensure that the hostname resolves to 127.0.0.1.
+
+	d) Menu does not appear:
+
+		- Confirm that PostgreSQL is running.
+		- Confirm that EwpBssShellDb exists.
+		- Confirm that the Shell Menu tables contain their expected snake_case names.
+		- Confirm that the authenticated user has role claims.
+		- Confirm that the BSS Shell BFF can connect to EwpBssShellDb.
+		- Remember that menu visibility is based on role mappings; it is not a substitute for API authorization.
+
+	e) Authentication succeeds but expected role-based menu items are missing:
+
+		- Inspect the authenticated user's role claims.
+		- Confirm the user-to-role mappings in EwpIdentityAccessDb.
+		- Confirm that the role codes match the values used by the Shell Menu DB.
+		- Sign out and sign in again after changing role assignments.
+
+	f) Stale Visual Studio state:
+
+		If Visual Studio behaves as though an old launch profile or project configuration is still being used:
+
+		- Close Visual Studio.
+		- Remove the solution's local ".vs" folder if necessary.
+		- Reopen the solution.
+		- Verify the configured startup profiles/projects.
+		- Ensure that the ASP.NET Core applications use their "https" Project profiles.
+
+11) Important Design Rules / Gotchas:
+
+	a) PostgreSQL naming:
+
+		- Use lowercase snake_case for PostgreSQL tables and columns.
+		- Use PascalCase for C# classes and properties.
+		- Avoid quoted PascalCase PostgreSQL identifiers.
+
+	b) Database isolation:
+
+		- Each business bounded context owns its own database.
+		- Do not query another microservice's database directly.
+		- Communicate across bounded contexts through APIs and/or Kafka events.
+
+	c) Authorization:
+
+		- Menu visibility is not security enforcement.
+		- BFFs and APIs must enforce authorization.
+		- Multiple roles do not automatically grant permission to violate Separation of Duties.
+
+	d) Messaging:
+
+		- Business state and Outbox messages must be committed atomically.
+		- Consumers must be idempotent.
+		- Assume at-least-once message delivery.
+
+	e) Browser security:
+
+		- Do not expose service access tokens or refresh tokens to the browser unnecessarily.
+		- BFFs are the browser-facing security boundary.
+		- Keep authentication cookies scoped to the appropriate application hostname.
+
+	f) Secrets:
+
+		- Development credentials are for local development only.
+		- Do not commit production secrets, private signing keys or certificates to source control.
+		- Production secrets must be supplied through an appropriate secret-management mechanism.
+
+12) Final touches required (not urgent, only after the required V3 modules are implemented):
+
+	- Complete OpenTelemetry distributed tracing.
+	- Add centralized/structured audit persistence and audit-event processing.
+	- Add Kafka monitoring and consumer-lag visibility.
+	- Add comprehensive health/readiness endpoints.
+	- Add rate limiting and production-grade security headers.
+	- Add Terraform scripts to provision the required cloud infrastructure.
+	- Add production secret-management integration.
+	- Add deployment-specific configuration for Azure/AWS/GCP as appropriate.
