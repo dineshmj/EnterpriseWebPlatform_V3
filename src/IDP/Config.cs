@@ -66,8 +66,9 @@ public static class Config
                     //              If a non-confidential grant (e.g., Resource Owner Password) were used, it would require sending user credentials
                     //              to the client and reduce overall security. The client might also be unable to validate tokens or perform
                     //              secure token exchange in a standard way.
+                RequirePkce = true,
 
-                
+
                 RedirectUris = { $"{BSSShellBFF.SHELL_BFF_CLIENT_BASE_URL }/signin-oidc" },
 				PostLogoutRedirectUris = { $"{BSSShellBFF.SHELL_BFF_CLIENT_BASE_URL}/signout-callback-oidc" },
 				FrontChannelLogoutUri = $"{BSSShellBFF.SHELL_BFF_CLIENT_BASE_URL }/signout-oidc",
@@ -124,6 +125,8 @@ public static class Config
                     // 🡡__ IF NOT: Using non-confidential or browser flows could expose tokens to the client-side, allowing token theft via XSS
                     //              and making secure API access more difficult to enforce.
 
+                RequirePkce = true,
+
                 RedirectUris = { $"{CustomerOnboardingMicroservice.BFF_CLIENT_BASE_URL }/signin-oidc" },
                 PostLogoutRedirectUris = { $"{CustomerOnboardingMicroservice.BFF_CLIENT_BASE_URL}/signout-callback-oidc" },
                 FrontChannelLogoutUri = $"{CustomerOnboardingMicroservice.BFF_CLIENT_BASE_URL }/signout-oidc",
@@ -174,6 +177,7 @@ public static class Config
                     //              private on the server and to benefit from the standard OIDC/OAuth flow, including PKCE if applicable.
                     // 🡡__ IF NOT: Using non-confidential or browser flows could expose tokens to the client-side, allowing token theft via XSS
                     //              and making secure API access more difficult to enforce.
+                RequirePkce = true,
 
                 RedirectUris = { $"{CustomerKycMicroservice.BFF_CLIENT_BASE_URL}/api/auth/callback" },
 				PostLogoutRedirectUris = { $"{CustomerKycMicroservice.BFF_CLIENT_BASE_URL}/signout-callback-oidc" },
@@ -226,6 +230,8 @@ public static class Config
                     // 🡡__ IF NOT: Using non-confidential or browser flows could expose tokens to the client-side, allowing token theft via XSS
                     //              and making secure API access more difficult to enforce.
 
+                RequirePkce = true,
+
                 RedirectUris = { $"{AccountsMicroservice.BFF_CLIENT_BASE_URL}/api/auth/callback" },
 				PostLogoutRedirectUris = { $"{AccountsMicroservice.BFF_CLIENT_BASE_URL}/signout-callback-oidc" },
 				FrontChannelLogoutUri = $"{AccountsMicroservice.BFF_CLIENT_BASE_URL }/signout-oidc",
@@ -275,6 +281,8 @@ public static class Config
                     //              private on the server and to benefit from the standard OIDC/OAuth flow, including PKCE if applicable.
                     // 🡡__ IF NOT: Using non-confidential or browser flows could expose tokens to the client-side, allowing token theft via XSS
                     //              and making secure API access more difficult to enforce.
+
+                RequirePkce = true,
 
                 RedirectUris = { $"{PaymentsMicroservice.BFF_CLIENT_BASE_URL}/api/auth/callback" },
 				PostLogoutRedirectUris = { $"{PaymentsMicroservice.BFF_CLIENT_BASE_URL}/signout-callback-oidc" },

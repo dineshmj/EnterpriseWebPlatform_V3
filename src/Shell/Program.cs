@@ -187,10 +187,6 @@ app.UseHttpsRedirection();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-// ------------------------------------------------------------------
-// -- bff re-routing block is removed. Compare with V2 if required.
-// ------------------------------------------------------------------
-
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -218,12 +214,5 @@ app.MapBffManagementEndpoints();
     //               management, and health checks). These are useful for development and operational diagnostics.
 	// 🡡__ IF NOT: You will lack the BFF management endpoints which can make debugging and runtime diagnostics harder;
     //               however, consider restricting or disabling these in production if they expose sensitive operations.
-
-//
-// Intentionally commented out to enable this Microservice's SPA set directly to the iFrame of the Shell SPA application and avoid unnecessary redirects
-// within the BSS Shell BFF.
-//
-// app.MapFallbackToFile("index.html");
-//
 
 app.Run();

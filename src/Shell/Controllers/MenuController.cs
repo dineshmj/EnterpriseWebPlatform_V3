@@ -23,15 +23,6 @@ public class MenuController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<MenuResponse>> GetMenu()
     {
-        var allClaims = User.Claims
-            .Select(c => new
-            {
-                c.Type,
-                c.Value,
-                c.Issuer
-            })
-            .ToList();
-
         var userRoles = User
             .FindAll("role")
             .Select(claim => claim.Value)
