@@ -15,14 +15,34 @@ headers {
   Content-Type: application/json
 }
 
+auth:oauth2 {
+  grant_type: authorization_code
+  callback_url: 
+  authorization_url: https://idp.dev.localhost:44392/connect/authorize
+  access_token_url: https://idp.dev.localhost:44392/connect/token
+  refresh_token_url: 
+  client_id: BSS.ApiTesting.Bruno.ClientID
+  client_secret: 
+  scope: openid profile email roles customer-onboarding.write
+  state: 
+  pkce: true
+  credentials_placement: body
+  credentials_id: credentials
+  token_source: access_token
+  token_placement: header
+  token_header_prefix: Bearer
+  auto_fetch_token: true
+  auto_refresh_token: false
+}
+
 body:json {
   {
-    "firstName": "Bruno",
-    "lastName": "Test Customer",
-    "email": "bruno.test@example.local",
-    "phoneNumber": "+919900000000",
-    "customerType": 0,
-    "branchId": 1
+    "firstName": "James",
+    "lastName": "Anderson",
+    "email": "james.anderson@example.com",
+    "phoneNumber": "+61412345678",
+    "customerType": "INDIVIDUAL",
+    "branchId": null
   }
 }
 

@@ -72,7 +72,6 @@ public sealed class CustomersController : ControllerBase
         CancellationToken cancellationToken)
     {
         var command = new CreateCustomerCommand(
-            request.CustomerNumber,
             request.FirstName,
             request.LastName,
             request.Email,

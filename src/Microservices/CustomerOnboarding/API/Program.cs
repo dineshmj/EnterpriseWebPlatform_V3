@@ -1,6 +1,7 @@
-using System;
-using System.Net;
-
+using EnterpriseWebPlatform.Common.Landscape;
+using EnterpriseWebPlatform.CustomerOnboarding.Application;
+using EnterpriseWebPlatform.CustomerOnboarding.Domain.Exceptions;
+using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics;
@@ -10,11 +11,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
-
-using EnterpriseWebPlatform.CustomerOnboarding.Application;
-using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence;
-using EnterpriseWebPlatform.CustomerOnboarding.Domain.Exceptions;
-using EnterpriseWebPlatform.Common.Landscape;
+using System;
+using System.Net;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,7 +27,39 @@ var builder = WebApplication.CreateBuilder(args);
 // Each V3 microservice would have different startup conventions, increasing
 // operational complexity without adding architectural value.
 
-builder.Services.AddControllers();
+builder.Services
+    .AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var hasBindingError = context.ModelState
+                .Values
+                .SelectMany(x => x.Errors)
+                .Any(error =>
+                    error.Exception is JsonException ||
+                    error.Exception is FormatException ||
+                    error.Exception is OverflowException);
+
+            var statusCode = hasBindingError
+                ? StatusCodes.Status400BadRequest
+                : StatusCodes.Status422UnprocessableEntity;
+
+            return new ObjectResult(new ValidationProblemDetails(context.ModelState)
+            {
+                Status = statusCode,
+                Title = statusCode == StatusCodes.Status400BadRequest
+                    ? "Bad Request"
+                    : "Unprocessable Entity",
+                Type = statusCode == StatusCodes.Status400BadRequest
+                    ? "https://httpstatuses.com/400"
+                    : "https://httpstatuses.com/422"
+            })
+            {
+                StatusCode = statusCode
+            };
+        };
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 

@@ -8,10 +8,6 @@ namespace EnterpriseWebPlatform.CustomerOnboarding.API.Models;
 public sealed class CreateCustomerRequest
 {
     [Required]
-    [MaxLength(30)]
-    public string CustomerNumber { get; init; } = string.Empty;
-
-    [Required]
     [MaxLength(100)]
     public string FirstName { get; init; } = string.Empty;
 
@@ -29,6 +25,7 @@ public sealed class CreateCustomerRequest
     public string PhoneNumber { get; init; } = string.Empty;
 
     [Required]
+    [EnumDataType(typeof(CustomerType))]
     public CustomerType CustomerType { get; init; }
 
     public Guid? SubjectId { get; init; }

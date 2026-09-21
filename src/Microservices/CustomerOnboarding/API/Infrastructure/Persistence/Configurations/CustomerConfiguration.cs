@@ -1,7 +1,9 @@
-using EnterpriseWebPlatform.CustomerOnboarding.Domain.Aggregates;
-using EnterpriseWebPlatform.CustomerOnboarding.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+using EnterpriseWebPlatform.CustomerOnboarding.Domain.Aggregates;
+using EnterpriseWebPlatform.CustomerOnboarding.Domain.Enums;
+using EnterpriseWebPlatform.CustomerOnboarding.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence.Configurations;
 
@@ -22,7 +24,7 @@ public sealed class CustomerConfiguration : IEntityTypeConfiguration<Customer>
             .HasColumnName("customer_number")
             .HasConversion(
                 value => value.Value,
-                value => CustomerNumber.Create(value))
+                value => CustomerNumber.Create(long.Parse (value)))
             .HasMaxLength(30)
             .IsRequired();
 
@@ -66,13 +68,17 @@ public sealed class CustomerConfiguration : IEntityTypeConfiguration<Customer>
 
         builder.Property(x => x.CustomerType)
             .HasColumnName("customer_type")
-            .HasConversion<string>()
+            .HasConversion(
+                value => value.ToString().ToUpperInvariant(),
+                value => Enum.Parse<CustomerType>(value, ignoreCase: true))
             .HasMaxLength(30)
             .IsRequired();
 
         builder.Property(x => x.Status)
             .HasColumnName("status")
-            .HasConversion<string>()
+            .HasConversion(
+                value => value.ToString().ToUpperInvariant(),
+                value => Enum.Parse<CustomerStatus>(value, ignoreCase: true))
             .HasMaxLength(30)
             .IsRequired();
 

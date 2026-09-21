@@ -11,17 +11,17 @@ public sealed record PostalAddress
     public string PostalCode { get; }
     public string CountryCode { get; }
 
-    private PostalAddress(string line1, string? line2, string city, string state,
+    private PostalAddress(string addressLine1, string? addressLine2, string city, string state,
         string postalCode, string countryCode)
     {
-        AddressLine1 = line1; AddressLine2 = line2; City = city; State = state;
+        AddressLine1 = addressLine1; AddressLine2 = addressLine2; City = city; State = state;
         PostalCode = postalCode; CountryCode = countryCode;
     }
 
-    public static PostalAddress Create(string line1, string? line2, string city,
+    public static PostalAddress Create(string addressLine1, string? addressLine2, string city,
         string state, string postalCode, string countryCode)
     {
-        if (string.IsNullOrWhiteSpace(line1)) throw new DomainRuleViolationException("Address line 1 is required.");
+        if (string.IsNullOrWhiteSpace(addressLine1)) throw new DomainRuleViolationException("Address line 1 is required.");
         if (string.IsNullOrWhiteSpace(city)) throw new DomainRuleViolationException("City is required.");
         if (string.IsNullOrWhiteSpace(state)) throw new DomainRuleViolationException("State is required.");
         if (string.IsNullOrWhiteSpace(postalCode)) throw new DomainRuleViolationException("Postal code is required.");
@@ -30,8 +30,8 @@ public sealed record PostalAddress
         var cc = countryCode.Trim().ToUpperInvariant();
         if (cc.Length != 2) throw new DomainRuleViolationException("Country code must contain exactly two characters.");
 
-        return new PostalAddress(line1.Trim(),
-            string.IsNullOrWhiteSpace(line2) ? null : line2.Trim(),
+        return new PostalAddress(addressLine1.Trim(),
+            string.IsNullOrWhiteSpace(addressLine2) ? null : addressLine2.Trim(),
             city.Trim(), state.Trim(), postalCode.Trim(), cc);
     }
 }

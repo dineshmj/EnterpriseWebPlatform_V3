@@ -27,6 +27,17 @@
 --
 -- ============================================================================
 
+-- ============================================================================ 
+-- CUSTOMER NUMBER SEQUENCE
+-- ============================================================================
+
+CREATE SEQUENCE public.customer_number_seq
+    AS BIGINT
+    START WITH 100001
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 20;
 
 -- ============================================================================
 -- CUSTOMERS
@@ -352,8 +363,12 @@ CREATE INDEX ix_onboarding_applications_status_created_at
 --
 -- ----------------------------------------------------------------------------
 
-CREATE INDEX ix_outbox_messages_published_at_occurred_at
-    ON outbox_messages (published_at, occurred_at);
+-- Unpublished messages are the primary polling workload of the
+-- Outbox Publisher. A partial index keeps this index focused on the
+-- rows that still need to be published.
+CREATE INDEX ix_outbox_messages_unpublished
+    ON outbox_messages (occurred_at)
+    WHERE published_at IS NULL;
 
 CREATE INDEX ix_outbox_messages_aggregate
     ON outbox_messages (aggregate_type, aggregate_id);

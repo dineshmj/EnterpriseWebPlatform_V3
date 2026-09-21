@@ -10,13 +10,16 @@ namespace EnterpriseWebPlatform.CustomerOnboarding.Application.Customers.Command
 public sealed class CreateCustomerCommandHandler
 {
     private readonly ICustomerRepository _customerRepository;
+    private readonly ICustomerNumberGenerator _customerNumberGenerator;
     private readonly IApplicationUnitOfWork _unitOfWork;
 
     public CreateCustomerCommandHandler(
         ICustomerRepository customerRepository,
+        ICustomerNumberGenerator customerNumberGenerator,
         IApplicationUnitOfWork unitOfWork)
     {
         _customerRepository = customerRepository;
+        _customerNumberGenerator = customerNumberGenerator;
         _unitOfWork = unitOfWork;
     }
 
@@ -24,8 +27,15 @@ public sealed class CreateCustomerCommandHandler
         CreateCustomerCommand command,
         CancellationToken cancellationToken)
     {
+        var sequenceNumber =
+            await _customerNumberGenerator.GetNextAsync(
+                cancellationToken);
+
+        var customerNumber =
+            CustomerNumber.Create(sequenceNumber);
+
         var customer = Customer.Create(
-            CustomerNumber.Create(command.CustomerNumber),
+            customerNumber,
             command.FirstName,
             command.LastName,
             EmailAddress.Create(command.Email),
@@ -34,10 +44,16 @@ public sealed class CreateCustomerCommandHandler
             command.SubjectId,
             command.BranchId);
 
-        await _customerRepository.AddAsync(customer, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await _customerRepository.AddAsync(
+            customer,
+            cancellationToken);
 
-        return new CreateCustomerResult(customer.Id, customer.CustomerNumber.Value);
+        await _unitOfWork.SaveChangesAsync(
+            cancellationToken);
+
+        return new CreateCustomerResult(
+            customer.Id,
+            customer.CustomerNumber.Value);
     }
 }
 
