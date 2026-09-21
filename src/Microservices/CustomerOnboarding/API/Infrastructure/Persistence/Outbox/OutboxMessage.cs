@@ -4,23 +4,78 @@ namespace EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence.Ou
 
 public sealed class OutboxMessage
 {
-    public Guid Id { get; set; }
+    private OutboxMessage()
+    {
+    }
 
-    public string AggregateType { get; set; } = string.Empty;
+    private OutboxMessage(
+        Guid id,
+        string aggregateType,
+        string aggregateId,
+        string eventType,
+        JsonDocument payload,
+        DateTimeOffset occurredAt)
+    {
+        Id = id;
+        AggregateType = aggregateType;
+        AggregateId = aggregateId;
+        EventType = eventType;
+        Payload = payload;
+        OccurredAt = occurredAt;
+    }
 
-    public string AggregateId { get; set; } = string.Empty;
+    public Guid Id { get; private set; }
 
-    public string EventType { get; set; } = string.Empty;
+    public string AggregateType { get; private set; } = string.Empty;
 
-    public JsonDocument Payload { get; set; } = null!;
+    public string AggregateId { get; private set; } = string.Empty;
 
-    public DateTimeOffset OccurredAt { get; set; }
+    public string EventType { get; private set; } = string.Empty;
 
-    public DateTimeOffset? PublishedAt { get; set; }
+    public JsonDocument Payload { get; private set; } = null!;
 
-    public int AttemptCount { get; set; }
+    public DateTimeOffset OccurredAt { get; private set; }
 
-    public DateTimeOffset? LastAttemptAt { get; set; }
+    public DateTimeOffset? PublishedAt { get; private set; }
 
-    public string? LastError { get; set; }
+    public int AttemptCount { get; private set; }
+
+    public DateTimeOffset? LastAttemptAt { get; private set; }
+
+    public string? LastError { get; private set; }
+
+    public static OutboxMessage Create(
+        string aggregateType,
+        string aggregateId,
+        string eventType,
+        JsonDocument payload,
+        DateTimeOffset occurredAt)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(aggregateType);
+        ArgumentException.ThrowIfNullOrWhiteSpace(aggregateId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(eventType);
+        ArgumentNullException.ThrowIfNull(payload);
+
+        return new OutboxMessage(
+            Guid.NewGuid(),
+            aggregateType,
+            aggregateId,
+            eventType,
+            payload,
+            occurredAt);
+    }
+
+    public void MarkPublished(DateTimeOffset publishedAt)
+    {
+        PublishedAt = publishedAt;
+    }
+
+    public void RecordPublishFailure(
+        DateTimeOffset attemptedAt,
+        string error)
+    {
+        AttemptCount++;
+        LastAttemptAt = attemptedAt;
+        LastError = error;
+    }
 }

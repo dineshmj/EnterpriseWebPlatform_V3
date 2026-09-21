@@ -48,6 +48,7 @@ public sealed class OutboxMessageConfiguration
 
         builder.Property(x => x.AttemptCount)
             .HasColumnName("attempt_count")
+            .HasDefaultValue(0)
             .IsRequired();
 
         builder.Property(x => x.LastAttemptAt)
@@ -57,10 +58,15 @@ public sealed class OutboxMessageConfiguration
         builder.Property(x => x.LastError)
             .HasColumnName("last_error");
 
-        builder.HasIndex(x => new { x.PublishedAt, x.OccurredAt })
-            .HasDatabaseName("ix_outbox_messages_published_at_occurred_at");
+        builder.HasIndex(x => x.OccurredAt)
+            .HasDatabaseName("ix_outbox_messages_unpublished")
+            .HasFilter("published_at IS NULL");
 
-        builder.HasIndex(x => new { x.AggregateType, x.AggregateId })
-            .HasDatabaseName("ix_outbox_messages_aggregate");
+        builder.HasIndex(x => new
+        {
+            x.AggregateType,
+            x.AggregateId
+        })
+        .HasDatabaseName("ix_outbox_messages_aggregate");
     }
 }

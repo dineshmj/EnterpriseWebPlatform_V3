@@ -35,9 +35,13 @@ public sealed class InboxMessageConfiguration
             .HasColumnName("processed_at")
             .HasColumnType("timestamp with time zone");
 
-        builder.HasIndex(x => new { x.MessageId, x.Consumer })
-            .IsUnique()
-            .HasDatabaseName("uq_inbox_messages_message_consumer");
+        builder.HasIndex(x => new
+        {
+            x.MessageId,
+            x.Consumer
+        })
+        .IsUnique()
+        .HasDatabaseName("uq_inbox_messages_message_consumer");
 
         builder.HasIndex(x => x.MessageId)
             .HasDatabaseName("ix_inbox_messages_message_id");

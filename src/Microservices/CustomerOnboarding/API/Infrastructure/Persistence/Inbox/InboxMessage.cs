@@ -2,13 +2,48 @@ namespace EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence.In
 
 public sealed class InboxMessage
 {
-    public Guid Id { get; set; }
+    private InboxMessage()
+    {
+    }
 
-    public Guid MessageId { get; set; }
+    private InboxMessage(
+        Guid id,
+        Guid messageId,
+        string consumer,
+        DateTimeOffset receivedAt)
+    {
+        Id = id;
+        MessageId = messageId;
+        Consumer = consumer;
+        ReceivedAt = receivedAt;
+    }
 
-    public string Consumer { get; set; } = string.Empty;
+    public Guid Id { get; private set; }
 
-    public DateTimeOffset ReceivedAt { get; set; }
+    public Guid MessageId { get; private set; }
 
-    public DateTimeOffset? ProcessedAt { get; set; }
+    public string Consumer { get; private set; } = string.Empty;
+
+    public DateTimeOffset ReceivedAt { get; private set; }
+
+    public DateTimeOffset? ProcessedAt { get; private set; }
+
+    public static InboxMessage Create(
+        Guid messageId,
+        string consumer,
+        DateTimeOffset receivedAt)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(consumer);
+
+        return new InboxMessage(
+            Guid.NewGuid(),
+            messageId,
+            consumer,
+            receivedAt);
+    }
+
+    public void MarkProcessed(DateTimeOffset processedAt)
+    {
+        ProcessedAt = processedAt;
+    }
 }

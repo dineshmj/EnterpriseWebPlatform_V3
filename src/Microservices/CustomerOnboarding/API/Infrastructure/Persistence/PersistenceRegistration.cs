@@ -12,9 +12,14 @@ public static class PersistenceRegistration
         services.AddScoped<IOnboardingApplicationRepository, OnboardingApplicationRepository>();
         services.AddScoped<ICustomerNumberGenerator, CustomerNumberGenerator>();
 
-        services.AddScoped<IApplicationUnitOfWork>(provider => provider.GetRequiredService<CustomerDbContext>());
-        services.AddScoped<ICustomerReadContext>(provider => provider.GetRequiredService<CustomerDbContext>());
-        services.AddScoped<IOnboardingApplicationReadContext>(provider => provider.GetRequiredService<CustomerDbContext>());
+        services.AddScoped<IApplicationUnitOfWork>(
+            provider => provider.GetRequiredService<CustomerDbContext>());
+
+        services.AddScoped<ICustomerReadContext>(
+            provider => provider.GetRequiredService<CustomerDbContext>());
+
+        services.AddScoped<IOnboardingApplicationReadContext>(
+            provider => provider.GetRequiredService<CustomerDbContext>());
 
         return services;
     }
