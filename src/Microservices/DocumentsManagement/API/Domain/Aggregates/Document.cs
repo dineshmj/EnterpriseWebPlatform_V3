@@ -1,0 +1,67 @@
+using EnterpriseWebPlatform.DocumentsManagement.Domain.Common;
+using EnterpriseWebPlatform.DocumentsManagement.Domain.Exceptions;
+
+namespace EnterpriseWebPlatform.DocumentsManagement.Domain.Aggregates;
+
+public sealed class Document : Entity
+{
+    private Document()
+    {
+    }
+
+    public string FileName { get; private set; } = string.Empty;
+    public string ContentType { get; private set; } = string.Empty;
+    public long Size { get; private set; }
+    public string ContentHash { get; private set; } = string.Empty;
+    public string StorageReference { get; private set; } = string.Empty;
+    public DateTimeOffset CreatedAt { get; private set; }
+    public DateTimeOffset UpdatedAt { get; private set; }
+    public long Version { get; private set; }
+
+    public static Document Create(
+        Guid documentId,
+        string fileName,
+        string contentType,
+        long size,
+        string contentHash,
+        string storageReference,
+        DateTimeOffset now)
+    {
+        if (documentId == Guid.Empty)
+            throw new DomainRuleViolationException("Document ID cannot be empty.");
+
+        if (string.IsNullOrWhiteSpace(fileName))
+            throw new DomainRuleViolationException("File name is required.");
+
+        if (string.IsNullOrWhiteSpace(contentType))
+            throw new DomainRuleViolationException("Content type is required.");
+
+        if (size < 0)
+            throw new DomainRuleViolationException("Document size cannot be negative.");
+
+        if (string.IsNullOrWhiteSpace(contentHash))
+            throw new DomainRuleViolationException("Content hash is required.");
+
+        if (string.IsNullOrWhiteSpace(storageReference))
+            throw new DomainRuleViolationException("Storage reference is required.");
+
+        return new Document
+        {
+            Id = documentId,
+            FileName = fileName,
+            ContentType = contentType,
+            Size = size,
+            ContentHash = contentHash,
+            StorageReference = storageReference,
+            CreatedAt = now,
+            UpdatedAt = now,
+            Version = 1
+        };
+    }
+
+    public void Touch(DateTimeOffset now)
+    {
+        UpdatedAt = now;
+        Version++;
+    }
+}

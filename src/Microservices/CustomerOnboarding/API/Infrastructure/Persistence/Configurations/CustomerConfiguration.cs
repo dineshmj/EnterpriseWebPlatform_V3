@@ -24,7 +24,7 @@ public sealed class CustomerConfiguration : IEntityTypeConfiguration<Customer>
             .HasColumnName("customer_number")
             .HasConversion(
                 value => value.Value,
-                value => CustomerNumber.Create(long.Parse (value)))
+                value => CustomerNumber.FromValue(value))
             .HasMaxLength(30)
             .IsRequired();
 

@@ -1,0 +1,11 @@
+meta {
+  name: Delete Document
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/v1/documents/{{documentId}}
+  body: none
+  auth: inherit
+}

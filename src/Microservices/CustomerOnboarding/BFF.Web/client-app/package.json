@@ -1,0 +1,23 @@
+{
+  "name": "customer-onboarding-mfe",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 44311",
+    "build": "next build",
+    "start": "next start -p 44311",
+    "export": "next build && powershell -NoProfile -ExecutionPolicy Bypass -File ./export-to-bff.ps1",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "16.3.4",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "26.4.1",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.5",
+    "typescript": "7.0.2"
+  }
+}

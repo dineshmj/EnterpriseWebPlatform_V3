@@ -1,4 +1,4 @@
-using EnterpriseWebPlatform.Common.Landscape;
+using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 using EnterpriseWebPlatform.CustomerOnboarding.Application;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Exceptions;
 using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence;
@@ -118,8 +118,8 @@ builder.Services.AddAuthorization(options =>
 
         policy.RequireClaim(
             "scope",
-            MicroserviceApiResources.CUSTOMER_ONBOARDING_READ,
-            MicroserviceApiResources.CUSTOMER_ONBOARDING_WRITE);
+            CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_READ,
+            CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_WRITE);
     });
 
     // These policies are intentionally role-based at this stage. They provide
