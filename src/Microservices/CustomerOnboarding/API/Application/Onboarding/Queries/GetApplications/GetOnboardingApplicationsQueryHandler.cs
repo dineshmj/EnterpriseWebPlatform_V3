@@ -36,18 +36,30 @@ public sealed class GetOnboardingApplicationsQueryHandler
 
         var totalCount = await applications.CountAsync(cancellationToken);
 
-        var items = await applications
+        var rows = await applications
             .OrderByDescending(x => x.CreatedAt)
             .Skip((pageNumber - 1) * pageSize)
             .Take(pageSize)
-            .Select(x => new OnboardingApplicationListItemDto(
+            .Select(x => new
+            {
                 x.Id,
-                x.ApplicationNumber.Value,
+                ApplicationNumber = x.ApplicationNumber.Value,
                 x.CustomerId,
                 x.Status,
                 x.CreatedAt,
-                x.Version))
+                x.Version
+            })
             .ToListAsync(cancellationToken);
+
+        var items = rows
+            .Select(x => new OnboardingApplicationListItemDto(
+                x.Id,
+                x.ApplicationNumber,
+                x.CustomerId,
+                x.Status.ToString(),
+                x.CreatedAt,
+                x.Version))
+            .ToList();
 
         return new PagedResult<OnboardingApplicationListItemDto>(
             items,
@@ -61,7 +73,7 @@ public sealed record OnboardingApplicationListItemDto(
     long ApplicationId,
     string ApplicationNumber,
     long CustomerId,
-    Domain.Enums.OnboardingApplicationStatus Status,
+    string Status,
     DateTimeOffset CreatedAt,
     long Version);
 

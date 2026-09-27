@@ -45,10 +45,13 @@ export default function CustomersPage() {
       {
         type: 'BSS_CONTEXT_UPDATE',
         context: {
-          persistentContext: [],
-          currentContext: [
+          // Customer ID is the durable business context for the onboarding
+          // workflow. The Shell remains business-agnostic and only transports
+          // and renders the context supplied by the MFE.
+          persistentContext: [
             { title: 'Customer ID', value: customer.customerId },
           ],
+          currentContext: [],
           retainedContext: [],
         },
       },

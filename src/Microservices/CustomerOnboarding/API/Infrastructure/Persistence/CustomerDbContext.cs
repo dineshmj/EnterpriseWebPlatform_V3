@@ -1,15 +1,15 @@
 using System.Text.Json;
 
+using Microsoft.EntityFrameworkCore;
+
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Persistence;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Aggregates;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Common;
-using EnterpriseWebPlatform.CustomerOnboarding.Domain.Events;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Entities;
+using EnterpriseWebPlatform.CustomerOnboarding.Domain.Events;
 using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Messaging;
 using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence.Inbox;
 using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence.Outbox;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence;
 
@@ -123,47 +123,120 @@ public sealed class CustomerDbContext :
             switch (domainEvent)
             {
                 case CustomerCreatedDomainEvent customerCreated:
-                {
-                    var customer =
-                        (Customer)aggregate;
+                    {
+                        var customer =
+                            (Customer)aggregate;
 
-                    var integrationEvent =
-                        new CustomerCreatedIntegrationEvent(
-                            customer.Id,
-                            customer.CustomerNumber.Value,
-                            customer.SubjectId,
-                            customer.CustomerType
-                                .ToString()
-                                .ToUpperInvariant(),
-                            customer.Status
-                                .ToString()
-                                .ToUpperInvariant());
+                        var integrationEvent =
+                            new CustomerCreatedIntegrationEvent(
+                                customer.Id,
+                                customer.CustomerNumber.Value,
+                                customer.SubjectId,
+                                customer.CustomerType
+                                    .ToString()
+                                    .ToUpperInvariant(),
+                                customer.Status
+                                    .ToString()
+                                    .ToUpperInvariant());
 
-                    var envelope =
-                        new IntegrationEventEnvelope
-                            <CustomerCreatedIntegrationEvent>(
-                            Guid.NewGuid(),
-                            "CustomerCreated",
-                            "customer-onboarding",
-                            customerCreated.OccurredAt,
-                            null,
-                            null,
-                            integrationEvent);
+                        var envelope =
+                            new IntegrationEventEnvelope
+                                <CustomerCreatedIntegrationEvent>(
+                                Guid.NewGuid(),
+                                "CustomerCreated",
+                                "customer-onboarding",
+                                customerCreated.OccurredAt,
+                                null,
+                                null,
+                                integrationEvent);
 
-                    var payload =
-                        JsonSerializer.SerializeToDocument(
-                            envelope);
+                        var payload =
+                            JsonSerializer.SerializeToDocument(
+                                envelope);
 
-                    messages.Add(
-                        OutboxMessage.Create(
-                            "Customer",
-                            customer.Id.ToString(),
-                            "CustomerCreated",
-                            payload,
-                            customerCreated.OccurredAt));
+                        messages.Add(
+                            OutboxMessage.Create(
+                                "Customer",
+                                customer.Id.ToString(),
+                                "CustomerCreated",
+                                payload,
+                                customerCreated.OccurredAt));
 
-                    break;
-                }
+                        break;
+                    }
+
+                case OnboardingApplicationSubmittedDomainEvent submitted:
+                    {
+                        var integrationEvent =
+                            new OnboardingApplicationSubmittedIntegrationEvent(
+                                submitted.ApplicationId,
+                                submitted.CustomerId,
+                                submitted.ApplicationNumber);
+
+                        var envelope =
+                            new IntegrationEventEnvelope
+                                <OnboardingApplicationSubmittedIntegrationEvent>(
+                                Guid.NewGuid(),
+                                "OnboardingApplicationSubmitted",
+                                "customer-onboarding",
+                                submitted.OccurredAt,
+                                null,
+                                null,
+                                integrationEvent);
+
+                        var payload =
+                            JsonSerializer.SerializeToDocument(
+                                envelope);
+
+                        messages.Add(
+                            OutboxMessage.Create(
+                                "OnboardingApplication",
+                                submitted.ApplicationId.ToString(),
+                                "OnboardingApplicationSubmitted",
+                                payload,
+                                submitted.OccurredAt));
+
+                        break;
+                    }
+
+                case OnboardingApplicationStatusChangedDomainEvent statusChanged:
+                    {
+                        var integrationEvent =
+                            new OnboardingApplicationStatusChangedIntegrationEvent(
+                                statusChanged.ApplicationId,
+                                statusChanged.CustomerId,
+                                statusChanged.PreviousStatus
+                                    .ToString()
+                                    .ToUpperInvariant(),
+                                statusChanged.NewStatus
+                                    .ToString()
+                                    .ToUpperInvariant());
+
+                        var envelope =
+                            new IntegrationEventEnvelope
+                                <OnboardingApplicationStatusChangedIntegrationEvent>(
+                                Guid.NewGuid(),
+                                "OnboardingApplicationStatusChanged",
+                                "customer-onboarding",
+                                statusChanged.OccurredAt,
+                                null,
+                                null,
+                                integrationEvent);
+
+                        var payload =
+                            JsonSerializer.SerializeToDocument(
+                                envelope);
+
+                        messages.Add(
+                            OutboxMessage.Create(
+                                "OnboardingApplication",
+                                statusChanged.ApplicationId.ToString(),
+                                "OnboardingApplicationStatusChanged",
+                                payload,
+                                statusChanged.OccurredAt));
+
+                        break;
+                    }
 
                 default:
                     throw new InvalidOperationException(

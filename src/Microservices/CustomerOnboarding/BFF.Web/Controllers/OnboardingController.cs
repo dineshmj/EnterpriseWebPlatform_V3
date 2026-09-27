@@ -2,8 +2,10 @@ using System.ComponentModel.DataAnnotations;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+
 using EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.Services;
 
 namespace EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.Controllers;
@@ -48,19 +50,41 @@ public sealed class OnboardingController(
             return UnprocessableEntity(new { message = "Both KYC documents must be PDF files." });
         }
 
-        var subject = User.FindFirst("sub")?.Value;
-        if (!Guid.TryParse(subject, out var subjectId))
+        long customerId;
+        string customerNumber;
+
+        if (request.CustomerId.HasValue)
         {
-            return Unauthorized(new { message = "The authenticated user does not have a valid subject identifier." });
+            var existingCustomer = await GetCustomerAsync(
+                request.CustomerId.Value,
+                cancellationToken);
+
+            if (!existingCustomer.Success)
+            {
+                return existingCustomer.Result!;
+            }
+
+            customerId = existingCustomer.CustomerId;
+            customerNumber = existingCustomer.CustomerNumber;
+        }
+        else
+        {
+            // The authenticated user's subject identifies the actor creating the customer,
+            // not the customer being created. A staff user may create many customer records,
+            // so the customer's optional OIDC SubjectId must not be populated from the
+            // staff user's token. It remains null until the customer's own identity is
+            // explicitly linked through an appropriate identity-association workflow.
+            var customer = await CreateCustomerAsync(request, cancellationToken);
+            if (!customer.Success)
+            {
+                return customer.Result!;
+            }
+
+            customerId = customer.CustomerId!.Value;
+            customerNumber = customer.CustomerNumber!;
         }
 
-        var customer = await CreateCustomerAsync(request, subjectId, cancellationToken);
-        if (!customer.Success)
-        {
-            return customer.Result!;
-        }
-
-        var application = await CreateApplicationAsync(customer.CustomerId, cancellationToken);
+        var application = await CreateApplicationAsync(customerId, cancellationToken);
         if (!application.Success)
         {
             return application.Result!;
@@ -134,8 +158,8 @@ public sealed class OnboardingController(
 
             return StatusCode(StatusCodes.Status201Created, new
             {
-                customerId = customer.CustomerId,
-                customerNumber = customer.CustomerNumber,
+                customerId,
+                customerNumber,
                 applicationId = application.ApplicationId,
                 applicationNumber = application.ApplicationNumber,
                 status = "SUBMITTED",
@@ -156,9 +180,28 @@ public sealed class OnboardingController(
         }
     }
 
+    private async Task<(bool Success, long CustomerId, string CustomerNumber, IActionResult? Result)> GetCustomerAsync(
+        long customerId,
+        CancellationToken cancellationToken)
+    {
+        var client = httpClientFactory.CreateClient("CustomerOnboardingApi");
+        using var response = await client.GetAsync(
+            $"/v1/customers/{customerId}",
+            cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return (false, 0, string.Empty, await ForwardJsonAsync(response, cancellationToken));
+        }
+
+        var result = await response.Content.ReadFromJsonAsync<CustomerDetailsResult>(cancellationToken: cancellationToken)
+            ?? throw new InvalidOperationException("CO API returned an empty customer response.");
+
+        return (true, result.CustomerId, result.CustomerNumber, null);
+    }
+
     private async Task<(bool Success, long? CustomerId, string? CustomerNumber, IActionResult? Result)> CreateCustomerAsync(
         CreateAndSubmitOnboardingRequest request,
-        Guid subjectId,
         CancellationToken cancellationToken)
     {
         var client = httpClientFactory.CreateClient("CustomerOnboardingApi");
@@ -170,8 +213,7 @@ public sealed class OnboardingController(
                 lastName = request.LastName,
                 email = request.Email,
                 phoneNumber = request.PhoneNumber,
-                customerType = 1,
-                subjectId
+                customerType = 1
             },
             cancellationToken);
 
@@ -341,6 +383,8 @@ public sealed class OnboardingController(
         [Required, MaxLength(30)]
         public string PhoneNumber { get; init; } = string.Empty;
 
+        public long? CustomerId { get; init; }
+
         [Required]
         public IFormFile? KycProof { get; init; }
 
@@ -349,6 +393,7 @@ public sealed class OnboardingController(
     }
 
     private sealed record CreateCustomerResult(long CustomerId, string CustomerNumber);
+    private sealed record CustomerDetailsResult(long CustomerId, string CustomerNumber);
     private sealed record CreateApplicationResult(long ApplicationId, string ApplicationNumber);
     private sealed record UploadDocumentResult(Guid DocumentId, string FileName, string ContentType, long Size, string ContentHash, DateTimeOffset CreatedAt, long Version);
 }

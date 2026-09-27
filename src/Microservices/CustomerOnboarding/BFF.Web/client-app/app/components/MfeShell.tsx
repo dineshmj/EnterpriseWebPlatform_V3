@@ -65,12 +65,6 @@ export function MfeShell({
 
     const parentWindow = window.parent;
 
-    // Announce that this MFE is ready to receive the Shell's current context.
-    parentWindow.postMessage(
-      { type: 'BSS_MFE_READY' },
-      parentOrigin,
-    );
-
     const handler = (event: MessageEvent) => {
       // Only accept protocol messages from the embedding parent.
       if (event.source !== parentWindow) return;
@@ -116,6 +110,14 @@ export function MfeShell({
     };
 
     window.addEventListener('message', handler);
+
+    // Register the listener before announcing readiness. The Shell responds
+    // to BSS_MFE_READY immediately with BSS_CONTEXT_HANDOFF, so announcing
+    // readiness first creates a race in which the handoff can be missed.
+    parentWindow.postMessage(
+      { type: 'BSS_MFE_READY' },
+      parentOrigin,
+    );
 
     return () => {
       window.removeEventListener('message', handler);

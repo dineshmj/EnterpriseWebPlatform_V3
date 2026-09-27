@@ -1,7 +1,9 @@
-using EnterpriseWebPlatform.CustomerOnboarding.Domain.Aggregates;
-using EnterpriseWebPlatform.CustomerOnboarding.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+using EnterpriseWebPlatform.CustomerOnboarding.Domain.Aggregates;
+using EnterpriseWebPlatform.CustomerOnboarding.Domain.Enums;
+using EnterpriseWebPlatform.CustomerOnboarding.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence.Configurations;
 
@@ -37,7 +39,11 @@ public sealed class OnboardingApplicationConfiguration
 
         builder.Property(x => x.Status)
             .HasColumnName("status")
-            .HasConversion<string>()
+            .HasConversion(
+                value => value.ToString().ToUpperInvariant(),
+                value => Enum.Parse<OnboardingApplicationStatus>(
+                    value,
+                    ignoreCase: true))
             .HasMaxLength(50)
             .IsRequired();
 

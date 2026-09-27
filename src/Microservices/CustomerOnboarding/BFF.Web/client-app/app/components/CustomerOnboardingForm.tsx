@@ -64,7 +64,11 @@ function getCustomerId(context: WorkspaceContext): number | null {
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
-export function CustomerOnboardingForm() {
+export function CustomerOnboardingForm({
+  onApplicationCreated,
+}: {
+  onApplicationCreated?: () => void;
+}) {
   const [busy, setBusy] = useState(false);
   const [loadingCustomer, setLoadingCustomer] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -136,6 +140,11 @@ export function CustomerOnboardingForm() {
 
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
+
+    if (selectedCustomer) {
+      form.set('customerId', String(selectedCustomer.customerId));
+    }
+
     const kyc = form.get('kycProof') as File | null;
     const tax = form.get('taxProof') as File | null;
 
@@ -163,6 +172,7 @@ export function CustomerOnboardingForm() {
       );
 
       setResult(response.data);
+      onApplicationCreated?.();
       formElement.reset();
       setFormValues(emptyForm);
       setSelectedCustomer(null);

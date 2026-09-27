@@ -40,19 +40,32 @@ public sealed class GetCustomersQueryHandler
 
         var totalCount = await customers.CountAsync(cancellationToken);
 
-        var items = await customers
+        var rows = await customers
             .OrderByDescending(x => x.CreatedAt)
             .Skip((pageNumber - 1) * pageSize)
             .Take(pageSize)
-            .Select(x => new CustomerListItemDto(
+            .Select(x => new
+            {
                 x.Id,
-                x.CustomerNumber.Value,
+                CustomerNumber = x.CustomerNumber.Value,
                 x.FirstName,
                 x.LastName,
-                x.Email.Value,
+                Email = x.Email.Value,
                 x.CustomerType,
-                x.Status))
+                x.Status
+            })
             .ToListAsync(cancellationToken);
+
+        var items = rows
+            .Select(x => new CustomerListItemDto(
+                x.Id,
+                x.CustomerNumber,
+                x.FirstName,
+                x.LastName,
+                x.Email,
+                x.CustomerType,
+                x.Status.ToString()))
+            .ToList();
 
         return new PagedResult<CustomerListItemDto>(
             items,
@@ -69,7 +82,7 @@ public sealed record CustomerListItemDto(
     string LastName,
     string Email,
     Domain.Enums.CustomerType CustomerType,
-    Domain.Enums.CustomerStatus Status);
+    string Status);
 
 public sealed record PagedResult<T>(
     IReadOnlyCollection<T> Items,

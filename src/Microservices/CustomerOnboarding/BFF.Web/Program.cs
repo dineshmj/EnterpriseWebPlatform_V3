@@ -21,7 +21,8 @@ builder.Services.Configure<CustomerOnboardingBffOptions>(
 
 builder.Services.AddMemoryCache();
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddControllers();
+// builder.Services.AddControllers();
+builder.Services.AddControllersWithViews();
 builder.Services.AddAntiforgery(options =>
 {
     options.HeaderName = "X-CSRF-TOKEN";
@@ -125,8 +126,11 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
-app.UseAuthorization();
+//app.UseAuthorization();
+//app.UseBff();
 app.UseBff();
+app.UseAuthorization();
+
 
 app.MapControllers();
 

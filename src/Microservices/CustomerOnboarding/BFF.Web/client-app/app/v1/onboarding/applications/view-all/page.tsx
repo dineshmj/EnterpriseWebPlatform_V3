@@ -12,10 +12,19 @@ export default function ApplicationsPage() {
   const [data, setData] = useState<Page | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => { getJson<Page>('/bff/api/onboarding/applications?pageNumber=1&pageSize=25').then(setData).catch(e => setError(e.message)); }, []);
+  const loadApplications = () => {
+    setError(null);
+    return getJson<Page>('/bff/api/onboarding/applications?pageNumber=1&pageSize=25')
+      .then(setData)
+      .catch(e => setError(e instanceof Error ? e.message : 'Unable to load applications.'));
+  };
+
+  useEffect(() => {
+    void loadApplications();
+  }, []);
 
   return <MfeShell title="Onboarding Applications" subtitle="Onboarding Applications · Create, review and manage applications">
-    <CustomerOnboardingForm />
+    <CustomerOnboardingForm onApplicationCreated={loadApplications} />
     <div className="card">
       <h2>Recent applications</h2>
       {error && <div className="error">{error}</div>}
