@@ -20,6 +20,7 @@ public sealed class CustomerOutboxDbContext(
             entity.Property(x => x.EventType).HasColumnName("event_type");
             entity.Property(x => x.Payload).HasColumnName("payload").HasColumnType("jsonb");
             entity.Property(x => x.OccurredAt).HasColumnName("occurred_at");
+            entity.Property(x => x.InitiatedByUserId).HasColumnName("initiated_by").HasColumnType("uuid");
             entity.Property(x => x.PublishedAt).HasColumnName("published_at");
             entity.Property(x => x.AttemptCount).HasColumnName("attempt_count");
             entity.Property(x => x.LastAttemptAt).HasColumnName("last_attempt_at");

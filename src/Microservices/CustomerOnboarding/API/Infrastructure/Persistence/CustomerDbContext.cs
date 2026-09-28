@@ -1,6 +1,7 @@
 using System.Text.Json;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Http;
 
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Persistence;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Aggregates;
@@ -19,10 +20,14 @@ public sealed class CustomerDbContext :
     ICustomerReadContext,
     IOnboardingApplicationReadContext
 {
+    private readonly IHttpContextAccessor _httpContextAccessor;
+
     public CustomerDbContext(
-        DbContextOptions<CustomerDbContext> options)
+        DbContextOptions<CustomerDbContext> options,
+        IHttpContextAccessor httpContextAccessor)
         : base(options)
     {
+        _httpContextAccessor = httpContextAccessor;
     }
 
     public DbSet<Customer> Customers => Set<Customer>();
@@ -69,8 +74,10 @@ public sealed class CustomerDbContext :
 
             // The generated Customer.Id is now available, so the integration
             // event can contain the real business aggregate identifier.
+            var initiatedByUserId = GetInitiatedByUserId();
+
             var outboxMessages =
-                CreateOutboxMessages(domainEvents);
+                CreateOutboxMessages(domainEvents, initiatedByUserId);
 
             OutboxMessages.AddRange(outboxMessages);
 
@@ -114,7 +121,8 @@ public sealed class CustomerDbContext :
 
     private List<OutboxMessage> CreateOutboxMessages(
         IEnumerable<(AggregateRoot Aggregate, IDomainEvent Event)>
-            domainEvents)
+            domainEvents,
+        Guid? initiatedByUserId)
     {
         var messages = new List<OutboxMessage>();
 
@@ -148,6 +156,7 @@ public sealed class CustomerDbContext :
                                 customerCreated.OccurredAt,
                                 null,
                                 null,
+                                initiatedByUserId?.ToString(),
                                 integrationEvent);
 
                         var payload =
@@ -160,7 +169,8 @@ public sealed class CustomerDbContext :
                                 customer.Id.ToString(),
                                 "CustomerCreated",
                                 payload,
-                                customerCreated.OccurredAt));
+                                customerCreated.OccurredAt,
+                                initiatedByUserId));
 
                         break;
                     }
@@ -182,6 +192,7 @@ public sealed class CustomerDbContext :
                                 submitted.OccurredAt,
                                 null,
                                 null,
+                                initiatedByUserId?.ToString(),
                                 integrationEvent);
 
                         var payload =
@@ -194,7 +205,8 @@ public sealed class CustomerDbContext :
                                 submitted.ApplicationId.ToString(),
                                 "OnboardingApplicationSubmitted",
                                 payload,
-                                submitted.OccurredAt));
+                                submitted.OccurredAt,
+                                initiatedByUserId));
 
                         break;
                     }
@@ -221,6 +233,7 @@ public sealed class CustomerDbContext :
                                 statusChanged.OccurredAt,
                                 null,
                                 null,
+                                initiatedByUserId?.ToString(),
                                 integrationEvent);
 
                         var payload =
@@ -233,7 +246,8 @@ public sealed class CustomerDbContext :
                                 statusChanged.ApplicationId.ToString(),
                                 "OnboardingApplicationStatusChanged",
                                 payload,
-                                statusChanged.OccurredAt));
+                                statusChanged.OccurredAt,
+                                initiatedByUserId));
 
                         break;
                     }
@@ -246,6 +260,15 @@ public sealed class CustomerDbContext :
         }
 
         return messages;
+    }
+
+    private Guid? GetInitiatedByUserId()
+    {
+        var subject = _httpContextAccessor.HttpContext?.User.FindFirst("sub")?.Value;
+
+        return Guid.TryParse(subject, out var subjectId)
+            ? subjectId
+            : null;
     }
 
     private static void ClearDomainEvents(

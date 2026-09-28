@@ -42,6 +42,10 @@ public sealed class OutboxMessageConfiguration
             .HasColumnType("timestamp with time zone")
             .IsRequired();
 
+        builder.Property(x => x.InitiatedByUserId)
+            .HasColumnName("initiated_by")
+            .HasColumnType("uuid");
+
         builder.Property(x => x.PublishedAt)
             .HasColumnName("published_at")
             .HasColumnType("timestamp with time zone");

@@ -14,7 +14,8 @@ public sealed class OutboxMessage
         string aggregateId,
         string eventType,
         JsonDocument payload,
-        DateTimeOffset occurredAt)
+        DateTimeOffset occurredAt,
+        Guid? initiatedByUserId)
     {
         Id = id;
         AggregateType = aggregateType;
@@ -22,6 +23,7 @@ public sealed class OutboxMessage
         EventType = eventType;
         Payload = payload;
         OccurredAt = occurredAt;
+        InitiatedByUserId = initiatedByUserId;
     }
 
     public Guid Id { get; private set; }
@@ -36,6 +38,8 @@ public sealed class OutboxMessage
 
     public DateTimeOffset OccurredAt { get; private set; }
 
+    public Guid? InitiatedByUserId { get; private set; }
+
     public DateTimeOffset? PublishedAt { get; private set; }
 
     public int AttemptCount { get; private set; }
@@ -49,7 +53,8 @@ public sealed class OutboxMessage
         string aggregateId,
         string eventType,
         JsonDocument payload,
-        DateTimeOffset occurredAt)
+        DateTimeOffset occurredAt,
+        Guid? initiatedByUserId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(aggregateType);
         ArgumentException.ThrowIfNullOrWhiteSpace(aggregateId);
@@ -62,7 +67,8 @@ public sealed class OutboxMessage
             aggregateId,
             eventType,
             payload,
-            occurredAt);
+            occurredAt,
+            initiatedByUserId);
     }
 
     public void MarkPublished(DateTimeOffset publishedAt)

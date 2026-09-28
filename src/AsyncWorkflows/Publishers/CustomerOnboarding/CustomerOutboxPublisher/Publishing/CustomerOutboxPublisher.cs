@@ -37,6 +37,13 @@ public sealed class CustomerOutboxPublisher(
 
             try
             {
+                if (message.InitiatedByUserId is null)
+                {
+                    logger.LogWarning(
+                        "Outbox message {MessageId} has no InitiatedByUserId. The event will be published, but downstream user-targeted notifications cannot be routed to a human initiator.",
+                        message.Id);
+                }
+
                 await kafkaProducer.ProduceAsync(
                     KafkaTopicNames.CustomerCreated,
                     message.AggregateId,
@@ -50,10 +57,11 @@ public sealed class CustomerOutboxPublisher(
                 await dbContext.SaveChangesAsync(cancellationToken);
 
                 logger.LogInformation(
-                    "Published Outbox message {MessageId} for aggregate {AggregateId} to topic {Topic}.",
+                    "Published Outbox message {MessageId} for aggregate {AggregateId} to topic {Topic}. InitiatedByUserId={InitiatedByUserId}.",
                     message.Id,
                     message.AggregateId,
-                    KafkaTopicNames.CustomerCreated);
+                    KafkaTopicNames.CustomerCreated,
+                    message.InitiatedByUserId);
             }
             catch (Exception ex)
             {

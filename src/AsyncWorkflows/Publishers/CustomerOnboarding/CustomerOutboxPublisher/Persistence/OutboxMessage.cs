@@ -8,6 +8,7 @@ public sealed class OutboxMessage
     public string EventType { get; set; } = string.Empty;
     public string Payload { get; set; } = string.Empty;
     public DateTimeOffset OccurredAt { get; set; }
+    public Guid? InitiatedByUserId { get; set; }
     public DateTimeOffset? PublishedAt { get; set; }
     public int AttemptCount { get; set; }
     public DateTimeOffset? LastAttemptAt { get; set; }

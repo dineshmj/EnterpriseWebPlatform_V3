@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import { MfeShell } from '../../../components/MfeShell';
+import { useEffect, useRef, useState } from 'react';
+import { MfeShell, publishWorkspaceContext, replacePersistentContext, type WorkspaceContext } from '../../../components/MfeShell';
 import { getJson } from '../../../lib/api';
 
 interface Customer {
@@ -27,6 +27,18 @@ export default function CustomersPage() {
   const router = useRouter();
   const [data, setData] = useState<Page | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const workspaceContextRef = useRef<WorkspaceContext | null>(null);
+
+  useEffect(() => {
+    const handleContextHandoff = (event: Event) => {
+      workspaceContextRef.current =
+        (event as CustomEvent<WorkspaceContext>).detail ?? null;
+    };
+
+    window.addEventListener('bss-context-handoff', handleContextHandoff);
+    return () =>
+      window.removeEventListener('bss-context-handoff', handleContextHandoff);
+  }, []);
 
   useEffect(() => {
     getJson<Page>('/bff/api/customers?pageNumber=1&pageSize=25')
@@ -35,28 +47,33 @@ export default function CustomersPage() {
   }, []);
 
   function startOnboarding(customer: Customer) {
-    // The MFE does not interpret the workspace context. It publishes the
-    // selected customer as the current context to the Shell. The Shell keeps
-    // that context and sends it back through BSS_CONTEXT_HANDOFF when the
-    // onboarding page becomes ready.
-    const parentOrigin = document.referrer ? new URL(document.referrer).origin : '*';
+    const previousContext = workspaceContextRef.current;
 
-    window.parent?.postMessage(
-      {
-        type: 'BSS_CONTEXT_UPDATE',
-        context: {
-          // Customer ID is the durable business context for the onboarding
-          // workflow. The Shell remains business-agnostic and only transports
-          // and renders the context supplied by the MFE.
-          persistentContext: [
-            { title: 'Customer ID', value: customer.customerId },
-          ],
-          currentContext: [],
-          retainedContext: [],
-        },
-      },
-      parentOrigin,
-    );
+    const previousCustomerId = previousContext?.persistentContext.find(
+      item => item.title.toLowerCase() === 'customer id',
+    )?.value;
+
+    const rootCustomerChanged =
+      previousCustomerId === undefined ||
+      Number(previousCustomerId) !== customer.customerId;
+
+    const persistentContext = [
+      { title: 'Customer ID', value: customer.customerId },
+      { title: 'Customer Number', value: customer.customerNumber },
+    ];
+
+    if (rootCustomerChanged) {
+      // Changing the root customer invalidates all subordinate context.
+      replacePersistentContext(persistentContext);
+    } else {
+      // Re-selecting the same customer does not change the business scope, so
+      // previously retained/current context may still be useful.
+      publishWorkspaceContext({
+        persistentContext,
+        currentContext: previousContext?.currentContext ?? [],
+        retainedContext: previousContext?.retainedContext ?? [],
+      });
+    }
 
     router.push('/v1/onboarding/applications/view-all');
   }

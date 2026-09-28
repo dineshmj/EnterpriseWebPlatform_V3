@@ -12,11 +12,16 @@ export default function ApplicationsPage() {
   const [data, setData] = useState<Page | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const loadApplications = () => {
-    setError(null);
-    return getJson<Page>('/bff/api/onboarding/applications?pageNumber=1&pageSize=25')
-      .then(setData)
-      .catch(e => setError(e instanceof Error ? e.message : 'Unable to load applications.'));
+  const loadApplications = async () => {
+    try {
+      setError(null);
+      const page = await getJson<Page>(
+        '/bff/api/onboarding/applications?pageNumber=1&pageSize=25',
+      );
+      setData(page);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to load applications.');
+    }
   };
 
   useEffect(() => {

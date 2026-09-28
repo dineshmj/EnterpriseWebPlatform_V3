@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { getCsrfToken, getJson, postForm } from '../lib/api';
-import { setUnsavedChanges } from './MfeShell';
+import { publishWorkspaceContext, setUnsavedChanges } from './MfeShell';
 
 interface Result {
   customerId: number;
@@ -52,11 +52,12 @@ const emptyForm: FormValues = {
 };
 
 function getCustomerId(context: WorkspaceContext): number | null {
-  const item = [
-    ...context.currentContext,
-    ...context.retainedContext,
-    ...context.persistentContext,
-  ].find(x => x.title.toLowerCase() === 'customer id');
+  // Customer is the persistent/root business context. Prefer it over
+  // current/retained entries so a stale subordinate context can never
+  // override the current customer identity.
+  const item = context.persistentContext.find(
+    x => x.title.toLowerCase() === 'customer id',
+  );
 
   if (item === undefined) return null;
 
@@ -64,11 +65,13 @@ function getCustomerId(context: WorkspaceContext): number | null {
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
+interface CustomerOnboardingFormProps {
+  onApplicationCreated?: () => void | Promise<void>;
+}
+
 export function CustomerOnboardingForm({
   onApplicationCreated,
-}: {
-  onApplicationCreated?: () => void;
-}) {
+}: CustomerOnboardingFormProps) {
   const [busy, setBusy] = useState(false);
   const [loadingCustomer, setLoadingCustomer] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -172,7 +175,25 @@ export function CustomerOnboardingForm({
       );
 
       setResult(response.data);
-      onApplicationCreated?.();
+
+      // Publish the authoritative result of the successful onboarding
+      // operation back to the Shell. The Shell treats this as opaque
+      // workspace context; the Customer Onboarding MFE owns the meaning.
+      publishWorkspaceContext({
+        persistentContext: [
+          { title: 'Customer ID', value: response.data.customerId },
+          { title: 'Customer Number', value: response.data.customerNumber },
+        ],
+        currentContext: [
+          { title: 'Application ID', value: response.data.applicationId },
+          { title: 'Application Number', value: response.data.applicationNumber },
+          { title: 'Status', value: response.data.status },
+        ],
+        retainedContext: [],
+      });
+
+      await onApplicationCreated?.();
+
       formElement.reset();
       setFormValues(emptyForm);
       setSelectedCustomer(null);

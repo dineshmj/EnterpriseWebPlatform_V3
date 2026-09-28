@@ -27,6 +27,21 @@
 --
 -- ============================================================================
 
+
+-- ============================================================================
+-- DROP EXISTING OBJECTS (CLEANUP)
+-- ============================================================================
+
+DROP TABLE IF EXISTS inbox_messages CASCADE;
+DROP TABLE IF EXISTS outbox_messages CASCADE;
+DROP TABLE IF EXISTS onboarding_applications CASCADE;
+DROP TABLE IF EXISTS customer_addresses CASCADE;
+DROP TABLE IF EXISTS customers CASCADE;
+
+DROP SEQUENCE IF EXISTS public.customer_number_seq CASCADE;
+
+-- ============================================================================
+
 -- ============================================================================ 
 -- CUSTOMER NUMBER SEQUENCE
 -- ============================================================================
@@ -262,6 +277,10 @@ CREATE TABLE outbox_messages
 
     occurred_at         TIMESTAMPTZ  NOT NULL,
 
+    -- Authenticated human user that initiated the workflow.
+    -- Captured transactionally and propagated in the Kafka envelope.
+    initiated_by        UUID         NULL,
+
     published_at        TIMESTAMPTZ  NULL,
 
     attempt_count       INTEGER      NOT NULL DEFAULT 0,
@@ -372,6 +391,9 @@ CREATE INDEX ix_outbox_messages_unpublished
 
 CREATE INDEX ix_outbox_messages_aggregate
     ON outbox_messages (aggregate_type, aggregate_id);
+
+CREATE INDEX ix_outbox_messages_initiated_by
+    ON outbox_messages (initiated_by);
 
 
 -- ----------------------------------------------------------------------------

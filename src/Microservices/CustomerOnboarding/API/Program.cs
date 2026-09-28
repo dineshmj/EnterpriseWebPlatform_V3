@@ -60,6 +60,7 @@ builder.Services
             };
         };
     });
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
