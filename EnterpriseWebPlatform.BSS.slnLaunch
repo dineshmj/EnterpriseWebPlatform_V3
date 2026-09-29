@@ -1,0 +1,47 @@
+[
+  {
+    "Name": "New Profile",
+    "Projects": [
+      {
+        "Path": "src\\IDP\\EnterpriseWebPlatform.IdentityServer.csproj",
+        "Action": "Start",
+        "DebugTarget": "SelfHost"
+      },
+      {
+        "Path": "src\\Microservices\\DocumentsManagement\\API\\EnterpriseWebPlatform.BSS.Microservices.DocumentsManagement.Api.csproj",
+        "Action": "Start",
+        "DebugTarget": "https"
+      },
+      {
+        "Path": "src\\Microservices\\CustomerOnboarding\\API\\EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Api.csproj",
+        "Action": "Start",
+        "DebugTarget": "https"
+      },
+      {
+        "Path": "src\\Microservices\\CustomerKyc\\API\\EnterpriseWebPlatform.CustomerKyc.Api.csproj",
+        "Action": "Start",
+        "DebugTarget": "https"
+      },
+      {
+        "Path": "src\\AsyncWorkflows\\Publishers\\CustomerOnboarding\\CustomerOutboxPublisher\\CustomerOutboxPublisher.csproj",
+        "Action": "Start",
+        "DebugTarget": "CustomerOutboxPublisher"
+      },
+      {
+        "Path": "src\\AsyncWorkflows\\Subscribers\\CustomerKyc\\CustomerKycSubscriber.csproj",
+        "Action": "Start",
+        "DebugTarget": "CustomerKycSubscriber"
+      },
+      {
+        "Path": "src\\Shell\\EnterpriseWebPlatform.BSS.BFFWeb.csproj",
+        "Action": "Start",
+        "DebugTarget": "https"
+      },
+      {
+        "Path": "src\\Microservices\\CustomerOnboarding\\BFF.Web\\EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.csproj",
+        "Action": "Start",
+        "DebugTarget": "https"
+      }
+    ]
+  }
+]

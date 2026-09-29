@@ -1,6 +1,9 @@
-using Confluent.Kafka;
-using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 using Microsoft.Extensions.Options;
+
+using Confluent.Kafka;
+
+using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
+using EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerKyc.CustomerKycSubscriber.Configuration;
 
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerKyc.CustomerKycSubscriber.Consumer;
 
@@ -8,12 +11,14 @@ public sealed class KafkaConsumer : IKafkaConsumer
 {
     private readonly IConsumer<string, string> _consumer;
 
-    public KafkaConsumer(IOptions<KafkaOptions> options)
+    public KafkaConsumer(
+        IOptions<KafkaOptions> options,
+        IOptions<CustomerKycSubscriberOptions> subscriberOptions)
     {
         var configuration = new ConsumerConfig
         {
             BootstrapServers = options.Value.BootstrapServers,
-            GroupId = "customer-kyc-subscriber",
+            GroupId = subscriberOptions.Value.GroupId,
             AutoOffsetReset = AutoOffsetReset.Earliest,
             EnableAutoCommit = false
         };

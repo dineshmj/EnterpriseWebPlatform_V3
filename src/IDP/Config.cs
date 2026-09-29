@@ -1,8 +1,7 @@
-﻿using Duende.IdentityServer.Models;
+using Duende.IdentityServer.Models;
 
 using EnterpriseWebPlatform.IdentityServer.ConfigRegistration.ApiResources;
 using EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients;
-using EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.KafkaSubscribers;
 using EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.M2M;
 using EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.MFEs;
 using EnterpriseWebPlatform.IdentityServer.ConfigRegistration.MicroserviceApiScopes;
@@ -66,8 +65,6 @@ public static class Config
 
             // M2M Clients
             CustomerOnboardingBFFToDocumentsManagementM2M.Client,
-
-            // Kafka Subscriber Clients
-            KafkaSubscriberCustomerKyc.Client
+            CustomerKycSubscriberToCustomerKycApiM2M.Client
 		];
 }
