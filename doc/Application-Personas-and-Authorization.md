@@ -1,9 +1,10 @@
 # Enterprise Web Platform V3
 ## Business Requirements — Application Personas & Authorization
 
-**Version:** 1.0  
-**Status:** Draft  
+**Document:** Application Personas and Authorization  
+**Version:** 1.1  
 **Domain:** Banking Services  
+**Status:** Maintained / Living Document
 
 ---
 
@@ -11,7 +12,7 @@
 
 The Enterprise Web Platform V3 PoC represents a banking-services platform in which different categories of users perform different business activities.
 
-The PoC application must ensure that:
+The application must ensure that:
 
 1. Users can access only the functionality appropriate to their role.
 2. Sensitive business operations require appropriate authorization.
@@ -20,6 +21,9 @@ The PoC application must ensure that:
 5. Access to individual business entities may depend on relationships such as branch ownership, customer assignment, or KYC case assignment.
 6. Service-to-service communication is authenticated independently from human-user authorization.
 7. Significant business actions and approvals are auditable.
+8. When a human initiates a long-running workflow, the initiating identity remains attributable throughout the distributed workflow.
+9. Human-user identity and machine/service identity are distinct security contexts.
+10. Real-time workflow notifications are delivered only to users authorized to receive them.
 
 The personas defined below provide the **business requirements** from which the application's RBAC, ABAC and ReBAC authorization policies will be derived.
 
@@ -374,6 +378,115 @@ What actions has the user already performed?
 
 ---
 
+# 12.1 Human Workflow Initiator and Accountability
+
+When a human user initiates a long-running business workflow, the platform must retain the identity of that user as workflow/accountability context even when subsequent workflow steps are executed asynchronously by machine identities.
+
+The intended distinction is:
+
+```text
+Human initiator
+    =
+Who originally started the workflow?
+
+M2M service identity
+    =
+Which technical service is executing the current step?
+```
+
+For example:
+
+```text
+Susan
+   │
+   │ starts onboarding
+   ▼
+Customer Onboarding API
+   │
+   ├── initiated_by = Susan
+   │
+   ▼
+Kafka
+   │
+   ▼
+Customer KYC Subscriber
+   │
+   ├── M2M identity = CustomerKycSubscriber
+   └── initiated_by = Susan
+```
+
+The initiating user identity is an accountability and workflow-context requirement. It must not be treated as an authorization grant by itself.
+
+The Customer Onboarding bounded context persists this information with its outbox message:
+
+```text
+outbox_messages.initiated_by
+```
+
+This allows downstream workflow processing and notification components to preserve human attribution without replacing it with the identity of the service performing the asynchronous step.
+
+---
+
+# 12.2 Workflow Notification Audience
+
+Where a workflow produces a human-facing notification, the notification audience must be determined explicitly.
+
+The originating user may be one audience member, but other authorized participants may also be relevant, such as:
+
+- Assigned officer.
+- Supervisor.
+- Authorized operations user.
+- Other explicitly authorized workflow participant.
+
+The platform must not broadcast sensitive workflow information to all connected users merely because they are authenticated.
+
+For example:
+
+```text
+Susan starts Customer 1
+Margaret starts Customer 2
+
+Customer 1 workflow
+    └──► Susan's authorized notification channel
+
+Customer 2 workflow
+    └──► Margaret's authorized notification channel
+```
+
+The final notification decision remains subject to authorization policy.
+
+---
+
+# 12.3 Object-Level Authorization
+
+Business access must be evaluated against the specific resource being accessed.
+
+Having a role or permission such as:
+
+```text
+customer.profile.view
+```
+
+does not automatically authorize access to every customer.
+
+The application may additionally require:
+
+```text
+Permission
++
+Target Resource
++
+Ownership / Relationship
++
+Organizational Scope
++
+Workflow State
+```
+
+This is particularly important for banking data and protects against unauthorized access to another customer's information.
+
+---
+
 # 13. RBAC Requirements
 
 Role-Based Access Control defines the coarse-grained permissions associated with each persona.
@@ -568,6 +681,19 @@ Target Resource
 Current Workflow State
 ```
 
+The M2M service identity must not replace the human initiator's identity for workflow accountability.
+
+Where the operation is part of a long-running workflow, the event/message context may carry:
+
+```text
+InitiatedByUserId
+WorkflowId
+CorrelationId
+CausationId
+```
+
+These values support traceability and accountability but do not, by themselves, grant business authorization.
+
 ---
 
 # 17. Approval Principles
@@ -617,6 +743,34 @@ Audit records should allow an auditor to answer:
 - What was the result?
 - Which workflow did it belong to?
 - Which request/correlation ID was involved?
+- Which human originally initiated the workflow?
+- Which service identity performed the technical step?
+
+---
+
+# 18.1 Additional Enterprise Security Requirements
+
+The authorization requirements should be implemented as part of a defense-in-depth security model.
+
+The platform should also support, as appropriate to the business operation:
+
+- deny-by-default authorization;
+- server-side authorization for every sensitive operation;
+- object/resource-level authorization;
+- least privilege;
+- secure BFF session handling;
+- strong authentication and step-up authentication for high-risk operations;
+- audience and scope validation for access tokens;
+- separation of human and machine identities;
+- secure session and cookie controls;
+- auditability of privileged and sensitive actions;
+- protection of PII and sensitive banking information;
+- masking of sensitive information in application logs;
+- rate limiting and abuse protection;
+- secure error handling;
+- explicit authorization of workflow notifications.
+
+These are architectural requirements; detailed implementation controls belong in the platform's security architecture documentation.
 
 ---
 
@@ -637,6 +791,9 @@ The personas are intentionally designed so that V3 can demonstrate several enter
 | Reliable events | Outbox |
 | Idempotent consumers | Inbox |
 | Workflow notifications | SignalR |
+| Workflow notification audience | InitiatedByUserId + authorization policy |
+| Human workflow attribution | `initiated_by` / InitiatedByUserId |
+| Human vs service identity | Human authentication + M2M authentication |
 | Failure handling | Retry / Circuit Breaker / Compensation |
 | Traceability | Correlation ID / Distributed tracing |
 
@@ -648,7 +805,9 @@ The V3 platform should follow this principle:
 
 > **A user should be authorized based not merely on who they are, but on what they are responsible for, what they are permitted to do, their relationship to the business resource, and the current state of the business process.**
 
-This principle provides the business foundation for implementing **RBAC + ABAC + ReBAC + workflow authorization + Separation of Duties** within the Enterprise Web Platform V3 PoC.
+For long-running workflows, the platform must additionally preserve who originally initiated the workflow without confusing that human identity with the machine identity executing subsequent workflow steps.
+
+This principle provides the business foundation for implementing **RBAC + ABAC + ReBAC + workflow authorization + Separation of Duties**, together with accountable human workflow attribution, within the Enterprise Web Platform V3 PoC.
 
 ---
 

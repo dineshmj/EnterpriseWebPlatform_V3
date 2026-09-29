@@ -1,9 +1,10 @@
 # Enterprise Web Platform V3
 ## Authorization Model
 
-**Version:** 1.0  
+**Document:** Authorization Model  
+**Version:** 1.1  
 **Domain:** Banking Services  
-**Status:** Draft  
+**Status:** Maintained / Living Document  
 **Purpose:** Business and authorization requirements for the Enterprise Web Platform V3 PoC
 
 ---
@@ -55,6 +56,11 @@ The authorization model follows these principles:
 11. Service-to-service authentication is separate from human-user authorization.
 12. Significant authorization decisions and business approvals must be auditable.
 13. Authorization failures must not reveal unnecessary business or security information.
+14. Authorization is **deny-by-default**; every mandatory authorization predicate must succeed before an operation is permitted.
+15. Resource/object-level authorization must be evaluated for the specific business entity being accessed; possession of a permission alone is not sufficient.
+16. The identity of the human who initiated a long-running workflow is **workflow/accountability context**, not an authorization grant.
+17. Human-user identity and machine/service identity must remain distinct throughout distributed workflow execution.
+18. Workflow notifications must be delivered only to users who are authorized to receive them.
 
 ---
 
@@ -1260,6 +1266,146 @@ The PoC should introduce token exchange only where it demonstrates a real author
 
 ---
 
+# 40.1 Human Workflow Initiator and Service Identity
+
+For a long-running distributed workflow, the platform must preserve the distinction between:
+
+```text
+Human workflow initiator
+        ≠
+Machine/service identity
+```
+
+When a human user initiates a business workflow, the initiating identity should be captured at the business transaction/outbox boundary and propagated with the integration event metadata.
+
+The Customer Onboarding bounded context persists this information as:
+
+```text
+outbox_messages.initiated_by
+```
+
+The semantic meaning is:
+
+```text
+initiated_by
+    = human identity that originally initiated the workflow
+```
+
+It does **not** mean:
+
+```text
+initiated_by
+    = current service executing the workflow step
+```
+
+For example:
+
+```text
+Susan
+   |
+   | starts onboarding
+   v
+Customer Onboarding API
+   |
+   +-- initiated_by = Susan
+   |
+   v
+Kafka
+   |
+   v
+KYC Subscriber
+   |
+   +-- M2M identity = CustomerKycSubscriber
+   +-- initiated_by = Susan
+```
+
+`initiated_by` must not by itself grant access to the underlying business resource. Authorization must still evaluate:
+
+```text
+Identity
++
+Role
++
+Permission
++
+ABAC
++
+ReBAC
++
+Workflow State
++
+Separation of Duties
+```
+
+The initiator is primarily used for accountability, workflow context and determining an appropriate notification audience.
+
+---
+
+# 40.2 Object-Level Authorization
+
+Authorization must apply to the **specific resource** being accessed.
+
+For example:
+
+```text
+customer.account.view
+```
+
+does not automatically mean that the caller may view every account.
+
+The decision may require:
+
+```text
+Permission
++
+Target Resource
++
+Ownership / Relationship
++
+Organizational Scope
++
+Workflow State
+```
+
+This prevents authorization from becoming merely a coarse-grained menu or endpoint check.
+
+---
+
+# 40.3 Notification Authorization
+
+Where the platform sends real-time workflow notifications through SignalR, notification delivery must be treated as an authorization decision.
+
+A workflow event may identify:
+
+```text
+InitiatedByUserId
+```
+
+but the platform must still determine whether the authenticated recipient is authorized to receive that notification.
+
+The intended model is:
+
+```text
+Workflow Event
+      |
+      v
+Notification Audience
+      |
+      +-- Initiating user
+      +-- Assigned officer
+      +-- Supervisor
+      +-- Authorized operations role
+      |
+      v
+Authenticated SignalR connection
+```
+
+The exact audience may vary by workflow and business policy.
+
+The platform must not broadcast sensitive workflow information to every connected user.
+
+---
+
 # 40. Authorization Decision Model
 
 The overall authorization model can be represented as:
@@ -1306,6 +1452,8 @@ The overall authorization model can be represented as:
                   │ Decision         │
                   └──────────────────┘
 ```
+
+The `InitiatedByUserId` / `initiated_by` value is intentionally **not another authorization layer** in this diagram. It provides workflow/accountability context and may contribute to notification-audience determination, but it must never bypass the authorization checks above.
 
 ---
 
@@ -1527,7 +1675,32 @@ Downstream API
 SignalR
 ```
 
-This enables investigation of distributed workflow behavior.
+For long-running workflows, the traceability model should distinguish at least:
+
+```text
+MessageId
+WorkflowId
+CorrelationId
+CausationId
+TraceId
+InitiatedByUserId
+```
+
+where these values are applicable.
+
+`InitiatedByUserId` answers:
+
+```text
+Who originally initiated the workflow?
+```
+
+while the service identity answers:
+
+```text
+Which technical principal performed this step?
+```
+
+This distinction enables investigation of distributed workflow behavior without confusing human accountability with machine execution identity.
 
 ---
 
@@ -1668,7 +1841,62 @@ The V3 PoC should explicitly demonstrate both positive and negative authorizatio
 
 ---
 
-# 50. Guiding Principle
+# 50.1 Human Initiator Does Not Grant Authorization
+
+The following must be denied unless the user independently satisfies the authorization policy:
+
+```text
+User = workflow initiator
++
+InitiatedByUserId = User
++
+No required permission
+```
+
+The fact that a user originally initiated a workflow does not automatically grant access to every downstream resource or operation.
+
+---
+
+# 50.2 M2M Identity Does Not Replace Human Attribution
+
+A subscriber may authenticate using:
+
+```text
+CustomerKycSubscriber
+```
+
+while the event still carries:
+
+```text
+InitiatedByUserId = Susan
+```
+
+The service identity authorizes the technical operation. The human initiator provides workflow accountability.
+
+---
+
+# 50.3 Notification Audience
+
+A user should receive a workflow notification only when the notification-audience policy permits it.
+
+Example:
+
+```text
+Susan starts Customer 1
+Margaret starts Customer 2
+
+Customer 1 workflow event
+    └──► Susan
+
+Customer 2 workflow event
+    └──► Margaret
+```
+
+The notification mechanism must not treat all authenticated SignalR connections as an implicit audience.
+
+---
+
+# 51. Guiding Principle
 
 The Enterprise Web Platform V3 authorization model follows this principle:
 

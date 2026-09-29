@@ -28,6 +28,7 @@
 		127.0.0.1    kyc.dev.localhost
 		127.0.0.1    accounts.dev.localhost
 		127.0.0.1    payments.dev.localhost
+		127.0.0.1    documents-management-api.dev.localhost
 
 		127.0.0.1    customer-api.dev.localhost
 		127.0.0.1    kyc-api.dev.localhost
@@ -41,6 +42,8 @@
 
 		ping customer.dev.localhost
 		ping customer-api.dev.localhost
+		
+		ping documents-management-api.dev.localhost
 
 		ping kyc.dev.localhost
 		ping kyc-api.dev.localhost
@@ -62,6 +65,8 @@
 		Customer Onboarding SPA	-	Static export served by the Customer Onboarding BFF
 		Customer Onboarding API	-	https://customer-api.dev.localhost:44363
 
+		Documents Management API	-	https://documents-management-api.dev.localhost:49486
+
 		Customer KYC BFF		-	https://kyc.dev.localhost:33800
 		Customer KYC SPA		-	Static export served by the Customer KYC BFF
 		Customer KYC API		-	https://kyc-api.dev.localhost:44305
@@ -73,7 +78,7 @@
 		Payments BFF			-	https://payments.dev.localhost:44388
 		Payments SPA			-	Next.js application; URL to be added when the local HTTPS configuration is finalized
 		Payments API			-	https://payments-api.dev.localhost:44488
-
+		
 	e) For ASP.NET Core applications, use the Kestrel server for local development rather than IIS Express. Select the "https" Project profile in launchSettings.json for:
 
 		1) Shell BFF
@@ -90,6 +95,10 @@
 		The use of Kestrel for V3 is intentional. In the previous version, IIS Express was used for several applications mainly to avoid opening multiple console windows. V3 uses dedicated hostnames and Kestrel-based HTTPS for the ASP.NET Core tiers so that the local topology is explicit and consistent.
 
 1) Technology Stack and V3 Architecture:
+
+	Enterprise Web Platform V3 (EWP V3) is an enterprise-architecture proof of concept for a modern banking-services platform. It demonstrates independently deployable bounded contexts, micro-frontends, BFF security boundaries, distributed identity, fine-grained authorization, transactional messaging, asynchronous workflows, resilience, auditability and secure application architecture.
+
+	The root ReadMe.txt is intentionally a repository and local-development guide. The complete architectural vision and security roadmap are documented in the canonical documentation listed in section 13.
 
 	a) Identity Provider (IDP):
 
@@ -155,17 +164,26 @@
 			- Owns payment instructions, beneficiaries, payment attempts and payment-processing state.
 			- This is an architectural PoC and not a real banking payment system.
 
+		5) Documents Management:
+
+			- Bounded Context: Documents Management.
+			- API: ASP.NET Core.
+			- Database: EwpDocumentsManagementDb.
+			- Owns document metadata and opaque storage references.
+			- Document BLOB content is kept outside PostgreSQL by the storage abstraction.
+			- The initial implementation uses local file-system storage; enterprise object/document storage can be introduced behind the same abstraction.
+
 	d) Messaging and distributed workflows:
 
-		- Apache Kafka is used as the event/message backbone.
-		- Producers use the Transactional Outbox pattern.
-		- Consumers use the Inbox / Processed Messages pattern to support idempotent processing.
-		- At-least-once delivery is assumed.
-		- Customer Onboarding demonstrates a Saga workflow across the Customer, KYC and Accounts bounded contexts.
-		- Saga compensation is demonstrated for failure scenarios.
-		- Choreography is used where simple event reactions are more appropriate.
-		- SignalR is used by the Shell to receive workflow-completion notifications.
-		- CorrelationId, TraceId, SagaId and CausationId are propagated across the workflow.
+		- Apache Kafka is the intended event/message backbone for the distributed workflows.
+		- Customer Onboarding uses a Transactional Outbox in the Customer Onboarding bounded context.
+		- The Customer Onboarding Outbox records persist the human initiator in the `initiated_by` column so that workflow attribution can survive asynchronous processing.
+		- The current Customer Outbox Publisher publishes supported outbox records to Kafka and marks successfully published records as published.
+		- At-least-once delivery is assumed; therefore duplicate delivery must be treated as an expected condition.
+		- An Inbox / Processed Messages pattern is part of the target consumer architecture, but is not yet implemented in the current Customer KYC subscriber.
+		- The Customer KYC subscriber currently consumes `customer.created`, deserializes the event and commits the Kafka offset after successful handling; its KYC API invocation is still a placeholder.
+		- Saga choreography, compensation, downstream workflow subscribers and SignalR workflow notifications remain planned implementation slices.
+		- The target workflow context includes WorkflowId, CorrelationId, CausationId, TraceId and InitiatedByUserId.
 
 	e) Application architecture:
 
@@ -264,16 +282,21 @@
 		- EwpBssShellDb
 			Shell navigation/menu metadata.
 
-		The business databases will be:
+		- EwpCustomerDb
+			Customer profile, onboarding applications and onboarding workflow state.
 
-		- CustomerDb
+		- EwpDocumentsManagementDb
+			Document metadata and opaque document-storage references.
+
+		The following business databases are planned as their bounded contexts are implemented:
+
 		- KycDb
 		- AccountsDb
 		- PaymentsDb
 
 	c) The database-per-service rule applies to the business bounded contexts. A single local PostgreSQL server/instance may host the individual databases during development.
 
-	d) Kafka and Kafka UI will be introduced as local Docker-based infrastructure as the messaging portion of V3 is implemented.
+	d) Kafka and Kafka UI are part of the V3 local infrastructure and are used by the current Customer Onboarding Outbox Publisher / Customer KYC subscriber slice.
 
 3) What to do after cloning the repository:
 
@@ -371,7 +394,20 @@
 		- Dedicated local hostname.
 		- Kestrel HTTPS development profile.
 
-	c) Shell Menu DB:
+	c) Customer Onboarding:
+
+		- Customer profile and onboarding application screens are operational in the current V3 slice.
+		- Start Onboarding can carry the selected Customer context into the Customer Onboarding MFE.
+		- Application Workspace context is exchanged through the BSS context protocol.
+		- The current implementation persists the initiating user's ID in Customer Onboarding Outbox records as `initiated_by`.
+
+	d) Documents Management:
+
+		- Documents Management API is implemented as an independently owned bounded context.
+		- Document metadata is stored in EwpDocumentsManagementDb.
+		- Document content is stored through an abstraction rather than in PostgreSQL.
+
+	e) Shell Menu DB:
 
 		The Shell Menu database uses PostgreSQL lowercase snake_case identifiers:
 
@@ -403,9 +439,36 @@
 
 	The Shell treats this context as opaque data. The MFE that owns the business semantics is responsible for creating and updating it.
 
-7) Planned V3 Customer Onboarding Workflow:
+7) Current and Planned V3 Customer Onboarding Workflow:
 
-	The flagship distributed workflow is Customer Onboarding:
+	The flagship distributed workflow is Customer Onboarding. The implementation is being built incrementally rather than treating the complete workflow as already implemented.
+
+	a) Current workflow foundation:
+
+		Customer MFE
+		    ↓
+		Customer BFF
+		    ↓
+		Customer API
+		    ↓
+		Business state + Outbox transaction
+		    ↓
+		Customer Outbox Publisher
+		    ↓
+		Kafka
+		    ↓
+		Customer KYC Subscriber
+
+		The current implementation demonstrates:
+
+		- Customer Onboarding business state changes.
+		- Transactional Outbox creation in the same business transaction.
+		- Persistence of the human initiator in `outbox_messages.initiated_by`.
+		- Kafka publication of the currently supported CustomerCreated event.
+		- A dedicated Customer KYC subscriber consuming `customer.created`.
+		- Kafka offset commit only after successful message handling.
+
+	b) Planned distributed workflow:
 
 		Customer MFE
 		    ↓
@@ -417,7 +480,7 @@
 		    ↓
 		Kafka
 		    ↓
-		KYC consumer
+		KYC subscriber / worker
 		    ↓
 		KYC state + Outbox
 		    ↓
@@ -427,7 +490,7 @@
 		    ↓
 		Kafka
 		    ↓
-		Accounts consumer
+		Accounts subscriber / worker
 		    ↓
 		Account opening
 		    ↓
@@ -437,17 +500,26 @@
 		    ↓
 		BSS Shell
 
-	The workflow is intended to expose:
+		The planned workflow will demonstrate:
 
 		- Application ID
-		- Saga ID
+		- Workflow / Saga ID
 		- Correlation ID
+		- Causation ID
+		- Trace ID
+		- InitiatedByUserId / `initiated_by` attribution
 		- Current workflow status
 		- Individual workflow steps
 		- Event counts
 		- Outbox activity
-		- Retry activity
+		- Inbox/idempotency processing
+		- Retry and timeout activity
+		- Circuit-breaker behavior where appropriate
 		- Compensation activity
+		- User-specific SignalR workflow notifications
+
+	IMPORTANT:
+		The Customer KYC subscriber currently contains a placeholder where the KYC API invocation will be implemented. The full multi-step Saga shown above is therefore a target architecture, not a claim that every step is currently operational.
 
 8) Planned Authorization Demonstrations:
 
@@ -597,18 +669,52 @@
 		- Do not commit production secrets, private signing keys or certificates to source control.
 		- Production secrets must be supplied through an appropriate secret-management mechanism.
 
-12) Final touches required (not urgent, only after the required V3 modules are implemented):
+12) Planned V3 Work / Final Touches:
 
-	- Complete OpenTelemetry distributed tracing.
+	The following items are intentionally separated from the Current V3 Foundation because they are planned implementation slices or production-oriented capabilities rather than completed functionality:
+
+	- Generalize the Customer Outbox Publisher to publish the remaining supported onboarding events.
+	- Complete the Customer KYC Subscriber as a real worker: Inbox/idempotency persistence, M2M client-credentials authentication, KYC API invocation, bounded retries and dead-letter handling.
+	- Propagate the human workflow initiator and distributed workflow context through Kafka messages without confusing the human identity with the M2M service identity.
+	- Implement the downstream workflow subscribers for Compliance/AML and Accounts.
+	- Complete Saga/choreography and compensation behavior for supported failure scenarios.
+	- Implement Shell SignalR workflow notifications and ensure notifications are delivered only to the appropriate authenticated user(s).
+	- Complete ABAC, ReBAC and Separation-of-Duties demonstrations.
+	- Complete OpenTelemetry distributed tracing across synchronous and asynchronous boundaries.
 	- Add centralized/structured audit persistence and audit-event processing.
 	- Add Kafka monitoring and consumer-lag visibility.
 	- Add comprehensive health/readiness endpoints.
 	- Add rate limiting and production-grade security headers.
-	- Add Terraform scripts to provision the required cloud infrastructure.
 	- Add production secret-management integration.
+	- Add Terraform scripts to provision the required cloud infrastructure.
 	- Add deployment-specific configuration for Azure/AWS/GCP as appropriate.
+	- Add further enterprise banking controls described in the Architectural Vision & Security Blueprint.
 
-13) Bruno API Testing
+13) Canonical V3 Documentation:
+
+	The root ReadMe.txt is the repository orientation and local-development guide. It intentionally does not duplicate the complete architectural/security blueprint or the detailed authorization model. The following three documents are the canonical V3 architecture/authorization documents:
+
+	1) Architectural Vision and Security Blueprint:
+
+		doc\Enterprise-Web-Platform-V3-Architectural-Vision-and-Security-Blueprint.md
+
+		This document describes the overall purpose, architectural vision, current capabilities, planned capabilities and enterprise/security roadmap for EWP V3.
+
+	2) Application Personas and Authorization:
+
+		doc\Application-Personas-and-Authorization.md
+
+		This document describes the business personas, responsibilities, authorization requirements, accountability and separation-of-duties expectations.
+
+	3) Authorization Model:
+
+		doc\Authorization-Model.md
+
+		This document describes how authorization decisions are intended to be evaluated using R-BAC, A-BAC, Re-BAC, workflow state and Separation of Duties.
+
+	The three documents deliberately overlap where a business/security concept needs to be described from different perspectives. The root ReadMe.txt should remain a concise repository and development guide rather than becoming a duplicate of those documents.
+
+14) Bruno API Testing
     ------------------
 
     This section explains how to configure Bruno for testing the Microservice
