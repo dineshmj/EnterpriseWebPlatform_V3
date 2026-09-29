@@ -28,17 +28,45 @@ public sealed class KycCaseService(KycDbContext db, ILogger<KycCaseService> logg
             db.KycCases.Add(entity);
             await db.SaveChangesAsync(ct);
 
+            var messageId = Guid.NewGuid();
+            var occurredAt = DateTimeOffset.UtcNow;
+
             var payload = JsonSerializer.Serialize(new KycCaseCreatedEvent(
-                Guid.NewGuid(), "KycCaseCreated", DateTimeOffset.UtcNow, entity.Id,
-                entity.CustomerNumber, entity.Status, entity.InitiatedByUserId));
+                messageId,
+                "KycCaseCreated",
+                occurredAt,
+                request.WorkflowId,
+                request.CorrelationId,
+                request.CausationId,
+                entity.Id,
+                entity.CustomerNumber,
+                entity.Status,
+                entity.InitiatedByUserId));
 
             db.OutboxMessages.Add(new OutboxMessage
             {
-                Id = Guid.NewGuid(), AggregateType = "KycCase", AggregateId = entity.Id.ToString(),
-                EventType = "KycCaseCreated", Payload = payload, OccurredAt = DateTimeOffset.UtcNow
+                Id = Guid.NewGuid(),
+                AggregateType = "KycCase",
+                AggregateId = entity.Id.ToString(),
+                EventType = "KycCaseCreated",
+                Payload = payload,
+                OccurredAt = occurredAt,
+                WorkflowId = request.WorkflowId,
+                CorrelationId = request.CorrelationId,
+                CausationId = request.CausationId
             });
+
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
+
+            logger.LogInformation(
+                "Created KYC case {KycCaseId} for CustomerNumber={CustomerNumber}. MessageId={MessageId}, WorkflowId={WorkflowId}, CorrelationId={CorrelationId}, CausationId={CausationId}",
+                entity.Id,
+                entity.CustomerNumber,
+                messageId,
+                request.WorkflowId,
+                request.CorrelationId,
+                request.CausationId);
 
             return new(entity, true);
         }
@@ -52,6 +80,23 @@ public sealed class KycCaseService(KycDbContext db, ILogger<KycCaseService> logg
     }
 }
 
-public sealed record CreateKycCaseRequest(string CustomerNumber, string? InitiatedByUserId);
+public sealed record CreateKycCaseRequest(
+    string CustomerNumber,
+    string? InitiatedByUserId,
+    Guid? WorkflowId,
+    Guid? CorrelationId,
+    Guid CausationId);
+
 public sealed record KycCaseResult(KycCase Case, bool Created);
-public sealed record KycCaseCreatedEvent(Guid MessageId, string EventType, DateTimeOffset OccurredAt, long KycCaseId, string CustomerNumber, string Status, string? InitiatedByUserId);
+
+public sealed record KycCaseCreatedEvent(
+    Guid MessageId,
+    string EventType,
+    DateTimeOffset OccurredAt,
+    Guid? WorkflowId,
+    Guid? CorrelationId,
+    Guid CausationId,
+    long KycCaseId,
+    string CustomerNumber,
+    string Status,
+    string? InitiatedByUserId);

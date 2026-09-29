@@ -6,6 +6,7 @@ public sealed record CustomerCreatedMessage(
     DateTimeOffset OccurredAt,
     string CustomerNumber,
     string? InitiatedByUserId,
-    string? CorrelationId,
-    string? CausationId,
+    Guid? WorkflowId,
+    Guid? CorrelationId,
+    Guid? CausationId,
     string? Source);

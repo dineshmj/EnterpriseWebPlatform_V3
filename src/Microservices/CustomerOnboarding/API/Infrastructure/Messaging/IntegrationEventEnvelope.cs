@@ -5,7 +5,8 @@ public sealed record IntegrationEventEnvelope<TPayload>(
     string EventType,
     string Source,
     DateTimeOffset OccurredAt,
-    string? CorrelationId,
-    string? CausationId,
+    Guid? WorkflowId,
+    Guid? CorrelationId,
+    Guid? CausationId,
     string? InitiatedByUserId,
     TPayload Payload);

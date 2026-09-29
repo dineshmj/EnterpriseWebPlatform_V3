@@ -277,8 +277,12 @@ CREATE TABLE outbox_messages
 
     occurred_at         TIMESTAMPTZ  NOT NULL,
 
+    -- Distributed workflow metadata.
+    workflow_id         UUID         NULL,
+    correlation_id      UUID         NULL,
+    causation_id        UUID         NULL,
+
     -- Authenticated human user that initiated the workflow.
-    -- Captured transactionally and propagated in the Kafka envelope.
     initiated_by        UUID         NULL,
 
     published_at        TIMESTAMPTZ  NULL,
@@ -394,6 +398,15 @@ CREATE INDEX ix_outbox_messages_aggregate
 
 CREATE INDEX ix_outbox_messages_initiated_by
     ON outbox_messages (initiated_by);
+
+CREATE INDEX ix_outbox_messages_workflow_id
+    ON outbox_messages (workflow_id);
+
+CREATE INDEX ix_outbox_messages_correlation_id
+    ON outbox_messages (correlation_id);
+
+CREATE INDEX ix_outbox_messages_causation_id
+    ON outbox_messages (causation_id);
 
 
 -- ----------------------------------------------------------------------------

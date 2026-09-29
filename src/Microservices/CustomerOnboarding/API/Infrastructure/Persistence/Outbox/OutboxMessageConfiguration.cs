@@ -42,6 +42,18 @@ public sealed class OutboxMessageConfiguration
             .HasColumnType("timestamp with time zone")
             .IsRequired();
 
+        builder.Property(x => x.WorkflowId)
+            .HasColumnName("workflow_id")
+            .HasColumnType("uuid");
+
+        builder.Property(x => x.CorrelationId)
+            .HasColumnName("correlation_id")
+            .HasColumnType("uuid");
+
+        builder.Property(x => x.CausationId)
+            .HasColumnName("causation_id")
+            .HasColumnType("uuid");
+
         builder.Property(x => x.InitiatedByUserId)
             .HasColumnName("initiated_by")
             .HasColumnType("uuid");
@@ -72,5 +84,14 @@ public sealed class OutboxMessageConfiguration
             x.AggregateId
         })
         .HasDatabaseName("ix_outbox_messages_aggregate");
+
+        builder.HasIndex(x => x.WorkflowId)
+            .HasDatabaseName("ix_outbox_messages_workflow_id");
+
+        builder.HasIndex(x => x.CorrelationId)
+            .HasDatabaseName("ix_outbox_messages_correlation_id");
+
+        builder.HasIndex(x => x.CausationId)
+            .HasDatabaseName("ix_outbox_messages_causation_id");
     }
 }

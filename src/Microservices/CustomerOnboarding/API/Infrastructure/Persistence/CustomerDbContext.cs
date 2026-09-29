@@ -147,14 +147,23 @@ public sealed class CustomerDbContext :
                                     .ToString()
                                     .ToUpperInvariant());
 
+                        // CustomerCreated is the root event for this workflow.
+                        // A new WorkflowId and CorrelationId are therefore
+                        // established here. CausationId is null because there
+                        // is no preceding integration event.
+                        var workflowId = Guid.NewGuid();
+                        var correlationId = Guid.NewGuid();
+                        var messageId = Guid.NewGuid();
+
                         var envelope =
                             new IntegrationEventEnvelope
                                 <CustomerCreatedIntegrationEvent>(
-                                Guid.NewGuid(),
+                                messageId,
                                 "CustomerCreated",
                                 "customer-onboarding",
                                 customerCreated.OccurredAt,
-                                null,
+                                workflowId,
+                                correlationId,
                                 null,
                                 initiatedByUserId?.ToString(),
                                 integrationEvent);
@@ -170,6 +179,9 @@ public sealed class CustomerDbContext :
                                 "CustomerCreated",
                                 payload,
                                 customerCreated.OccurredAt,
+                                workflowId,
+                                correlationId,
+                                null,
                                 initiatedByUserId));
 
                         break;
@@ -192,6 +204,7 @@ public sealed class CustomerDbContext :
                                 submitted.OccurredAt,
                                 null,
                                 null,
+                                null,
                                 initiatedByUserId?.ToString(),
                                 integrationEvent);
 
@@ -206,6 +219,9 @@ public sealed class CustomerDbContext :
                                 "OnboardingApplicationSubmitted",
                                 payload,
                                 submitted.OccurredAt,
+                                null,
+                                null,
+                                null,
                                 initiatedByUserId));
 
                         break;
@@ -233,6 +249,7 @@ public sealed class CustomerDbContext :
                                 statusChanged.OccurredAt,
                                 null,
                                 null,
+                                null,
                                 initiatedByUserId?.ToString(),
                                 integrationEvent);
 
@@ -247,6 +264,9 @@ public sealed class CustomerDbContext :
                                 "OnboardingApplicationStatusChanged",
                                 payload,
                                 statusChanged.OccurredAt,
+                                null,
+                                null,
+                                null,
                                 initiatedByUserId));
 
                         break;

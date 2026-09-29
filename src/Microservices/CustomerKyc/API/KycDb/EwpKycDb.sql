@@ -19,6 +19,11 @@ CREATE TABLE IF NOT EXISTS outbox_messages (
     event_type VARCHAR(200) NOT NULL,
     payload JSONB NOT NULL,
     occurred_at TIMESTAMPTZ NOT NULL,
+
+    workflow_id UUID NULL,
+    correlation_id UUID NULL,
+    causation_id UUID NULL,
+
     published_at TIMESTAMPTZ NULL,
     attempt_count INTEGER NOT NULL DEFAULT 0,
     last_attempt_at TIMESTAMPTZ NULL,
@@ -26,3 +31,6 @@ CREATE TABLE IF NOT EXISTS outbox_messages (
 );
 
 CREATE INDEX IF NOT EXISTS ix_kyc_outbox_unpublished ON outbox_messages (occurred_at) WHERE published_at IS NULL;
+CREATE INDEX IF NOT EXISTS ix_kyc_outbox_workflow_id ON outbox_messages (workflow_id);
+CREATE INDEX IF NOT EXISTS ix_kyc_outbox_correlation_id ON outbox_messages (correlation_id);
+CREATE INDEX IF NOT EXISTS ix_kyc_outbox_causation_id ON outbox_messages (causation_id);

@@ -29,7 +29,10 @@ public sealed class CustomerKycApiClient(
         {
             Content = JsonContent.Create(new CreateKycCaseRequest(
                 message.CustomerNumber,
-                message.InitiatedByUserId))
+                message.InitiatedByUserId,
+                message.WorkflowId,
+                message.CorrelationId,
+                message.MessageId))
         };
 
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
@@ -71,7 +74,10 @@ public sealed class CustomerKycApiClient(
 
     private sealed record CreateKycCaseRequest(
         string CustomerNumber,
-        string? InitiatedByUserId);
+        string? InitiatedByUserId,
+        Guid? WorkflowId,
+        Guid? CorrelationId,
+        Guid CausationId);
 }
 
 public sealed class TransientKycApiException(HttpStatusCode statusCode, string responseBody)

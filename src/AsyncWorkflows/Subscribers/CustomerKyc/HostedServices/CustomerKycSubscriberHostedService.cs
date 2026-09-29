@@ -43,10 +43,11 @@ public sealed class CustomerKycSubscriberHostedService(
 
         // DEBUG POINT #1: Put a breakpoint here to inspect the Kafka event before any downstream call.
         logger.LogInformation(
-            "Received customer.created. MessageId={MessageId}, CustomerNumber={CustomerNumber}, InitiatedByUserId={InitiatedByUserId}, CorrelationId={CorrelationId}, CausationId={CausationId}, KafkaKey={KafkaKey}",
+            "Received customer.created. MessageId={MessageId}, CustomerNumber={CustomerNumber}, InitiatedByUserId={InitiatedByUserId}, WorkflowId={WorkflowId}, CorrelationId={CorrelationId}, CausationId={CausationId}, KafkaKey={KafkaKey}",
             message.MessageId,
             message.CustomerNumber,
             message.InitiatedByUserId,
+            message.WorkflowId,
             message.CorrelationId,
             message.CausationId,
             key);
@@ -140,6 +141,7 @@ public sealed class CustomerKycSubscriberHostedService(
                 envelope.OccurredAt,
                 customer.CustomerNumber,
                 envelope.InitiatedByUserId ?? customer.InitiatedByUserId,
+                envelope.WorkflowId,
                 envelope.CorrelationId,
                 envelope.CausationId,
                 envelope.Source);
@@ -155,8 +157,9 @@ public sealed class CustomerKycSubscriberHostedService(
             direct.OccurredAt,
             direct.CustomerNumber,
             direct.InitiatedByUserId,
-            direct.CorrelationId,
-            direct.CausationId,
+            null,
+            ParseNullableGuid (direct.CorrelationId),
+            ParseNullableGuid (direct.CausationId),
             null);
     }
 
@@ -170,8 +173,9 @@ public sealed class CustomerKycSubscriberHostedService(
         string EventType,
         string? Source,
         DateTimeOffset OccurredAt,
-        string? CorrelationId,
-        string? CausationId,
+        Guid? WorkflowId,
+        Guid? CorrelationId,
+        Guid? CausationId,
         string? InitiatedByUserId);
 
     private sealed record CustomerCreatedPayload(
@@ -201,5 +205,12 @@ public sealed class CustomerKycSubscriberHostedService(
     {
         logger.LogInformation("Customer KYC Subscriber is stopping.");
         return base.StopAsync(cancellationToken);
+    }
+
+    private static Guid? ParseNullableGuid(string? value)
+    {
+        return Guid.TryParse(value, out var guid)
+            ? guid
+            : null;
     }
 }

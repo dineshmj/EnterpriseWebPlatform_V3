@@ -34,11 +34,17 @@ public sealed class KycDbContext(DbContextOptions<KycDbContext> options) : DbCon
             e.Property(x => x.EventType).HasColumnName("event_type").HasMaxLength(200).IsRequired();
             e.Property(x => x.Payload).HasColumnName("payload").HasColumnType("jsonb").IsRequired();
             e.Property(x => x.OccurredAt).HasColumnName("occurred_at").HasColumnType("timestamp with time zone").IsRequired();
+            e.Property(x => x.WorkflowId).HasColumnName("workflow_id").HasColumnType("uuid");
+            e.Property(x => x.CorrelationId).HasColumnName("correlation_id").HasColumnType("uuid");
+            e.Property(x => x.CausationId).HasColumnName("causation_id").HasColumnType("uuid");
             e.Property(x => x.PublishedAt).HasColumnName("published_at").HasColumnType("timestamp with time zone");
             e.Property(x => x.AttemptCount).HasColumnName("attempt_count").HasDefaultValue(0).IsRequired();
             e.Property(x => x.LastAttemptAt).HasColumnName("last_attempt_at").HasColumnType("timestamp with time zone");
             e.Property(x => x.LastError).HasColumnName("last_error");
             e.HasIndex(x => x.OccurredAt).HasDatabaseName("ix_kyc_outbox_unpublished").HasFilter("published_at IS NULL");
+            e.HasIndex(x => x.WorkflowId).HasDatabaseName("ix_kyc_outbox_workflow_id");
+            e.HasIndex(x => x.CorrelationId).HasDatabaseName("ix_kyc_outbox_correlation_id");
+            e.HasIndex(x => x.CausationId).HasDatabaseName("ix_kyc_outbox_causation_id");
         });
     }
 }
