@@ -1,10 +1,8 @@
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 using Serilog;
 
 using EnterpriseWebPlatform.IdentityServer.Data;
-using EnterpriseWebPlatform.IdentityServer.Data.Entities;
 using EnterpriseWebPlatform.IdentityServer.Repositories;
 using EnterpriseWebPlatform.IdentityServer.Security;
 using EnterpriseWebPlatform.IdentityServer.Services;

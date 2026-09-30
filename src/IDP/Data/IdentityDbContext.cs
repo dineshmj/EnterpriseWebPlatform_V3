@@ -13,13 +13,21 @@ public sealed class IdentityDbContext : DbContext
     }
 
     public DbSet<User> Users => Set<User>();
+
     public DbSet<Role> Roles => Set<Role>();
+
     public DbSet<Permission> Permissions => Set<Permission>();
+
     public DbSet<UserRole> UserRoles => Set<UserRole>();
+
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+
     public DbSet<Branch> Branches => Set<Branch>();
+
     public DbSet<Department> Departments => Set<Department>();
+
     public DbSet<UserEmploymentProfile> UserEmploymentProfiles => Set<UserEmploymentProfile>();
+
     public DbSet<UserRelationship> UserRelationships => Set<UserRelationship>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

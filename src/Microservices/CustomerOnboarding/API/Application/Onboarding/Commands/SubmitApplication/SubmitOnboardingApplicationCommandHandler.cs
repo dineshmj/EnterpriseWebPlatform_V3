@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Persistence;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Application.Onboarding.Commands.SubmitApplication;
@@ -10,6 +5,7 @@ namespace EnterpriseWebPlatform.CustomerOnboarding.Application.Onboarding.Comman
 public sealed class SubmitOnboardingApplicationCommandHandler
 {
     private readonly IOnboardingApplicationRepository _applicationRepository;
+
     private readonly IApplicationUnitOfWork _unitOfWork;
 
     public SubmitOnboardingApplicationCommandHandler(

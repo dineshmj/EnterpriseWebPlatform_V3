@@ -11,7 +11,6 @@ using EnterpriseWebPlatform.DocumentsManagement.Domain.Exceptions;
 using EnterpriseWebPlatform.DocumentsManagement.Infrastructure.Persistence;
 using EnterpriseWebPlatform.DocumentsManagement.Infrastructure.Storage;
 using EnterpriseWebPlatform.DocumentsManagement.Application.Abstractions.Storage;
-using EnterpriseWebPlatform.Common.Landscape.Microservices;
 using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -106,9 +105,6 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("ApiScope", policy =>
     {
         policy.RequireAuthenticatedUser();
-        //policy.RequireClaim(
-        //    "scope",
-        //    MicroserviceApiResourceNames.DOCUMENTS_MANAGEMENT_API);
     });
 
     options.AddPolicy("DocumentRead", policy =>

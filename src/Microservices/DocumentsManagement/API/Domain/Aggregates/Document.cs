@@ -10,14 +10,23 @@ public sealed class Document : Entity
     }
 
     public string FileName { get; private set; } = string.Empty;
+
     public string ContentType { get; private set; } = string.Empty;
+
     public long Size { get; private set; }
+
     public string ContentHash { get; private set; } = string.Empty;
+
     public string StorageReference { get; private set; } = string.Empty;
+
     public string? DocumentType { get; private set; }
+
     public string? BusinessReference { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
+
     public DateTimeOffset UpdatedAt { get; private set; }
+
     public long Version { get; private set; }
 
     public static Document Create(

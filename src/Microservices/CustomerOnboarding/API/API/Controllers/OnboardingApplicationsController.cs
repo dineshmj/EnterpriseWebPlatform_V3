@@ -1,15 +1,11 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+using EnterpriseWebPlatform.CustomerOnboarding.API.Models;
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Onboarding.Commands.CreateApplication;
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Onboarding.Commands.SubmitApplication;
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Onboarding.Queries.GetApplication;
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Onboarding.Queries.GetApplications;
-using EnterpriseWebPlatform.CustomerOnboarding.API.Models;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.API.Controllers;
 
@@ -18,8 +14,11 @@ namespace EnterpriseWebPlatform.CustomerOnboarding.API.Controllers;
 public sealed class OnboardingApplicationsController : ControllerBase
 {
     private readonly CreateOnboardingApplicationCommandHandler _createApplicationHandler;
+
     private readonly SubmitOnboardingApplicationCommandHandler _submitApplicationHandler;
+
     private readonly GetOnboardingApplicationQueryHandler _getApplicationHandler;
+
     private readonly GetOnboardingApplicationsQueryHandler _getApplicationsHandler;
 
     public OnboardingApplicationsController(

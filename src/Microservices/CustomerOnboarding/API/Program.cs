@@ -1,19 +1,15 @@
+using System.Text.Json;
+
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+
 using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 using EnterpriseWebPlatform.CustomerOnboarding.Application;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Exceptions;
 using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Diagnostics;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.IdentityModel.Tokens;
-using System;
-using System.Net;
-using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 

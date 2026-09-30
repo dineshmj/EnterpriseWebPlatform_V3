@@ -1,5 +1,3 @@
-using System;
-
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Enums;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Application.Customers.Commands.CreateCustomer;

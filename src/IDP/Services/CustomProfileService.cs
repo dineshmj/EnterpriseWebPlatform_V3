@@ -1,5 +1,4 @@
 ﻿using System.Security.Claims;
-using System.Collections.Generic;
 
 using Duende.IdentityServer.Extensions;
 using Duende.IdentityServer.Models;

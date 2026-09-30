@@ -3,7 +3,6 @@ using Duende.IdentityServer.Models;
 using Duende.IdentityServer.Validation;
 
 using EnterpriseWebPlatform.IdentityServer.Repositories;
-using EnterpriseWebPlatform.IdentityServer.Security;
 
 namespace EnterpriseWebPlatform.IdentityServer.Security;
 
@@ -11,6 +10,7 @@ public sealed class CustomResourceOwnerPasswordValidator
     : IResourceOwnerPasswordValidator
 {
     private readonly IUserRepository _userRepository;
+
     private readonly IPasswordManager _passwordManager;
 
     public CustomResourceOwnerPasswordValidator(IUserRepository userRepository, IPasswordManager passwordManager)

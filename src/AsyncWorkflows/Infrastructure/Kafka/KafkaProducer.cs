@@ -1,5 +1,6 @@
-using Confluent.Kafka;
 using Microsoft.Extensions.Options;
+
+using Confluent.Kafka;
 
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 

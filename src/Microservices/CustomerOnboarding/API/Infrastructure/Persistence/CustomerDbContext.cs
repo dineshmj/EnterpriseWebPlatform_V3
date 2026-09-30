@@ -1,7 +1,6 @@
 using System.Text.Json;
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Http;
 
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Persistence;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Aggregates;

@@ -1,15 +1,11 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+using EnterpriseWebPlatform.CustomerOnboarding.API.Models;
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Customers.Commands.CreateCustomer;
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Customers.Commands.UpdateCustomer;
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Customers.Queries.GetCustomer;
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Customers.Queries.GetCustomers;
-using EnterpriseWebPlatform.CustomerOnboarding.API.Models;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.API.Controllers;
 
@@ -18,8 +14,11 @@ namespace EnterpriseWebPlatform.CustomerOnboarding.API.Controllers;
 public sealed class CustomersController : ControllerBase
 {
     private readonly CreateCustomerCommandHandler _createCustomerHandler;
+
     private readonly UpdateCustomerCommandHandler _updateCustomerHandler;
+
     private readonly GetCustomerQueryHandler _getCustomerHandler;
+
     private readonly GetCustomersQueryHandler _getCustomersHandler;
 
     public CustomersController(

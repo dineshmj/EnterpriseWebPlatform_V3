@@ -1,5 +1,6 @@
-using EnterpriseWebPlatform.BSS.BFFWeb.Data.Entities;
 using Microsoft.EntityFrameworkCore;
+
+using EnterpriseWebPlatform.BSS.BFFWeb.Data.Entities;
 
 namespace EnterpriseWebPlatform.BSS.BFFWeb.Data;
 

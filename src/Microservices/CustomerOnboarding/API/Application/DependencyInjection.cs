@@ -1,5 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
-
 namespace EnterpriseWebPlatform.CustomerOnboarding.Application;
 
 public static class DependencyInjection

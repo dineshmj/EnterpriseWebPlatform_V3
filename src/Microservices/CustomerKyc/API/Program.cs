@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
 using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
-
 using EnterpriseWebPlatform.CustomerKyc.Api.Authorization;
 using EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure;
 

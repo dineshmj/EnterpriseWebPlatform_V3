@@ -9,14 +9,22 @@ public sealed class KycOutboxPublisher(KycDbContext db, IConfiguration config, I
     public async Task PublishPendingAsync(CancellationToken ct)
     {
         var servers = config["Kafka:BootstrapServers"] ?? "localhost:9092";
+
         var defaultTopic = config["Kafka:KycCaseCreatedTopic"] ?? "kyc.case.created";
+
         var approvedTopic = config["Kafka:KycCaseApprovedTopic"] ?? "kyc.case.approved";
+
         var rejectedTopic = config["Kafka:KycCaseRejectedTopic"] ?? "kyc.case.rejected";
+
+
         var identityVerificationApprovedTopic =
             config["Kafka:KycIdentityVerificationApprovedTopic"] ?? "kyc.identity.verification.approved";
+
         var identityVerificationRejectedTopic =
             config["Kafka:KycIdentityVerificationRejectedTopic"] ?? "kyc.identity.verification.rejected";
+
         var documentVerificationApprovedTopic =
+
             config["Kafka:KycDocumentVerificationApprovedTopic"] ?? "kyc.document.verification.approved";
         var documentVerificationRejectedTopic =
             config["Kafka:KycDocumentVerificationRejectedTopic"] ?? "kyc.document.verification.rejected";

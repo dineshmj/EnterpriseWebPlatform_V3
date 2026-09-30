@@ -1,5 +1,6 @@
-using EnterpriseWebPlatform.DocumentsManagement.Domain.Aggregates;
 using Microsoft.EntityFrameworkCore;
+
+using EnterpriseWebPlatform.DocumentsManagement.Domain.Aggregates;
 
 namespace EnterpriseWebPlatform.DocumentsManagement.Infrastructure.Persistence;
 

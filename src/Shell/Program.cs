@@ -4,12 +4,11 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 
+using Duende.AccessTokenManagement.OpenIdConnect;
+using Duende.Bff;
 using Duende.Bff.Yarp;
 
 using EnterpriseWebPlatform.BSS.BFFWeb.Data;
-
-using Duende.AccessTokenManagement.OpenIdConnect;
-using Duende.Bff;
 using EnterpriseWebPlatform.Common.Landscape;
 
 var builder = WebApplication.CreateBuilder(args);

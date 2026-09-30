@@ -1,6 +1,3 @@
-using System.Threading;
-using System.Threading.Tasks;
-
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Persistence;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Aggregates;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.ValueObjects;
@@ -10,7 +7,9 @@ namespace EnterpriseWebPlatform.CustomerOnboarding.Application.Customers.Command
 public sealed class CreateCustomerCommandHandler
 {
     private readonly ICustomerRepository _customerRepository;
+
     private readonly ICustomerNumberGenerator _customerNumberGenerator;
+
     private readonly IApplicationUnitOfWork _unitOfWork;
 
     public CreateCustomerCommandHandler(

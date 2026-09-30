@@ -6,6 +6,7 @@ namespace EnterpriseWebPlatform.CustomerOnboarding.Application.Customers.Command
 public sealed class UpdateCustomerCommandHandler
 {
     private readonly ICustomerRepository _customerRepository;
+
     private readonly IApplicationUnitOfWork _unitOfWork;
 
     public UpdateCustomerCommandHandler(

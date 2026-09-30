@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-using EnterpriseWebPlatform.CustomerKyc.Api.Authorization;
 using EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure;
 
 namespace EnterpriseWebPlatform.CustomerKyc.Api.Controllers;

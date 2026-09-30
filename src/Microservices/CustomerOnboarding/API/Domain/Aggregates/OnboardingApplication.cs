@@ -29,10 +29,15 @@ public sealed class OnboardingApplication : AggregateRoot
     // So constructor does not have a parameter to accept a Customer.
 
     public OnboardingApplicationStatus Status { get; private set; }
+
     public DateTimeOffset? SubmittedAt { get; private set; }
+
     public DateTimeOffset? CompletedAt { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
+
     public DateTimeOffset UpdatedAt { get; private set; }
+
     public long Version { get; private set; }
 
     public static OnboardingApplication Create(ApplicationNumber applicationNumber, long customerId)

@@ -1,6 +1,7 @@
+using Microsoft.EntityFrameworkCore;
+
 using EnterpriseWebPlatform.DocumentsManagement.Application.Abstractions.Persistence;
 using EnterpriseWebPlatform.DocumentsManagement.Domain.Aggregates;
-using Microsoft.EntityFrameworkCore;
 
 namespace EnterpriseWebPlatform.DocumentsManagement.Infrastructure.Persistence;
 
