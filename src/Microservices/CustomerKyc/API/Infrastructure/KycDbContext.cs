@@ -19,6 +19,38 @@ public sealed class KycDbContext(DbContextOptions<KycDbContext> options) : DbCon
             e.Property(x => x.CustomerNumber).HasColumnName("customer_number").HasMaxLength(100).IsRequired();
             e.Property(x => x.Status).HasColumnName("status").HasMaxLength(50).IsRequired();
             e.Property(x => x.InitiatedByUserId).HasColumnName("initiated_by_user_id").HasMaxLength(200);
+
+            e.Property(x => x.IdentityVerificationStatus)
+                .HasColumnName("identity_verification_status")
+                .HasMaxLength(50)
+                .IsRequired();
+            e.Property(x => x.IdentityVerificationByUserId)
+                .HasColumnName("identity_verification_by_user_id")
+                .HasMaxLength(200);
+            e.Property(x => x.IdentityVerificationAt)
+                .HasColumnName("identity_verification_at")
+                .HasColumnType("timestamp with time zone");
+            e.Property(x => x.IdentityVerificationRemarks)
+                .HasColumnName("identity_verification_remarks")
+                .HasMaxLength(4000);
+
+            e.Property(x => x.DocumentVerificationStatus)
+                .HasColumnName("document_verification_status")
+                .HasMaxLength(50)
+                .IsRequired();
+            e.Property(x => x.DocumentVerificationByUserId)
+                .HasColumnName("document_verification_by_user_id")
+                .HasMaxLength(200);
+            e.Property(x => x.DocumentVerificationAt)
+                .HasColumnName("document_verification_at")
+                .HasColumnType("timestamp with time zone");
+            e.Property(x => x.DocumentVerificationRemarks)
+                .HasColumnName("document_verification_remarks")
+                .HasMaxLength(4000);
+
+            e.Property(x => x.DecisionByUserId).HasColumnName("decision_by_user_id").HasMaxLength(200);
+            e.Property(x => x.DecisionAt).HasColumnName("decision_at").HasColumnType("timestamp with time zone");
+            e.Property(x => x.DecisionRemarks).HasColumnName("decision_remarks").HasMaxLength(4000);
             e.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone").IsRequired();
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone").IsRequired();
             e.HasIndex(x => x.CustomerNumber).IsUnique().HasDatabaseName("uq_kyc_cases_customer_number");

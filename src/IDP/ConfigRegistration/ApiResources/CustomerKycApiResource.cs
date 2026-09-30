@@ -22,7 +22,13 @@ public sealed class CustomerKycApiResource : IDuendeApiResource
                 {
                     "role",
                     "name",
-                    "email"
+                    "email",
+                    "permission",
+                    "department",
+                    "branch",
+                    "region",
+                    "clearance_level",
+                    "employment_type"
                 }
         };
 }

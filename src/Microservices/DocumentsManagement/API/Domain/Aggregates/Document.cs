@@ -14,6 +14,8 @@ public sealed class Document : Entity
     public long Size { get; private set; }
     public string ContentHash { get; private set; } = string.Empty;
     public string StorageReference { get; private set; } = string.Empty;
+    public string? DocumentType { get; private set; }
+    public string? BusinessReference { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
     public long Version { get; private set; }
@@ -25,7 +27,9 @@ public sealed class Document : Entity
         long size,
         string contentHash,
         string storageReference,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        string? documentType = null,
+        string? businessReference = null)
     {
         if (documentId == Guid.Empty)
             throw new DomainRuleViolationException("Document ID cannot be empty.");
@@ -53,6 +57,8 @@ public sealed class Document : Entity
             Size = size,
             ContentHash = contentHash,
             StorageReference = storageReference,
+            DocumentType = string.IsNullOrWhiteSpace(documentType) ? null : documentType.Trim(),
+            BusinessReference = string.IsNullOrWhiteSpace(businessReference) ? null : businessReference.Trim(),
             CreatedAt = now,
             UpdatedAt = now,
             Version = 1

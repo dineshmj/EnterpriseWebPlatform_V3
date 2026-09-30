@@ -1,16 +1,16 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
 using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 
+using EnterpriseWebPlatform.CustomerKyc.Api.Authorization;
 using EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
 
 var connectionString = builder.Configuration.GetConnectionString("KycDbConnection")
     ?? throw new InvalidOperationException("Connection string 'KycDbConnection' was not configured.");
@@ -47,19 +47,37 @@ builder.Services.AddAuthorization(options =>
             "client_id",
             CustomerKycMicroservice.CLIENT_ID_FOR_IDP_FOR_CUST_KYC_SUBSCRIBER_TO_CUST_KYC_API_M2M);
     });
+
+    options.AddPolicy("KycCaseView", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireClaim("scope", "customer-kyc.read");
+        policy.RequireClaim("role", "kyc_officer");
+        policy.RequireClaim("permission", "kyc.case.view");
+        policy.RequireClaim("department", "KYC");
+    });
+
+    options.AddPolicy("KycCaseApprove", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireClaim("scope", "customer-kyc.write");
+        policy.AddRequirements(new KycCaseDecisionRequirement("kyc.case.approve"));
+    });
+
+    options.AddPolicy("KycCaseReject", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireClaim("scope", "customer-kyc.write");
+        policy.AddRequirements(new KycCaseDecisionRequirement("kyc.case.reject"));
+    });
 });
 
+builder.Services.AddSingleton<IAuthorizationHandler, KycCaseDecisionAuthorizationHandler>();
 builder.Services.AddScoped<KycCaseService>();
 builder.Services.AddScoped<KycOutboxPublisher>();
 builder.Services.AddHostedService<KycOutboxPublisherHostedService>();
 
 var app = builder.Build();
-
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
 
 app.UseHttpsRedirection();
 app.UseAuthentication();

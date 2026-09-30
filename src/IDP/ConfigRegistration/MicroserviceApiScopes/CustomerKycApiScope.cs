@@ -11,7 +11,7 @@ public sealed class CustomerKycApiScope : IDuendeMicroserviceApiScope
                 CustomerKycApiScopesRequired.CUSTOMER_KYC_READ,
                 "Customer KYC API - Read")
         {
-            UserClaims = { "role", "name", "email" }
+            UserClaims = { "role", "name", "email", "permission", "department", "branch", "region", "clearance_level", "employment_type" }
         };
 
     public static ApiScope Write =>
@@ -19,6 +19,6 @@ public sealed class CustomerKycApiScope : IDuendeMicroserviceApiScope
                 CustomerKycApiScopesRequired.CUSTOMER_KYC_WRITE,
                 "Customer KYC API - Write")
         {
-            UserClaims = { "role", "name", "email" }
+            UserClaims = { "role", "name", "email", "permission", "department", "branch", "region", "clearance_level", "employment_type" }
         };
 }

@@ -3,4 +3,6 @@ namespace EnterpriseWebPlatform.DocumentsManagement.Application.Documents.Comman
 public sealed record UploadDocumentCommand(
     string FileName,
     string ContentType,
-    Stream Content);
+    Stream Content,
+    string? DocumentType,
+    string? BusinessReference);

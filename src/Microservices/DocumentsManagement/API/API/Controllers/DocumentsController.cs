@@ -22,9 +22,14 @@ public sealed class DocumentsController(
     [HttpGet]
     [Authorize(Policy = "DocumentRead")]
     public async Task<ActionResult<IReadOnlyList<DocumentListItemDto>>> GetDocuments(
+        [FromQuery] string? businessReference,
+        [FromQuery] string? documentType,
         CancellationToken cancellationToken)
     {
-        return Ok(await getDocumentsHandler.HandleAsync(cancellationToken));
+        return Ok(await getDocumentsHandler.HandleAsync(
+            businessReference,
+            documentType,
+            cancellationToken));
     }
 
     [HttpGet("{id:guid}")]
@@ -68,6 +73,8 @@ public sealed class DocumentsController(
     [RequestSizeLimit(25 * 1024 * 1024)]
     public async Task<ActionResult<UploadDocumentResult>> Upload(
         [FromForm] UploadDocumentRequest request,
+        [FromHeader(Name = "X-Document-Type")] string? documentType,
+        [FromHeader(Name = "X-Business-Reference")] string? businessReference,
         CancellationToken cancellationToken)
     {
         if (request.File is null || request.File.Length == 0)
@@ -82,7 +89,9 @@ public sealed class DocumentsController(
             new UploadDocumentCommand(
                 request.File.FileName,
                 request.File.ContentType,
-                stream),
+                stream,
+                documentType,
+                businessReference),
             cancellationToken);
 
         return CreatedAtAction(

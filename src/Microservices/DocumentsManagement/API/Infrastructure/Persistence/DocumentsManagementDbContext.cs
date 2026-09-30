@@ -54,6 +54,16 @@ public sealed class DocumentsManagementDbContext(DbContextOptions<DocumentsManag
                 .HasColumnName("version")
                 .IsRequired();
 
+            entity.Property(x => x.DocumentType)
+                .HasColumnName("document_type")
+                .HasMaxLength(100);
+
+            entity.Property(x => x.BusinessReference)
+                .HasColumnName("business_reference")
+                .HasMaxLength(255);
+
+            entity.HasIndex(x => new { x.BusinessReference, x.DocumentType });
+
             entity.HasIndex(x => x.ContentHash);
         });
     }

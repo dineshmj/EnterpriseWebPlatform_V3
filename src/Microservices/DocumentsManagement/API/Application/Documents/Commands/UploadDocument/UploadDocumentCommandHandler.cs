@@ -31,7 +31,9 @@ public sealed class UploadDocumentCommandHandler(
             stored.Size,
             stored.ContentHash,
             stored.StorageReference,
-            now);
+            now,
+            command.DocumentType,
+            command.BusinessReference);
 
         await repository.AddAsync(document, cancellationToken);
 

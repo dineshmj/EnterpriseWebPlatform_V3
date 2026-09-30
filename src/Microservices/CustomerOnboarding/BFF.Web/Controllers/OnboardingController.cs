@@ -111,6 +111,7 @@ public sealed class OnboardingController(
             var kycDocument = await UploadDocumentAsync(
                 request.KycProof,
                 "KYCProof",
+                customerNumber,
                 m2mToken,
                 cancellationToken);
 
@@ -124,6 +125,7 @@ public sealed class OnboardingController(
             var taxDocument = await UploadDocumentAsync(
                 request.TaxProof,
                 "TaxProof",
+                customerNumber,
                 m2mToken,
                 cancellationToken);
 
@@ -253,6 +255,7 @@ public sealed class OnboardingController(
     private async Task<(bool Success, Guid? DocumentId, IActionResult? Result)> UploadDocumentAsync(
         IFormFile file,
         string documentType,
+        string businessReference,
         string m2mToken,
         CancellationToken cancellationToken)
     {
@@ -269,6 +272,7 @@ public sealed class OnboardingController(
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", m2mToken);
         request.Headers.Add("X-Document-Type", documentType);
+        request.Headers.Add("X-Business-Reference", businessReference);
 
         // IMPORTANT: this POST is deliberately not retried automatically. The current
         // DM API has no idempotency-key contract, so a retry could create a duplicate file.

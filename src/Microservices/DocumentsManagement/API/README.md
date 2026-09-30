@@ -39,3 +39,12 @@ Document BLOBs are never placed in Kafka events. Other bounded contexts should p
 Add `API/EnterpriseWebPlatform.BSS.Microservices.DocumentsManagement.Api.csproj` to the V3 solution under the Documents Management microservice area.
 
 The project expects the Landscape project reference at the same relative location used by the V3 `src/Microservices/*/API` projects.
+
+
+## Generic document metadata
+
+Documents may optionally carry:
+- `document_type`
+- `business_reference`
+
+These are generic strings; Documents Management does not own or interpret Customer/KYC domain identifiers. Other bounded contexts may use them to retrieve their documents through the API without introducing cross-service database foreign keys.

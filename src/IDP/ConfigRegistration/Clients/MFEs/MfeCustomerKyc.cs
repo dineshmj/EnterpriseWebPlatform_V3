@@ -2,6 +2,7 @@
 using Duende.IdentityServer.Models;
 
 using EnterpriseWebPlatform.Common.Landscape.Microservices;
+using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.MFEs;
@@ -44,7 +45,9 @@ public sealed class MfeCustomerKyc
                         IdentityServerConstants.StandardScopes.Profile,
                         IdentityServerConstants.StandardScopes.Email,
                         "roles",
-                        MicroserviceApiResourceNames.CUSTOMER_KYC_API
+                        MicroserviceApiResourceNames.CUSTOMER_KYC_API,
+                        CustomerKycApiScopesRequired.CUSTOMER_KYC_READ,
+                        CustomerKycApiScopesRequired.CUSTOMER_KYC_WRITE
                             // 🡡__ WHY   : Including the CUSTOMER_KYC_API scope permits the CustomerKyc Microservice BFF client to request access tokens that include scope permissions for the
                             //              CustomerKyc Microservice API. The CustomerKyc Microservice API will validate the access token and require the corresponding scope to authorize API calls.
                             // 🡡__ IF NOT: If this scope is not included, tokens issued to the client will not be valid for calling the CustomerKyc Microservice API, so CustomerKyc Microservice API calls

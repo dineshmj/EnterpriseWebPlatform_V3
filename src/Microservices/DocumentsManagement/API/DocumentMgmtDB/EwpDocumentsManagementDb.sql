@@ -61,6 +61,8 @@ CREATE TABLE documents
     content_hash        VARCHAR(64)   NOT NULL,
 
     storage_reference   VARCHAR(1024) NOT NULL,
+    document_type       VARCHAR(100)  NULL,
+    business_reference  VARCHAR(255)  NULL,
 
     created_at          TIMESTAMPTZ   NOT NULL,
     updated_at          TIMESTAMPTZ   NOT NULL,
@@ -79,6 +81,9 @@ CREATE TABLE documents
 
 CREATE INDEX ix_documents_content_hash
     ON documents (content_hash);
+
+CREATE INDEX ix_documents_business_reference_document_type
+    ON documents (business_reference, document_type);
 
 -- ============================================================================
 -- DESIGN NOTE
