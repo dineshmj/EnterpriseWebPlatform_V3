@@ -129,6 +129,12 @@ CREATE TABLE IF NOT EXISTS outbox_messages (
     correlation_id UUID NULL,
     causation_id UUID NULL,
 
+    -- Human originator of the long-running workflow.
+    initiated_by_user_id VARCHAR(200) NULL,
+
+    -- Human who actually performed the KYC decision, when applicable.
+    acted_by_user_id VARCHAR(200) NULL,
+
     published_at TIMESTAMPTZ NULL,
     attempt_count INTEGER NOT NULL DEFAULT 0,
     last_attempt_at TIMESTAMPTZ NULL,
@@ -141,3 +147,5 @@ CREATE INDEX IF NOT EXISTS ix_kyc_outbox_unpublished
 CREATE INDEX IF NOT EXISTS ix_kyc_outbox_workflow_id ON outbox_messages (workflow_id);
 CREATE INDEX IF NOT EXISTS ix_kyc_outbox_correlation_id ON outbox_messages (correlation_id);
 CREATE INDEX IF NOT EXISTS ix_kyc_outbox_causation_id ON outbox_messages (causation_id);
+CREATE INDEX IF NOT EXISTS ix_kyc_outbox_initiated_by_user_id ON outbox_messages (initiated_by_user_id);
+CREATE INDEX IF NOT EXISTS ix_kyc_outbox_acted_by_user_id ON outbox_messages (acted_by_user_id);

@@ -50,6 +50,13 @@ public sealed class OnboardingController(
             return UnprocessableEntity(new { message = "Both KYC documents must be PDF files." });
         }
 
+        // The BFF is the workflow entry point for this human onboarding action.
+        // Establish the business workflow context once and propagate it only to
+        // the workflow-owning Customer Onboarding API. Documents Management is
+        // deliberately treated as an artifact service and receives no workflow metadata.
+        var workflowId = Guid.NewGuid();
+        var correlationId = Guid.NewGuid();
+
         long customerId;
         string customerNumber;
 
@@ -74,7 +81,12 @@ public sealed class OnboardingController(
             // so the customer's optional OIDC SubjectId must not be populated from the
             // staff user's token. It remains null until the customer's own identity is
             // explicitly linked through an appropriate identity-association workflow.
-            var customer = await CreateCustomerAsync(request, cancellationToken);
+            var customer = await CreateCustomerAsync(
+                request,
+                workflowId,
+                correlationId,
+                Guid.NewGuid(),
+                cancellationToken);
             if (!customer.Success)
             {
                 return customer.Result!;
@@ -84,7 +96,12 @@ public sealed class OnboardingController(
             customerNumber = customer.CustomerNumber!;
         }
 
-        var application = await CreateApplicationAsync(customerId, cancellationToken);
+        var application = await CreateApplicationAsync(
+            customerId,
+            workflowId,
+            correlationId,
+            Guid.NewGuid(),
+            cancellationToken);
         if (!application.Success)
         {
             return application.Result!;
@@ -150,6 +167,9 @@ public sealed class OnboardingController(
             var submit = await SubmitApplicationAsync(
                 application.ApplicationId.Value,
                 applicationDetails.Version,
+                workflowId,
+                correlationId,
+                Guid.NewGuid(),
                 cancellationToken);
 
             if (!submit.Success)
@@ -204,20 +224,25 @@ public sealed class OnboardingController(
 
     private async Task<(bool Success, long? CustomerId, string? CustomerNumber, IActionResult? Result)> CreateCustomerAsync(
         CreateAndSubmitOnboardingRequest request,
+        Guid workflowId,
+        Guid correlationId,
+        Guid? commandId,
         CancellationToken cancellationToken)
     {
         var client = httpClientFactory.CreateClient("CustomerOnboardingApi");
-        using var response = await client.PostAsJsonAsync(
-            "/v1/customers",
-            new
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "/v1/customers")
+        {
+            Content = JsonContent.Create(new
             {
                 firstName = request.FirstName,
                 lastName = request.LastName,
                 email = request.Email,
                 phoneNumber = request.PhoneNumber,
                 customerType = 1
-            },
-            cancellationToken);
+            })
+        };
+        AddWorkflowHeaders(httpRequest, workflowId, correlationId, commandId);
+        using var response = await client.SendAsync(httpRequest, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -232,14 +257,19 @@ public sealed class OnboardingController(
 
     private async Task<(bool Success, long? ApplicationId, string? ApplicationNumber, IActionResult? Result)> CreateApplicationAsync(
         long? customerId,
+        Guid workflowId,
+        Guid correlationId,
+        Guid commandId,
         CancellationToken cancellationToken)
     {
         var applicationNumber = $"APP-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}-{Random.Shared.Next(1000, 9999)}";
         var client = httpClientFactory.CreateClient("CustomerOnboardingApi");
-        using var response = await client.PostAsJsonAsync(
-            "/v1/onboarding/applications",
-            new { customerId, applicationNumber },
-            cancellationToken);
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "/v1/onboarding/applications")
+        {
+            Content = JsonContent.Create(new { customerId, applicationNumber })
+        };
+        AddWorkflowHeaders(httpRequest, workflowId, correlationId, commandId);
+        using var response = await client.SendAsync(httpRequest, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -273,7 +303,6 @@ public sealed class OnboardingController(
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", m2mToken);
         request.Headers.Add("X-Document-Type", documentType);
         request.Headers.Add("X-Business-Reference", businessReference);
-
         // IMPORTANT: this POST is deliberately not retried automatically. The current
         // DM API has no idempotency-key contract, so a retry could create a duplicate file.
         using var response = await client.SendAsync(request, cancellationToken);
@@ -311,13 +340,20 @@ public sealed class OnboardingController(
     private async Task<(bool Success, IActionResult? Result)> SubmitApplicationAsync(
         long applicationId,
         long expectedVersion,
+        Guid workflowId,
+        Guid correlationId,
+        Guid commandId,
         CancellationToken cancellationToken)
     {
         var client = httpClientFactory.CreateClient("CustomerOnboardingApi");
-        using var response = await client.PostAsJsonAsync(
-            $"/v1/onboarding/applications/{applicationId}/submit",
-            new { expectedVersion },
-            cancellationToken);
+        using var httpRequest = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/v1/onboarding/applications/{applicationId}/submit")
+        {
+            Content = JsonContent.Create(new { expectedVersion })
+        };
+        AddWorkflowHeaders(httpRequest, workflowId, correlationId, commandId);
+        using var response = await client.SendAsync(httpRequest, cancellationToken);
 
         return response.IsSuccessStatusCode
             ? (true, null)
@@ -353,6 +389,23 @@ public sealed class OnboardingController(
             {
                 logger.LogWarning(ex, "Document compensation threw an exception for {DocumentId}.", documentId);
             }
+        }
+    }
+
+    private static void AddWorkflowHeaders(
+        HttpRequestMessage request,
+        Guid workflowId,
+        Guid correlationId,
+        Guid? causationId)
+    {
+        request.Headers.Remove("X-Workflow-Id");
+        request.Headers.Remove("X-Correlation-Id");
+        request.Headers.Remove("X-Causation-Id");
+        request.Headers.TryAddWithoutValidation("X-Workflow-Id", workflowId.ToString());
+        request.Headers.TryAddWithoutValidation("X-Correlation-Id", correlationId.ToString());
+        if (causationId.HasValue)
+        {
+            request.Headers.TryAddWithoutValidation("X-Causation-Id", causationId.Value.ToString());
         }
     }
 

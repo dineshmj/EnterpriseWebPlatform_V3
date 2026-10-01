@@ -76,7 +76,10 @@ public sealed class CustomerDbContext :
             var initiatedByUserId = GetInitiatedByUserId();
 
             var outboxMessages =
-                CreateOutboxMessages(domainEvents, initiatedByUserId);
+                await CreateOutboxMessagesAsync(
+                    domainEvents,
+                    initiatedByUserId,
+                    cancellationToken);
 
             OutboxMessages.AddRange(outboxMessages);
 
@@ -118,168 +121,252 @@ public sealed class CustomerDbContext :
             .ToList();
     }
 
-    private List<OutboxMessage> CreateOutboxMessages(
-        IEnumerable<(AggregateRoot Aggregate, IDomainEvent Event)>
-            domainEvents,
-        Guid? initiatedByUserId)
+    private async Task<List<OutboxMessage>> CreateOutboxMessagesAsync(
+        IEnumerable<(AggregateRoot Aggregate, IDomainEvent Event)> domainEvents,
+        Guid? initiatedByUserId,
+        CancellationToken cancellationToken)
     {
         var messages = new List<OutboxMessage>();
+        var requestContext = GetWorkflowRequestContext();
+        var lastMessageIdByAggregate = new Dictionary<string, Guid>();
 
         foreach (var (aggregate, domainEvent) in domainEvents)
         {
             switch (domainEvent)
             {
                 case CustomerCreatedDomainEvent customerCreated:
-                    {
-                        var customer =
-                            (Customer)aggregate;
+                {
+                    var customer = (Customer)aggregate;
+                    var workflowId = requestContext.WorkflowId ?? Guid.NewGuid();
+                    var correlationId = requestContext.CorrelationId ?? Guid.NewGuid();
+                    var messageId = Guid.NewGuid();
 
-                        var integrationEvent =
-                            new CustomerCreatedIntegrationEvent(
-                                customer.Id,
-                                customer.CustomerNumber.Value,
-                                customer.SubjectId,
-                                customer.CustomerType
-                                    .ToString()
-                                    .ToUpperInvariant(),
-                                customer.Status
-                                    .ToString()
-                                    .ToUpperInvariant());
+                    var integrationEvent = new CustomerCreatedIntegrationEvent(
+                        customer.Id,
+                        customer.CustomerNumber.Value,
+                        customer.SubjectId,
+                        customer.CustomerType.ToString().ToUpperInvariant(),
+                        customer.Status.ToString().ToUpperInvariant());
 
-                        // CustomerCreated is the root event for this workflow.
-                        // A new WorkflowId and CorrelationId are therefore
-                        // established here. CausationId is null because there
-                        // is no preceding integration event.
-                        var workflowId = Guid.NewGuid();
-                        var correlationId = Guid.NewGuid();
-                        var messageId = Guid.NewGuid();
+                    var envelope = new IntegrationEventEnvelope<CustomerCreatedIntegrationEvent>(
+                        messageId,
+                        "CustomerCreated",
+                        "customer-onboarding",
+                        customerCreated.OccurredAt,
+                        workflowId,
+                        correlationId,
+                        requestContext.CausationId,
+                        initiatedByUserId?.ToString(),
+                        integrationEvent);
 
-                        var envelope =
-                            new IntegrationEventEnvelope
-                                <CustomerCreatedIntegrationEvent>(
-                                messageId,
-                                "CustomerCreated",
-                                "customer-onboarding",
-                                customerCreated.OccurredAt,
-                                workflowId,
-                                correlationId,
-                                null,
-                                initiatedByUserId?.ToString(),
-                                integrationEvent);
+                    var payload = JsonSerializer.SerializeToDocument(envelope);
 
-                        var payload =
-                            JsonSerializer.SerializeToDocument(
-                                envelope);
+                    messages.Add(OutboxMessage.Create(
+                        "Customer",
+                        customer.Id.ToString(),
+                        "CustomerCreated",
+                        payload,
+                        customerCreated.OccurredAt,
+                        workflowId,
+                        correlationId,
+                        requestContext.CausationId,
+                        initiatedByUserId));
 
-                        messages.Add(
-                            OutboxMessage.Create(
-                                "Customer",
-                                customer.Id.ToString(),
-                                "CustomerCreated",
-                                payload,
-                                customerCreated.OccurredAt,
-                                workflowId,
-                                correlationId,
-                                null,
-                                initiatedByUserId));
-
-                        break;
-                    }
+                    break;
+                }
 
                 case OnboardingApplicationSubmittedDomainEvent submitted:
-                    {
-                        var integrationEvent =
-                            new OnboardingApplicationSubmittedIntegrationEvent(
-                                submitted.ApplicationId,
-                                submitted.CustomerId,
-                                submitted.ApplicationNumber);
+                {
+                    var context = await ResolveApplicationWorkflowContextAsync(
+                        submitted.CustomerId,
+                        submitted.ApplicationId,
+                        requestContext,
+                        lastMessageIdByAggregate,
+                        cancellationToken);
 
-                        var envelope =
-                            new IntegrationEventEnvelope
-                                <OnboardingApplicationSubmittedIntegrationEvent>(
-                                Guid.NewGuid(),
-                                "OnboardingApplicationSubmitted",
-                                "customer-onboarding",
-                                submitted.OccurredAt,
-                                null,
-                                null,
-                                null,
-                                initiatedByUserId?.ToString(),
-                                integrationEvent);
+                    var messageId = Guid.NewGuid();
+                    var causationId = ResolveCausationId(
+                        submitted.ApplicationId,
+                        context.CausationId,
+                        lastMessageIdByAggregate);
 
-                        var payload =
-                            JsonSerializer.SerializeToDocument(
-                                envelope);
+                    var integrationEvent = new OnboardingApplicationSubmittedIntegrationEvent(
+                        submitted.ApplicationId,
+                        submitted.CustomerId,
+                        submitted.ApplicationNumber);
 
-                        messages.Add(
-                            OutboxMessage.Create(
-                                "OnboardingApplication",
-                                submitted.ApplicationId.ToString(),
-                                "OnboardingApplicationSubmitted",
-                                payload,
-                                submitted.OccurredAt,
-                                null,
-                                null,
-                                null,
-                                initiatedByUserId));
+                    var envelope = new IntegrationEventEnvelope<OnboardingApplicationSubmittedIntegrationEvent>(
+                        messageId,
+                        "OnboardingApplicationSubmitted",
+                        "customer-onboarding",
+                        submitted.OccurredAt,
+                        context.WorkflowId,
+                        context.CorrelationId,
+                        causationId,
+                        initiatedByUserId?.ToString(),
+                        integrationEvent);
 
-                        break;
-                    }
+                    messages.Add(OutboxMessage.Create(
+                        "OnboardingApplication",
+                        submitted.ApplicationId.ToString(),
+                        "OnboardingApplicationSubmitted",
+                        JsonSerializer.SerializeToDocument(envelope),
+                        submitted.OccurredAt,
+                        context.WorkflowId,
+                        context.CorrelationId,
+                        causationId,
+                        initiatedByUserId));
+
+                    lastMessageIdByAggregate[GetAggregateKey("OnboardingApplication", submitted.ApplicationId)] = messageId;
+                    break;
+                }
 
                 case OnboardingApplicationStatusChangedDomainEvent statusChanged:
-                    {
-                        var integrationEvent =
-                            new OnboardingApplicationStatusChangedIntegrationEvent(
-                                statusChanged.ApplicationId,
-                                statusChanged.CustomerId,
-                                statusChanged.PreviousStatus
-                                    .ToString()
-                                    .ToUpperInvariant(),
-                                statusChanged.NewStatus
-                                    .ToString()
-                                    .ToUpperInvariant());
+                {
+                    var context = await ResolveApplicationWorkflowContextAsync(
+                        statusChanged.CustomerId,
+                        statusChanged.ApplicationId,
+                        requestContext,
+                        lastMessageIdByAggregate,
+                        cancellationToken);
 
-                        var envelope =
-                            new IntegrationEventEnvelope
-                                <OnboardingApplicationStatusChangedIntegrationEvent>(
-                                Guid.NewGuid(),
-                                "OnboardingApplicationStatusChanged",
-                                "customer-onboarding",
-                                statusChanged.OccurredAt,
-                                null,
-                                null,
-                                null,
-                                initiatedByUserId?.ToString(),
-                                integrationEvent);
+                    var messageId = Guid.NewGuid();
+                    var causationId = ResolveCausationId(
+                        statusChanged.ApplicationId,
+                        context.CausationId,
+                        lastMessageIdByAggregate);
 
-                        var payload =
-                            JsonSerializer.SerializeToDocument(
-                                envelope);
+                    var integrationEvent = new OnboardingApplicationStatusChangedIntegrationEvent(
+                        statusChanged.ApplicationId,
+                        statusChanged.CustomerId,
+                        statusChanged.PreviousStatus.ToString().ToUpperInvariant(),
+                        statusChanged.NewStatus.ToString().ToUpperInvariant());
 
-                        messages.Add(
-                            OutboxMessage.Create(
-                                "OnboardingApplication",
-                                statusChanged.ApplicationId.ToString(),
-                                "OnboardingApplicationStatusChanged",
-                                payload,
-                                statusChanged.OccurredAt,
-                                null,
-                                null,
-                                null,
-                                initiatedByUserId));
+                    var envelope = new IntegrationEventEnvelope<OnboardingApplicationStatusChangedIntegrationEvent>(
+                        messageId,
+                        "OnboardingApplicationStatusChanged",
+                        "customer-onboarding",
+                        statusChanged.OccurredAt,
+                        context.WorkflowId,
+                        context.CorrelationId,
+                        causationId,
+                        initiatedByUserId?.ToString(),
+                        integrationEvent);
 
-                        break;
-                    }
+                    messages.Add(OutboxMessage.Create(
+                        "OnboardingApplication",
+                        statusChanged.ApplicationId.ToString(),
+                        "OnboardingApplicationStatusChanged",
+                        JsonSerializer.SerializeToDocument(envelope),
+                        statusChanged.OccurredAt,
+                        context.WorkflowId,
+                        context.CorrelationId,
+                        causationId,
+                        initiatedByUserId));
+
+                    lastMessageIdByAggregate[GetAggregateKey("OnboardingApplication", statusChanged.ApplicationId)] = messageId;
+                    break;
+                }
 
                 default:
                     throw new InvalidOperationException(
-                        $"No Outbox mapping exists for domain event " +
-                        $"'{domainEvent.GetType().Name}'.");
+                        $"No Outbox mapping exists for domain event '{domainEvent.GetType().Name}'.");
             }
         }
 
         return messages;
     }
+
+    private async Task<WorkflowRequestContext> ResolveApplicationWorkflowContextAsync(
+        long customerId,
+        long applicationId,
+        WorkflowRequestContext requestContext,
+        IReadOnlyDictionary<string, Guid> localMessages,
+        CancellationToken cancellationToken)
+    {
+        var applicationAggregateKey = GetAggregateKey("OnboardingApplication", applicationId);
+        var existingApplicationMessage = await OutboxMessages
+            .AsNoTracking()
+            .Where(x => x.AggregateType == "OnboardingApplication" &&
+                        x.AggregateId == applicationId.ToString())
+            .OrderByDescending(x => x.OccurredAt)
+            .Select(x => new WorkflowLookup(x.WorkflowId, x.CorrelationId, x.Id))
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (existingApplicationMessage is not null)
+        {
+            return new WorkflowRequestContext(
+                requestContext.WorkflowId ?? existingApplicationMessage.WorkflowId,
+                requestContext.CorrelationId ?? existingApplicationMessage.CorrelationId,
+                requestContext.CausationId ?? existingApplicationMessage.MessageId);
+        }
+
+        var customerRootMessage = await OutboxMessages
+            .AsNoTracking()
+            .Where(x => x.AggregateType == "Customer" &&
+                        x.AggregateId == customerId.ToString() &&
+                        x.EventType == "CustomerCreated")
+            .OrderBy(x => x.OccurredAt)
+            .Select(x => new WorkflowLookup(x.WorkflowId, x.CorrelationId, x.Id))
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return new WorkflowRequestContext(
+            requestContext.WorkflowId ?? customerRootMessage?.WorkflowId ?? Guid.NewGuid(),
+            requestContext.CorrelationId ?? customerRootMessage?.CorrelationId ?? Guid.NewGuid(),
+            requestContext.CausationId ??
+            (localMessages.TryGetValue(applicationAggregateKey, out var localMessageId)
+                ? localMessageId
+                : customerRootMessage?.MessageId));
+    }
+
+    private Guid? ResolveCausationId(
+        long applicationId,
+        Guid? requestedCausationId,
+        IReadOnlyDictionary<string, Guid> localMessages)
+    {
+        var aggregateKey = GetAggregateKey("OnboardingApplication", applicationId);
+        if (localMessages.TryGetValue(aggregateKey, out var localMessageId))
+        {
+            // When multiple domain events are raised in one transaction, the later
+            // integration event is caused by the earlier integration event.
+            return localMessageId;
+        }
+
+        return requestedCausationId;
+    }
+
+    private WorkflowRequestContext GetWorkflowRequestContext()
+    {
+        var headers = _httpContextAccessor.HttpContext?.Request.Headers;
+        return new WorkflowRequestContext(
+            ParseGuidHeader(headers, "X-Workflow-Id"),
+            ParseGuidHeader(headers, "X-Correlation-Id"),
+            ParseGuidHeader(headers, "X-Causation-Id"));
+    }
+
+    private static Guid? ParseGuidHeader(
+        IHeaderDictionary? headers,
+        string name)
+    {
+        return headers is not null &&
+               headers.TryGetValue(name, out var value) &&
+               Guid.TryParse(value.FirstOrDefault(), out var parsed)
+            ? parsed
+            : null;
+    }
+
+    private static string GetAggregateKey(string aggregateType, long aggregateId) =>
+        $"{aggregateType}:{aggregateId}";
+
+    private sealed record WorkflowRequestContext(
+        Guid? WorkflowId,
+        Guid? CorrelationId,
+        Guid? CausationId);
+
+    private sealed record WorkflowLookup(
+        Guid? WorkflowId,
+        Guid? CorrelationId,
+        Guid MessageId);
 
     private Guid? GetInitiatedByUserId()
     {

@@ -53,7 +53,8 @@ public sealed class KycCaseService(KycDbContext db, ILogger<KycCaseService> logg
                 OccurredAt = occurredAt,
                 WorkflowId = request.WorkflowId,
                 CorrelationId = request.CorrelationId,
-                CausationId = request.CausationId
+                CausationId = request.CausationId,
+                InitiatedByUserId = entity.InitiatedByUserId
             });
 
             await db.SaveChangesAsync(ct);
@@ -81,6 +82,7 @@ public sealed class KycCaseService(KycDbContext db, ILogger<KycCaseService> logg
         KycCaseDecision decision,
         string decisionByUserId,
         string? decisionRemarks,
+        Guid commandId,
         CancellationToken ct)
     {
         var remarks = string.IsNullOrWhiteSpace(decisionRemarks)
@@ -205,7 +207,7 @@ public sealed class KycCaseService(KycDbContext db, ILogger<KycCaseService> logg
 
         var stageEventType = GetStageEventType(stage, decision);
         var stageMessageId = Guid.NewGuid();
-        var stageCausationId = Guid.NewGuid();
+        var stageCausationId = commandId;
 
         db.OutboxMessages.Add(new OutboxMessage
         {
@@ -233,7 +235,9 @@ public sealed class KycCaseService(KycDbContext db, ILogger<KycCaseService> logg
             OccurredAt = decisionAt,
             WorkflowId = workflowId,
             CorrelationId = correlationId,
-            CausationId = stageCausationId
+            CausationId = stageCausationId,
+            InitiatedByUserId = existing.InitiatedByUserId,
+            ActedByUserId = decisionByUserId
         });
 
         if (overallNewStatus is "APPROVED" or "REJECTED")
@@ -241,6 +245,32 @@ public sealed class KycCaseService(KycDbContext db, ILogger<KycCaseService> logg
             var overallEventType = overallNewStatus == "APPROVED"
                 ? "KycCaseApproved"
                 : "KycCaseRejected";
+
+            var prerequisiteMessageIds = new List<Guid>();
+
+            if (overallNewStatus == "APPROVED")
+            {
+                var previousApprovedStageMessageId = await db.OutboxMessages
+                    .AsNoTracking()
+                    .Where(x => x.AggregateType == "KycCase" &&
+                                x.AggregateId == caseId.ToString() &&
+                                (x.EventType == "KycIdentityVerificationApproved" ||
+                                 x.EventType == "KycDocumentVerificationApproved"))
+                    .OrderByDescending(x => x.OccurredAt)
+                    .Select(x => x.Id)
+                    .FirstOrDefaultAsync(ct);
+
+                if (previousApprovedStageMessageId != Guid.Empty)
+                {
+                    prerequisiteMessageIds.Add(previousApprovedStageMessageId);
+                }
+
+                prerequisiteMessageIds.Add(stageMessageId);
+            }
+            else
+            {
+                prerequisiteMessageIds.Add(stageMessageId);
+            }
 
             var overallMessageId = Guid.NewGuid();
 
@@ -264,11 +294,14 @@ public sealed class KycCaseService(KycDbContext db, ILogger<KycCaseService> logg
                     existing.InitiatedByUserId,
                     decisionByUserId,
                     decisionAt,
-                    remarks)),
+                    remarks,
+                    prerequisiteMessageIds)),
                 OccurredAt = decisionAt,
                 WorkflowId = workflowId,
                 CorrelationId = correlationId,
-                CausationId = stageMessageId
+                CausationId = stageMessageId,
+                InitiatedByUserId = existing.InitiatedByUserId,
+                ActedByUserId = decisionByUserId
             });
         }
 
@@ -363,7 +396,8 @@ public sealed record KycCaseDecisionEvent(
     string? InitiatedByUserId,
     string DecisionByUserId,
     DateTimeOffset DecisionAt,
-    string? DecisionRemarks);
+    string? DecisionRemarks,
+    IReadOnlyList<Guid> CausedByMessageIds);
 
 public sealed record KycCaseStageDecisionResult(
     bool Succeeded,

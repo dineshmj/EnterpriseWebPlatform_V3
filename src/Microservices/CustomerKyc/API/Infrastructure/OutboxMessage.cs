@@ -22,6 +22,10 @@ public sealed class OutboxMessage
 
     public Guid? CausationId { get; set; }
 
+    public string? InitiatedByUserId { get; set; }
+
+    public string? ActedByUserId { get; set; }
+
     public DateTimeOffset? PublishedAt { get; set; }
 
     public int AttemptCount { get; set; }
