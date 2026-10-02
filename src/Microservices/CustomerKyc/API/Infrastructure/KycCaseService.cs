@@ -99,9 +99,19 @@ public sealed class KycCaseService(KycDbContext db, ILogger<KycCaseService> logg
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
+        // Serialize decisions for this KYC case. Identity and Documentation
+        // approvals are independent and may arrive in either order, but the
+        // aggregate-level status decision must observe the latest committed
+        // state of the other stage. PostgreSQL holds this row lock until the
+        // transaction commits, preventing the classic both-read-PENDING race.
         var existing = await db.KycCases
-            .AsNoTracking()
-            .SingleOrDefaultAsync(x => x.Id == caseId, ct);
+            .FromSqlInterpolated($"""
+                SELECT *
+                FROM kyc_cases
+                WHERE id = {caseId}
+                FOR UPDATE
+                """)
+            .SingleOrDefaultAsync(ct);
 
         if (existing is null)
         {

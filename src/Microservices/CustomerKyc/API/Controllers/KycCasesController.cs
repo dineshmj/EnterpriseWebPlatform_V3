@@ -141,9 +141,8 @@ public sealed class KycCasesController(KycDbContext db, KycCaseService service) 
         if (string.IsNullOrWhiteSpace(decisionByUserId))
             return Unauthorized();
 
-        // Each human approval/rejection is a command. Its command ID is the
-        // immediate causation for the resulting stage event; it is deliberately
-        // different from the event's own MessageId.
+        // Each human approval/rejection is a distinct business command.
+        // The command id becomes the CausationId of the resulting stage event.
         var commandId = Guid.NewGuid();
 
         var result = await service.DecideStageAsync(
