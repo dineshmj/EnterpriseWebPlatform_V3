@@ -405,7 +405,12 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | User-specific SignalR notifications | Planned |
 | Centralized audit trail | Planned |
 | OpenTelemetry / distributed tracing | Planned |
-| Security headers / CSP (`frame-ancestors`, `nosniff`) | Present (IDP, Shell, CO BFF, KYC BFF) |
+| Security headers / CSP | Present: strict CSP on the Shell, CO BFF and KYC BFF (hashed inline scripts, `frame-ancestors` / `frame-src`, `object-src 'none'`); IDP CSP on its pages; `nosniff`; Referrer-Policy |
+| Cookie hardening | Present: session and anti-forgery cookies HttpOnly (session), Secure, `SameSite=Lax`; OIDC correlation / nonce cookies `None` for the login round trip only |
+| Logout propagation | Present: front-channel and back-channel logout on all three BFFs |
+| Error responses without internals | Present: problem details with `traceId` only; details logged |
+| Least-privilege database users | Present: one user per service, own database only, no DDL (`db/EwpServiceDbUsers.sql`) |
+| Dependency vulnerability scanning | Present: `Scan-Dependencies.ps1` (NuGet + pnpm); not yet wired into a CI pipeline |
 | Rate limiting | Partial (IDP login only) |
 | Health checks | Planned |
 | IDP hardening (lockout, no enumeration, POST logout, front-channel logout, refresh-token rotation) | Present |

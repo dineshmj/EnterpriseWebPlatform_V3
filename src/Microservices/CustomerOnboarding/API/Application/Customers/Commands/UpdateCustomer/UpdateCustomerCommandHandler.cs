@@ -1,3 +1,4 @@
+using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions;
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Persistence;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.ValueObjects;
 
@@ -37,7 +38,7 @@ public sealed class UpdateCustomerCommandHandler
 
         if (customer.Version != command.ExpectedVersion)
         {
-            throw new InvalidOperationException(
+            throw new ConcurrencyConflictException(
                 "The customer was modified by another request.");
         }
 

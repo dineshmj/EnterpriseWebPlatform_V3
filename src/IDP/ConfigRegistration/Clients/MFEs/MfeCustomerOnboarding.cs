@@ -34,6 +34,10 @@ public sealed class MfeCustomerOnboarding
                     RedirectUris = { $"{CustomerOnboardingMicroservice.BFF_CLIENT_BASE_URL}/signin-oidc" },
                     PostLogoutRedirectUris = { $"{CustomerOnboardingMicroservice.BFF_CLIENT_BASE_URL}/signout-callback-oidc" },
                     FrontChannelLogoutUri = $"{CustomerOnboardingMicroservice.BFF_CLIENT_BASE_URL}/signout-oidc",
+                    // Back-channel logout (server-to-server; Duende BFF endpoint): ends the
+                    // server-side session even when the browser blocks the front-channel iframe.
+                    BackChannelLogoutUri = $"{CustomerOnboardingMicroservice.BFF_CLIENT_BASE_URL}/bff/backchannel",
+                    BackChannelLogoutSessionRequired = true,
 
                     AllowOfflineAccess = true,
                     // 🡡__ WHY   : CustomerOnboarding Microservice BFF frontend may need refresh tokens to maintain backend sessions or to act on behalf of the user without interactive login.

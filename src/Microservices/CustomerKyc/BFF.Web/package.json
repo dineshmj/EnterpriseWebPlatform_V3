@@ -11,21 +11,22 @@
     "mfe:export": "pnpm --dir client-app export"
   },
   "dependencies": {
-    "@nestjs/common": "11.1.6",
-    "@nestjs/core": "11.1.6",
-    "@nestjs/platform-express": "11.1.6",
+    "@nestjs/common": "11.2.7",
+    "@nestjs/core": "11.2.7",
+    "@nestjs/platform-express": "11.2.7",
     "class-transformer": "0.5.1",
     "class-validator": "0.14.2",
-    "express": "5.1.0",
+    "express": "5.2.1",
     "express-session": "1.18.2",
+    "jose": "4.15.9",
     "openid-client": "5.7.0",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2"
   },
   "devDependencies": {
-    "@nestjs/cli": "11.0.10",
+    "@nestjs/cli": "11.0.24",
     "@nestjs/schematics": "11.0.7",
-    "@nestjs/testing": "11.1.6",
+    "@nestjs/testing": "11.2.7",
     "@types/express": "5.0.3",
     "@types/express-session": "1.18.2",
     "@types/node": "24.5.2",

@@ -91,7 +91,15 @@ builder.Services.AddSingleton<KycKafkaProducer>();
 builder.Services.AddScoped<KycOutboxPublisher>();
 builder.Services.AddHostedService<KycOutboxPublisherHostedService>();
 
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<EnterpriseWebPlatform.CustomerKyc.Api.Controllers.ApiExceptionHandler>();
+
 var app = builder.Build();
+
+// Problem details without internals; see ApiExceptionHandler.
+app.UseExceptionHandler();
+if (!app.Environment.IsDevelopment())
+    app.UseHsts();
 
 app.UseHttpsRedirection();
 app.UseAuthentication();

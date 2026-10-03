@@ -10,6 +10,7 @@ using Duende.Bff.Yarp;
 
 using EnterpriseWebPlatform.BSS.BFFWeb.Data;
 using EnterpriseWebPlatform.Common.Landscape;
+using EnterpriseWebPlatform.Common.WebUtilities.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -86,11 +87,13 @@ builder.Services
 			// 🡡__ IF NOT: A more restrictive path would prevent the cookie from being included on some requests, breaking
 			//              authentication for those routes (unexpected 401s).
         
-        options.Cookie.SameSite = SameSiteMode.None;
-			// 🡡__ WHY   : Required for OIDC redirect flows and cross-site requests involving the IDP (authorization callbacks).
-			//              SameSite=None combined with Secure allows the cookie to be sent on cross-site redirects.
-			// 🡡__ IF NOT: Browsers may block the cookie during the authorization callback or when used inside iframes,
-			//              causing login/logout and SSO flows to fail.
+        options.Cookie.SameSite = SameSiteMode.Lax;
+			// 🡡__ WHY   : The session cookie is only needed on requests from the platform's own site (the Shell, its
+			//              MFEs and the IDP share one registrable domain). Lax keeps it off cross-site sub-requests,
+			//              a second CSRF defence besides Duende's X-CSRF header, while still allowing the top-level
+			//              redirect back from the IDP (ResponseMode = query). The short-lived OIDC correlation and
+			//              nonce cookies below stay SameSite=None for the login round trip.
+			// 🡡__ IF NOT: With None, the browser would attach the session to requests initiated by any other site.
 
         options.Cookie.HttpOnly = true;
 			// 🡡__ WHY   : Prevents JavaScript from reading the cookie (mitigates XSS theft).
@@ -202,17 +205,32 @@ app.UseHttpsRedirection();
 	// 🡡__ WHY   : Redirects plain HTTP requests to HTTPS to guarantee transport security for cookies and token exchanges.
 	// 🡡__ IF NOT: Sensitive data (cookies, tokens) could be transmitted over plaintext HTTP and be intercepted or modified.
 
-app.UseDefaultFiles();
-app.UseStaticFiles();
+// Browser security headers - registered BEFORE the static files, so the exported
+// pages themselves (index.html …) carry them. The Shell is the top-level host and
+// must never be framed (clickjacking). It frames the MFEs, and an MFE's frame
+// briefly navigates to the IDP during its silent sign-in, so both are frame sources.
+var shellCsp = ContentSecurityPolicy.Build(
+    app.Environment.WebRootPath,
+    frameAncestors: ["'none'"],
+    frameSources:
+    [
+        ContentSecurityPolicy.Origin(EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo.CustomerOnboardingMicroservice.BFF_CLIENT_BASE_URL),
+        ContentSecurityPolicy.Origin(EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo.CustomerKycMicroservice.BFF_CLIENT_BASE_URL),
+        ContentSecurityPolicy.Origin(EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo.AccountsMicroservice.BFF_CLIENT_BASE_URL),
+        ContentSecurityPolicy.Origin(EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo.PaymentsMicroservice.BFF_CLIENT_BASE_URL),
+        ContentSecurityPolicy.Origin(IDP.AUTHORITY)
+    ]);
+// Security:CspReportOnly = true reports violations in the browser console instead of blocking.
+var shellCspHeader = app.Configuration.GetValue<bool>("Security:CspReportOnly")
+    ? "Content-Security-Policy-Report-Only"
+    : "Content-Security-Policy";
 
-// Browser security headers. The Shell is the top-level host and must never be
-// framed by another site (clickjacking); MFEs are framed BY the Shell.
 app.Use(async (context, next) =>
 {
     context.Response.OnStarting(() =>
     {
         var headers = context.Response.Headers;
-        headers.TryAdd("Content-Security-Policy", "frame-ancestors 'none'; object-src 'none'; base-uri 'self'");
+        headers.TryAdd(shellCspHeader, shellCsp);
         headers.TryAdd("X-Frame-Options", "DENY");
         headers.TryAdd("X-Content-Type-Options", "nosniff");
         headers.TryAdd("Referrer-Policy", "strict-origin-when-cross-origin");
@@ -221,6 +239,9 @@ app.Use(async (context, next) =>
 
     await next();
 });
+
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 app.UseRouting();
 app.UseAuthentication();

@@ -2,6 +2,7 @@ import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { Issuer, Client, generators, TokenSet } from 'openid-client';
 import { Request } from 'express';
 import { KycBffOptions } from '../configuration/kyc-bff-options';
+import { registerSession } from './session-registry';
 
 @Injectable()
 export class OidcService {
@@ -76,6 +77,11 @@ export class OidcService {
 
     this.storeTokenSet(req, tokenSet);
     await this.loadUser(req, client, tokenSet);
+
+    // Index the session by the IDP session (sid) so back-channel logout can end it.
+    const idClaims = tokenSet.claims();
+    registerSession(req.sessionID, String(idClaims.sub), typeof idClaims.sid === 'string' ? idClaims.sid : undefined);
+
     return pending.returnUrl;
   }
 

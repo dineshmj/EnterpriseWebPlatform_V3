@@ -9,6 +9,7 @@ using Duende.Bff;
 using Duende.Bff.Yarp;
 using EnterpriseWebPlatform.Common.Landscape;
 using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.Configuration;
 using EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.Services;
 
@@ -28,7 +29,8 @@ builder.Services.AddAntiforgery(options =>
     options.HeaderName = "X-CSRF-TOKEN";
     options.Cookie.Name = "__Host-CO-Bff-CSRF";
     options.Cookie.HttpOnly = false;
-    options.Cookie.SameSite = SameSiteMode.None;
+    // Only ever needed by same-site requests from this MFE.
+    options.Cookie.SameSite = SameSiteMode.Lax;
     options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
 });
 
@@ -51,7 +53,11 @@ builder.Services
     {
         options.Cookie.Name = CookieNames.MICROSERVICE_CUSTOMER_ONBOARDING_HOST_BFF;
         options.Cookie.Path = "/";
-        options.Cookie.SameSite = SameSiteMode.None;
+        // Lax: never sent on cross-site sub-requests (second CSRF defence besides the
+        // X-CSRF header). The Shell, this MFE and the IDP are one site, so the framed
+        // MFE and the top-level IDP redirect (ResponseMode = query) still work. The
+        // short-lived OIDC correlation / nonce cookies below stay SameSite=None.
+        options.Cookie.SameSite = SameSiteMode.Lax;
         options.Cookie.HttpOnly = true;
         options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
         options.SlidingExpiration = true;
@@ -141,14 +147,23 @@ app.UseHttpsRedirection();
 
 // Browser security headers. This MFE may be framed only by the Shell, and by
 // the IDP (which loads /signout-oidc in a hidden iframe for front-channel logout).
+// Full CSP: scripts limited to 'self' + the hashed inline scripts of the export.
 var shellOrigin = builder.Configuration["ShellOrigin"] ?? BSSShellBFF.SHELL_BFF_CLIENT_BASE_URL;
-var idpOrigin = new Uri(IDP.AUTHORITY).GetLeftPart(UriPartial.Authority);
+var idpOrigin = ContentSecurityPolicy.Origin(IDP.AUTHORITY);
+var csp = ContentSecurityPolicy.Build(
+    app.Environment.WebRootPath,
+    frameAncestors: [shellOrigin, idpOrigin],
+    frameSources: []);
+// Security:CspReportOnly = true reports violations in the browser console instead of blocking.
+var cspHeader = app.Configuration.GetValue<bool>("Security:CspReportOnly")
+    ? "Content-Security-Policy-Report-Only"
+    : "Content-Security-Policy";
 app.Use(async (context, next) =>
 {
     context.Response.OnStarting(() =>
     {
         var headers = context.Response.Headers;
-        headers.TryAdd("Content-Security-Policy", $"frame-ancestors {shellOrigin} {idpOrigin}; object-src 'none'; base-uri 'self'");
+        headers.TryAdd(cspHeader, csp);
         headers.TryAdd("X-Content-Type-Options", "nosniff");
         headers.TryAdd("Referrer-Policy", "strict-origin-when-cross-origin");
         return Task.CompletedTask;

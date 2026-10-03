@@ -124,7 +124,7 @@ Role → permission mappings: see the permission tables in each context's requir
 ## 7. Session and Logout
 
 - The IDP holds the SSO session that lets MFE BFFs sign in silently (`prompt=none`) after the Shell login.
-- Each interactive client registers a front-channel logout URI. On end-session, the IDP must notify every participating client. The user-facing logout flow is owned by the [Shell](../../Shell/doc/Shell-Requirements.md#6-logout).
+- Each interactive client registers a front-channel logout URI **and a back-channel logout URI** (Shell and CO BFF: Duende `/bff/backchannel`; KYC BFF: `/backchannel-logout`). On end-session the IDP notifies every participating client both ways; the back-channel call (a signed logout token, server-to-server) ends the BFF session even when the browser blocks the front-channel iframes. The user-facing logout flow is owned by the [Shell](../../Shell/doc/Shell-Requirements.md#6-logout).
 
 ---
 

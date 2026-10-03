@@ -16,5 +16,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\Common\Landscape\EnterpriseWebPlatform.Common.Landscape.csproj" />
+    <ProjectReference Include="..\..\..\Common\WebUtilities\EnterpriseWebPlatform.Common.WebUtilties.csproj" />
   </ItemGroup>
 </Project>

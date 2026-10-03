@@ -1,3 +1,4 @@
+using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions;
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Persistence;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Application.Onboarding.Commands.SubmitApplication;
@@ -36,7 +37,7 @@ public sealed class SubmitOnboardingApplicationCommandHandler
 
         if (application.Version != command.ExpectedVersion)
         {
-            throw new InvalidOperationException(
+            throw new ConcurrencyConflictException(
                 "The onboarding application was modified by another request.");
         }
 

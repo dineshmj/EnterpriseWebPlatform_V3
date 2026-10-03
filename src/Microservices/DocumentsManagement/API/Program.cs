@@ -1,14 +1,12 @@
 using System.Text.Json;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
 using EnterpriseWebPlatform.DocumentsManagement.API.Authorization;
 using EnterpriseWebPlatform.DocumentsManagement.Application;
-using EnterpriseWebPlatform.DocumentsManagement.Domain.Exceptions;
 using EnterpriseWebPlatform.DocumentsManagement.Infrastructure.Persistence;
 using EnterpriseWebPlatform.DocumentsManagement.Infrastructure.Storage;
 using EnterpriseWebPlatform.DocumentsManagement.Application.Abstractions.Storage;
@@ -128,6 +126,9 @@ builder.Services.AddAuthorization(options =>
 
 builder.Services.AddProblemDetails();
 
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<EnterpriseWebPlatform.DocumentsManagement.API.ErrorHandling.ApiExceptionHandler>();
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -140,55 +141,8 @@ else
     app.UseHsts();
 }
 
-app.UseExceptionHandler(errorApp =>
-{
-    errorApp.Run(async context =>
-    {
-        var exception = context.Features
-            .Get<IExceptionHandlerFeature>()
-            ?.Error;
-
-        var problem = new ProblemDetails
-        {
-            Instance = context.Request.Path
-        };
-
-        switch (exception)
-        {
-            case DomainRuleViolationException:
-                context.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
-                problem.Status = StatusCodes.Status422UnprocessableEntity;
-                problem.Title = "Domain rule violation";
-                problem.Detail = exception.Message;
-                break;
-
-            case KeyNotFoundException:
-                context.Response.StatusCode = StatusCodes.Status404NotFound;
-                problem.Status = StatusCodes.Status404NotFound;
-                problem.Title = "Resource not found";
-                problem.Detail = exception.Message;
-                break;
-
-            case InvalidOperationException:
-                context.Response.StatusCode = StatusCodes.Status409Conflict;
-                problem.Status = StatusCodes.Status409Conflict;
-                problem.Title = "Operation could not be completed";
-                problem.Detail = exception.Message;
-                break;
-
-            default:
-                context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-                problem.Status = StatusCodes.Status500InternalServerError;
-                problem.Title = "An unexpected error occurred";
-                problem.Detail = app.Environment.IsDevelopment()
-                    ? exception?.Message
-                    : null;
-                break;
-        }
-
-        await Results.Problem(problem).ExecuteAsync(context);
-    });
-});
+// Problem details without internals; see ApiExceptionHandler.
+app.UseExceptionHandler();
 
 app.UseHttpsRedirection();
 app.UseAuthentication();

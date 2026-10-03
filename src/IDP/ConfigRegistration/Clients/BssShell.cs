@@ -35,6 +35,10 @@ public sealed class BssClient
                     RedirectUris = { $"{BSSShellBFF.SHELL_BFF_CLIENT_BASE_URL}/signin-oidc" },
                     PostLogoutRedirectUris = { $"{BSSShellBFF.SHELL_BFF_CLIENT_BASE_URL}/signout-callback-oidc" },
                     FrontChannelLogoutUri = $"{BSSShellBFF.SHELL_BFF_CLIENT_BASE_URL}/signout-oidc",
+                    // Back-channel logout (server-to-server; Duende BFF endpoint): ends the
+                    // server-side session even when the browser blocks the front-channel iframe.
+                    BackChannelLogoutUri = $"{BSSShellBFF.SHELL_BFF_CLIENT_BASE_URL}/bff/backchannel",
+                    BackChannelLogoutSessionRequired = true,
 
                     AllowOfflineAccess = true,
                     // 🡡__ WHY   : Allowing offline access enables issuance of refresh tokens (offline access RFC). BFFs or server-side

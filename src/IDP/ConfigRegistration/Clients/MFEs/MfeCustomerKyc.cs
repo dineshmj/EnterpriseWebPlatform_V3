@@ -33,6 +33,10 @@ public sealed class MfeCustomerKyc
                     RedirectUris = { $"{CustomerKycMicroservice.BFF_CLIENT_BASE_URL}/api/auth/callback" },
                     PostLogoutRedirectUris = { $"{CustomerKycMicroservice.BFF_CLIENT_BASE_URL}/signout-callback-oidc" },
                     FrontChannelLogoutUri = $"{CustomerKycMicroservice.BFF_CLIENT_BASE_URL}/signout-oidc",
+                    // Back-channel logout (server-to-server; NestJS BackChannelLogoutController):
+                    // ends the BFF session even when the browser blocks the front-channel iframe.
+                    BackChannelLogoutUri = $"{CustomerKycMicroservice.BFF_CLIENT_BASE_URL}/backchannel-logout",
+                    BackChannelLogoutSessionRequired = true,
 
                     AllowOfflineAccess = true,
                     // 🡡__ WHY   : CustomerKyc Microservice BFF frontend may need refresh tokens to maintain backend sessions or to act on behalf of the user without interactive login.

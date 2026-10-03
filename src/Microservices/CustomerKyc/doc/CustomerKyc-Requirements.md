@@ -184,7 +184,8 @@ Contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Event-Ca
 | Poison-message handling / dead-letter topic in the subscriber | **Gap**: an unprocessable message stops the worker |
 | Document lookup | Present: by business reference and document type only (the filename fallback is removed). The officer's branch is passed to Documents Management, so an officer sees only evidence uploaded in their own branch. |
 | Safe evidence display | Present: only DM-verified PDF is shown inline (`nosniff`, framable only by the KYC MFE); other types are downloaded; content is streamed |
-| BFF session security | Present: session regenerated at sign-in; logout revokes the refresh token and ends the IDP session; front-channel logout (`/signout-oidc`); timing-safe CSRF check; secrets required from the environment (no fallbacks) |
+| BFF session security | Present: session regenerated at sign-in; `SameSite=Lax` session cookie; logout revokes the refresh token and ends the IDP session; front-channel (`/signout-oidc`) and back-channel (`/backchannel-logout`, fully validated logout token) logout; timing-safe CSRF check; strict CSP with hashed inline scripts; secrets required from the environment (no fallbacks). Sessions are in memory (single instance). |
+| Evidence display hardening | Decision: the PDF preview is **not** sandboxed, because Chrome refuses to render PDFs in sandboxed frames. Instead: magic-byte verification in DM, inline display only for verified PDF, `nosniff`, framable only by the KYC MFE. |
 
 ---
 

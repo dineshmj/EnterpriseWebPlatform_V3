@@ -137,6 +137,32 @@ What the platform is, how it is designed and what each component must do are doc
 
 		After recreating the IDP database, sign out and sign in again so that new claims are issued.
 
+		Service database users (least privilege) - run ONCE after the databases exist (and again only if you drop a database itself):
+
+			& $psql -h localhost -U postgres -d postgres -f .\db\EwpServiceDbUsers.sql
+
+		Each service connects with its own user (ewp_idp, ewp_shell, ewp_customer_onboarding_api, ewp_customer_outbox_relay,
+		ewp_kyc_api, ewp_documents_api) that may read and write ITS OWN database only: no DDL and no access to other
+		services' databases; the CO outbox relay may only read and update outbox_messages. The database scripts above
+		still run as postgres; the grants survive re-running them. Without this step the services cannot connect.
+
+		The relay's grant is per TABLE, so EwpCustomerDb.sql re-applies it (watch for its NOTICE / WARNING line).
+		Symptom if it is missing: CO outbox rows stay unpublished (attempt_count 0) and KYC never opens a case.
+		Repair: re-run EwpServiceDbUsers.sql - it is idempotent and safe to run at any time.
+
+	f2) Content-Security-Policy and dependency scanning.
+
+		The Shell, CO BFF and KYC BFF send a strict CSP: scripts only from the BFF itself plus the SHA-256 hashes of the
+		exported pages' inline scripts, computed at startup from the files served. After re-exporting the MFEs
+		(CompileAndExportBFFClients_V3.ps1), restart the BFFs so the hashes are recomputed.
+		If a page is blocked by CSP, switch to report-only (violations appear in the browser console) while investigating:
+			Shell / CO BFF:  appsettings: "Security": { "CspReportOnly": true }
+			KYC BFF:         environment variable KYC_BFF_CSP_REPORT_ONLY=true
+
+		Known-vulnerability scan of all .NET and npm dependencies (fails only on deployed dependencies):
+
+			.\Scan-Dependencies.ps1            # or -FailOn critical
+
 	f) Create the Kafka topics.
 
 		docker-compose.yml disables automatic topic creation, so every topic must be created explicitly (PowerShell):
@@ -172,7 +198,7 @@ What the platform is, how it is designed and what each component must do are doc
 			.\CompileAndExportBFFClients_V3.ps1
 
 		This builds the Shell SPA, the Customer Onboarding MFE, the Customer KYC MFE and the KYC NestJS BFF, and copies each static export to where its BFF serves it.
-		(CompileAndExportBFFClients.ps1 is the older V2 script; it refers to V2 projects and is not used in V3.)
+		Restart the Shell, CO BFF and KYC BFF afterwards: their Content-Security-Policy hashes are computed at startup from the exported pages.
 
 	h) Configure the Customer KYC BFF: its environment variables and PFX certificate are described in src\Microservices\CustomerKyc\BFF.Web\README.md (runnow.bat sets them and starts the BFF).
 

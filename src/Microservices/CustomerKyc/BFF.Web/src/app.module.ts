@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthController, FrontChannelLogoutController } from './auth/auth.controller';
+import { BackChannelLogoutController } from './auth/backchannel-logout.controller';
 import { OidcService } from './auth/oidc.service';
 import { KycCasesController } from './controllers/kyc-cases.controller';
 import { loadOptions } from './configuration/kyc-bff-options';
@@ -10,7 +11,7 @@ import { DocumentsManagementService } from './services/documents-management.serv
 const options = loadOptions();
 
 @Module({
-  controllers: [AuthController, FrontChannelLogoutController, KycCasesController],
+  controllers: [AuthController, FrontChannelLogoutController, BackChannelLogoutController, KycCasesController],
   providers: [
     { provide: 'KYC_BFF_OPTIONS', useValue: options },
     OidcService,

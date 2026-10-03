@@ -22,8 +22,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "CustomerOnboarding", "Custo
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Scripts", "Scripts", "{4569E0B8-050F-4FC4-864D-21BD5191BF6D}"
 	ProjectSection(SolutionItems) = preProject
-		CleanThisLoctionForFreshCopyFromZIPFile.ps1 = CleanThisLoctionForFreshCopyFromZIPFile.ps1
-		CompileAndExportBFFClients.ps1 = CompileAndExportBFFClients.ps1
+		CompileAndExportBFFClients_V3.ps1 = CompileAndExportBFFClients_V3.ps1
+		Scan-Dependencies.ps1 = Scan-Dependencies.ps1
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Accounts", "Accounts", "{E9F5595F-7192-4693-B3B7-7685A5B64DA6}"

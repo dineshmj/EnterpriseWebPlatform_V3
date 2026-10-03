@@ -456,6 +456,23 @@ CREATE INDEX ix_outbox_messages_causation_id
 CREATE INDEX ix_inbox_messages_message_id
     ON inbox_messages (message_id);
 
+-- ----------------------------------------------------------------------------
+-- Least privilege: the outbox relay may only read and mark Outbox rows.
+-- (Roles are created by db/EwpServiceDbUsers.sql; skipped if not yet created.
+-- The API role's table grants come from that script's default privileges.)
+-- ----------------------------------------------------------------------------
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ewp_customer_outbox_relay') THEN
+        GRANT SELECT, UPDATE ON outbox_messages TO ewp_customer_outbox_relay;
+        RAISE NOTICE 'Outbox relay grant applied (ewp_customer_outbox_relay).';
+    ELSE
+        RAISE WARNING 'Role ewp_customer_outbox_relay does not exist yet: run db/EwpServiceDbUsers.sql, or the outbox relay cannot publish.';
+    END IF;
+END
+$$;
+
 
 -- ============================================================================
 -- END OF EwpCustomerDb
