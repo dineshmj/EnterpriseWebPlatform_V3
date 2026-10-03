@@ -42,6 +42,7 @@ Each document has one purpose. A fact is written in exactly one place; other doc
 | [Authorization Model](doc/Authorization-Model.md) | How authorization decisions are made: pipeline, scopes vs permissions, ABAC / ReBAC / SoD mechanics, platform-level permissions |
 | [Saga Plans](doc/EWP-V3-Saga-Choreography-and-Orchestration-Plans.md) | Cross-context workflows: event chain, compensation, saga rules |
 | [Integration Event Catalogue](doc/Integration-Event-Catalogue.md) | Event envelope, topics, keys, producers, consumers |
+| [End-to-End Processing Walkthrough](doc/End-to-End-Processing-Walkthrough.md) | One onboarding traced from the agent's submit to the KYC outcome, through every component, policy and domain check |
 | [Architect Review](doc/Fellow-architect-review-of-v3-ewp.md) | Point-in-time review findings and their remediation status |
 
 ### Per component (`src/**/doc/`)

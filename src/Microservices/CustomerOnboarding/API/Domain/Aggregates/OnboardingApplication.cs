@@ -81,7 +81,10 @@ public sealed class OnboardingApplication : AggregateRoot
     {
         ArgumentNullException.ThrowIfNull(applicationNumber);
         ArgumentNullException.ThrowIfNull(branchCode);
-        if (customerId <= 0) throw new DomainRuleViolationException("A valid customer is required.");
+
+        if (customerId <= 0)
+            throw new DomainRuleViolationException("A valid customer is required.");
+
         return new OnboardingApplication(applicationNumber, customerId, branchCode, now);
     }
 
@@ -89,15 +92,21 @@ public sealed class OnboardingApplication : AggregateRoot
     {
         EnsureStatus(OnboardingApplicationStatus.Draft);
         SubmittedAt = now;
+
         RaiseDomainEvent(new OnboardingApplicationSubmittedDomainEvent(
             Id, ApplicationRef, CustomerId, ApplicationNumber.Value, BranchCode.Value, now));
+
         SetStatus(OnboardingApplicationStatus.Submitted, now);
     }
 
     public void StartKyc(DateTimeOffset now) => TransitionTo(OnboardingApplicationStatus.KycInProgress, now);
+
     public void CompleteKyc(DateTimeOffset now) => TransitionTo(OnboardingApplicationStatus.KycCompleted, now);
+
     public void StartCompliance(DateTimeOffset now) => TransitionTo(OnboardingApplicationStatus.ComplianceInProgress, now);
+
     public void CompleteCompliance(DateTimeOffset now) => TransitionTo(OnboardingApplicationStatus.ComplianceCompleted, now);
+
     public void StartAccountOpening(DateTimeOffset now) => TransitionTo(OnboardingApplicationStatus.AccountOpeningInProgress, now);
 
     public void Complete(DateTimeOffset now)

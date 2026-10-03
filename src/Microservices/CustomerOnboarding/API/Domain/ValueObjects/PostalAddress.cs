@@ -33,7 +33,9 @@ public sealed record PostalAddress
         if (string.IsNullOrWhiteSpace(countryCode)) throw new DomainRuleViolationException("Country code is required.");
 
         var cc = countryCode.Trim().ToUpperInvariant();
-        if (cc.Length != 2) throw new DomainRuleViolationException("Country code must contain exactly two characters.");
+
+        if (cc.Length != 2)
+            throw new DomainRuleViolationException("Country code must contain exactly two characters.");
 
         return new PostalAddress(addressLine1.Trim(),
             string.IsNullOrWhiteSpace(addressLine2) ? null : addressLine2.Trim(),

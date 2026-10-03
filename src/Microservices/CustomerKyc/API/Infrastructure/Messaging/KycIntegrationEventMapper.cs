@@ -6,7 +6,6 @@ using EnterpriseWebPlatform.CustomerKyc.Api.Domain.Aggregates;
 using EnterpriseWebPlatform.CustomerKyc.Api.Domain.Common;
 using EnterpriseWebPlatform.CustomerKyc.Api.Domain.Events;
 using EnterpriseWebPlatform.CustomerKyc.Api.Domain.ValueObjects;
-using EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure;
 
 namespace EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure.Messaging;
 

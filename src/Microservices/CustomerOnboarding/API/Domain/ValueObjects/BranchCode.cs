@@ -16,6 +16,7 @@ public sealed partial record BranchCode
     public static BranchCode Create(string? value)
     {
         var normalized = value?.Trim().ToUpperInvariant();
+
         if (string.IsNullOrEmpty(normalized) || !Pattern().IsMatch(normalized))
             throw new DomainRuleViolationException("A valid branch code (1-20 letters or digits) is required.");
 

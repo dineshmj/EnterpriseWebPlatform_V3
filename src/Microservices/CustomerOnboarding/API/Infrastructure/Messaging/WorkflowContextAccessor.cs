@@ -46,6 +46,7 @@ public sealed class WorkflowContextAccessor(IHttpContextAccessor httpContextAcce
         // event), so the workflow's accountability survives the asynchronous hop.
         // It is attribution only - never an authorization grant.
         var clientId = httpContext?.User.FindFirst("client_id")?.Value;
+
         if (string.Equals(clientId, TrustedInitiatorAssertingClient, StringComparison.Ordinal) &&
             Guid.TryParse(httpContext!.Request.Headers["X-Initiated-By-User-Id"].FirstOrDefault(), out var initiator))
         {
