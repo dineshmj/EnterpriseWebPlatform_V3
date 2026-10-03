@@ -2,6 +2,7 @@ using System.Security.Claims;
 
 using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 using EnterpriseWebPlatform.DocumentsManagement.Domain.Aggregates;
+using EnterpriseWebPlatform.DocumentsManagement.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.DocumentsManagement.API.Authorization;
 
@@ -57,14 +58,9 @@ public sealed class DocumentResourceAuthorization
             : branch.Trim().ToUpperInvariant();
     }
 
-    public bool CanAccess(Document document, ClaimsPrincipal user, HttpRequest request)
-    {
-        var actorBranch = GetActorBranch(user, request);
-
-        return actorBranch is not null &&
-            document.ResourceBranch is not null &&
-            string.Equals(actorBranch, document.ResourceBranch, StringComparison.Ordinal);
-    }
+    public bool CanAccess(Document document, ClaimsPrincipal user, HttpRequest request) =>
+        BranchCode.TryCreate(GetActorBranch(user, request), out var actorBranch) &&
+        document.BelongsTo(actorBranch);
 
     public bool CanDelete(Document document, ClaimsPrincipal user, HttpRequest request)
     {

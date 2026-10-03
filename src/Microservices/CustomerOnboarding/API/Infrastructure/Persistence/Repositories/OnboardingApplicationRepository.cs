@@ -20,8 +20,15 @@ public sealed class OnboardingApplicationRepository
         CancellationToken cancellationToken = default)
     {
         return _dbContext.OnboardingApplications
-            .Include(x => x.Customer)
             .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+    }
+
+    public Task<OnboardingApplication?> GetByRefAsync(
+        Guid applicationRef,
+        CancellationToken cancellationToken = default)
+    {
+        return _dbContext.OnboardingApplications
+            .SingleOrDefaultAsync(x => x.ApplicationRef == applicationRef, cancellationToken);
     }
 
     public Task<OnboardingApplication?> GetByApplicationNumberAsync(
@@ -30,7 +37,7 @@ public sealed class OnboardingApplicationRepository
     {
         return _dbContext.OnboardingApplications
             .SingleOrDefaultAsync(
-                x => x.ApplicationNumber.Value == applicationNumber,
+                x => (string)(object)x.ApplicationNumber == applicationNumber,
                 cancellationToken);
     }
 

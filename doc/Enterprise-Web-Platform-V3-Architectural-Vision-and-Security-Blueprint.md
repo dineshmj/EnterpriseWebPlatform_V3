@@ -179,9 +179,9 @@ The domain layer has no knowledge of HTTP, EF Core, Kafka or the IDP.
 
 | Context | Maturity | Main gap |
 |---|---|---|
-| Customer Onboarding | Full tactical DDD | Workflow headers are read in the infrastructure layer |
-| Documents Management | Aggregate with invariants; CRUD-like behaviour | No lifecycle behaviour yet |
-| Customer KYC | **Anemic**: string statuses, rules in a service | Introduce the `KycCase` aggregate (see its requirements, §4.2) |
+| Customer Onboarding | Full tactical DDD: `Customer` and `OnboardingApplication` aggregates (reference by ID only), value objects (`PersonName`, `EmailAddress`, `PostalAddress`…), domain events, explicit status codes, injected clock; event translation in a dedicated mapper | Cross-context references use database IDs (Session B: GUID references) |
+| Documents Management | `Document` aggregate root with value objects (`BranchCode`, `FileName`, `ContentHash`), the content-type policy in the domain, a `DocumentUploaded` domain event | Events are not published (no consumer yet); the document is immutable by design |
+| Customer KYC | Full tactical DDD: `KycCase` aggregate (`DecideStage`), `VerificationStage` value object (EF complex type), typed statuses, domain events, SoD in the aggregate (fails closed), optimistic `version` + row lock; Application layer (commands, queries) and a dedicated integration-event mapper | Published events still use the flat format, not the standard envelope |
 
 ---
 
@@ -379,16 +379,16 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Capability | Status |
 |---|---|
 | Bounded contexts, database per context | Present |
-| DDD tactical model | Partial (CO full; DM partial; KYC anemic) |
+| DDD tactical model | Present (aggregates, value objects, domain events and invariants in CO, KYC and DM) |
 | Independent deployability | Partial (secrets now per deployable; service URLs still compiled into `Common.Landscape`) |
 | Next.js MFEs, Shell composition, Shell BFF, MFE BFFs (.NET and NestJS) | Present |
 | Application Workspace, opaque context exchange, navigation protocol | Present |
 | Duende IdentityServer 8, OIDC, Authorization Code + PKCE | Present |
 | M2M Client Credentials (pinned clients) | Present |
 | RBAC | Present |
-| ABAC | Partial (KYC decisions: department and clearance; CO and DM: branch scope) |
-| ReBAC | Planned (data seeded in IDP; not enforced) |
-| Separation of Duties | Partial (KYC initiator rule; does not yet fail closed) |
+| ABAC | Present (department and clearance on KYC actions; branch scope in CO, KYC and DM; stage-specific KYC permissions) |
+| ReBAC | Present (owned by the contexts: CO managing agent, KYC assigned officer; Compliance / Accounts relationships planned with those contexts) |
+| Separation of Duties | Partial (KYC initiator rule, enforced in the aggregate and failing closed; four-eyes per stage planned) |
 | Workflow-state authorization | Partial (CO aggregate transitions; KYC stages) |
 | Object-level authorization | Present (CO and DM: branch scope); Planned (KYC) |
 | Transactional Outbox with `initiated_by` | Present (CO and KYC) |
@@ -464,7 +464,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 **Phase 5 — Enterprise security**
 - [ ] ABAC across all contexts
 - [ ] ReBAC
-- [ ] SoD that fails closed
+- [x] SoD that fails closed
 - [x] Object-level authorization (CO, DM)
 - [ ] Audit trail
 - [ ] PII-aware logging

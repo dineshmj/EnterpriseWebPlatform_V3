@@ -2,7 +2,7 @@
 
 **Bounded context:** Customer KYC  
 **Subdomain type:** Core  
-**Status:** Present (first slice) — human review works end to end; the domain model is still anemic
+**Status:** Present (first slice) — human review works end to end on a `KycCase` aggregate
 
 Platform-wide rules are not repeated here. See [doc/](../../../../doc/).
 
@@ -62,26 +62,27 @@ API scopes: `customer-kyc.read`, `customer-kyc.write`.
 
 ## 4. Domain Model
 
-### 4.1 Current model
+### 4.1 Model
 
-`KycCase` is currently an **anemic entity**: statuses are strings, and the decision rules live in `KycCaseService`. Its fields:
+| Element | Kind | Responsibility |
+|---|---|---|
+| `KycCase` (`API/Domain/Aggregates`) | Aggregate root | `Open(...)` and `DecideStage(stage, decision, officer, remarks, now)`. Enforces every §6 rule itself, including SoD. Raises the domain events. `Version` is its optimistic-concurrency token. |
+| `VerificationStage` | Value object (EF complex type) | Status, decided-by, decided-at and remarks of one stage. Immutable: `Decide(...)` returns a new value and refuses a stage that is not pending. |
+| `DecisionRemarks` | Value object | Trimmed, never blank, at most 4000 characters. |
+| `KycCaseStatus`, `VerificationStatus`, `VerificationStageType`, `StageDecision` | Typed enums | Persisted and published as explicit codes (`PENDING_REVIEW`, `IDENTITY_VERIFICATION`…), never as names or ordinals. |
+| `KycCaseOpened`, `VerificationStageDecided`, `KycCaseDecided` | Domain events | Translated to the published `kyc.*` events by `KycIntegrationEventMapper`, in the same transaction (Outbox). |
 
-- `ApplicationId` (unique) and `ApplicationNumber` — the onboarding application, held by value. The unique `ApplicationId` is the idempotency key for case creation.
-- `CustomerNumber` — the application's customer (not unique: one customer can have several applications).
-- `Status` — the overall case status.
-- Identity-verification stage: status, decided-by user, decided-at, remarks.
-- Document-verification stage: status, decided-by user, decided-at, remarks.
-- Overall decision: decided-by user, decided-at, remarks. Populated only when the case becomes terminal.
-- `InitiatedByUserId` — the onboarding initiator, used for SoD.
+The case holds the onboarding application by value: `ApplicationRef` (Customer Onboarding's never-repeating GUID, unique here) and `ApplicationNumber`. It also holds the `CustomerNumber` (not unique: one customer can have several applications), `BranchCode` (the branch the application was opened in; ABAC), `AssignedOfficerUserId` (ReBAC `assigned_to`) and `InitiatedByUserId` (SoD).
+
+**Layers.** Controllers translate HTTP only. The Application layer holds the command handlers (`OpenKycCase`, `DecideVerificationStage`) and the read side (`IKycCaseQueries`, projections without loading aggregates). Infrastructure holds the EF mapping, the repository and the unit of work. **Concurrency:** a decision locks the case row and then loads the aggregate; the `version` column is a second line of defence. Of six simultaneous decisions on one stage, exactly one wins and the others receive 409.
 
 The database backs the rules with CHECK constraints: valid statuses, stage metadata present exactly when a stage is decided, and overall-state consistency.
 
-### 4.2 Target model (DDD)
+### 4.2 Next steps
 
-- `KycCase` aggregate root with typed statuses and behaviour (`DecideStage`, `RequestInformation`, `Hold`) that enforces the §6 rules itself.
-- `VerificationStage` value or entity (Identity, Document) with its own status and decision.
-- A resource `Branch` for ABAC, and `AssignedOfficer` for ReBAC.
-- Domain events raised by the aggregate and mapped to integration events by the Outbox.
+- Behaviour for `RequestInformation` and `Hold` (§5 target states).
+- A claim / release action in the KYC MFE (the API endpoints exist; the UI currently assigns implicitly on the first decision).
+- Four-eyes per stage (a different officer per stage), as an SoD variant of the assignment rule.
 
 ### 4.3 Ubiquitous language
 
@@ -123,7 +124,7 @@ Target additional states: `AWAITING_INFORMATION` (more evidence requested; retur
 4. A terminal case (APPROVED or REJECTED) cannot be decided again.
 5. When several officers act on the same case at once, exactly one stage decision wins. Decisions are serialised by a row lock and a conditional update; the others receive 409.
 6. **SoD:** the workflow initiator cannot decide any stage of the case.
-7. **SoD fails closed (target):** if the initiator is unknown, the decision is denied or escalated, not allowed.
+7. **SoD fails closed:** if the initiator is unknown, the decision is denied (403), never allowed.
 8. Every stage decision emits a stage event. A decision that makes the case terminal also emits `KycCaseApproved` or `KycCaseRejected`, in the same transaction.
 9. KYC never stores document content. It reads evidence from Documents Management by business reference and document type.
 
@@ -134,7 +135,7 @@ Target additional states: `AWAITING_INFORMATION` (more evidence requested; retur
 | Direction | What | Status |
 |---|---|---|
 | In | `onboarding.application.submitted` → subscriber → `POST /internal/v1/kyc/cases/from-application-submitted` (M2M): one case per application | Present |
-| Out | `kyc.case.created`, `kyc.identity.verification.*`, `kyc.document.verification.*`, `kyc.case.approved`, `kyc.case.rejected`, each carrying `ApplicationId` / `ApplicationNumber` | Present |
+| Out | `kyc.case.created`, `kyc.identity.verification.*`, `kyc.document.verification.*`, `kyc.case.approved`, `kyc.case.rejected`, each carrying `ApplicationRef` / `ApplicationNumber` | Present |
 | Consumed by | Customer Onboarding (`CustomerOnboardingKycSubscriber`) records `kyc.case.created` / `approved` / `rejected` on the application | Present |
 | Sync | KYC BFF → Documents Management (`documents-management.read`, M2M) for the identity proof and tax proof | Present |
 
@@ -146,11 +147,12 @@ Contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Event-Ca
 
 | Operation | Rule |
 |---|---|
-| View queue / case | `customer-kyc.read` + role `kyc_officer` + `kyc.case.view` + department `KYC` (+ branch scope, target) |
-| Decide identity stage | `customer-kyc.write` + `kyc_officer` + `kyc.case.approve` or `kyc.case.reject` (target: also `kyc.identity.verify`) + department `KYC` + clearance ≥ 3 + not the initiator + stage pending |
-| Decide document stage | As above, with `kyc.document.verify` as the target stage permission |
+| View queue / case | `customer-kyc.read` + role `kyc_officer` + `kyc.case.view` + department `KYC` + **branch scope**: only cases whose `BranchCode` equals the officer's `branch` claim (another branch's case is a 404; no branch claim = 403) |
+| Decide identity stage | `customer-kyc.write` + `kyc_officer` + `kyc.case.approve` or `kyc.case.reject` **and** `kyc.identity.verify` + department `KYC` + clearance ≥ 3 + own branch + **assigned to the officer, or unassigned (the decision assigns it)** + not the initiator + stage pending |
+| Decide document stage | As above, with `kyc.document.verify` |
+| Claim / release (`POST …/claim`, `…/release`) | `customer-kyc.write` + `kyc_officer` + `kyc.case.update` + department `KYC` + clearance ≥ 3 + own branch. Claim: case unassigned (409 if assigned to someone else), not the initiator. Release: only the assignee (403 otherwise). |
 | Create case (internal) | M2M only: pinned `client_id` of the KYC subscriber + `customer-kyc.write` |
-| Assigned-case access | Target ReBAC: `assigned_to` the case. The demo queue is intentionally unassigned, so `ethan.kyc` and `noah.kyc` compete for the same case. |
+| Assigned-case access | ReBAC `assigned_to`, stored on the case and checked in the aggregate. New cases start unassigned in the branch queue, so `ethan.kyc` and `noah.kyc` compete; the first to decide (or claim) owns the case from then on. |
 
 ---
 
@@ -172,11 +174,11 @@ Contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Event-Ca
 | Two-stage review, row-locked decisions, CHECK constraints | Present |
 | KYC Outbox and in-process relay (7 topics) | Present: `SKIP LOCKED` claiming, per-aggregate ordering, bounded retries with parking, one idempotent producer |
 | Department + clearance ABAC and initiator SoD on decisions | Present |
-| Stage-specific permissions (`kyc.identity.verify`, `kyc.document.verify`) used in policy | Planned |
-| Branch scope and `assigned_to` ReBAC | Planned (the case has no branch or assignee yet) |
-| SoD fails closed when the initiator is missing | **Gap**: the check is skipped when `InitiatedByUserId` is null |
-| Aggregate-based domain model (§4.2) | Planned |
-| One case per application | Present (`uq_kyc_cases_application_id`) |
+| Stage-specific permissions (`kyc.identity.verify`, `kyc.document.verify`) used in policy | Present |
+| Branch scope and `assigned_to` ReBAC | Present (`branch_code`, `assigned_officer_user_id`; claim / release endpoints) |
+| SoD fails closed when the initiator is missing | Present (enforced in the aggregate) |
+| Aggregate-based domain model (§4.1) | Present |
+| One case per application | Present (`uq_kyc_cases_application_ref`: a GUID, so a recreated Customer Onboarding database cannot collide with old cases) |
 | Standard event envelope | **Gap**: KYC events are flat |
 | Inbox in the subscriber | Planned (idempotency currently relies on the unique `application_id`) |
 | Poison-message handling / dead-letter topic in the subscriber | **Gap**: an unprocessable message stops the worker |

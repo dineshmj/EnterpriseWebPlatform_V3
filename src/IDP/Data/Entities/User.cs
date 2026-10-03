@@ -39,12 +39,6 @@ public sealed class User
     public UserEmploymentProfile? EmploymentProfile { get; set; }
 
     /// <summary>
-    /// Relationships where this user is the subject.
-    /// </summary>
-    public ICollection<UserRelationship> Relationships { get; set; }
-        = new List<UserRelationship>();
-
-    /// <summary>
     /// Users for whom this user is the manager.
     /// </summary>
     public ICollection<UserEmploymentProfile> ManagedEmployees { get; set; }

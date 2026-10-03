@@ -81,16 +81,28 @@ public sealed class OnboardingApplicationsController : ControllerBase
         [FromBody] CreateOnboardingApplicationRequest request,
         CancellationToken cancellationToken)
     {
-        // The customer must be within the caller's scope; this also protects the
-        // BFF's "existing customer" path from a client-supplied CustomerId.
-        if (!await _resourceAuthorization.CanAccessCustomerAsync(User, request.CustomerId, cancellationToken))
+        // ABAC: the customer must be within the caller's branch scope (this also
+        // protects the BFF's "existing customer" path from a client-supplied ID).
+        // ReBAC: only the customer's managing agent may open an application.
+        var access = await _resourceAuthorization.CanManageCustomerAsync(User, request.CustomerId, cancellationToken);
+        if (access != ResourceAccess.Allowed)
         {
-            return NotFound();
+            return Denied(access);
+        }
+
+        // The application records the branch it was opened in (ABAC attribute for KYC).
+        var branch = CustomerResourceAuthorization.GetActingBranch(User);
+        if (branch is null)
+        {
+            return Problem(
+                statusCode: StatusCodes.Status403Forbidden,
+                title: "No branch",
+                detail: "Your account has no branch, so an application cannot be opened.");
         }
 
         var command = new CreateOnboardingApplicationCommand(
             request.CustomerId,
-            request.ApplicationNumber);
+            branch);
 
         var result = await _createApplicationHandler.HandleAsync(
             command,
@@ -109,9 +121,10 @@ public sealed class OnboardingApplicationsController : ControllerBase
         [FromBody] SubmitOnboardingApplicationRequest request,
         CancellationToken cancellationToken)
     {
-        if (!await _resourceAuthorization.CanAccessApplicationAsync(User, id, cancellationToken))
+        var access = await _resourceAuthorization.CanManageApplicationAsync(User, id, cancellationToken);
+        if (access != ResourceAccess.Allowed)
         {
-            return NotFound();
+            return Denied(access);
         }
 
         var command = new SubmitOnboardingApplicationCommand(
@@ -124,4 +137,12 @@ public sealed class OnboardingApplicationsController : ControllerBase
 
         return NoContent();
     }
+
+    private ActionResult Denied(ResourceAccess access) =>
+        access == ResourceAccess.NotFound
+            ? NotFound()
+            : Problem(
+                statusCode: StatusCodes.Status403Forbidden,
+                title: "Not the managing agent",
+                detail: "Only the customer's managing agent may change the customer or its applications.");
 }

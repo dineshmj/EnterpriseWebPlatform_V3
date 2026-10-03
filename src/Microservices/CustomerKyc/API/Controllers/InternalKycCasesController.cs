@@ -1,13 +1,14 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-using EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure;
+using EnterpriseWebPlatform.CustomerKyc.Api.Application.Commands.OpenKycCase;
+using EnterpriseWebPlatform.CustomerKyc.Api.Domain.Exceptions;
 
 namespace EnterpriseWebPlatform.CustomerKyc.Api.Controllers;
 
 [ApiController]
 [Route("internal/v1/kyc/cases")]
-public sealed class InternalKycCasesController(KycCaseService service) : ControllerBase
+public sealed class InternalKycCasesController(OpenKycCaseCommandHandler openKycCaseHandler) : ControllerBase
 {
     /// <summary>
     /// Opens the KYC case for a submitted onboarding application. Called only by
@@ -18,27 +19,40 @@ public sealed class InternalKycCasesController(KycCaseService service) : Control
     [HttpPost("from-application-submitted")]
     [Authorize(Policy = "KycSubscriberWrite")]
     public async Task<IActionResult> CreateFromApplicationSubmitted(
-        [FromBody] CreateKycCaseRequest request,
+        [FromBody] OpenKycCaseRequest request,
         CancellationToken cancellationToken)
     {
-        if (request.ApplicationId <= 0 ||
-            string.IsNullOrWhiteSpace(request.ApplicationNumber) ||
-            string.IsNullOrWhiteSpace(request.CustomerNumber))
+        OpenKycCaseResult result;
+        try
         {
-            return ValidationProblem("ApplicationId, ApplicationNumber and CustomerNumber are required.");
+            result = await openKycCaseHandler.HandleAsync(
+                new OpenKycCaseCommand(
+                    request.ApplicationRef,
+                    request.ApplicationNumber,
+                    request.CustomerNumber,
+                    request.BranchCode,
+                    request.InitiatedByUserId,
+                    request.WorkflowId,
+                    request.CorrelationId,
+                    request.CausationId),
+                cancellationToken);
+        }
+        catch (DomainRuleViolationException ex)
+        {
+            return ValidationProblem(ex.Message);
         }
 
-        var result = await service.CreateOrGetAsync(request, cancellationToken);
         var response = new
         {
-            kycCaseId = result.Case.Id,
-            applicationId = result.Case.ApplicationId,
-            applicationNumber = result.Case.ApplicationNumber,
-            customerNumber = result.Case.CustomerNumber,
-            status = result.Case.Status,
+            kycCaseId = result.KycCaseId,
+            applicationRef = result.ApplicationRef,
+            branchCode = result.BranchCode,
+            applicationNumber = result.ApplicationNumber,
+            customerNumber = result.CustomerNumber,
+            status = result.Status,
             created = result.Created
         };
 
-        return result.Created ? Created($"/internal/v1/kyc/cases/{result.Case.Id}", response) : Ok(response);
+        return result.Created ? Created($"/internal/v1/kyc/cases/{result.KycCaseId}", response) : Ok(response);
     }
 }

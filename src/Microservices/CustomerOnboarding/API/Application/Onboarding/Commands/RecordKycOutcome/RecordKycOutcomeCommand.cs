@@ -2,12 +2,12 @@ namespace EnterpriseWebPlatform.CustomerOnboarding.Application.Onboarding.Comman
 
 /// <summary>
 /// Applies a Customer KYC fact (KycCaseCreated / KycCaseApproved / KycCaseRejected)
-/// to an onboarding application. MessageId is the KYC event's MessageId and is
-/// the idempotency key. ApplicationNumber must match the application with
-/// ApplicationId: ids are reused when a database is recreated, business numbers are not.
+/// to an onboarding application, identified by its cross-context ApplicationRef.
+/// MessageId is the KYC event's MessageId and is the idempotency key.
+/// ApplicationNumber is a consistency check: it must match the referenced application.
 /// </summary>
 public sealed record RecordKycOutcomeCommand(
-    long ApplicationId,
+    Guid ApplicationRef,
     string ApplicationNumber,
     Guid MessageId,
     string EventType);
@@ -25,7 +25,7 @@ public enum RecordKycOutcomeResult
 
     NotFound,
 
-    /// <summary>The application with this id has a different application number (stale or misrouted fact).</summary>
+    /// <summary>The referenced application has a different application number (inconsistent fact).</summary>
     ApplicationMismatch,
 
     /// <summary>The event type is not a KYC outcome this context understands.</summary>

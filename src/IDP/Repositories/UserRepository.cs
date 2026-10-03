@@ -56,7 +56,6 @@ public sealed class UserRepository : IUserRepository
 				.ThenInclude(profile => profile.Department)
 			.Include(user => user.EmploymentProfile)
 				.ThenInclude(profile => profile.Branch)
-			.Include(user => user.Relationships)
 			.SingleOrDefaultAsync(
 				user => user.SubjectId == subjectGuid,
 				cancellationToken);

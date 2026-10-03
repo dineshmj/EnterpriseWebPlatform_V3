@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 
 using EnterpriseWebPlatform.DocumentsManagement.Application.Abstractions.Persistence;
 using EnterpriseWebPlatform.DocumentsManagement.Domain.Aggregates;
+using EnterpriseWebPlatform.DocumentsManagement.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.DocumentsManagement.Infrastructure.Persistence;
 
@@ -17,18 +18,16 @@ public sealed class DocumentRepository(DocumentsManagementDbContext dbContext)
             .SingleOrDefaultAsync(x => x.Id == documentId, cancellationToken);
 
     public async Task<IReadOnlyList<Document>> ListAsync(
-        string resourceBranch,
+        BranchCode resourceBranch,
         string? businessReference,
         string? documentType,
         int pageNumber,
         int pageSize,
         CancellationToken cancellationToken)
     {
-        var branch = resourceBranch.Trim().ToUpperInvariant();
-
         var query = dbContext.Documents
             .AsNoTracking()
-            .Where(x => x.ResourceBranch == branch);
+            .Where(x => x.ResourceBranch == resourceBranch);
 
         if (!string.IsNullOrWhiteSpace(businessReference))
         {

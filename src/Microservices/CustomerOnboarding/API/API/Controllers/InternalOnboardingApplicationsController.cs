@@ -24,10 +24,10 @@ public sealed class InternalOnboardingApplicationsController(
     /// Workflow metadata comes in the X-Workflow-Id / X-Correlation-Id /
     /// X-Causation-Id / X-Initiated-By-User-Id headers.
     /// </summary>
-    [HttpPost("{id:long}/kyc-outcomes")]
+    [HttpPost("{applicationRef:guid}/kyc-outcomes")]
     [Authorize(Policy = "KycOutcomeSubscriberWrite")]
     public async Task<IActionResult> RecordKycOutcome(
-        long id,
+        Guid applicationRef,
         [FromBody] RecordKycOutcomeRequest request,
         CancellationToken cancellationToken)
     {
@@ -42,7 +42,7 @@ public sealed class InternalOnboardingApplicationsController(
         try
         {
             result = await recordKycOutcomeHandler.HandleAsync(
-                new RecordKycOutcomeCommand(id, request.ApplicationNumber, request.MessageId, request.EventType),
+                new RecordKycOutcomeCommand(applicationRef, request.ApplicationNumber, request.MessageId, request.EventType),
                 cancellationToken);
         }
         catch (DbUpdateException ex) when (IsInboxDuplicate(ex))
@@ -53,23 +53,23 @@ public sealed class InternalOnboardingApplicationsController(
         }
 
         logger.LogInformation(
-            "KYC outcome {EventType} (MessageId={MessageId}) for application {ApplicationId}: {Result}.",
+            "KYC outcome {EventType} (MessageId={MessageId}) for application {ApplicationRef}: {Result}.",
             request.EventType,
             request.MessageId,
-            id,
+            applicationRef,
             result);
 
         return result switch
         {
             RecordKycOutcomeResult.Applied or RecordKycOutcomeResult.NoChange or RecordKycOutcomeResult.Duplicate =>
-                Ok(new { applicationId = id, messageId = request.MessageId, result = result.ToString() }),
+                Ok(new { applicationRef, messageId = request.MessageId, result = result.ToString() }),
             RecordKycOutcomeResult.NotFound =>
                 Problem(statusCode: StatusCodes.Status404NotFound, title: "Onboarding application not found"),
             RecordKycOutcomeResult.ApplicationMismatch =>
                 Problem(
                     statusCode: StatusCodes.Status409Conflict,
                     title: "Application number mismatch",
-                    detail: $"Application {id} is not '{request.ApplicationNumber}'. The KYC fact is stale or misrouted."),
+                    detail: $"Application {applicationRef} is not '{request.ApplicationNumber}'. The KYC fact is stale or misrouted."),
             _ =>
                 Problem(statusCode: StatusCodes.Status422UnprocessableEntity, title: $"Unsupported KYC event type '{request.EventType}'")
         };

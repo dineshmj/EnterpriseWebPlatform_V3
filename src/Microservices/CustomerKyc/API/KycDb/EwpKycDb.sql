@@ -5,10 +5,21 @@ CREATE TABLE IF NOT EXISTS kyc_cases (
     id BIGSERIAL PRIMARY KEY,
 
     -- One KYC case per onboarding APPLICATION (owned by Customer Onboarding and
-    -- referenced here by value only - no cross-database foreign key). The unique
-    -- application_id is also the business idempotency key for case creation.
-    application_id BIGINT NOT NULL,
+    -- referenced here by value only - no cross-database foreign key). The
+    -- application is identified by Customer Onboarding's ApplicationRef, a GUID
+    -- that never repeats (database IDs restart when a database is recreated).
+    -- It is also the business idempotency key for case creation.
+    application_ref UUID NOT NULL,
     application_number VARCHAR(30) NOT NULL,
+
+    -- ABAC: the branch the application was opened in. Officers see and decide
+    -- only the cases of their own branch.
+    branch_code VARCHAR(20) NOT NULL,
+
+    -- ReBAC: the officer the case is assigned to ("assigned_to"). Set when an
+    -- officer claims the case or makes the first decision; only the assignee
+    -- may decide. NULL = in the shared work queue.
+    assigned_officer_user_id VARCHAR(200) NULL,
 
     -- The customer the application belongs to; a customer can have several
     -- applications and therefore several KYC cases over time.
@@ -41,7 +52,20 @@ CREATE TABLE IF NOT EXISTS kyc_cases (
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
 
-    CONSTRAINT uq_kyc_cases_application_id UNIQUE (application_id),
+    -- Optimistic concurrency token of the KycCase aggregate; incremented by every change.
+    version BIGINT NOT NULL DEFAULT 1,
+
+    CONSTRAINT uq_kyc_cases_application_ref UNIQUE (application_ref),
+
+    -- A decided stage always has an assigned officer.
+    CONSTRAINT ck_kyc_cases_assignment
+        CHECK (
+            assigned_officer_user_id IS NOT NULL
+            OR (
+                identity_verification_status = 'PENDING_REVIEW'
+                AND document_verification_status = 'PENDING_REVIEW'
+            )
+        ),
 
     CONSTRAINT ck_kyc_cases_status
         CHECK (status IN ('PENDING_REVIEW','APPROVED','REJECTED')),
@@ -125,6 +149,13 @@ CREATE TABLE IF NOT EXISTS kyc_cases (
 
 CREATE INDEX IF NOT EXISTS ix_kyc_cases_status
     ON kyc_cases (status);
+
+-- Work queues are listed per branch.
+CREATE INDEX IF NOT EXISTS ix_kyc_cases_branch_status
+    ON kyc_cases (branch_code, status, created_at);
+
+CREATE INDEX IF NOT EXISTS ix_kyc_cases_assigned_officer
+    ON kyc_cases (assigned_officer_user_id);
 
 -- Evidence and case history are looked up per customer.
 CREATE INDEX IF NOT EXISTS ix_kyc_cases_customer_number

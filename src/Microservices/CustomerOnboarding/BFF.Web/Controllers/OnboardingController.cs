@@ -282,11 +282,11 @@ public sealed class OnboardingController(
         Guid commandId,
         CancellationToken cancellationToken)
     {
-        var applicationNumber = $"APP-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}-{Random.Shared.Next(1000, 9999)}";
+        // The application number is issued by the Customer Onboarding API (returned below).
         var client = httpClientFactory.CreateClient("CustomerOnboardingApi");
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "/v1/onboarding/applications")
         {
-            Content = JsonContent.Create(new { customerId, applicationNumber })
+            Content = JsonContent.Create(new { customerId })
         };
         AddWorkflowHeaders(httpRequest, workflowId, correlationId, commandId);
         using var response = await client.SendAsync(httpRequest, cancellationToken);

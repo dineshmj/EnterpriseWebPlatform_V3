@@ -28,9 +28,10 @@ public sealed class CustomerKycApiClient(
             "/internal/v1/kyc/cases/from-application-submitted")
         {
             Content = JsonContent.Create(new CreateKycCaseRequest(
-                message.ApplicationId,
+                message.ApplicationRef,
                 message.ApplicationNumber,
                 message.CustomerNumber,
+                message.BranchCode,
                 message.InitiatedByUserId,
                 message.WorkflowId,
                 message.CorrelationId,
@@ -75,9 +76,10 @@ public sealed class CustomerKycApiClient(
         (int)statusCode >= 500;
 
     private sealed record CreateKycCaseRequest(
-        long ApplicationId,
+        Guid ApplicationRef,
         string ApplicationNumber,
         string CustomerNumber,
+        string BranchCode,
         string? InitiatedByUserId,
         Guid? WorkflowId,
         Guid? CorrelationId,

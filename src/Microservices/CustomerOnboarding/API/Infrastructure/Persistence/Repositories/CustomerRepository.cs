@@ -40,7 +40,7 @@ public sealed class CustomerRepository : ICustomerRepository
     {
         return _dbContext.Customers
             .SingleOrDefaultAsync(
-                x => x.CustomerNumber.Value == customerNumber,
+                x => (string)(object)x.CustomerNumber == customerNumber,
                 cancellationToken);
     }
 

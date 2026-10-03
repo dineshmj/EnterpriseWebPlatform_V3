@@ -7,38 +7,53 @@ using EnterpriseWebPlatform.CustomerOnboarding.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Domain.Aggregates;
 
+/// <summary>
+/// Aggregate root: a customer and their addresses.
+///
+/// Invariants:
+///  - A customer always has a valid name, e-mail address and phone number.
+///  - At most one address is primary.
+///  - Lifecycle: PROSPECT → ONBOARDING → ACTIVE; SUSPENDED from any non-closed
+///    status; a closed or suspended customer cannot start onboarding.
+///  - Every customer has exactly one managing agent (ReBAC "manages" relationship,
+///    owned by this context, not by the IDP).
+/// </summary>
 public sealed class Customer : AggregateRoot
 {
     private readonly List<CustomerAddress> _addresses = [];
 
+    // For EF Core materialization.
     private Customer()
     {
         CustomerNumber = null!;
+        Name = null!;
         Email = null!;
         PhoneNumber = null!;
+        ManagingAgentUserId = null!;
     }
 
     private Customer(
         CustomerNumber customerNumber,
-        string firstName,
-        string lastName,
+        PersonName name,
         EmailAddress email,
         PhoneNumber phoneNumber,
         CustomerType customerType,
+        string managingAgentUserId,
         Guid? subjectId,
-        long? branchId)
+        long? branchId,
+        DateTimeOffset now)
     {
         CustomerNumber = customerNumber;
-        FirstName = RequireName(firstName, nameof(firstName));
-        LastName = RequireName(lastName, nameof(lastName));
+        Name = name;
         Email = email;
         PhoneNumber = phoneNumber;
         CustomerType = customerType;
+        ManagingAgentUserId = managingAgentUserId;
         SubjectId = subjectId;
         BranchId = branchId;
         Status = CustomerStatus.Prospect;
-        CreatedAt = DateTimeOffset.UtcNow;
-        UpdatedAt = CreatedAt;
+        CreatedAt = now;
+        UpdatedAt = now;
         Version = 1;
     }
 
@@ -46,9 +61,7 @@ public sealed class Customer : AggregateRoot
 
     public Guid? SubjectId { get; private set; }
 
-    public string FirstName { get; private set; } = string.Empty;
-
-    public string LastName { get; private set; } = string.Empty;
+    public PersonName Name { get; private set; }
 
     public EmailAddress Email { get; private set; }
 
@@ -59,6 +72,9 @@ public sealed class Customer : AggregateRoot
     public CustomerStatus Status { get; private set; }
 
     public long? BranchId { get; private set; }
+
+    /// <summary>IDP subject of the agent who manages this customer.</summary>
+    public string ManagingAgentUserId { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
 
@@ -71,37 +87,51 @@ public sealed class Customer : AggregateRoot
 
     public static Customer Create(
         CustomerNumber customerNumber,
-        string firstName,
-        string lastName,
+        PersonName name,
         EmailAddress email,
         PhoneNumber phoneNumber,
         CustomerType customerType,
+        string managingAgentUserId,
+        DateTimeOffset now,
         Guid? subjectId = null,
         long? branchId = null)
     {
         ArgumentNullException.ThrowIfNull(customerNumber);
+        ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(email);
         ArgumentNullException.ThrowIfNull(phoneNumber);
 
+        if (string.IsNullOrWhiteSpace(managingAgentUserId))
+        {
+            throw new DomainRuleViolationException(
+                "A customer must have a managing agent.");
+        }
+
         var customer = new Customer(
             customerNumber,
-            firstName,
-            lastName,
+            name,
             email,
             phoneNumber,
             customerType,
+            managingAgentUserId.Trim(),
             subjectId,
-            branchId);
+            branchId,
+            now);
 
         customer.RaiseDomainEvent(
             new CustomerCreatedDomainEvent(
                 customer.CustomerNumber.Value,
-                customer.CreatedAt));
+                now));
 
         return customer;
     }
 
-    public void AddAddress(CustomerAddress address)
+    /// <summary>ReBAC: is <paramref name="userId"/> the agent who manages this customer?</summary>
+    public bool IsManagedBy(string? userId) =>
+        !string.IsNullOrWhiteSpace(userId) &&
+        string.Equals(ManagingAgentUserId, userId.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    public void AddAddress(CustomerAddress address, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(address);
 
@@ -117,25 +147,46 @@ public sealed class Customer : AggregateRoot
         // through the aggregate's relationship when the customer is saved.
         if (Id > 0)
         {
-            address.AssignToCustomer(Id);
+            address.AssignToCustomer(Id, now);
         }
 
-        Touch();
+        Touch(now);
     }
 
     public void ChangeContactDetails(
         EmailAddress email,
-        PhoneNumber phoneNumber)
+        PhoneNumber phoneNumber,
+        DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(email);
         ArgumentNullException.ThrowIfNull(phoneNumber);
 
+        if (Email == email && PhoneNumber == phoneNumber)
+        {
+            return;
+        }
+
         Email = email;
         PhoneNumber = phoneNumber;
-        Touch();
+        Touch(now);
+
+        RaiseDomainEvent(new CustomerContactDetailsChangedDomainEvent(Id, now));
     }
 
-    public void StartOnboarding()
+    public void Rename(PersonName name, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+
+        if (Name == name)
+        {
+            return;
+        }
+
+        Name = name;
+        Touch(now);
+    }
+
+    public void StartOnboarding(DateTimeOffset now)
     {
         if (Status is CustomerStatus.Closed or CustomerStatus.Suspended)
         {
@@ -143,11 +194,10 @@ public sealed class Customer : AggregateRoot
                 "A closed or suspended customer cannot start onboarding.");
         }
 
-        Status = CustomerStatus.Onboarding;
-        Touch();
+        ChangeStatus(CustomerStatus.Onboarding, now);
     }
 
-    public void Activate()
+    public void Activate(DateTimeOffset now)
     {
         if (Status != CustomerStatus.Onboarding)
         {
@@ -155,11 +205,10 @@ public sealed class Customer : AggregateRoot
                 "Only a customer in onboarding can be activated.");
         }
 
-        Status = CustomerStatus.Active;
-        Touch();
+        ChangeStatus(CustomerStatus.Active, now);
     }
 
-    public void Suspend()
+    public void Suspend(DateTimeOffset now)
     {
         if (Status == CustomerStatus.Closed)
         {
@@ -167,54 +216,26 @@ public sealed class Customer : AggregateRoot
                 "A closed customer cannot be suspended.");
         }
 
-        Status = CustomerStatus.Suspended;
-        Touch();
+        ChangeStatus(CustomerStatus.Suspended, now);
     }
 
-    public void UpdateName(string firstName, string lastName)
+    private void ChangeStatus(CustomerStatus target, DateTimeOffset now)
     {
-        if (string.IsNullOrWhiteSpace(firstName))
+        if (Status == target)
         {
-            throw new DomainRuleViolationException(
-                "First name is required.");
+            return;
         }
 
-        if (string.IsNullOrWhiteSpace(lastName))
-        {
-            throw new DomainRuleViolationException(
-                "Last name is required.");
-        }
+        var previous = Status;
+        Status = target;
+        Touch(now);
 
-        FirstName = firstName.Trim();
-        LastName = lastName.Trim();
-
-        Touch();
+        RaiseDomainEvent(new CustomerStatusChangedDomainEvent(Id, previous, target, now));
     }
 
-    private void Touch()
+    private void Touch(DateTimeOffset now)
     {
-        UpdatedAt = DateTimeOffset.UtcNow;
+        UpdatedAt = now;
         Version++;
-    }
-
-    private static string RequireName(
-        string value,
-        string parameterName)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            throw new DomainRuleViolationException(
-                $"{parameterName} is required.");
-        }
-
-        var normalized = value.Trim();
-
-        if (normalized.Length > 100)
-        {
-            throw new DomainRuleViolationException(
-                $"{parameterName} cannot exceed 100 characters.");
-        }
-
-        return normalized;
     }
 }

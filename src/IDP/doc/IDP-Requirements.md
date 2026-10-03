@@ -18,7 +18,7 @@ The IDP authenticates humans and services and issues the tokens and claims that 
 | Client registrations, API resources and scopes | Resource attributes (branch of a customer, risk of a case) — owned by each context |
 | Users, roles, permissions, role–permission mapping | Business authorization decisions — made by each BFF and API |
 | User attributes for ABAC (employment profile) | |
-| Interim ReBAC relationship store (`user_relationships`) — see [Authorization-Model §6](../../../doc/Authorization-Model.md#6-rebac--relationship-based-access-control) | |
+| | ReBAC relationships (who manages a customer, who is assigned a case) — owned by the context that owns the resource, see [Authorization-Model §6](../../../doc/Authorization-Model.md#6-rebac--relationship-based-access-control) |
 
 ### Deployable component
 
@@ -109,21 +109,13 @@ All staff are `FULL_TIME`. `ethan.kyc` and `noah.kyc` are deliberately unassigne
 
 **Branches** (city, country; region = state): `SYD001` Sydney CBD and `SYD002` Sydney North (Sydney, AU, NSW); `MEL001` Melbourne Central (Melbourne, AU, VIC); `BNE001` Brisbane City (Brisbane, AU, QLD); `ADL001` Adelaide City (Adelaide, AU, SA); `PER001` Perth City (Perth, AU, WA).
 
-**Branch-scope demonstration:** `sophie.cs` (Sydney) and `mia.cs` (Melbourne) are both Customer Service Agents. Each can onboard and see only customers with a primary residential address in their own branch city. The KYC officers are in Sydney, so they review Sophie's onboardings; documents uploaded by Mia stay invisible to them.
+**Branch-scope demonstration:** `sophie.cs` (Sydney) and `mia.cs` (Melbourne) are both Customer Service Agents. Each can onboard and see only customers with a primary residential address in their own branch city. Applications record the branch they were opened in, and KYC officers see only their own branch's cases: the KYC officers are in Sydney, so they review Sophie's onboardings, while Mia's would wait for a Melbourne officer. Documents uploaded by Mia stay invisible to them as well.
+
+**ReBAC demonstration** (relationships live in the business contexts, not here):
+- The agent who creates a customer **manages** it: only `sophie.cs` can change her customers or open their applications.
+- The first KYC officer to decide a case (or to claim it) is **assigned to** it. If `ethan.kyc` approves the identity stage, `noah.kyc` is refused the document stage until Ethan releases the case.
 
 **Departments:** CUSTOMER_SERVICE, KYC, COMPLIANCE, ACCOUNTS, PAYMENTS, OPERATIONS, AUDIT, IT.
-
-**ReBAC demonstration relationships:**
-
-| Subject | Relationship | Resource |
-|---|---|---|
-| `sophie.cs` | `manages` | Customer `CUST-10045` |
-| `liam.kyc` | `assigned_to` | KYC case `KYC-10045` |
-| `olivia.compliance` | `assigned_to` | Compliance case `COMP-10045` |
-| `jack.accounts` | `assigned_to` | Account application `ACCAPP-10045` |
-| `customer.demo` | `owns` | Account `ACC-100001`, Payment `PAY-100001` |
-
-The resource identifiers are owned by the respective contexts. The IDP stores them only as opaque strings.
 
 Role → permission mappings: see the permission tables in each context's requirements document and [Authorization-Model §3.2](../../../doc/Authorization-Model.md#32-permissions).
 

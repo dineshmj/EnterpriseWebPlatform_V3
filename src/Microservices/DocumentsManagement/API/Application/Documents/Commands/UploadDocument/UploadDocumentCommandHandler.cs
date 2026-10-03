@@ -1,19 +1,25 @@
 using EnterpriseWebPlatform.DocumentsManagement.Application.Abstractions.Persistence;
 using EnterpriseWebPlatform.DocumentsManagement.Application.Abstractions.Storage;
 using EnterpriseWebPlatform.DocumentsManagement.Domain.Aggregates;
+using EnterpriseWebPlatform.DocumentsManagement.Domain.Policies;
+using EnterpriseWebPlatform.DocumentsManagement.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.DocumentsManagement.Application.Documents.Commands.UploadDocument;
 
 public sealed class UploadDocumentCommandHandler(
     IDocumentRepository repository,
-    IDocumentStorage storage)
+    IDocumentStorage storage,
+    TimeProvider clock)
 {
     public async Task<UploadDocumentResult> HandleAsync(
         UploadDocumentCommand command,
         CancellationToken cancellationToken)
     {
         var documentId = Guid.NewGuid();
-        var fileName = Path.GetFileName(command.FileName);
+
+        // Validate everything the caller supplied before any content is stored.
+        var fileName = FileName.Create(command.FileName);
+        var resourceBranch = BranchCode.Create(command.ResourceBranch);
 
         // Verify the real content type from the file signature before anything
         // is stored. A non-seekable stream is buffered so it can be rewound.
@@ -40,41 +46,41 @@ public sealed class UploadDocumentCommandHandler(
 
         var stored = await storage.StoreAsync(
             documentId,
-            fileName,
+            fileName.Value,
             content,
             cancellationToken);
 
-        var now = DateTimeOffset.UtcNow;
-        var document = Document.Create(
-            documentId,
-            fileName,
-            verifiedContentType,
-            stored.Size,
-            stored.ContentHash,
-            stored.StorageReference,
-            now,
-            command.ResourceBranch,
-            command.DocumentType,
-            command.BusinessReference);
-
-        await repository.AddAsync(document, cancellationToken);
-
+        Document document;
         try
         {
+            document = Document.Upload(
+                documentId,
+                fileName,
+                verifiedContentType,
+                stored.Size,
+                ContentHash.Create(stored.ContentHash),
+                stored.StorageReference,
+                resourceBranch,
+                clock.GetUtcNow(),
+                command.DocumentType,
+                command.BusinessReference);
+
+            await repository.AddAsync(document, cancellationToken);
             await repository.SaveChangesAsync(cancellationToken);
         }
         catch
         {
+            // Never leave stored content without its record.
             await storage.DeleteAsync(stored.StorageReference, CancellationToken.None);
             throw;
         }
 
         return new UploadDocumentResult(
             document.Id,
-            document.FileName,
+            document.FileName.Value,
             document.ContentType,
             document.Size,
-            document.ContentHash,
+            document.ContentHash.Value,
             document.CreatedAt,
             document.Version);
     }

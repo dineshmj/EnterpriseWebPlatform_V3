@@ -1,15 +1,28 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
-using EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure;
+using EnterpriseWebPlatform.CustomerKyc.Api.Application.Commands.AssignKycCase;
+using EnterpriseWebPlatform.CustomerKyc.Api.Application.Commands.DecideVerificationStage;
+using EnterpriseWebPlatform.CustomerKyc.Api.Application.Queries;
+using EnterpriseWebPlatform.CustomerKyc.Api.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.CustomerKyc.Api.Controllers;
 
+/// <summary>
+/// KYC officer endpoints. Authorization layers:
+///  - RBAC / ABAC policies (scope, role, permission, department, clearance; per-stage
+///    permission for decisions) - see Program.cs;
+///  - ABAC branch scope: an officer sees and acts on their own branch's cases only
+///    (another branch's case is a 404); no branch claim = no access (fail closed);
+///  - ReBAC + SoD inside the KycCase aggregate (assigned officer only; never the initiator).
+/// </summary>
 [ApiController]
 [Route("v1/kyc/cases")]
 [Authorize(Policy = "KycCaseView")]
-public sealed class KycCasesController(KycDbContext db, KycCaseService service) : ControllerBase
+public sealed class KycCasesController(
+    IKycCaseQueries queries,
+    DecideVerificationStageCommandHandler decideStageHandler,
+    AssignKycCaseCommandHandler assignHandler) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<PagedKycCasesResponse>> GetCases(
@@ -19,49 +32,24 @@ public sealed class KycCasesController(KycDbContext db, KycCaseService service) 
         [FromQuery] KycVerificationStage? stage = null,
         CancellationToken cancellationToken = default)
     {
+        if (OfficerBranch() is not { } branch)
+            return Forbid();
+
         pageNumber = Math.Clamp(pageNumber, 1, 1000);
         pageSize = Math.Clamp(pageSize, 1, 100);
 
-        var query = db.KycCases.AsNoTracking();
-
+        KycCaseStatus? statusFilter = null;
         if (!string.IsNullOrWhiteSpace(status))
-            query = query.Where(x => x.Status == status);
-
-        if (stage.HasValue)
         {
-            query = stage.Value == KycVerificationStage.IdentityVerification
-                ? query.Where(x => x.IdentityVerificationStatus == "PENDING_REVIEW")
-                : query.Where(x => x.DocumentVerificationStatus == "PENDING_REVIEW");
+            // An unknown status matches no case.
+            if (!KycCodes.TryParseCaseStatus(status, out var parsed))
+                return Ok(new PagedKycCasesResponse([], pageNumber, pageSize, 0));
+
+            statusFilter = parsed;
         }
 
-        var totalCount = await query.CountAsync(cancellationToken);
-
-        var items = await query
-            .OrderBy(x => x.CreatedAt)
-            .Skip((pageNumber - 1) * pageSize)
-            .Take(pageSize)
-            .Select(x => new KycCaseListItem(
-                x.Id,
-                x.CustomerNumber,
-                x.ApplicationNumber,
-                x.Status,
-                x.IdentityVerificationStatus,
-                x.IdentityVerificationByUserId,
-                x.IdentityVerificationAt,
-                x.IdentityVerificationRemarks,
-                x.DocumentVerificationStatus,
-                x.DocumentVerificationByUserId,
-                x.DocumentVerificationAt,
-                x.DocumentVerificationRemarks,
-                x.InitiatedByUserId,
-                x.DecisionByUserId,
-                x.DecisionAt,
-                x.DecisionRemarks,
-                x.CreatedAt,
-                x.UpdatedAt))
-            .ToListAsync(cancellationToken);
-
-        return Ok(new PagedKycCasesResponse(items, pageNumber, pageSize, totalCount));
+        return Ok(await queries.GetCasesAsync(
+            branch, pageNumber, pageSize, statusFilter, stage?.ToDomain(), cancellationToken));
     }
 
     [HttpGet("{caseId:long}")]
@@ -69,73 +57,61 @@ public sealed class KycCasesController(KycDbContext db, KycCaseService service) 
         long caseId,
         CancellationToken cancellationToken = default)
     {
-        var item = await db.KycCases
-            .AsNoTracking()
-            .Where(x => x.Id == caseId)
-            .Select(x => new KycCaseDetail(
-                x.Id,
-                x.CustomerNumber,
-                x.ApplicationNumber,
-                x.Status,
-                x.IdentityVerificationStatus,
-                x.IdentityVerificationByUserId,
-                x.IdentityVerificationAt,
-                x.IdentityVerificationRemarks,
-                x.DocumentVerificationStatus,
-                x.DocumentVerificationByUserId,
-                x.DocumentVerificationAt,
-                x.DocumentVerificationRemarks,
-                x.InitiatedByUserId,
-                x.DecisionByUserId,
-                x.DecisionAt,
-                x.DecisionRemarks,
-                x.CreatedAt,
-                x.UpdatedAt))
-            .SingleOrDefaultAsync(cancellationToken);
+        if (OfficerBranch() is not { } branch)
+            return Forbid();
 
+        var item = await queries.GetCaseAsync(caseId, branch, cancellationToken);
         return item is null ? NotFound() : Ok(item);
     }
 
+    /// <summary>ReBAC: take the case from the shared work queue.</summary>
+    [HttpPost("{caseId:long}/claim")]
+    [Authorize(Policy = "KycCaseAssign")]
+    public Task<ActionResult<KycCaseAssignmentResponse>> Claim(long caseId, CancellationToken cancellationToken = default) =>
+        Assign(caseId, AssignmentAction.Claim, cancellationToken);
+
+    /// <summary>ReBAC: return your own case to the shared work queue.</summary>
+    [HttpPost("{caseId:long}/release")]
+    [Authorize(Policy = "KycCaseAssign")]
+    public Task<ActionResult<KycCaseAssignmentResponse>> Release(long caseId, CancellationToken cancellationToken = default) =>
+        Assign(caseId, AssignmentAction.Release, cancellationToken);
+
     [HttpPost("{caseId:long}/identity-verification/approve")]
-    [Authorize(Policy = "KycCaseApprove")]
+    [Authorize(Policy = "KycIdentityApprove")]
     public Task<ActionResult<KycCaseDecisionResponse>> ApproveIdentity(
         long caseId,
         [FromBody] KycCaseDecisionRequest request,
         CancellationToken cancellationToken = default) =>
-        DecideStage(caseId, KycVerificationStage.IdentityVerification,
-            KycCaseDecision.Approve, request, cancellationToken);
+        DecideStage(caseId, VerificationStageType.IdentityVerification, StageDecision.Approve, request, cancellationToken);
 
     [HttpPost("{caseId:long}/identity-verification/reject")]
-    [Authorize(Policy = "KycCaseReject")]
+    [Authorize(Policy = "KycIdentityReject")]
     public Task<ActionResult<KycCaseDecisionResponse>> RejectIdentity(
         long caseId,
         [FromBody] KycCaseDecisionRequest request,
         CancellationToken cancellationToken = default) =>
-        DecideStage(caseId, KycVerificationStage.IdentityVerification,
-            KycCaseDecision.Reject, request, cancellationToken);
+        DecideStage(caseId, VerificationStageType.IdentityVerification, StageDecision.Reject, request, cancellationToken);
 
     [HttpPost("{caseId:long}/document-verification/approve")]
-    [Authorize(Policy = "KycCaseApprove")]
+    [Authorize(Policy = "KycDocumentApprove")]
     public Task<ActionResult<KycCaseDecisionResponse>> ApproveDocument(
         long caseId,
         [FromBody] KycCaseDecisionRequest request,
         CancellationToken cancellationToken = default) =>
-        DecideStage(caseId, KycVerificationStage.DocumentVerification,
-            KycCaseDecision.Approve, request, cancellationToken);
+        DecideStage(caseId, VerificationStageType.DocumentVerification, StageDecision.Approve, request, cancellationToken);
 
     [HttpPost("{caseId:long}/document-verification/reject")]
-    [Authorize(Policy = "KycCaseReject")]
+    [Authorize(Policy = "KycDocumentReject")]
     public Task<ActionResult<KycCaseDecisionResponse>> RejectDocument(
         long caseId,
         [FromBody] KycCaseDecisionRequest request,
         CancellationToken cancellationToken = default) =>
-        DecideStage(caseId, KycVerificationStage.DocumentVerification,
-            KycCaseDecision.Reject, request, cancellationToken);
+        DecideStage(caseId, VerificationStageType.DocumentVerification, StageDecision.Reject, request, cancellationToken);
 
     private async Task<ActionResult<KycCaseDecisionResponse>> DecideStage(
         long caseId,
-        KycVerificationStage stage,
-        KycCaseDecision decision,
+        VerificationStageType stage,
+        StageDecision decision,
         KycCaseDecisionRequest request,
         CancellationToken cancellationToken)
     {
@@ -143,80 +119,62 @@ public sealed class KycCasesController(KycDbContext db, KycCaseService service) 
         if (string.IsNullOrWhiteSpace(decisionByUserId))
             return Unauthorized();
 
-        // Each human approval/rejection is a distinct business command.
-        // The command id becomes the CausationId of the resulting stage event.
-        var commandId = Guid.NewGuid();
-
-        var result = await service.DecideStageAsync(
-            caseId, stage, decision, decisionByUserId,
-            request.DecisionRemarks, commandId, cancellationToken);
-
-        if (result.IsNotFound)
-            return NotFound(new { error = result.Error });
-
-        if (result.IsForbidden)
+        if (OfficerBranch() is null)
             return Forbid();
 
-        if (result.IsValidationFailure)
-            return BadRequest(new { error = result.Error });
+        // Each human approval/rejection is a distinct business command; its id
+        // becomes the CausationId of the resulting stage event.
+        var result = await decideStageHandler.HandleAsync(
+            new DecideVerificationStageCommand(
+                caseId, stage, decision, decisionByUserId, User.FindFirst("branch")?.Value,
+                request.DecisionRemarks, Guid.NewGuid()),
+            cancellationToken);
 
-        if (result.IsConflict)
-            return Conflict(new { error = result.Error });
-
-        return Ok(new KycCaseDecisionResponse(
-            result.KycCaseId!.Value,
-            result.CustomerNumber!,
-            result.Stage!.Value,
-            result.StageStatus!,
-            result.OverallStatus!,
-            result.DecisionByUserId!,
-            result.DecisionAt!.Value,
-            result.DecisionRemarks));
+        return result.Outcome switch
+        {
+            DecideVerificationStageOutcome.NotFound => NotFound(new { error = result.Error }),
+            DecideVerificationStageOutcome.Forbidden => Forbid(),
+            DecideVerificationStageOutcome.ValidationFailed => BadRequest(new { error = result.Error }),
+            DecideVerificationStageOutcome.Conflict => Conflict(new { error = result.Error }),
+            _ => Ok(new KycCaseDecisionResponse(
+                result.KycCaseId!.Value,
+                result.CustomerNumber!,
+                KycVerificationStageMapping.FromDomain(result.Stage!.Value),
+                result.StageStatus!,
+                result.OverallStatus!,
+                result.DecisionByUserId!,
+                result.DecisionAt!.Value,
+                result.DecisionRemarks))
+        };
     }
+
+    private async Task<ActionResult<KycCaseAssignmentResponse>> Assign(
+        long caseId,
+        AssignmentAction action,
+        CancellationToken cancellationToken)
+    {
+        var officerUserId = User.FindFirst("sub")?.Value;
+        if (string.IsNullOrWhiteSpace(officerUserId))
+            return Unauthorized();
+
+        if (OfficerBranch() is null)
+            return Forbid();
+
+        var result = await assignHandler.HandleAsync(
+            new AssignKycCaseCommand(caseId, action, officerUserId, User.FindFirst("branch")?.Value),
+            cancellationToken);
+
+        return result.Outcome switch
+        {
+            DecideVerificationStageOutcome.NotFound => NotFound(new { error = result.Error }),
+            DecideVerificationStageOutcome.Forbidden => Forbid(),
+            DecideVerificationStageOutcome.ValidationFailed => BadRequest(new { error = result.Error }),
+            DecideVerificationStageOutcome.Conflict => Conflict(new { error = result.Error }),
+            _ => Ok(new KycCaseAssignmentResponse(caseId, result.AssignedOfficerUserId))
+        };
+    }
+
+    /// <summary>The officer's branch (ABAC); null when the token has none (fail closed).</summary>
+    private BranchCode? OfficerBranch() =>
+        BranchCode.TryCreate(User.FindFirst("branch")?.Value, out var branch) ? branch : null;
 }
-
-public sealed record KycCaseListItem(
-    long KycCaseId,
-    string CustomerNumber,
-    string ApplicationNumber,
-    string Status,
-    string IdentityVerificationStatus,
-    string? IdentityVerificationByUserId,
-    DateTimeOffset? IdentityVerificationAt,
-    string? IdentityVerificationRemarks,
-    string DocumentVerificationStatus,
-    string? DocumentVerificationByUserId,
-    DateTimeOffset? DocumentVerificationAt,
-    string? DocumentVerificationRemarks,
-    string? InitiatedByUserId,
-    string? DecisionByUserId,
-    DateTimeOffset? DecisionAt,
-    string? DecisionRemarks,
-    DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
-
-public sealed record PagedKycCasesResponse(
-    IReadOnlyList<KycCaseListItem> Items,
-    int PageNumber,
-    int PageSize,
-    int TotalCount);
-
-public sealed record KycCaseDetail(
-    long KycCaseId,
-    string CustomerNumber,
-    string ApplicationNumber,
-    string Status,
-    string IdentityVerificationStatus,
-    string? IdentityVerificationByUserId,
-    DateTimeOffset? IdentityVerificationAt,
-    string? IdentityVerificationRemarks,
-    string DocumentVerificationStatus,
-    string? DocumentVerificationByUserId,
-    DateTimeOffset? DocumentVerificationAt,
-    string? DocumentVerificationRemarks,
-    string? InitiatedByUserId,
-    string? DecisionByUserId,
-    DateTimeOffset? DecisionAt,
-    string? DecisionRemarks,
-    DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);

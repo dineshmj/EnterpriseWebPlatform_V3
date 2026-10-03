@@ -172,7 +172,15 @@ ReBAC: "Are you the KYC Officer assigned to this case?"
 
 Relationship types used in EWP V3: `works_at`, `manages`, `assigned_to`, `owns`, `belongs_to`.
 
-**Ownership of relationship data.** A relationship is a business fact. It is owned by the bounded context that owns the resource (customer assignment by Customer Onboarding, case assignment by KYC or Compliance, account ownership by Accounts). For the PoC, the IDP holds a simplified `user_relationships` store for demonstration. That store is an interim convenience: the target is for each context to own its relationship facts.
+**Ownership of relationship data.** A relationship is a business fact. It is owned by the bounded context that owns the resource, stored on the resource itself, and checked there at request time. Relationships are **never issued as token claims**: a claim would go stale the moment a case is reassigned, and would make every token carry every assignment.
+
+| Relationship | Owner and storage | Enforced rule | Status |
+|---|---|---|---|
+| Agent `manages` Customer | Customer Onboarding: `customers.managing_agent_user_id` (the creating agent) | Only the managing agent may change the customer or open and submit its applications. Other agents of the same branch may read it (403 on change); other branches get 404. | Present |
+| Officer `assigned_to` KYC case | Customer KYC: `kyc_cases.assigned_officer_user_id` | The first decision (or an explicit claim) assigns the case. Only the assignee decides; the assignee may release it. The workflow initiator can never take it (SoD). | Present |
+| Officer `assigned_to` compliance case; customer `owns` account / payment | Compliance, Accounts, Payments | — | Planned with those contexts |
+
+The IDP's former `user_relationships` table and `relationship` claim have been removed.
 
 ---
 

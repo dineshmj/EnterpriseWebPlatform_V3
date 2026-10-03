@@ -215,29 +215,10 @@ public sealed class CustomProfileService : IProfileService
             }
         }
 
-        // ------------------------------------------------------------
-        // ReBAC - Relationships
-        //
-        // The actual relationships remain represented by the
-        // Identity/Access model for this PoC. Business services
-        // remain authoritative for their own business resources.
-        // ------------------------------------------------------------
-
-        if (requestedClaimTypes.Contains("relationship"))
-        {
-            foreach (var relationship in user.Relationships)
-            {
-                var relationshipValue =
-                    $"{relationship.RelationshipType}:" +
-                    $"{relationship.ResourceType}:" +
-                    $"{relationship.ResourceId}";
-
-                context.IssuedClaims.Add(
-                    new Claim(
-                        "relationship",
-                        relationshipValue));
-            }
-        }
+        // ReBAC relationships (an agent "manages" a customer, an officer is
+        // "assigned_to" a KYC case) are NOT issued as claims: they are owned and
+        // checked by the bounded context that owns the resource, at request time,
+        // so they are never stale. See doc/Authorization-Model.md §6.
 
         _logger.LogDebug(
             "Issued profile claims for user {UserName} with subject ID {SubjectId}.",

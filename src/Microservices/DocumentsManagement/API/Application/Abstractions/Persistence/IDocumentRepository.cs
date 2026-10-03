@@ -1,4 +1,5 @@
 using EnterpriseWebPlatform.DocumentsManagement.Domain.Aggregates;
+using EnterpriseWebPlatform.DocumentsManagement.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.DocumentsManagement.Application.Abstractions.Persistence;
 
@@ -13,7 +14,7 @@ public interface IDocumentRepository
     /// executed by the database; callers can never list across branches.
     /// </summary>
     Task<IReadOnlyList<Document>> ListAsync(
-        string resourceBranch,
+        BranchCode resourceBranch,
         string? businessReference,
         string? documentType,
         int pageNumber,

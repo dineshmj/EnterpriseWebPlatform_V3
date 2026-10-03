@@ -5,6 +5,7 @@ namespace EnterpriseWebPlatform.CustomerOnboarding.Domain.Events;
 
 public sealed record OnboardingApplicationStatusChangedDomainEvent(
     long ApplicationId,
+    Guid ApplicationRef,
     long CustomerId,
     OnboardingApplicationStatus PreviousStatus,
     OnboardingApplicationStatus NewStatus,

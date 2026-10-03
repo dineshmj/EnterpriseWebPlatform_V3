@@ -1,21 +1,37 @@
 using EnterpriseWebPlatform.DocumentsManagement.Domain.Common;
+using EnterpriseWebPlatform.DocumentsManagement.Domain.Events;
 using EnterpriseWebPlatform.DocumentsManagement.Domain.Exceptions;
+using EnterpriseWebPlatform.DocumentsManagement.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.DocumentsManagement.Domain.Aggregates;
 
-public sealed class Document : Entity
+/// <summary>
+/// Aggregate root: one stored, verified document.
+///
+/// Invariants:
+///  - The content type is one DM detected from the file signature (see
+///    <see cref="Policies.DocumentContentPolicy"/>), never the caller's claim.
+///  - Content is identified by its SHA-256 hash and an opaque storage reference.
+///  - Every new document belongs to a branch; a document without a resource
+///    branch (legacy data only) is accessible to nobody (fail closed).
+///  - A document is immutable once stored; it can only be removed.
+/// </summary>
+public sealed class Document : AggregateRoot
 {
+    // For EF Core materialization.
     private Document()
     {
+        FileName = null!;
+        ContentHash = null!;
     }
 
-    public string FileName { get; private set; } = string.Empty;
+    public FileName FileName { get; private set; }
 
     public string ContentType { get; private set; } = string.Empty;
 
     public long Size { get; private set; }
 
-    public string ContentHash { get; private set; } = string.Empty;
+    public ContentHash ContentHash { get; private set; }
 
     public string StorageReference { get; private set; } = string.Empty;
 
@@ -25,10 +41,9 @@ public sealed class Document : Entity
 
     /// <summary>
     /// Organizational (branch) scope of the document, taken from the actor who
-    /// uploaded it. Used for object-level authorization. A document without a
-    /// resource branch is accessible to nobody (fail closed).
+    /// uploaded it. Used for object-level authorization.
     /// </summary>
-    public string? ResourceBranch { get; private set; }
+    public BranchCode? ResourceBranch { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
 
@@ -36,59 +51,61 @@ public sealed class Document : Entity
 
     public long Version { get; private set; }
 
-    public static Document Create(
+    public static Document Upload(
         Guid documentId,
-        string fileName,
-        string contentType,
+        FileName fileName,
+        string verifiedContentType,
         long size,
-        string contentHash,
+        ContentHash contentHash,
         string storageReference,
+        BranchCode resourceBranch,
         DateTimeOffset now,
-        string resourceBranch,
         string? documentType = null,
         string? businessReference = null)
     {
-        if (string.IsNullOrWhiteSpace(resourceBranch))
-            throw new DomainRuleViolationException("A resource branch is required.");
+        ArgumentNullException.ThrowIfNull(fileName);
+        ArgumentNullException.ThrowIfNull(contentHash);
+        ArgumentNullException.ThrowIfNull(resourceBranch);
 
         if (documentId == Guid.Empty)
             throw new DomainRuleViolationException("Document ID cannot be empty.");
 
-        if (string.IsNullOrWhiteSpace(fileName))
-            throw new DomainRuleViolationException("File name is required.");
-
-        if (string.IsNullOrWhiteSpace(contentType))
+        if (string.IsNullOrWhiteSpace(verifiedContentType))
             throw new DomainRuleViolationException("Content type is required.");
 
-        if (size < 0)
-            throw new DomainRuleViolationException("Document size cannot be negative.");
-
-        if (string.IsNullOrWhiteSpace(contentHash))
-            throw new DomainRuleViolationException("Content hash is required.");
+        if (size <= 0)
+            throw new DomainRuleViolationException("A document cannot be empty.");
 
         if (string.IsNullOrWhiteSpace(storageReference))
             throw new DomainRuleViolationException("Storage reference is required.");
 
-        return new Document
+        var document = new Document
         {
             Id = documentId,
             FileName = fileName,
-            ContentType = contentType,
+            ContentType = verifiedContentType,
             Size = size,
             ContentHash = contentHash,
             StorageReference = storageReference,
             DocumentType = string.IsNullOrWhiteSpace(documentType) ? null : documentType.Trim(),
             BusinessReference = string.IsNullOrWhiteSpace(businessReference) ? null : businessReference.Trim(),
-            ResourceBranch = resourceBranch.Trim().ToUpperInvariant(),
+            ResourceBranch = resourceBranch,
             CreatedAt = now,
             UpdatedAt = now,
             Version = 1
         };
+
+        document.RaiseDomainEvent(new DocumentUploadedDomainEvent(
+            documentId,
+            resourceBranch.Value,
+            document.DocumentType,
+            document.BusinessReference,
+            verifiedContentType,
+            now));
+
+        return document;
     }
 
-    public void Touch(DateTimeOffset now)
-    {
-        UpdatedAt = now;
-        Version++;
-    }
+    public bool BelongsTo(BranchCode? branch) =>
+        branch is not null && ResourceBranch is not null && ResourceBranch == branch;
 }

@@ -1,4 +1,5 @@
 using EnterpriseWebPlatform.DocumentsManagement.Application.Abstractions.Persistence;
+using EnterpriseWebPlatform.DocumentsManagement.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.DocumentsManagement.Application.Documents.Queries.GetDocuments;
 
@@ -14,8 +15,12 @@ public sealed class GetDocumentsQueryHandler(IDocumentRepository repository)
         int pageSize,
         CancellationToken cancellationToken)
     {
+        // An unusable branch sees nothing (fail closed).
+        if (!BranchCode.TryCreate(resourceBranch, out var branch))
+            return [];
+
         var documents = await repository.ListAsync(
-            resourceBranch,
+            branch!,
             businessReference,
             documentType,
             Math.Max(1, pageNumber),
@@ -25,10 +30,10 @@ public sealed class GetDocumentsQueryHandler(IDocumentRepository repository)
         return documents
             .Select(document => new DocumentListItemDto(
                 document.Id,
-                document.FileName,
+                document.FileName.Value,
                 document.ContentType,
                 document.Size,
-                document.ContentHash,
+                document.ContentHash.Value,
                 document.CreatedAt,
                 document.Version,
                 document.DocumentType,

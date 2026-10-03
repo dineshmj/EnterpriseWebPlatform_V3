@@ -13,14 +13,18 @@ public sealed class RecordKycOutcomeCommandHandler
 
     private readonly IApplicationUnitOfWork _unitOfWork;
 
+    private readonly TimeProvider _clock;
+
     public RecordKycOutcomeCommandHandler(
         IOnboardingApplicationRepository applicationRepository,
         IInboxStore inbox,
-        IApplicationUnitOfWork unitOfWork)
+        IApplicationUnitOfWork unitOfWork,
+        TimeProvider clock)
     {
         _applicationRepository = applicationRepository;
         _inbox = inbox;
         _unitOfWork = unitOfWork;
+        _clock = clock;
     }
 
     public async Task<RecordKycOutcomeResult> HandleAsync(
@@ -32,8 +36,8 @@ public sealed class RecordKycOutcomeCommandHandler
             return RecordKycOutcomeResult.Duplicate;
         }
 
-        var application = await _applicationRepository.GetByIdAsync(
-            command.ApplicationId,
+        var application = await _applicationRepository.GetByRefAsync(
+            command.ApplicationRef,
             cancellationToken);
 
         if (application is null)
@@ -49,19 +53,21 @@ public sealed class RecordKycOutcomeCommandHandler
             return RecordKycOutcomeResult.ApplicationMismatch;
         }
 
+        var now = _clock.GetUtcNow();
+
         bool changed;
         switch (command.EventType)
         {
             case "KycCaseCreated":
-                changed = application.RecordKycCaseOpened();
+                changed = application.RecordKycCaseOpened(now);
                 break;
 
             case "KycCaseApproved":
-                changed = application.RecordKycApproved();
+                changed = application.RecordKycApproved(now);
                 break;
 
             case "KycCaseRejected":
-                changed = application.RecordKycRejected();
+                changed = application.RecordKycRejected(now);
                 break;
 
             default:

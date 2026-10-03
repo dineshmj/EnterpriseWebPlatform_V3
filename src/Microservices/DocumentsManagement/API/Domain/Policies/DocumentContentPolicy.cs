@@ -1,6 +1,6 @@
 using EnterpriseWebPlatform.DocumentsManagement.Domain.Exceptions;
 
-namespace EnterpriseWebPlatform.DocumentsManagement.Application.Documents.Commands.UploadDocument;
+namespace EnterpriseWebPlatform.DocumentsManagement.Domain.Policies;
 
 /// <summary>
 /// Allow-list of document content types, verified against the file signature

@@ -5,25 +5,27 @@ using EnterpriseWebPlatform.CustomerOnboarding.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Domain.Entities;
 
+/// <summary>An address of a customer. Part of the Customer aggregate; changed only through it.</summary>
 public sealed class CustomerAddress : Entity
 {
+    // For EF Core materialization.
     private CustomerAddress()
     {
         Address = null!;
-        Customer = null!;
     }
 
     private CustomerAddress(
         AddressType addressType,
         PostalAddress address,
-        bool isPrimary)
+        bool isPrimary,
+        DateTimeOffset now)
     {
         AddressType = addressType;
         Address = address;
         IsPrimary = isPrimary;
 
-        CreatedAt = DateTimeOffset.UtcNow;
-        UpdatedAt = CreatedAt;
+        CreatedAt = now;
+        UpdatedAt = now;
     }
 
     public long CustomerId { get; private set; }
@@ -38,22 +40,22 @@ public sealed class CustomerAddress : Entity
 
     public DateTimeOffset UpdatedAt { get; private set; }
 
-    public Aggregates.Customer Customer { get; private set; } = null!;
-
     public static CustomerAddress Create(
         AddressType addressType,
         PostalAddress address,
-        bool isPrimary)
+        bool isPrimary,
+        DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(address);
 
         return new CustomerAddress(
             addressType,
             address,
-            isPrimary);
+            isPrimary,
+            now);
     }
 
-    internal void AssignToCustomer(long customerId)
+    internal void AssignToCustomer(long customerId, DateTimeOffset now)
     {
         if (customerId <= 0)
         {
@@ -62,25 +64,6 @@ public sealed class CustomerAddress : Entity
         }
 
         CustomerId = customerId;
-        Touch();
-    }
-
-    public void ChangeAddress(PostalAddress address)
-    {
-        ArgumentNullException.ThrowIfNull(address);
-
-        Address = address;
-        Touch();
-    }
-
-    public void SetPrimary(bool isPrimary)
-    {
-        IsPrimary = isPrimary;
-        Touch();
-    }
-
-    private void Touch()
-    {
-        UpdatedAt = DateTimeOffset.UtcNow;
+        UpdatedAt = now;
     }
 }

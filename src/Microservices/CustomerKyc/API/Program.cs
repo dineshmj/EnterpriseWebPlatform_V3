@@ -4,6 +4,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
 using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.CustomerKyc.Api.Application.Abstractions;
+using EnterpriseWebPlatform.CustomerKyc.Api.Application.Commands.AssignKycCase;
+using EnterpriseWebPlatform.CustomerKyc.Api.Application.Commands.DecideVerificationStage;
+using EnterpriseWebPlatform.CustomerKyc.Api.Application.Commands.OpenKycCase;
+using EnterpriseWebPlatform.CustomerKyc.Api.Application.Queries;
 using EnterpriseWebPlatform.CustomerKyc.Api.Authorization;
 using EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure;
 
@@ -56,23 +61,32 @@ builder.Services.AddAuthorization(options =>
         policy.RequireClaim("department", "KYC");
     });
 
-    options.AddPolicy("KycCaseApprove", policy =>
-    {
-        policy.RequireAuthenticatedUser();
-        policy.RequireClaim("scope", "customer-kyc.write");
-        policy.AddRequirements(new KycCaseDecisionRequirement("kyc.case.approve"));
-    });
+    // Stage decisions: the decision permission AND the stage permission.
+    void AddDecisionPolicy(string name, params string[] permissions) =>
+        options.AddPolicy(name, policy =>
+        {
+            policy.RequireAuthenticatedUser();
+            policy.RequireClaim("scope", "customer-kyc.write");
+            policy.AddRequirements(new KycCaseDecisionRequirement(permissions));
+        });
 
-    options.AddPolicy("KycCaseReject", policy =>
-    {
-        policy.RequireAuthenticatedUser();
-        policy.RequireClaim("scope", "customer-kyc.write");
-        policy.AddRequirements(new KycCaseDecisionRequirement("kyc.case.reject"));
-    });
+    AddDecisionPolicy("KycIdentityApprove", "kyc.case.approve", "kyc.identity.verify");
+    AddDecisionPolicy("KycIdentityReject", "kyc.case.reject", "kyc.identity.verify");
+    AddDecisionPolicy("KycDocumentApprove", "kyc.case.approve", "kyc.document.verify");
+    AddDecisionPolicy("KycDocumentReject", "kyc.case.reject", "kyc.document.verify");
+
+    // Claiming / releasing a case changes its assignment (ReBAC relationship).
+    AddDecisionPolicy("KycCaseAssign", "kyc.case.update");
 });
 
 builder.Services.AddSingleton<IAuthorizationHandler, KycCaseDecisionAuthorizationHandler>();
-builder.Services.AddScoped<KycCaseService>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<IKycUnitOfWork>(sp => sp.GetRequiredService<KycDbContext>());
+builder.Services.AddScoped<IKycCaseRepository, KycCaseRepository>();
+builder.Services.AddScoped<IKycCaseQueries, KycCaseQueries>();
+builder.Services.AddScoped<OpenKycCaseCommandHandler>();
+builder.Services.AddScoped<DecideVerificationStageCommandHandler>();
+builder.Services.AddScoped<AssignKycCaseCommandHandler>();
 builder.Services.AddSingleton<KycKafkaProducer>();
 builder.Services.AddScoped<KycOutboxPublisher>();
 builder.Services.AddHostedService<KycOutboxPublisherHostedService>();

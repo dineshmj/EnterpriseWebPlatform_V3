@@ -129,17 +129,12 @@ CREATE TABLE role_permissions (
 );
 
 -- =========================================================
--- 9. REBAC RELATIONSHIPS
+-- 9. REBAC RELATIONSHIPS - not stored here
 -- =========================================================
-
-CREATE TABLE user_relationships (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    subject_user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    relationship_type VARCHAR(100) NOT NULL,
-    resource_type VARCHAR(100) NOT NULL,
-    resource_id VARCHAR(100) NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+-- Relationships are owned by the bounded context that owns the resource
+-- (Customer Onboarding: customers.managing_agent_user_id; Customer KYC:
+-- kyc_cases.assigned_officer_user_id) and checked there at request time.
+-- The former user_relationships table is dropped above for existing databases.
 
 -- =========================================================
 -- EXPLICIT INDEXES
@@ -209,19 +204,6 @@ CREATE INDEX ix_user_roles_role_id
 CREATE INDEX ix_role_permissions_permission_id
     ON role_permissions(permission_id);
 
-CREATE UNIQUE INDEX ux_user_relationships_subject_relationship_resource
-    ON user_relationships(
-        subject_user_id,
-        relationship_type,
-        resource_type,
-        resource_id
-    );
-
-CREATE INDEX ix_user_relationships_resource
-    ON user_relationships(resource_type, resource_id);
-
-CREATE INDEX ix_user_relationships_subject_relationship
-    ON user_relationships(subject_user_id, relationship_type);
 
 -- =========================================================
 -- 10. ROLES
@@ -621,28 +603,6 @@ JOIN permissions p ON p.code IN (
 WHERE r.code = 'platform_administrator';
 
 -- =========================================================
--- 18. ReBAC demonstration relationships
--- =========================================================
-
-INSERT INTO user_relationships
-(subject_user_id, relationship_type, resource_type, resource_id)
-SELECT
-    u.id,
-    x.relationship_type,
-    x.resource_type,
-    x.resource_id
-FROM users u
-JOIN (VALUES
-    ('sophie.cs','manages','Customer','CUST-10045'),
-    ('liam.kyc','assigned_to','KYC_Case','KYC-10045'),
-    ('olivia.compliance','assigned_to','Compliance_Case','COMP-10045'),
-    ('jack.accounts','assigned_to','Account_Application','ACCAPP-10045'),
-    ('customer.demo','owns','Account','ACC-100001'),
-    ('customer.demo','owns','Payment','PAY-100001')
-) AS x(user_name, relationship_type, resource_type, resource_id)
-ON u.user_name = x.user_name;
-
--- =========================================================
 -- 19. VERIFICATION QUERIES
 -- =========================================================
 
@@ -703,14 +663,5 @@ JOIN user_employment_profiles e ON e.user_id = u.id
 JOIN departments d ON d.id = e.department_id
 JOIN branches b ON b.id = e.branch_id
 ORDER BY u.user_name;
-
-SELECT
-    u.user_name,
-    ur.relationship_type,
-    ur.resource_type,
-    ur.resource_id
-FROM user_relationships ur
-JOIN users u ON u.id = ur.subject_user_id
-ORDER BY u.user_name, ur.resource_type, ur.resource_id;
 
 COMMIT;

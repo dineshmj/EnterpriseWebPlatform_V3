@@ -8,9 +8,11 @@ public static class PersistenceRegistration
     public static IServiceCollection AddCustomerOnboardingPersistence(
         this IServiceCollection services)
     {
+        services.AddScoped<Messaging.WorkflowContextAccessor>();
         services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<IOnboardingApplicationRepository, OnboardingApplicationRepository>();
         services.AddScoped<ICustomerNumberGenerator, CustomerNumberGenerator>();
+        services.AddScoped<IApplicationNumberGenerator, ApplicationNumberGenerator>();
 
         services.AddScoped<IApplicationUnitOfWork>(
             provider => provider.GetRequiredService<CustomerDbContext>());

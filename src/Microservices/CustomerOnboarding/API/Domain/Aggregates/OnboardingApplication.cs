@@ -6,27 +6,54 @@ using EnterpriseWebPlatform.CustomerOnboarding.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Domain.Aggregates;
 
+/// <summary>
+/// Aggregate root: one onboarding application of one customer, and the saga state
+/// of its cross-context workflow (KYC → Compliance → Account opening).
+///
+/// The customer is referenced by ID only (<see cref="CustomerId"/>): Customer is a
+/// separate aggregate, and an application must never load or change it.
+///
+/// Invariants:
+///  - Status moves only along the transition table below; terminal statuses are final.
+///  - Only a draft can be submitted; only an application awaiting a decision can be rejected.
+/// </summary>
 public sealed class OnboardingApplication : AggregateRoot
 {
+    // For EF Core materialization.
     private OnboardingApplication()
     {
-        ApplicationNumber = null!; Customer = null!;
+        ApplicationNumber = null!;
+        BranchCode = null!;
     }
 
-    private OnboardingApplication(ApplicationNumber applicationNumber, long customerId)
+    private OnboardingApplication(
+        ApplicationNumber applicationNumber,
+        long customerId,
+        BranchCode branchCode,
+        DateTimeOffset now)
     {
+        ApplicationRef = Guid.CreateVersion7(now);
         ApplicationNumber = applicationNumber;
         CustomerId = customerId;
+        BranchCode = branchCode;
         Status = OnboardingApplicationStatus.Draft;
-        CreatedAt = DateTimeOffset.UtcNow; UpdatedAt = CreatedAt; Version = 1;
+        CreatedAt = now;
+        UpdatedAt = now;
+        Version = 1;
     }
 
+    /// <summary>
+    /// The application's identity for OTHER bounded contexts: a GUID that never
+    /// repeats. <see cref="Entity.Id"/> is internal and restarts with the database.
+    /// </summary>
+    public Guid ApplicationRef { get; private set; }
+
     public ApplicationNumber ApplicationNumber { get; private set; }
+
     public long CustomerId { get; private set; }
 
-    public Customer? Customer { get; private set; }
-    // Customer is not part of the OnboardingApplication aggregate's domain state that needs to be constructed through the domain factory. CustomerId is the important domain relationship.
-    // So constructor does not have a parameter to accept a Customer.
+    /// <summary>The branch the application was opened in (ABAC resource attribute).</summary>
+    public BranchCode BranchCode { get; private set; }
 
     public OnboardingApplicationStatus Status { get; private set; }
 
@@ -40,41 +67,44 @@ public sealed class OnboardingApplication : AggregateRoot
 
     public long Version { get; private set; }
 
-    public static OnboardingApplication Create(ApplicationNumber applicationNumber, long customerId)
+    public bool IsTerminal => Status is
+        OnboardingApplicationStatus.Completed or
+        OnboardingApplicationStatus.Rejected or
+        OnboardingApplicationStatus.Cancelled or
+        OnboardingApplicationStatus.CompensationFailed;
+
+    public static OnboardingApplication Create(
+        ApplicationNumber applicationNumber,
+        long customerId,
+        BranchCode branchCode,
+        DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(applicationNumber);
+        ArgumentNullException.ThrowIfNull(branchCode);
         if (customerId <= 0) throw new DomainRuleViolationException("A valid customer is required.");
-        return new OnboardingApplication(applicationNumber, customerId);
+        return new OnboardingApplication(applicationNumber, customerId, branchCode, now);
     }
 
-    public void Submit()
+    public void Submit(DateTimeOffset now)
     {
         EnsureStatus(OnboardingApplicationStatus.Draft);
-        var previous = Status;
-        Status = OnboardingApplicationStatus.Submitted;
-        SubmittedAt = DateTimeOffset.UtcNow;
-        Touch();
+        SubmittedAt = now;
         RaiseDomainEvent(new OnboardingApplicationSubmittedDomainEvent(
-            Id, CustomerId, ApplicationNumber.Value, UpdatedAt));
-        RaiseDomainEvent(new OnboardingApplicationStatusChangedDomainEvent(
-            Id, CustomerId, previous, Status, UpdatedAt));
+            Id, ApplicationRef, CustomerId, ApplicationNumber.Value, BranchCode.Value, now));
+        SetStatus(OnboardingApplicationStatus.Submitted, now);
     }
 
-    public void StartKyc() => TransitionTo(OnboardingApplicationStatus.KycInProgress);
-    public void CompleteKyc() => TransitionTo(OnboardingApplicationStatus.KycCompleted);
-    public void StartCompliance() => TransitionTo(OnboardingApplicationStatus.ComplianceInProgress);
-    public void CompleteCompliance() => TransitionTo(OnboardingApplicationStatus.ComplianceCompleted);
-    public void StartAccountOpening() => TransitionTo(OnboardingApplicationStatus.AccountOpeningInProgress);
+    public void StartKyc(DateTimeOffset now) => TransitionTo(OnboardingApplicationStatus.KycInProgress, now);
+    public void CompleteKyc(DateTimeOffset now) => TransitionTo(OnboardingApplicationStatus.KycCompleted, now);
+    public void StartCompliance(DateTimeOffset now) => TransitionTo(OnboardingApplicationStatus.ComplianceInProgress, now);
+    public void CompleteCompliance(DateTimeOffset now) => TransitionTo(OnboardingApplicationStatus.ComplianceCompleted, now);
+    public void StartAccountOpening(DateTimeOffset now) => TransitionTo(OnboardingApplicationStatus.AccountOpeningInProgress, now);
 
-    public void Complete()
+    public void Complete(DateTimeOffset now)
     {
         EnsureStatus(OnboardingApplicationStatus.AccountOpeningInProgress);
-        var previous = Status;
-        Status = OnboardingApplicationStatus.Completed;
-        CompletedAt = DateTimeOffset.UtcNow;
-        Touch();
-        RaiseDomainEvent(new OnboardingApplicationStatusChangedDomainEvent(
-            Id, CustomerId, previous, Status, UpdatedAt));
+        CompletedAt = now;
+        SetStatus(OnboardingApplicationStatus.Completed, now);
     }
 
     // ------------------------------------------------------------------
@@ -89,88 +119,100 @@ public sealed class OnboardingApplication : AggregateRoot
     // ------------------------------------------------------------------
 
     /// <summary>KYC opened a case for this application: SUBMITTED → KYC_IN_PROGRESS.</summary>
-    public bool RecordKycCaseOpened()
+    public bool RecordKycCaseOpened(DateTimeOffset now)
     {
         if (Status != OnboardingApplicationStatus.Submitted)
             return false;
 
-        StartKyc();
+        StartKyc(now);
         return true;
     }
 
     /// <summary>KYC approved: (SUBMITTED →) KYC_IN_PROGRESS → KYC_COMPLETED.</summary>
-    public bool RecordKycApproved()
+    public bool RecordKycApproved(DateTimeOffset now)
     {
-        var changed = RecordKycCaseOpened();
+        var changed = RecordKycCaseOpened(now);
 
         if (Status != OnboardingApplicationStatus.KycInProgress)
             return changed;
 
-        CompleteKyc();
+        CompleteKyc(now);
         return true;
     }
 
     /// <summary>KYC rejected: SUBMITTED / KYC_IN_PROGRESS → REJECTED (terminal).</summary>
-    public bool RecordKycRejected()
+    public bool RecordKycRejected(DateTimeOffset now)
     {
         if (Status is not (OnboardingApplicationStatus.Submitted or OnboardingApplicationStatus.KycInProgress))
             return false;
 
-        Reject();
+        Reject(now);
         return true;
     }
 
-    public void Reject() => SetTerminalStatus(OnboardingApplicationStatus.Rejected);
-    public void Cancel() => SetTerminalStatus(OnboardingApplicationStatus.Cancelled);
-
-    public void StartCompensation()
+    /// <summary>
+    /// A verifying context rejected the application. Only possible while a decision
+    /// is pending (submitted, in KYC or in compliance) - never from a draft.
+    /// </summary>
+    public void Reject(DateTimeOffset now)
     {
-        EnsureNotTerminal();
-        SetStatus(OnboardingApplicationStatus.Compensating);
+        if (Status is not (OnboardingApplicationStatus.Submitted or
+                           OnboardingApplicationStatus.KycInProgress or
+                           OnboardingApplicationStatus.ComplianceInProgress))
+        {
+            throw new DomainRuleViolationException(
+                $"An application can only be rejected while a decision is pending, not in status '{Status.ToCode()}'.");
+        }
+
+        SetStatus(OnboardingApplicationStatus.Rejected, now);
     }
 
-    public void MarkCompensationFailed()
+    public void Cancel(DateTimeOffset now)
+    {
+        EnsureNotTerminal();
+        SetStatus(OnboardingApplicationStatus.Cancelled, now);
+    }
+
+    public void StartCompensation(DateTimeOffset now)
+    {
+        EnsureNotTerminal();
+        SetStatus(OnboardingApplicationStatus.Compensating, now);
+    }
+
+    public void MarkCompensationFailed(DateTimeOffset now)
     {
         EnsureStatus(OnboardingApplicationStatus.Compensating);
-        SetStatus(OnboardingApplicationStatus.CompensationFailed);
+        SetStatus(OnboardingApplicationStatus.CompensationFailed, now);
     }
 
-    private void TransitionTo(OnboardingApplicationStatus target)
+    private void TransitionTo(OnboardingApplicationStatus target, DateTimeOffset now)
     {
         if (!IsValidTransition(Status, target))
-            throw new DomainRuleViolationException($"Invalid onboarding application transition: {Status} -> {target}.");
-        SetStatus(target);
+            throw new DomainRuleViolationException(
+                $"Invalid onboarding application transition: {Status.ToCode()} -> {target.ToCode()}.");
+        SetStatus(target, now);
     }
 
-    private void SetTerminalStatus(OnboardingApplicationStatus target)
-    {
-        EnsureNotTerminal();
-        SetStatus(target);
-    }
-
-    private void SetStatus(OnboardingApplicationStatus target)
+    private void SetStatus(OnboardingApplicationStatus target, DateTimeOffset now)
     {
         var previous = Status;
         Status = target;
-        Touch();
+        Touch(now);
         RaiseDomainEvent(new OnboardingApplicationStatusChangedDomainEvent(
-            Id, CustomerId, previous, Status, UpdatedAt));
+            Id, ApplicationRef, CustomerId, previous, Status, now));
     }
 
     private void EnsureStatus(OnboardingApplicationStatus expected)
     {
         if (Status != expected)
             throw new DomainRuleViolationException(
-                $"Operation requires status '{expected}', but current status is '{Status}'.");
+                $"Operation requires status '{expected.ToCode()}', but current status is '{Status.ToCode()}'.");
     }
 
     private void EnsureNotTerminal()
     {
-        if (Status is OnboardingApplicationStatus.Completed or
-            OnboardingApplicationStatus.Rejected or
-            OnboardingApplicationStatus.Cancelled or
-            OnboardingApplicationStatus.CompensationFailed)
-            throw new DomainRuleViolationException($"Operation is not valid for terminal status '{Status}'.");
+        if (IsTerminal)
+            throw new DomainRuleViolationException($"Operation is not valid for terminal status '{Status.ToCode()}'.");
     }
 
     private static bool IsValidTransition(OnboardingApplicationStatus current, OnboardingApplicationStatus target) =>
@@ -184,5 +226,9 @@ public sealed class OnboardingApplication : AggregateRoot
             _ => false
         };
 
-    private void Touch() { UpdatedAt = DateTimeOffset.UtcNow; Version++; }
+    private void Touch(DateTimeOffset now)
+    {
+        UpdatedAt = now;
+        Version++;
+    }
 }

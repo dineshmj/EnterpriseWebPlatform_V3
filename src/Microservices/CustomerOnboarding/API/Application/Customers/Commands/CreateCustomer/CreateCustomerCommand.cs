@@ -8,6 +8,7 @@ namespace EnterpriseWebPlatform.CustomerOnboarding.Application.Customers.Command
 /// The customer's own OIDC SubjectId and the BranchId are deliberately not part
 /// of this command: neither may be supplied by the calling staff user. The
 /// SubjectId is linked later by an explicit identity-association step.
+/// ManagingAgentUserId is the acting agent (token subject), set by the API layer.
 /// </summary>
 public sealed record CreateCustomerCommand(
     string FirstName,
@@ -15,7 +16,8 @@ public sealed record CreateCustomerCommand(
     string Email,
     string PhoneNumber,
     CustomerType CustomerType,
-    ResidentialAddress ResidentialAddress);
+    ResidentialAddress ResidentialAddress,
+    string ManagingAgentUserId);
 
 public sealed record ResidentialAddress(
     string AddressLine1,

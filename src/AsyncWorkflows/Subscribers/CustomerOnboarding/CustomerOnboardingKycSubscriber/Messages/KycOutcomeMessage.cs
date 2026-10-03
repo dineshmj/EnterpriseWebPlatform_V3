@@ -9,7 +9,7 @@ public sealed record KycOutcomeMessage(
     Guid MessageId,
     string EventType,
     long KycCaseId,
-    long ApplicationId,
+    Guid ApplicationRef,
     string? ApplicationNumber,
     Guid? WorkflowId,
     Guid? CorrelationId,

@@ -78,7 +78,7 @@ public sealed class CustomerAddressConfiguration : IEntityTypeConfiguration<Cust
                     .IsRequired();
             });
 
-        builder.HasOne(x => x.Customer)
+        builder.HasOne<Domain.Aggregates.Customer>()
             .WithMany(x => x.Addresses)
             .HasForeignKey(x => x.CustomerId)
             .OnDelete(DeleteBehavior.Cascade);

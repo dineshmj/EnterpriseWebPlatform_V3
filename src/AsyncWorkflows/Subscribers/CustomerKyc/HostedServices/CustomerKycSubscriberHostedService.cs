@@ -59,12 +59,13 @@ public sealed class CustomerKycSubscriberHostedService(
                 $"Unexpected event type '{message.EventType}' on topic '{_options.Topic}'.");
         }
 
-        if (message.ApplicationId <= 0 ||
+        if (message.ApplicationRef == Guid.Empty ||
             string.IsNullOrWhiteSpace(message.ApplicationNumber) ||
-            string.IsNullOrWhiteSpace(message.CustomerNumber))
+            string.IsNullOrWhiteSpace(message.CustomerNumber) ||
+            string.IsNullOrWhiteSpace(message.BranchCode))
         {
             throw new InvalidOperationException(
-                "OnboardingApplicationSubmitted event did not contain ApplicationId, ApplicationNumber and CustomerNumber.");
+                "OnboardingApplicationSubmitted event did not contain ApplicationRef, ApplicationNumber, CustomerNumber and BranchCode.");
         }
 
         if (string.IsNullOrWhiteSpace(message.InitiatedByUserId))
@@ -132,9 +133,10 @@ public sealed class CustomerKycSubscriberHostedService(
             envelope.MessageId,
             envelope.EventType,
             envelope.OccurredAt,
-            application.ApplicationId,
+            application.ApplicationRef,
             application.ApplicationNumber,
             application.CustomerNumber,
+            application.BranchCode ?? string.Empty,
             envelope.InitiatedByUserId,
             envelope.WorkflowId,
             envelope.CorrelationId,
@@ -160,10 +162,11 @@ public sealed class CustomerKycSubscriberHostedService(
         ApplicationSubmittedPayload? Payload);
 
     private sealed record ApplicationSubmittedPayload(
-        long ApplicationId,
+        Guid ApplicationRef,
         long CustomerId,
         string ApplicationNumber,
-        string CustomerNumber);
+        string CustomerNumber,
+        string? BranchCode);
 
     public override Task StopAsync(CancellationToken cancellationToken)
     {

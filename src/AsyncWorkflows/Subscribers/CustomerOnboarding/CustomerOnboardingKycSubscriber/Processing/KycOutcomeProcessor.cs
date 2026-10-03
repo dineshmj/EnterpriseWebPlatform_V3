@@ -68,19 +68,19 @@ public sealed class KycOutcomeProcessor(
         if (!SupportedEventTypes.Contains(message.EventType ?? string.Empty))
             return ProcessingOutcome.ToDeadLetter($"Unsupported event type '{message.EventType}'.");
 
-        if (message.ApplicationId <= 0 || string.IsNullOrWhiteSpace(message.ApplicationNumber))
+        if (message.ApplicationRef == Guid.Empty || string.IsNullOrWhiteSpace(message.ApplicationNumber))
         {
-            // e.g. events produced before KYC cases were linked to applications.
-            return ProcessingOutcome.ToDeadLetter("Event does not identify an onboarding application (ApplicationId / ApplicationNumber missing).");
+            // e.g. events produced before applications were referenced by ApplicationRef.
+            return ProcessingOutcome.ToDeadLetter("Event does not identify an onboarding application (ApplicationRef / ApplicationNumber missing).");
         }
 
         // DEBUG POINT #1: a valid KYC outcome, about to be recorded on the application.
         logger.LogInformation(
-            "Received {EventType} MessageId={MessageId} KycCaseId={KycCaseId} ApplicationId={ApplicationId} ({ApplicationNumber}) WorkflowId={WorkflowId}.",
+            "Received {EventType} MessageId={MessageId} KycCaseId={KycCaseId} ApplicationRef={ApplicationRef} ({ApplicationNumber}) WorkflowId={WorkflowId}.",
             message.EventType,
             message.MessageId,
             message.KycCaseId,
-            message.ApplicationId,
+            message.ApplicationRef,
             message.ApplicationNumber,
             message.WorkflowId);
 
@@ -112,10 +112,10 @@ public sealed class KycOutcomeProcessor(
             if (response.IsSuccessStatusCode)
             {
                 logger.LogInformation(
-                    "Recorded {EventType} MessageId={MessageId} on application {ApplicationId}: {Response}",
+                    "Recorded {EventType} MessageId={MessageId} on application {ApplicationRef}: {Response}",
                     message.EventType,
                     message.MessageId,
-                    message.ApplicationId,
+                    message.ApplicationRef,
                     body);
                 return ProcessingOutcome.Processed;
             }
@@ -137,10 +137,10 @@ public sealed class KycOutcomeProcessor(
 
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            $"/internal/v1/onboarding/applications/{message.ApplicationId}/kyc-outcomes")
+            $"/internal/v1/onboarding/applications/{message.ApplicationRef}/kyc-outcomes")
         {
-            // ApplicationNumber lets the API reject a fact whose ApplicationId now
-            // belongs to a different application (ids are reused when a DB is recreated).
+            // ApplicationNumber lets the API reject a fact whose reference now
+            // belongs to a different application (a consistency check).
             Content = JsonContent.Create(new
             {
                 messageId = message.MessageId,

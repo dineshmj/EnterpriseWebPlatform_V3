@@ -8,7 +8,7 @@ Kafka subscriber **owned by the Customer KYC bounded context**: it is deployed a
 Kafka onboarding.application.submitted
         |
         v
-Deserialize / validate event (ApplicationId, ApplicationNumber, CustomerNumber)
+Deserialize / validate event (ApplicationRef, ApplicationNumber, CustomerNumber, BranchCode)
         |
         v
 Acquire M2M access token

@@ -24,6 +24,7 @@ Status values (Present, In Progress, Planned, Target) are defined in the [Bluepr
 | Kafka key | The aggregate ID. This guarantees ordering per aggregate within a partition. |
 | Publication order | Each Outbox has a database-assigned `sequence` (insertion order). Events raised together are inserted cause-first, and the relay publishes an aggregate's events strictly by `sequence` (never by `occurred_at`, which can tie). |
 | Message identity | The Outbox row ID equals the event's `MessageId`, so a row, its Kafka message and any `CausationId` pointing at it share one identifier. |
+| Cross-context references | Another context's resource is referenced by a **never-repeating GUID** (e.g. `ApplicationRef`, UUID v7) or a business number, never by its database ID: database IDs restart when a database is recreated, which would make old events match new records. Database IDs may appear in a producer's own events as information only. |
 | Enumerations | Serialized as stable upper-case codes (e.g. `IDENTITY_VERIFICATION`), never as numeric ordinals. |
 | Delivery | At-least-once. Every consumer must be idempotent on `MessageId`. |
 | Producer path | Business transaction → Outbox row (same DB transaction) → relay → Kafka. Producers never publish directly from a request. |
@@ -80,8 +81,8 @@ Workflow identifiers currently travel only in the message body, not in Kafka hea
 | Event type | Topic | Key | Payload | Consumers | Status |
 |---|---|---|---|---|---|
 | `CustomerCreated` | `customer.created` | Customer ID | `CustomerId`, `CustomerNumber`, `SubjectId`, `CustomerType`, `Status` | — | Published; no consumer |
-| `OnboardingApplicationSubmitted` | `onboarding.application.submitted` | Application ID | `ApplicationId`, `CustomerId`, `ApplicationNumber`, `CustomerNumber` | `CustomerKycSubscriber` → Customer KYC opens one case per application | Present |
-| `OnboardingApplicationStatusChanged` | `onboarding.application.status.changed` | Application ID | `ApplicationId`, `CustomerId`, `PreviousStatus`, `NewStatus` | Notifications (planned) | Published; no consumer yet |
+| `OnboardingApplicationSubmitted` | `onboarding.application.submitted` | Application ID | `ApplicationRef`, `ApplicationNumber`, `CustomerNumber`, `BranchCode` (branch the application was opened in), plus `ApplicationId` / `CustomerId` (information only) | `CustomerKycSubscriber` → Customer KYC opens one case per `ApplicationRef` | Present |
+| `OnboardingApplicationStatusChanged` | `onboarding.application.status.changed` | Application ID | `ApplicationRef`, `PreviousStatus`, `NewStatus`, plus `ApplicationId` / `CustomerId` | Notifications (planned) | Published; no consumer yet |
 
 ### 4.2 Customer KYC (producer: Customer KYC API, in-process Outbox relay)
 
@@ -95,7 +96,7 @@ Workflow identifiers currently travel only in the message body, not in Kafka hea
 | `KycCaseApproved` | `kyc.case.approved` | KYC case ID | `CustomerOnboardingKycSubscriber` (application → KYC_COMPLETED); Compliance (planned) | Present |
 | `KycCaseRejected` | `kyc.case.rejected` | KYC case ID | `CustomerOnboardingKycSubscriber` (application → REJECTED) | Present |
 
-All KYC payloads carry `KycCaseId`, `ApplicationId`, `ApplicationNumber` and `CustomerNumber`, plus the status fields (`Status`, or `PreviousStatus`/`NewStatus`, or the `Stage` with `PreviousStageStatus`/`NewStageStatus`) and the decision fields (`DecisionByUserId`, `DecisionAt`, remarks).
+All KYC payloads carry `KycCaseId`, `ApplicationRef`, `ApplicationNumber` and `CustomerNumber` (`KycCaseCreated` also carries `BranchCode`); Customer Onboarding routes the outcomes by `ApplicationRef`. They also carry the status fields (`Status`, or `PreviousStatus`/`NewStatus`, or the `Stage` with `PreviousStageStatus`/`NewStageStatus`) and the decision fields (`DecisionByUserId`, `DecisionAt`, remarks).
 
 **Cross-topic ordering.** Kafka orders messages only within one partition of one topic. `kyc.case.created` and `kyc.case.approved` are different topics, so a consumer may see the approval first. Consumers must tolerate this; Customer Onboarding's aggregate applies the outstanding transitions and ignores facts it is already beyond.
 

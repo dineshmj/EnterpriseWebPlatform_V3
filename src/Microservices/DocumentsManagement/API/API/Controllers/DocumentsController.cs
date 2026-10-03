@@ -82,7 +82,7 @@ public sealed class DocumentsController(
         return File(
             stream,
             document.ContentType,
-            document.FileName,
+            document.FileName.Value,
             lastModified: document.UpdatedAt,
             entityTag: null,
             enableRangeProcessing: true);

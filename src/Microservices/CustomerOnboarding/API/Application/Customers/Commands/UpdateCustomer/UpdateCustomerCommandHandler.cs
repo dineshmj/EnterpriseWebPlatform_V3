@@ -9,12 +9,16 @@ public sealed class UpdateCustomerCommandHandler
 
     private readonly IApplicationUnitOfWork _unitOfWork;
 
+    private readonly TimeProvider _clock;
+
     public UpdateCustomerCommandHandler(
         ICustomerRepository customerRepository,
-        IApplicationUnitOfWork unitOfWork)
+        IApplicationUnitOfWork unitOfWork,
+        TimeProvider clock)
     {
         _customerRepository = customerRepository;
         _unitOfWork = unitOfWork;
+        _clock = clock;
     }
 
     public async Task HandleAsync(
@@ -37,11 +41,14 @@ public sealed class UpdateCustomerCommandHandler
                 "The customer was modified by another request.");
         }
 
+        var now = _clock.GetUtcNow();
+
         customer.ChangeContactDetails(
             EmailAddress.Create(command.Email),
-            PhoneNumber.Create(command.PhoneNumber));
+            PhoneNumber.Create(command.PhoneNumber),
+            now);
 
-        customer.UpdateName(command.FirstName, command.LastName);
+        customer.Rename(PersonName.Create(command.FirstName, command.LastName), now);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }

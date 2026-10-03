@@ -5,6 +5,9 @@ public static class DependencyInjection
     public static IServiceCollection AddCustomerOnboardingApplication(
         this IServiceCollection services)
     {
+        // The domain never reads the system clock itself; handlers pass "now" in.
+        services.AddSingleton(TimeProvider.System);
+
         services.AddScoped<
             Customers.Commands.CreateCustomer.CreateCustomerCommandHandler>();
 

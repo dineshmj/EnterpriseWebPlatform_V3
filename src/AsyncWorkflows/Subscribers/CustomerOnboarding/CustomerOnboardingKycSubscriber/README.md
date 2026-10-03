@@ -33,7 +33,7 @@ The worker holds no business rules. Customer Onboarding's `OnboardingApplication
 | Several instances running | They share one consumer group. Kafka assigns each partition to one instance, so no two process the same message at the same time. Extra instances are hot standbys while topics have 1 partition. |
 | Redelivery (crash before commit, rebalance) | Harmless: the CO API's Inbox (`inbox_messages`, unique `(message_id, consumer)`) records each KYC `MessageId` in the same transaction as its effect. A repeat returns `Duplicate`. |
 | CO API / IDP unavailable, 5xx, timeout, open circuit | **Transient.** The message is retried in place (the consumer seeks back to it) with back-off of 2 s up to 60 s. It is never skipped, and partition order is kept. |
-| Malformed JSON, unknown event type, no `ApplicationId` / `ApplicationNumber`, 4xx (e.g. unknown application, or **409** when the application with that id has a different number — a stale event from before a database was recreated) | **Permanent.** The message is copied to the dead-letter topic with `dlq-*` headers (reason, original topic/partition/offset, consumer group, time), then committed. The worker keeps running. |
+| Malformed JSON, unknown event type, no `ApplicationRef` / `ApplicationNumber`, 4xx (e.g. 404 unknown application — such as an event from before a database was recreated — or 409 when the referenced application has a different number) | **Permanent.** The message is copied to the dead-letter topic with `dlq-*` headers (reason, original topic/partition/offset, consumer group, time), then committed. The worker keeps running. |
 
 ## Configuration
 

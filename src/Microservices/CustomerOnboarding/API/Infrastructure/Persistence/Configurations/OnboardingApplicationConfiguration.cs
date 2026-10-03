@@ -33,8 +33,25 @@ public sealed class OnboardingApplicationConfiguration
             .IsUnique()
             .HasDatabaseName("uq_onboarding_applications_application_number");
 
+        builder.Property(x => x.ApplicationRef)
+            .HasColumnName("application_ref")
+            .HasColumnType("uuid")
+            .IsRequired();
+
+        builder.HasIndex(x => x.ApplicationRef)
+            .IsUnique()
+            .HasDatabaseName("uq_onboarding_applications_application_ref");
+
         builder.Property(x => x.CustomerId)
             .HasColumnName("customer_id")
+            .IsRequired();
+
+        builder.Property(x => x.BranchCode)
+            .HasColumnName("branch_code")
+            .HasConversion(
+                value => value.Value,
+                value => BranchCode.Create(value))
+            .HasMaxLength(BranchCode.MaxLength)
             .IsRequired();
 
         builder.Property(x => x.Status)
@@ -68,7 +85,9 @@ public sealed class OnboardingApplicationConfiguration
             .IsConcurrencyToken()
             .IsRequired();
 
-        builder.HasOne(x => x.Customer)
+        // Foreign key only: the application references the Customer aggregate by ID
+        // and has no navigation to it (aggregates never hold each other).
+        builder.HasOne<Customer>()
             .WithMany()
             .HasForeignKey(x => x.CustomerId)
             .HasConstraintName("fk_onboarding_applications_customer")

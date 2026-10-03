@@ -40,15 +40,20 @@ public sealed class CustomerConfiguration : IEntityTypeConfiguration<Customer>
             .IsUnique()
             .HasDatabaseName("uq_customers_subject_id");
 
-        builder.Property(x => x.FirstName)
-            .HasColumnName("first_name")
-            .HasMaxLength(100)
-            .IsRequired();
+        builder.ComplexProperty(
+            x => x.Name,
+            name =>
+            {
+                name.Property(x => x.FirstName)
+                    .HasColumnName("first_name")
+                    .HasMaxLength(PersonName.MaxPartLength)
+                    .IsRequired();
 
-        builder.Property(x => x.LastName)
-            .HasColumnName("last_name")
-            .HasMaxLength(100)
-            .IsRequired();
+                name.Property(x => x.LastName)
+                    .HasColumnName("last_name")
+                    .HasMaxLength(PersonName.MaxPartLength)
+                    .IsRequired();
+            });
 
         builder.Property(x => x.Email)
             .HasColumnName("email")
@@ -84,6 +89,11 @@ public sealed class CustomerConfiguration : IEntityTypeConfiguration<Customer>
 
         builder.Property(x => x.BranchId)
             .HasColumnName("branch_id");
+
+        builder.Property(x => x.ManagingAgentUserId)
+            .HasColumnName("managing_agent_user_id")
+            .HasMaxLength(200)
+            .IsRequired();
 
         builder.Property(x => x.CreatedAt)
             .HasColumnName("created_at")

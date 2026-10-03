@@ -14,10 +14,10 @@ public sealed class GetDocumentQueryHandler(IDocumentRepository repository)
 
         return new DocumentDetailsDto(
             document.Id,
-            document.FileName,
+            document.FileName.Value,
             document.ContentType,
             document.Size,
-            document.ContentHash,
+            document.ContentHash.Value,
             document.CreatedAt,
             document.UpdatedAt,
             document.Version);

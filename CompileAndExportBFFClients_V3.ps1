@@ -3,7 +3,9 @@ cls
 $ErrorActionPreference = "Stop"
 
 # In Windows PowerShell / PowerShell ISE, invoking `pnpm` can resolve to pnpm.ps1.
-# Use pnpm.cmd explicitly.
+# Use pnpm.cmd explicitly. PowerShell ISE may also surface native stderr as a
+# NativeCommandError even when the process is successful, so Invoke-Pnpm temporarily
+# uses Continue while invoking PNPM and determines success from $LASTEXITCODE.
 $PnpmCommand = "pnpm.cmd"
 
 function Invoke-Pnpm {
@@ -30,18 +32,23 @@ function Invoke-Pnpm {
 
     Push-Location -LiteralPath $Directory
     try {
-        # pnpm echoes every script line ("$ next build", "$ nest build") to stderr,
-        # and Next.js/NestJS write progress there too. Windows PowerShell 5.1 wraps
-        # each stderr line of a directly invoked native command in a red
-        # NativeCommandError record, although nothing failed.
+        # PowerShell ISE can convert native-process stderr into a NativeCommandError
+        # even when the native process is not actually failing. Next.js/PNPM can
+        # write diagnostic/progress output to stderr, so do not let the global
+        # $ErrorActionPreference = "Stop" abort the script on that stream.
         #
-        # Running pnpm through cmd.exe with "2>&1" merges stderr into stdout at the
-        # OS level, so PowerShell only ever sees ordinary output. Success/failure
-        # is decided exclusively by the exit code, which cmd.exe passes through.
-        $commandLine = "$PnpmCommand $($Arguments -join ' ') 2>&1"
+        # We determine success/failure exclusively from the native process exit
+        # code ($LASTEXITCODE).
+        $previousErrorActionPreference = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
 
-        & cmd.exe /d /c $commandLine
-        $pnpmExitCode = $LASTEXITCODE
+        try {
+            & $PnpmCommand @Arguments
+            $pnpmExitCode = $LASTEXITCODE
+        }
+        finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+        }
 
         if ($pnpmExitCode -ne 0) {
             throw "pnpm command failed with exit code $pnpmExitCode in '$Directory'."
@@ -64,6 +71,18 @@ function Install-Dependencies {
         -Description "Installing PNPM dependencies..."
 }
 
+function Build-NextJS-SPA {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Directory
+    )
+
+    Invoke-Pnpm `
+        -Directory $Directory `
+        -Arguments @("run", "build") `
+        -Description "Building Next.js SPA..."
+}
+
 function Export-NextJS-SPA {
     param(
         [Parameter(Mandatory = $true)]
@@ -83,9 +102,7 @@ function Build-NextJS-Client {
     )
 
     Install-Dependencies -Directory $Directory
-
-    # Each client's "export" script runs "next build" itself before copying the
-    # static output to its BFF, so a separate build step would build twice.
+    Build-NextJS-SPA -Directory $Directory
     Export-NextJS-SPA -Directory $Directory
 
     Write-Host "`r`nNext.js client build/export complete: $Directory`r`n" -ForegroundColor Green
@@ -224,7 +241,7 @@ Build-NestJS-BFF -Directory $kycBffFolder
 # ----------------------------------------------------------------------------------------------------------------------
 
 Write-Host "`r`n==================================================================================================================" -ForegroundColor Green
-Write-Host "==  EWP V3 client/BFF compilation and export completed successfully.                                             ==" -ForegroundColor Green
+Write-Host "==  EWP V3 client/BFF compilation and export completed successfully.                                            ==" -ForegroundColor Green
 Write-Host "==================================================================================================================" -ForegroundColor Green
 Write-Host "`r`nBuilt/exported:" -ForegroundColor Green
 Write-Host "  1. Shell Next.js client"

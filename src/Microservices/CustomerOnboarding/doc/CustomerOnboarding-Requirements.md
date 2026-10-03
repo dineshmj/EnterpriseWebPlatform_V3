@@ -17,7 +17,7 @@ Customer Onboarding owns the **customer** and the **onboarding application** —
 | Customer profile, contact details, addresses, customer lifecycle status | KYC verification results (Customer KYC) |
 | Onboarding applications and their workflow status | Compliance / AML decisions (Compliance) |
 | Initiation of the onboarding workflow (`WorkflowId`, `CorrelationId`, initiator) | Document content and storage (Documents Management) |
-| Customer–agent relationships (target ReBAC data) | Accounts (Accounts) |
+| Customer–agent relationship (ReBAC `manages`: the managing agent) | Accounts (Accounts) |
 
 ### Deployable components
 
@@ -71,8 +71,9 @@ API scopes: `customer-onboarding.read`, `customer-onboarding.write`.
 
 **`OnboardingApplication`** (aggregate root)
 
-- Identity: database ID plus `ApplicationNumber` (value object, at most 30 characters).
+- Identity: an internal database ID; `ApplicationRef` (UUID v7, the identity **other contexts** use: it never repeats, even when the database is recreated); and `ApplicationNumber` (value object, issued by this context as `APP-yyyyMMdd-nnnnnn` from a database sequence).
 - References its customer **by ID only** (`CustomerId`). The customer is not part of the application aggregate.
+- `BranchCode`: the branch the application was opened in (the acting agent's `branch` claim). Published so that KYC can scope its work queue.
 - Attributes: `OnboardingApplicationStatus`, `SubmittedAt`, `CompletedAt`, `Version` (optimistic concurrency).
 - Raises: `OnboardingApplicationSubmitted`, `OnboardingApplicationStatusChanged`.
 - Reacts to KYC facts through `RecordKycCaseOpened`, `RecordKycApproved` and `RecordKycRejected`. These are tolerant of repeated and out-of-order facts: they apply only the transitions still outstanding, and report whether anything changed.
@@ -172,11 +173,12 @@ Event contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Ev
 
 | Operation | Rule |
 |---|---|
-| View or update a customer or application | Permission **and** organizational scope **or** (target) `manages` relationship. **Branch scope:** a Customer Service Agent sees customers whose primary residential address is in the agent's branch city and country (`branch_city` / `branch_country_code` claims). Operations administrators, platform administrators and auditors read globally. Anyone else, or an agent without branch location claims, sees nothing. |
-| Create a customer | `customer_service_agent` + write scope + the residential address is within the agent's branch scope (otherwise 403) |
+| View a customer or application | Permission **and** branch scope (ABAC). A Customer Service Agent sees customers whose primary residential address is in the agent's branch city and country (`branch_city` / `branch_country_code` claims). Operations administrators, platform administrators and auditors read globally. Anyone else, or an agent without branch location claims, sees nothing (404). |
+| Update a customer; open or submit its application | Branch scope **and** ReBAC `manages`: only the customer's managing agent (`customers.managing_agent_user_id`). Another agent of the same branch gets 403; another branch gets 404. |
+| Create a customer | `customer_service_agent` + write scope + the residential address is within the agent's branch scope (otherwise 403). The creating agent becomes the managing agent. |
 | Submit | `customer.onboarding.submit` + application in DRAFT + version match |
 | Customer self-service | `_own` permissions + the customer `owns` the application |
-| Workflow-driven transitions (§5.3) | Only through `POST /internal/v1/onboarding/applications/{id}/kyc-outcomes`, pinned to the `CustomerOnboarding.KycSubscriber.To.CustomerOnboardingApi.M2M.ClientID` client with `customer-onboarding.write`; never via user endpoints. That client alone may state the human initiator (`X-Initiated-By-User-Id`), so the resulting events keep the original initiator for attribution. |
+| Workflow-driven transitions (§5.3) | Only through `POST /internal/v1/onboarding/applications/{applicationRef}/kyc-outcomes` (the application addressed by its GUID; the application number must match), pinned to the `CustomerOnboarding.KycSubscriber.To.CustomerOnboardingApi.M2M.ClientID` client with `customer-onboarding.write`; never via user endpoints. That client alone may state the human initiator (`X-Initiated-By-User-Id`), so the resulting events keep the original initiator for attribution. |
 
 ---
 
@@ -204,12 +206,14 @@ Event contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Ev
 | API scope enforced per operation | Present (read policies require `customer-onboarding.read`, write policies `customer-onboarding.write`) |
 | Role-based endpoint policies | Present |
 | Branch-scoped object-level authorization | Present (`CustomerResourceAuthorization` + `CustomerAccessScope`): applied to single reads, lists (filtered in the database), updates, application creation and submission; out-of-scope resources return 404 |
-| `manages` relationship check | Planned |
+| `manages` relationship check | Present (managing agent stored on the customer; enforced on update, application creation and submission) |
+| Managing-agent reassignment (agent leaves, workload balancing) | Planned |
 | Operations and platform administrators excluded from business writes | Present (writes require `customer_service_agent`) |
 | `SubjectId` / `BranchId` protected from caller input | Present (no longer accepted by `CreateCustomerRequest`) |
 | Primary residential address captured at creation | Present (required for new customers; drives branch scope) |
-| Application number generation | Interim: the BFF generates it from a timestamp and a random suffix. The target is generation inside the CO domain. |
-| Workflow headers read by `CustomerDbContext` | Interim: the infrastructure layer reads HTTP headers. The target is for the application layer to pass a workflow context. |
+| Application number generation | Present: issued by the CO API (`application_number_seq`); callers cannot supply it |
+| Cross-context identity | Present: `ApplicationRef` (GUID) on every application event; KYC outcomes are routed by it |
+| Workflow headers | Read by `WorkflowContextAccessor` (infrastructure), not by the DbContext or the domain |
 
 ---
 
@@ -220,5 +224,6 @@ Event contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Ev
 - Submitting an application that is not in DRAFT is rejected.
 - A token holding only `customer-onboarding.read` cannot create or submit.
 - An agent from another branch cannot read or update the customer.
+- Another agent of the same branch can read the customer but cannot update it or open / submit its application (403).
 - `operations_administrator` and `platform_administrator` cannot create or update customers.
 - An `auditor` can read history but receives 403 on any write.

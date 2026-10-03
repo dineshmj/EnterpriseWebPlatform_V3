@@ -82,6 +82,13 @@ public sealed class CustomersController : ControllerBase
         [FromBody] CreateCustomerRequest request,
         CancellationToken cancellationToken)
     {
+        // ReBAC: the creating agent becomes the customer's managing agent.
+        var managingAgent = CustomerResourceAuthorization.GetActingUserId(User);
+        if (managingAgent is null)
+        {
+            return Forbid();
+        }
+
         var address = request.ResidentialAddress!;
 
         // An agent may only create customers within their own branch scope;
@@ -106,7 +113,8 @@ public sealed class CustomersController : ControllerBase
                 address.City,
                 address.State,
                 address.PostalCode,
-                address.CountryCode));
+                address.CountryCode),
+            managingAgent);
 
         var result = await _createCustomerHandler.HandleAsync(
             command,
@@ -125,9 +133,19 @@ public sealed class CustomersController : ControllerBase
         [FromBody] UpdateCustomerRequest request,
         CancellationToken cancellationToken)
     {
-        if (!await _resourceAuthorization.CanAccessCustomerAsync(User, id, cancellationToken))
+        // ABAC (visible in the branch) + ReBAC (the caller manages this customer).
+        var access = await _resourceAuthorization.CanManageCustomerAsync(User, id, cancellationToken);
+        if (access == ResourceAccess.NotFound)
         {
             return NotFound();
+        }
+
+        if (access == ResourceAccess.Forbidden)
+        {
+            return Problem(
+                statusCode: StatusCodes.Status403Forbidden,
+                title: "Not the managing agent",
+                detail: "Only the customer's managing agent may change the customer.");
         }
 
         var command = new UpdateCustomerCommand(

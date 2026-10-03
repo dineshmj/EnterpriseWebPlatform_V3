@@ -14,14 +14,18 @@ public sealed class CreateCustomerCommandHandler
 
     private readonly IApplicationUnitOfWork _unitOfWork;
 
+    private readonly TimeProvider _clock;
+
     public CreateCustomerCommandHandler(
         ICustomerRepository customerRepository,
         ICustomerNumberGenerator customerNumberGenerator,
-        IApplicationUnitOfWork unitOfWork)
+        IApplicationUnitOfWork unitOfWork,
+        TimeProvider clock)
     {
         _customerRepository = customerRepository;
         _customerNumberGenerator = customerNumberGenerator;
         _unitOfWork = unitOfWork;
+        _clock = clock;
     }
 
     public async Task<CreateCustomerResult> HandleAsync(
@@ -35,13 +39,16 @@ public sealed class CreateCustomerCommandHandler
         var customerNumber =
             CustomerNumber.Create(sequenceNumber);
 
+        var now = _clock.GetUtcNow();
+
         var customer = Customer.Create(
             customerNumber,
-            command.FirstName,
-            command.LastName,
+            PersonName.Create(command.FirstName, command.LastName),
             EmailAddress.Create(command.Email),
             PhoneNumber.Create(command.PhoneNumber),
-            command.CustomerType);
+            command.CustomerType,
+            command.ManagingAgentUserId,
+            now);
 
         var address = command.ResidentialAddress;
         customer.AddAddress(
@@ -54,7 +61,9 @@ public sealed class CreateCustomerCommandHandler
                     address.State,
                     address.PostalCode,
                     address.CountryCode),
-                isPrimary: true));
+                isPrimary: true,
+                now),
+            now);
 
         await _customerRepository.AddAsync(
             customer,

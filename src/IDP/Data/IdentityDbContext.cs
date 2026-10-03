@@ -28,8 +28,6 @@ public sealed class IdentityDbContext : DbContext
 
     public DbSet<UserEmploymentProfile> UserEmploymentProfiles => Set<UserEmploymentProfile>();
 
-    public DbSet<UserRelationship> UserRelationships => Set<UserRelationship>();
-
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -42,7 +40,6 @@ public sealed class IdentityDbContext : DbContext
         ConfigureBranch(modelBuilder);
         ConfigureDepartment(modelBuilder);
         ConfigureUserEmploymentProfile(modelBuilder);
-        ConfigureUserRelationship(modelBuilder);
     }
 
     private static void ConfigureUser(ModelBuilder modelBuilder)
@@ -440,71 +437,5 @@ public sealed class IdentityDbContext : DbContext
             x.BranchId
         })
         .HasDatabaseName("ix_user_employment_profiles_department_branch");
-    }
-
-    private static void ConfigureUserRelationship(ModelBuilder modelBuilder)
-    {
-        var entity = modelBuilder.Entity<UserRelationship>();
-
-        entity.ToTable("user_relationships");
-
-        entity.HasKey(x => x.Id);
-
-        entity.Property(x => x.Id)
-            .HasColumnName("id")
-            .ValueGeneratedOnAdd();
-
-        entity.Property(x => x.SubjectUserId)
-            .HasColumnName("subject_user_id")
-            .IsRequired();
-
-        entity.Property(x => x.RelationshipType)
-            .HasColumnName("relationship_type")
-            .HasMaxLength(100)
-            .IsRequired();
-
-        entity.Property(x => x.ResourceType)
-            .HasColumnName("resource_type")
-            .HasMaxLength(100)
-            .IsRequired();
-
-        entity.Property(x => x.ResourceId)
-            .HasColumnName("resource_id")
-            .HasMaxLength(100)
-            .IsRequired();
-
-        entity.Property(x => x.CreatedAt)
-            .HasColumnName("created_at")
-            .HasColumnType("timestamp with time zone")
-            .IsRequired();
-
-        entity.HasOne(x => x.SubjectUser)
-            .WithMany(x => x.Relationships)
-            .HasForeignKey(x => x.SubjectUserId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        entity.HasIndex(x => new
-        {
-            x.SubjectUserId,
-            x.RelationshipType,
-            x.ResourceType,
-            x.ResourceId
-        })
-        .IsUnique()
-        .HasDatabaseName("ux_user_relationships_subject_relationship_resource");
-
-        entity.HasIndex(x => new
-        {
-            x.ResourceType,
-            x.ResourceId
-        })
-        .HasDatabaseName("ix_user_relationships_resource");
-
-        entity.HasIndex(x => new
-        {
-            x.SubjectUserId,
-            x.RelationshipType
-        })
-        .HasDatabaseName("ix_user_relationships_subject_relationship");
     }
 }

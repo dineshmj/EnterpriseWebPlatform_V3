@@ -30,11 +30,14 @@ public sealed class GetCustomersQueryHandler
         {
             var search = query.Search.Trim();
 
+            // CustomerNumber and Email are value objects stored through value converters:
+            // "(string)(object)x.Email" is how EF Core addresses the stored column value.
+            // (x.Email.Value cannot be translated to SQL.)
             customers = customers.Where(x =>
-                x.CustomerNumber.Value.Contains(search) ||
-                x.FirstName.Contains(search) ||
-                x.LastName.Contains(search) ||
-                x.Email.Value.Contains(search));
+                ((string)(object)x.CustomerNumber).Contains(search) ||
+                x.Name.FirstName.Contains(search) ||
+                x.Name.LastName.Contains(search) ||
+                ((string)(object)x.Email).Contains(search));
         }
 
         var totalCount = await customers.CountAsync(cancellationToken);
@@ -47,8 +50,8 @@ public sealed class GetCustomersQueryHandler
             {
                 x.Id,
                 CustomerNumber = x.CustomerNumber.Value,
-                x.FirstName,
-                x.LastName,
+                x.Name.FirstName,
+                x.Name.LastName,
                 Email = x.Email.Value,
                 x.CustomerType,
                 x.Status

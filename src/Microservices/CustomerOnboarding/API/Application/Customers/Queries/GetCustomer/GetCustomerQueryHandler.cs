@@ -23,8 +23,8 @@ public sealed class GetCustomerQueryHandler
             .Select(x => new CustomerDetailsDto(
                 x.Id,
                 x.CustomerNumber.Value,
-                x.FirstName,
-                x.LastName,
+                x.Name.FirstName,
+                x.Name.LastName,
                 x.Email.Value,
                 x.PhoneNumber.Value,
                 x.CustomerType,

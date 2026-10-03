@@ -8,12 +8,16 @@ public sealed class SubmitOnboardingApplicationCommandHandler
 
     private readonly IApplicationUnitOfWork _unitOfWork;
 
+    private readonly TimeProvider _clock;
+
     public SubmitOnboardingApplicationCommandHandler(
         IOnboardingApplicationRepository applicationRepository,
-        IApplicationUnitOfWork unitOfWork)
+        IApplicationUnitOfWork unitOfWork,
+        TimeProvider clock)
     {
         _applicationRepository = applicationRepository;
         _unitOfWork = unitOfWork;
+        _clock = clock;
     }
 
     public async Task HandleAsync(
@@ -36,7 +40,7 @@ public sealed class SubmitOnboardingApplicationCommandHandler
                 "The onboarding application was modified by another request.");
         }
 
-        application.Submit();
+        application.Submit(_clock.GetUtcNow());
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
