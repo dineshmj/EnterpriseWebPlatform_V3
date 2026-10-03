@@ -1,0 +1,88 @@
+/*
+ * =============================================================================
+ * Tailwind CSS v4 mapping of the EWP design tokens (Four Walls Inc.)
+ * =============================================================================
+ * Values live in ewp-tokens.css. This file only maps them to Tailwind theme
+ * names, so utilities such as bg-brand-800, text-ink-muted, border-line,
+ * rounded-card and shadow-card resolve to the shared tokens.
+ * ("@theme inline" makes utilities reference var(--ewp-…) directly.)
+ * =============================================================================
+ */
+
+@import "./ewp-tokens.css";
+
+@theme inline {
+  --font-sans: var(--ewp-font-sans);
+  --font-display: var(--ewp-font-display);
+  --font-mono: var(--ewp-font-mono);
+
+  --color-brand-50: var(--ewp-brand-50);
+  --color-brand-100: var(--ewp-brand-100);
+  --color-brand-200: var(--ewp-brand-200);
+  --color-brand-300: var(--ewp-brand-300);
+  --color-brand-400: var(--ewp-brand-400);
+  --color-brand-500: var(--ewp-brand-500);
+  --color-brand-600: var(--ewp-brand-600);
+  --color-brand-700: var(--ewp-brand-700);
+  --color-brand-800: var(--ewp-brand-800);
+  --color-brand-900: var(--ewp-brand-900);
+  --color-brand-950: var(--ewp-brand-950);
+
+  --color-accent-50: var(--ewp-accent-50);
+  --color-accent-100: var(--ewp-accent-100);
+  --color-accent-200: var(--ewp-accent-200);
+  --color-accent-500: var(--ewp-accent-500);
+  --color-accent-600: var(--ewp-accent-600);
+  --color-accent-700: var(--ewp-accent-700);
+
+  --color-brick-400: var(--ewp-brick-400);
+  --color-brick-500: var(--ewp-brick-500);
+  --color-brick-600: var(--ewp-brick-600);
+
+  --color-canvas: var(--ewp-canvas);
+  --color-surface: var(--ewp-surface);
+  --color-subtle: var(--ewp-subtle);
+  --color-line: var(--ewp-line);
+  --color-line-strong: var(--ewp-line-strong);
+  --color-ink: var(--ewp-ink);
+  --color-ink-muted: var(--ewp-ink-muted);
+  --color-ink-faint: var(--ewp-ink-faint);
+
+  --color-success-50: var(--ewp-success-50);
+  --color-success-200: var(--ewp-success-200);
+  --color-success-700: var(--ewp-success-700);
+  --color-warning-50: var(--ewp-warning-50);
+  --color-warning-200: var(--ewp-warning-200);
+  --color-warning-700: var(--ewp-warning-700);
+  --color-danger-50: var(--ewp-danger-50);
+  --color-danger-200: var(--ewp-danger-200);
+  --color-danger-600: var(--ewp-danger-600);
+  --color-danger-700: var(--ewp-danger-700);
+  --color-info-50: var(--ewp-info-50);
+  --color-info-200: var(--ewp-info-200);
+  --color-info-700: var(--ewp-info-700);
+
+  --radius-card: var(--ewp-radius-card);
+  --radius-control: var(--ewp-radius-control);
+  --shadow-card: var(--ewp-shadow-card);
+  --shadow-raised: var(--ewp-shadow-raised);
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background-color: var(--ewp-canvas);
+    color: var(--ewp-ink);
+    font-family: var(--ewp-font-sans);
+  }
+
+  /* One visible, consistent keyboard focus ring (WCAG 2.2 focus visible). */
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--ewp-accent-500);
+    outline-offset: 2px;
+  }
+}

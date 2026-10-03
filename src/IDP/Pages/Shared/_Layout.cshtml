@@ -1,43 +1,56 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-AU">
 <head>
     <meta charset="utf-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Four Walls Inc. IdentityServer</title>
+    <title>@(ViewData["Title"] ?? "Sign in") · Four Walls Inc.</title>
     <link rel="icon" type="image/x-icon" href="~/favicon.ico" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="~/css/site.css" />
+    <link rel="icon" type="image/svg+xml" href="~/res/img/four-walls-mark.svg" />
+    <link rel="stylesheet" href="~/css/ewp-tokens.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container">
-            <table>
-                <tr>
-                    <td style="vertical-align: middle;">
-                        <img src="/res/img/FourWallsIncLogo.png"
-                             alt="Four Walls Inc. Logo"
-                             class="d-inline-block align-text-top me-2"
-                             style="height:100px !important; width:auto !important; display:block;" />
-                    </td>
-                    <td style="vertical-align: middle;">
-                        <div style="display:flex; align-items:center; height:100px;">
-                            <a class="navbar-brand" href="~/"
-                               style="margin:0; padding:0; display:block;">
-                                <h1><strong>Four Walls Inc. IdentityServer</strong></h1>
-                            </a>
-                        </div>
-                    </td>
-                </tr>
-            </table>
-        </div>
-    </nav>
+    <div class="idp">
+        <aside class="idp-brand">
+            <a class="brand-lockup" href="~/">
+                <img class="brand-mark" src="~/res/img/four-walls-mark.svg" alt="" />
+                <span class="brand-name">
+                    Four Walls Inc.
+                    <span class="brand-sub">Staff sign-in</span>
+                </span>
+            </a>
 
-    <div class="container mt-4">
-        @RenderBody()
+            <div class="brand-pitch">
+                <h2>One secure sign-in for every banking workspace.</h2>
+                <p>Customer onboarding, KYC review and back-office tools all trust this identity provider. Your password never leaves it.</p>
+
+                <ul class="brand-points">
+                    <li>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+                        <span>OpenID Connect with PKCE. Tokens stay on the server, never in your browser.</span>
+                    </li>
+                    <li>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        <span>Access follows your role, your branch and the cases assigned to you.</span>
+                    </li>
+                    <li>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 20a6 6 0 0 0-12 0"/><circle cx="12" cy="10" r="4"/><circle cx="12" cy="12" r="10"/></svg>
+                        <span>Signing out here signs you out of every workspace.</span>
+                    </li>
+                </ul>
+            </div>
+
+            <p class="brand-foot">Authorised staff only. Activity is logged and monitored.</p>
+        </aside>
+
+        <main class="idp-main">
+            <div class="idp-main-inner">
+                @RenderBody()
+                <p class="idp-footer">&copy; @DateTime.Now.Year Four Walls Inc. &middot; Identity provider</p>
+            </div>
+        </main>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     @await RenderSectionAsync("scripts", required: false)
 </body>
 </html>

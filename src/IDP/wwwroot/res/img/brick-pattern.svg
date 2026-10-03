@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="48" viewBox="0 0 96 48">
+  <!-- Running-bond mortar lines; tiled behind the brand panel at low opacity. -->
+  <g fill="none" stroke="#ffffff" stroke-width="1.5">
+    <path d="M0 0.75H96M0 24.75H96"/>
+    <path d="M48 0.75V24.75M0.75 24.75V48M95.25 24.75V48"/>
+  </g>
+</svg>

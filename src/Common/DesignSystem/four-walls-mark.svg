@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Four Walls Inc.">
+  <title>Four Walls Inc.</title>
+  <!-- Flat brick wall, four courses in running bond; one teal "keystone" brick. -->
+  <g>
+    <rect x="2" y="5" width="20.5" height="8" rx="1.5" fill="#b8553f"/>
+    <rect x="25.5" y="5" width="20.5" height="8" rx="1.5" fill="#14a093"/>
+
+    <rect x="2" y="16" width="8.75" height="8" rx="1.5" fill="#964331"/>
+    <rect x="13.75" y="16" width="20.5" height="8" rx="1.5" fill="#d0705a"/>
+    <rect x="37.25" y="16" width="8.75" height="8" rx="1.5" fill="#b8553f"/>
+
+    <rect x="2" y="27" width="20.5" height="8" rx="1.5" fill="#d0705a"/>
+    <rect x="25.5" y="27" width="20.5" height="8" rx="1.5" fill="#964331"/>
+
+    <rect x="2" y="38" width="8.75" height="8" rx="1.5" fill="#b8553f"/>
+    <rect x="13.75" y="38" width="20.5" height="8" rx="1.5" fill="#964331"/>
+    <rect x="37.25" y="38" width="8.75" height="8" rx="1.5" fill="#d0705a"/>
+  </g>
+</svg>

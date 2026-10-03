@@ -1,6 +1,10 @@
 'use client';
 
+import { ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { cn } from './ui/cn';
+import { ConfirmDialog } from './ui/confirm-dialog';
+import { Badge } from './ui/feedback';
 
 let hasUnsavedChanges = false;
 
@@ -71,7 +75,18 @@ interface PendingNavigationRequest {
   origin: string;
 }
 
-export function MfeShell({ children }: { children: React.ReactNode }) {
+export function MfeShell({
+  title = 'KYC review',
+  subtitle = 'Customer KYC',
+  wide = false,
+  children,
+}: {
+  title?: string;
+  subtitle?: string;
+  /** Review screens use more of very wide monitors (evidence + decision side by side). */
+  wide?: boolean;
+  children: React.ReactNode;
+}) {
   const [context, setContext] = useState<WorkspaceContext>(EMPTY);
   const [pendingNavigation, setPendingNavigation] =
     useState<PendingNavigationRequest | null>(null);
@@ -152,54 +167,35 @@ export function MfeShell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <main className="mfe" data-workspace-context={JSON.stringify(context)}>
-        <header className="header">
-          <div>
-            <h1 className="title">Customer KYC</h1>
-            <p className="subtitle">KYC Management · Review Work Queue</p>
+      <div className="min-h-screen bg-canvas" data-workspace-context={JSON.stringify(context)}>
+        <header className="border-b border-line bg-surface">
+          <div className={cn('mx-auto flex items-center justify-between gap-4 px-8 py-4', wide ? 'max-w-[1920px]' : 'max-w-[1440px]')}>
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-800 text-white">
+                <ShieldCheck className="size-[18px]" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs font-medium uppercase tracking-wider text-ink-faint">{subtitle}</p>
+                <h1 className="truncate font-display text-xl font-semibold text-ink">{title}</h1>
+              </div>
+            </div>
+            <Badge tone="brand" dot>Customer KYC</Badge>
           </div>
-          <span className="badge">● Customer KYC MFE</span>
         </header>
-        {children}
-      </main>
+
+        <main className={cn('mx-auto px-8 py-6', wide ? 'max-w-[1920px]' : 'max-w-[1440px]')}>{children}</main>
+      </div>
 
       {pendingNavigation && (
-        <div
-          role="presentation"
-          style={{
-            position: 'fixed', inset: 0, zIndex: 9999, display: 'flex',
-            alignItems: 'center', justifyContent: 'center',
-            background: 'rgba(0, 0, 0, 0.42)',
-          }}
+        <ConfirmDialog
+          title="Unsaved changes"
+          cancelLabel="Stay on this page"
+          confirmLabel="Leave without saving"
+          onCancel={() => respondToNavigation(false)}
+          onConfirm={() => respondToNavigation(true)}
         >
-          <div
-            role="alertdialog" aria-modal="true"
-            aria-labelledby="bss-nav-guard-title"
-            aria-describedby="bss-nav-guard-description"
-            style={{
-              width: 'min(460px, calc(100vw - 32px))', padding: '24px',
-              borderRadius: '10px', background: '#fff',
-              boxShadow: '0 20px 60px rgba(0, 0, 0, 0.25)', color: '#1f2937',
-            }}
-          >
-            <h2 id="bss-nav-guard-title" style={{ margin: '0 0 10px', fontSize: '1.25rem' }}>
-              Unsaved changes
-            </h2>
-            <p id="bss-nav-guard-description" style={{ margin: '0 0 20px', lineHeight: 1.5 }}>
-              You have unsaved changes on this page. If you leave now, they will be lost.
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button type="button" onClick={() => respondToNavigation(false)} autoFocus
-                style={{ padding: '9px 14px', borderRadius: '6px', border: '1px solid #d0d5dd', background: '#fff', cursor: 'pointer' }}>
-                Stay on this page
-              </button>
-              <button type="button" onClick={() => respondToNavigation(true)}
-                style={{ padding: '9px 14px', borderRadius: '6px', border: '1px solid #b42318', background: '#b42318', color: '#fff', cursor: 'pointer' }}>
-                Leave without saving
-              </button>
-            </div>
-          </div>
-        </div>
+          You have unsaved changes on this page. If you leave now, they will be lost.
+        </ConfirmDialog>
       )}
     </>
   );

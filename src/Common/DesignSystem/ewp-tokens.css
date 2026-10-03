@@ -1,0 +1,77 @@
+/*
+ * =============================================================================
+ * EWP design tokens - Four Walls Inc.
+ * =============================================================================
+ * The SINGLE SOURCE of the platform's look: colours, typography, radii, shadows.
+ * Plain CSS custom properties, so every front end can use them:
+ *   - the MFEs, through Tailwind (ewp-theme.css maps these to utilities);
+ *   - the IDP's Razor pages (copied into its wwwroot at build time);
+ *   - the Shell.
+ *
+ * Re-branding = editing the values below.
+ * =============================================================================
+ */
+
+:root {
+  /* Typography - system fonts only (no external font requests; CSP font-src 'self'). */
+  --ewp-font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Roboto, Arial, sans-serif;
+  --ewp-font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Roboto, Arial, sans-serif;
+  --ewp-font-mono: "Cascadia Mono", Consolas, "SFMono-Regular", Menlo, monospace;
+
+  /* Brand - deep navy */
+  --ewp-brand-50: #eef3fa;
+  --ewp-brand-100: #d9e4f3;
+  --ewp-brand-200: #b4c8e6;
+  --ewp-brand-300: #85a5d3;
+  --ewp-brand-400: #5680bd;
+  --ewp-brand-500: #3863a6;
+  --ewp-brand-600: #2a4e8a;
+  --ewp-brand-700: #213e6f;
+  --ewp-brand-800: #1a3157;
+  --ewp-brand-900: #122440;
+  --ewp-brand-950: #0b1729;
+
+  /* Accent - teal (focus, highlights, primary call to action) */
+  --ewp-accent-50: #ecfaf8;
+  --ewp-accent-100: #cff2ed;
+  --ewp-accent-200: #a2e3db;
+  --ewp-accent-500: #14a093;
+  --ewp-accent-600: #0d8478;
+  --ewp-accent-700: #0e6a62;
+
+  /* Signature - brick (the Four Walls mark only; never for UI states) */
+  --ewp-brick-400: #d0705a;
+  --ewp-brick-500: #b8553f;
+  --ewp-brick-600: #964331;
+
+  /* Neutrals */
+  --ewp-canvas: #f3f6fa;
+  --ewp-surface: #ffffff;
+  --ewp-subtle: #f8fafc;
+  --ewp-line: #e1e7ef;
+  --ewp-line-strong: #c9d3df;
+  --ewp-ink: #13233a;
+  --ewp-ink-muted: #5a6b80;
+  --ewp-ink-faint: #8a98aa;
+
+  /* States */
+  --ewp-success-50: #ecfdf3;
+  --ewp-success-200: #abefc6;
+  --ewp-success-700: #067647;
+  --ewp-warning-50: #fffaeb;
+  --ewp-warning-200: #fedf89;
+  --ewp-warning-700: #b54708;
+  --ewp-danger-50: #fef3f2;
+  --ewp-danger-200: #fecdca;
+  --ewp-danger-600: #d92d20;
+  --ewp-danger-700: #b42318;
+  --ewp-info-50: #eff8ff;
+  --ewp-info-200: #b2ddff;
+  --ewp-info-700: #175cd3;
+
+  /* Shape and depth */
+  --ewp-radius-card: 14px;
+  --ewp-radius-control: 9px;
+  --ewp-shadow-card: 0 1px 2px rgba(16, 35, 58, 0.04), 0 4px 14px rgba(16, 35, 58, 0.05);
+  --ewp-shadow-raised: 0 10px 30px rgba(16, 35, 58, 0.10), 0 2px 6px rgba(16, 35, 58, 0.06);
+}

@@ -53,12 +53,24 @@ public sealed class LoginModel : PageModel
         public string Button { get; set; } = default!;
     }
 
-    public IActionResult OnGet(string? returnUrl)
+    /// <summary>
+    /// Display name of the client application that sent the user here
+    /// ("Sign in to continue to ..."); null when signing in directly.
+    /// </summary>
+    public string? ClientName { get; private set; }
+
+    public async Task<IActionResult> OnGet(string? returnUrl)
     {
         Input = new InputModel
         {
             ReturnUrl = returnUrl ?? "~/"
         };
+
+        var context = await _interaction.GetAuthorizationContextAsync(
+            Input.ReturnUrl,
+            HttpContext.RequestAborted);
+
+        ClientName = DisplayNameOf(context);
 
         return Page();
     }
@@ -70,6 +82,8 @@ public sealed class LoginModel : PageModel
         var context = await _interaction.GetAuthorizationContextAsync(
             Input.ReturnUrl,
             cancellationToken);
+
+        ClientName = DisplayNameOf(context);
 
         if (Input.Button != "login")
         {
@@ -183,4 +197,9 @@ public sealed class LoginModel : PageModel
 
         return Page();
     }
+
+    private static string? DisplayNameOf(AuthorizationRequest? context)
+        => context?.Client is { } client
+            ? (string.IsNullOrWhiteSpace(client.ClientName) ? client.ClientId : client.ClientName)
+            : null;
 }

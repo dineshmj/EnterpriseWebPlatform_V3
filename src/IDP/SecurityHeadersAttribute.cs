@@ -27,14 +27,16 @@ public sealed class SecurityHeadersAttribute
 
         headers.TryAdd("Referrer-Policy", "no-referrer");
 
+        // Everything is self-hosted (no CDN) and the pages use no inline scripts or
+        // styles, so no 'unsafe-inline' anywhere.
         // frame-src 'self': the logged-out page embeds the IDP's own end-session
         // callback, which in turn renders the clients' front-channel logout iframes.
         headers.TryAdd(
             "Content-Security-Policy",
             "default-src 'self'; " +
-            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
-            "script-src 'self' https://cdn.jsdelivr.net; " +
-            "font-src 'self' https://cdn.jsdelivr.net; " +
+            "style-src 'self'; " +
+            "script-src 'self'; " +
+            "font-src 'self'; " +
             "frame-src 'self'; " +
             "frame-ancestors 'none'; " +
             "object-src 'none'; " +

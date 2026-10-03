@@ -1,47 +1,46 @@
-﻿@page
+@page
 @model EnterpriseWebPlatform.IdentityServer.Pages.Home.ErrorModel
-
 @{
-    ViewData["Title"] = "Identity Server Error";
+    ViewData["Title"] = "Something went wrong";
 }
 
-<div class="container mt-4">
+<section class="card" aria-labelledby="error-title">
+    <header class="card-head">
+        <span class="card-icon is-danger" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+        </span>
+        <h1 class="card-title" id="error-title">Something went wrong</h1>
+        <p class="card-lead">The sign-in request could not be completed. Return to the application and try again.</p>
+    </header>
 
-    <h2>Identity Server Error</h2>
-
-    <div class="alert alert-danger">
-        <strong>@Model.Error</strong>
-
-        @if (!string.IsNullOrWhiteSpace(Model.ErrorDescription))
-        {
-            <div class="mt-2">
-                @Model.ErrorDescription
+    @if (!string.IsNullOrWhiteSpace(Model.Error))
+    {
+        <div class="alert" role="alert">
+            <div>
+                <strong>@Model.Error</strong>
+                @if (!string.IsNullOrWhiteSpace(Model.ErrorDescription))
+                {
+                    <span>@Model.ErrorDescription</span>
+                }
             </div>
-        }
-    </div>
-
-    @if (!string.IsNullOrWhiteSpace(Model.RequestId))
-    {
-        <p>
-            <strong>Request ID:</strong>
-            @Model.RequestId
-        </p>
+        </div>
     }
 
-    @if (!string.IsNullOrWhiteSpace(Model.ClientId))
+    @if (!string.IsNullOrWhiteSpace(Model.RequestId) || !string.IsNullOrWhiteSpace(Model.ClientId) || !string.IsNullOrWhiteSpace(Model.RedirectUri))
     {
-        <p>
-            <strong>Client ID:</strong>
-            @Model.ClientId
-        </p>
+        <dl class="details" aria-label="Details for support">
+            @if (!string.IsNullOrWhiteSpace(Model.RequestId))
+            {
+                <div><dt>Request ID</dt><dd>@Model.RequestId</dd></div>
+            }
+            @if (!string.IsNullOrWhiteSpace(Model.ClientId))
+            {
+                <div><dt>Client ID</dt><dd>@Model.ClientId</dd></div>
+            }
+            @if (!string.IsNullOrWhiteSpace(Model.RedirectUri))
+            {
+                <div><dt>Redirect URI</dt><dd>@Model.RedirectUri</dd></div>
+            }
+        </dl>
     }
-
-    @if (!string.IsNullOrWhiteSpace(Model.RedirectUri))
-    {
-        <p>
-            <strong>Redirect URI:</strong>
-            @Model.RedirectUri
-        </p>
-    }
-
-</div>
+</section>

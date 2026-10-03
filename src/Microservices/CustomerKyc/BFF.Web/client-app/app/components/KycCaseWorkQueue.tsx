@@ -1,14 +1,23 @@
- 'use client';
+'use client';
 
+import { CheckCircle2, ChevronRight, Inbox } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { MfeShell } from './MfeShell';
 import { getJson } from '../lib/api';
+import { Card, CardHeader } from './ui/card';
+import { Table, Td, Th, formatDateTime } from './ui/data';
+import { Alert, EmptyState, StatusBadge } from './ui/feedback';
 
 export interface KycCase {
   kycCaseId: number;
   customerNumber: string;
+  applicationNumber?: string;
+  branchCode?: string;
+  assignedOfficerUserId?: string | null;
   status: string;
+  identityVerificationStatus?: string;
+  documentVerificationStatus?: string;
   initiatedByUserId?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -38,54 +47,56 @@ export function KycCaseWorkQueue({ title, subtitle, description }: Props) {
   }, []);
 
   return (
-    <MfeShell>
-      <section className="card">
-        <div className="header compact-header">
-          <div>
-            <h2>{title}</h2>
-            <div className="hint">{subtitle}</div>
-          </div>
-          <span className="badge">PENDING REVIEW</span>
-        </div>
+    <MfeShell title={title} subtitle="Customer KYC">
+      <Card>
+        <CardHeader icon={<Inbox />} title={subtitle} description={description} />
 
-        <p className="hint">{description}</p>
+        {error && <div className="p-6"><Alert tone="danger">{error}</Alert></div>}
+        {!data && !error && <p className="px-6 py-8 text-sm text-ink-muted">Loading KYC cases…</p>}
 
-        {error && <div className="error">{error}</div>}
-        {!data && !error && <div className="empty">Loading KYC cases...</div>}
-
-        {data && (
-          data.items.length === 0 ? (
-            <div className="empty">No KYC cases are currently awaiting review.</div>
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>KYC Case ID</th>
-                  <th>Customer</th>
-                  <th>Status</th>
-                  <th>Initiated By</th>
-                  <th>Created</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.items.map(item => (
-                  <tr key={item.kycCaseId}>
-                    <td>
-                      <Link className="record-link" href={`/v1/kyc/cases/view-details?caseId=${item.kycCaseId}`}>
-                        {item.kycCaseId}
-                      </Link>
-                    </td>
-                    <td>{item.customerNumber}</td>
-                    <td><span className="status">{item.status}</span></td>
-                    <td>{item.initiatedByUserId ?? '—'}</td>
-                    <td>{new Date(item.createdAt).toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )
+        {data && data.items.length === 0 && (
+          <EmptyState icon={<CheckCircle2 />} title="Queue is clear">No KYC cases in your branch are awaiting review.</EmptyState>
         )}
-      </section>
+
+        {data && data.items.length > 0 && (
+          <Table>
+            <thead>
+              <tr>
+                <Th>Application</Th>
+                <Th>Customer</Th>
+                <Th>Identity</Th>
+                <Th>Documents</Th>
+                <Th>Assigned</Th>
+                <Th>Opened</Th>
+                <Th><span className="sr-only">Open</span></Th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.items.map(item => (
+                <tr key={item.kycCaseId} className="group hover:bg-subtle/70">
+                  <Td>
+                    <Link className="font-mono text-[13px] font-semibold text-brand-700 hover:underline" href={`/v1/kyc/cases/view-details?caseId=${item.kycCaseId}`}>
+                      {item.applicationNumber ?? `Case ${item.kycCaseId}`}
+                    </Link>
+                    <div className="text-xs text-ink-faint">Case #{item.kycCaseId}</div>
+                  </Td>
+                  <Td className="font-mono text-[13px]">{item.customerNumber}</Td>
+                  <Td><StatusBadge status={item.identityVerificationStatus} /></Td>
+                  <Td><StatusBadge status={item.documentVerificationStatus} /></Td>
+                  <Td className="text-ink-muted">{item.assignedOfficerUserId ? `${item.assignedOfficerUserId.slice(0, 8)}…` : 'Unassigned'}</Td>
+                  <Td className="text-ink-muted">{formatDateTime(item.createdAt)}</Td>
+                  <Td className="text-right">
+                    <Link aria-label={`Open case ${item.kycCaseId}`} href={`/v1/kyc/cases/view-details?caseId=${item.kycCaseId}`}
+                      className="inline-flex size-8 items-center justify-center rounded-md text-ink-faint group-hover:text-brand-700">
+                      <ChevronRight className="size-4" aria-hidden="true" />
+                    </Link>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </Card>
     </MfeShell>
   );
 }

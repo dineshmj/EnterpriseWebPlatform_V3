@@ -1,99 +1,70 @@
 @page
 @model EnterpriseWebPlatform.IdentityServer.Pages.Consent.Index
 @{
+    ViewData["Title"] = "Allow access";
 }
 
-<div class="page-consent">
-    <div class="lead">
+<section class="card" aria-labelledby="consent-title">
+    <header class="card-head">
         @if (Model.View.ClientLogoUrl != null)
         {
-            <div class="client-logo"><img src="@Model.View.ClientLogoUrl"></div>
+            <img class="client-logo" src="@Model.View.ClientLogoUrl" alt="" />
         }
+        <p class="eyebrow">Permission request</p>
+        <h1 class="card-title" id="consent-title">@Model.View.ClientName</h1>
+        <p class="card-lead">is requesting access to your account. Untick anything you do not wish to share.</p>
+    </header>
 
-        <h1>
-            @Model.View.ClientName
-            <small class="text-muted">is requesting your permission</small>
-        </h1>
-
-        <p>Uncheck the permissions you do not wish to grant.</p>
-    </div>
-
-    <div class="row">
-        <div class="col-sm-8">
-            <partial name="_ValidationSummary" />
-        </div>
-    </div>
+    <partial name="_ValidationSummary" />
 
     <form asp-page="/Consent/Index">
         <input type="hidden" asp-for="Input.ReturnUrl" />
-        <div class="row">
-            <div class="col-sm-8">
-                @if (Model.View.IdentityScopes.Any())
-                {
-                    <div class="form-group">
-                        <div class="card">
-                            <div class="card-header">
-                                <span class="glyphicon glyphicon-user"></span>
-                                Personal Information
-                            </div>
 
-                            <ul class="list-group list-group-flush">
-                                @foreach (var scope in Model.View.IdentityScopes)
-                                {
-                                    <partial name="_ScopeListItem" model="@scope" />
-                                }
-                            </ul>
-                        </div>
-                    </div>
-                }
-
-                @if (Model.View.ApiScopes.Any())
-                {
-                    <div class="form-group">
-                        <div class="card">
-                            <div class="card-header">
-                                <span class="glyphicon glyphicon-tasks"></span>
-                                Application Access
-                            </div>
-                            <ul class="list-group list-group-flush">
-                                @foreach (var scope in Model.View.ApiScopes)
-                                {
-                                    <partial name="_ScopeListItem" model="scope" />
-                                }
-                            </ul>
-                        </div>
-                    </div>
-                }
-
-                @if (Model.View.AllowRememberConsent)
-                {
-                    <div class="form-group">
-                        <div class="form-check">
-                            <input class="form-check-input" asp-for="Input.RememberConsent">
-                            <label class="form-check-label" asp-for="Input.RememberConsent">
-                                <strong>Remember My Decision</strong>
-                            </label>
-                        </div>
-                    </div>
-                }
+        @if (Model.View.IdentityScopes.Any())
+        {
+            <div class="scope-group">
+                <h2>Personal information</h2>
+                <ul class="scope-list">
+                    @foreach (var scope in Model.View.IdentityScopes)
+                    {
+                        <partial name="_ScopeListItem" model="@scope" />
+                    }
+                </ul>
             </div>
+        }
+
+        @if (Model.View.ApiScopes.Any())
+        {
+            <div class="scope-group">
+                <h2>Application access</h2>
+                <ul class="scope-list">
+                    @foreach (var scope in Model.View.ApiScopes)
+                    {
+                        <partial name="_ScopeListItem" model="scope" />
+                    }
+                </ul>
+            </div>
+        }
+
+        @if (Model.View.AllowRememberConsent)
+        {
+            <label class="check">
+                <input asp-for="Input.RememberConsent" />
+                <span>Remember my decision</span>
+            </label>
+        }
+
+        <div class="actions-row">
+            @* "yes" first: Enter submits with the form's first submit button. *@
+            <button name="Input.button" value="yes" class="btn btn-primary" autofocus>Allow</button>
+            <button name="Input.button" value="no" class="btn btn-secondary">Don't allow</button>
         </div>
 
-        <div class="row">
-            <div class="col-sm-4">
-                <button name="Input.button" value="yes" class="btn btn-primary" autofocus>Yes, Allow</button>
-                <button name="Input.button" value="no" class="btn btn-secondary">No, Do Not Allow</button>
-            </div>
-
-            <div class="col-sm-4 col-lg-auto">
-                @if (Model.View.ClientUrl != null)
-                {
-                    <a class="btn btn-outline-info" href="@Model.View.ClientUrl">
-                        <span class="glyphicon glyphicon-info-sign"></span>
-                        <strong>@Model.View.ClientName</strong>
-                    </a>
-                }
-            </div>
-        </div>
+        @if (Model.View.ClientUrl != null)
+        {
+            <p class="idp-footer">
+                About this application: <a href="@Model.View.ClientUrl">@Model.View.ClientName</a>
+            </p>
+        }
     </form>
-</div>
+</section>

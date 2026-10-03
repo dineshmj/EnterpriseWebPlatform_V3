@@ -2,8 +2,8 @@
 
 @model ScopeViewModel
 
-<li class="list-group-item">
-    <label>
+<li class="scope">
+    <label class="scope-label" for="scopes_@Model.Value">
         <input class="consent-scopecheck"
                type="checkbox"
                name="Input.ScopesConsented"
@@ -19,30 +19,27 @@
                    value="@Model.Value" />
         }
 
-        <strong>@Model.DisplayName</strong>
+        <span>@Model.DisplayName</span>
 
-        @if (Model.Emphasize)
+        @if (Model.Required)
         {
-            <span class="glyphicon glyphicon-exclamation-sign"></span>
+            <span class="scope-tag">Required</span>
+        }
+        else if (Model.Emphasize)
+        {
+            <span class="scope-tag is-emphasis">Sensitive</span>
         }
     </label>
 
-    @if (Model.Required)
-    {
-        <span><em>(required)</em></span>
-    }
-
     @if (Model.Description != null)
     {
-        <div class="consent-description">
-            <label for="scopes_@Model.Value">@Model.Description</label>
-        </div>
+        <p class="scope-desc">@Model.Description</p>
     }
 
     @if (Model.Resources?.Any() == true)
     {
-        <div class="consent-description">
-            <label>Will be available to these resource servers:</label>
+        <div class="scope-desc">
+            Will be available to these resource servers:
             <ul>
                 @foreach (var resource in Model.Resources)
                 {

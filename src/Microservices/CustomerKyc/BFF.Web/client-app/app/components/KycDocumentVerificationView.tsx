@@ -1,12 +1,23 @@
 'use client';
 
+import { ArrowLeft, ArrowRight, CheckCircle2, ExternalLink, FileText, Inbox, ThumbsDown, ThumbsUp, UserRound } from 'lucide-react';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { MfeShell } from './MfeShell';
 import { getJson, postJson } from '../lib/api';
+import { Button, buttonVariants } from './ui/button';
+import { Card, CardContent, CardHeader } from './ui/card';
+import { cn } from './ui/cn';
+import { DescriptionList, formatDateTime } from './ui/data';
+import { Alert, Badge, EmptyState, Skeleton, StatusBadge } from './ui/feedback';
+import { Textarea } from './ui/form';
 
 interface KycCase {
   kycCaseId: number;
   customerNumber: string;
+  applicationNumber?: string;
+  branchCode?: string;
+  assignedOfficerUserId?: string | null;
   status: string;
   identityVerificationStatus: string;
   documentVerificationStatus: string;
@@ -48,6 +59,20 @@ interface Props {
   verificationStage: 'IdentityVerification' | 'DocumentVerification';
 }
 
+const REMARKS_LIMIT = 4000;
+
+/** Where the reviewer can go next once a stage decision is recorded. */
+interface LastDecision {
+  caseId: number;
+  otherStagePending: boolean;
+}
+
+const caseDetailsHref = (caseId: number) => `/v1/kyc/cases/view-details?caseId=${caseId}`;
+
+function shortId(id: string | null | undefined) {
+  return id ? `${id.slice(0, 8)}…` : '—';
+}
+
 export function KycDocumentVerificationView({
   title,
   subtitle,
@@ -61,6 +86,7 @@ export function KycDocumentVerificationView({
   const [decisionRemarks, setDecisionRemarks] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [decisionMessage, setDecisionMessage] = useState<string | null>(null);
+  const [lastDecision, setLastDecision] = useState<LastDecision | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingDocument, setLoadingDocument] = useState(false);
   const [submittingDecision, setSubmittingDecision] = useState<'approve' | 'reject' | null>(null);
@@ -72,6 +98,10 @@ export function KycDocumentVerificationView({
       : selectedCase.documentVerificationStatus)
     : null;
   const awaitingDecision = stageStatus === 'PENDING_REVIEW';
+  const stageName = verificationStage === 'IdentityVerification' ? 'Identity verification' : 'Document verification';
+  const otherStage = verificationStage === 'IdentityVerification'
+    ? { label: 'Review tax proof', path: '/v1/kyc/documents/view-all' }
+    : { label: 'Review identity proof', path: '/v1/kyc/identity-verification/view-all' };
 
   useEffect(() => {
     getJson<PageResult>(
@@ -101,6 +131,7 @@ export function KycDocumentVerificationView({
     setLoadingDocument(true);
     setError(null);
     setDecisionMessage(null);
+    setLastDecision(null);
     setDecisionRemarks('');
 
     getJson<DocumentInfo>(`/bff/api/kyc/cases/${selectedCaseId}/${documentRoute}`)
@@ -131,19 +162,23 @@ export function KycDocumentVerificationView({
         { decisionRemarks: remarks },
       );
 
-      const stageName = verificationStage === 'IdentityVerification'
-        ? 'Identity verification'
-        : 'Document verification';
-      const stageStatus = result.stageStatus ?? (action === 'approve' ? 'APPROVED' : 'REJECTED');
+      const decidedStatus = result.stageStatus ?? (action === 'approve' ? 'APPROVED' : 'REJECTED');
       const overallStatus = result.overallStatus ?? selectedCase?.status ?? 'PENDING_REVIEW';
+      const otherStageStatus = verificationStage === 'IdentityVerification'
+        ? selectedCase?.documentVerificationStatus
+        : selectedCase?.identityVerificationStatus;
 
       setCases(previous => previous.filter(item => item.kycCaseId !== selectedCaseId));
       setSelectedCaseId(null);
       setDocument(null);
       setDecisionRemarks('');
       setDecisionMessage(
-        `${stageName} for KYC Case ${selectedCaseId} was ${stageStatus.toLowerCase()}. Overall KYC status: ${overallStatus}.`,
+        `${stageName} for KYC case ${selectedCaseId} was ${decidedStatus.toLowerCase()}. Overall KYC status: ${overallStatus.toLowerCase().replace(/_/g, ' ')}.`,
       );
+      setLastDecision({
+        caseId: selectedCaseId,
+        otherStagePending: overallStatus === 'PENDING_REVIEW' && otherStageStatus === 'PENDING_REVIEW',
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : `Unable to ${action} the KYC case.`);
     } finally {
@@ -152,127 +187,199 @@ export function KycDocumentVerificationView({
   }
 
   return (
-    <MfeShell>
-      <section className="card">
-        <div className="header compact-header">
-          <div>
-            <h2>{title}</h2>
-            <div className="hint">{subtitle}</div>
-          </div>
-          <span className="badge">{stageStatus ?? 'PENDING REVIEW'}</span>
-        </div>
+    <MfeShell title={title} subtitle="Customer KYC · Review" wide>
+      <div className="mb-4">
+        <Link className={buttonVariants({ variant: 'ghost', size: 'sm' })} href="/v1/kyc/cases/view-all/">
+          <ArrowLeft aria-hidden="true" />Back to work queue
+        </Link>
+      </div>
 
-        {loading && <div className="empty">Loading KYC work queue...</div>}
-
-        {!loading && cases.length === 0 && (
-          <div className="empty">No KYC cases are currently awaiting this verification stage.</div>
-        )}
-
-        {cases.length > 0 && (
-          <>
-            <div className="field">
-              <label htmlFor="kycCaseSelector">KYC Case</label>
-              <select
-                id="kycCaseSelector"
-                value={selectedCaseId ?? ''}
-                onChange={event => setSelectedCaseId(Number(event.target.value))}
-              >
-                {cases.map(item => (
-                  <option key={item.kycCaseId} value={item.kycCaseId}>
-                    Case {item.kycCaseId} — {item.customerNumber} — {item.status}
-                  </option>
-                ))}
-              </select>
+      {decisionMessage && (
+        <Alert tone="success" title="Decision recorded" className="mb-6">
+          {decisionMessage}
+          {lastDecision && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {lastDecision.otherStagePending && (
+                <Link className={buttonVariants({ variant: 'accent', size: 'sm' })} href={`${otherStage.path}?caseId=${lastDecision.caseId}`}>
+                  {otherStage.label}<ArrowRight aria-hidden="true" />
+                </Link>
+              )}
+              <Link className={buttonVariants({ variant: 'secondary', size: 'sm' })} href={caseDetailsHref(lastDecision.caseId)}>
+                Back to case
+              </Link>
             </div>
+          )}
+        </Alert>
+      )}
 
-            {error && <div className="error">{error}</div>}
-            {decisionMessage && <div className="success">{decisionMessage}</div>}
-
-            {loadingDocument && <div className="empty">Loading {documentLabel}...</div>}
-
-            {document && !loadingDocument && (
-              <>
-                <div className="card">
-                  <h3>{documentLabel}</h3>
-                  <div className="detail-grid">
-                    <div className="detail-item">
-                      <span>Document ID</span>
-                      <strong>{document.documentId}</strong>
-                    </div>
-                    <div className="detail-item">
-                      <span>File</span>
-                      <strong>{document.fileName}</strong>
-                    </div>
-                    <div className="detail-item">
-                      <span>Type</span>
-                      <strong>{document.contentType}</strong>
-                    </div>
-                    <div className="detail-item">
-                      <span>Size</span>
-                      <strong>{document.size.toLocaleString()} bytes</strong>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="card">
-                  <h3>PDF Preview</h3>
-                  <iframe
-                    title={`${documentLabel} PDF`}
-                    src={`/bff/api/kyc/cases/${selectedCaseId!}/${documentRoute}/content`}
-                    style={{
-                      width: '100%',
-                      height: '720px',
-                      border: '1px solid #d1d5db',
-                      borderRadius: '8px',
-                      background: '#fff',
-                    }}
-                  />
-                </div>
-
-                <div className="card decision-card">
-                  <h3>Human KYC Decision</h3>
-                  <div className="hint">
-                    Enter the remarks supporting the approval or rejection. The KYC API is responsible for the final authorization decision.
-                  </div>
-
-                  <label className="decision-label" htmlFor="decisionRemarks">
-                    Remarks for decision
-                  </label>
-                  <textarea
-                    id="decisionRemarks"
-                    value={decisionRemarks}
-                    onChange={event => setDecisionRemarks(event.target.value)}
-                    maxLength={4000}
-                    rows={5}
-                    disabled={!awaitingDecision || submittingDecision !== null}
-                    placeholder="Enter approval notes or the reason for rejection..."
-                  />
-                  <div className="character-count">{decisionRemarks.length} / 4000</div>
-
-                  <div className="decision-actions">
+      <div className="grid items-start gap-6 xl:grid-cols-[300px_minmax(0,1fr)_380px]">
+        {/* 1. Work queue */}
+        <Card className="xl:sticky xl:top-6">
+          <CardHeader
+            icon={<Inbox />}
+            title="Awaiting review"
+            description={loading ? 'Loading…' : `${cases.length} case${cases.length === 1 ? '' : 's'} in your branch`}
+          />
+          {loading && <div className="space-y-3 p-4">{[0, 1, 2].map(i => <Skeleton key={i} className="h-16" />)}</div>}
+          {!loading && cases.length === 0 && (
+            <EmptyState icon={<CheckCircle2 />} title="Queue is clear">No cases are awaiting {stageName.toLowerCase()}.</EmptyState>
+          )}
+          {cases.length > 0 && (
+            <ul className="max-h-[calc(100vh-14rem)] divide-y divide-line overflow-y-auto" role="listbox" aria-label="KYC cases awaiting review">
+              {cases.map(item => {
+                const active = item.kycCaseId === selectedCaseId;
+                return (
+                  <li key={item.kycCaseId} role="option" aria-selected={active}>
                     <button
                       type="button"
-                      className="danger-button"
-                      onClick={() => submitDecision('reject')}
-                      disabled={!awaitingDecision || submittingDecision !== null}
+                      onClick={() => setSelectedCaseId(item.kycCaseId)}
+                      className={cn(
+                        'flex w-full flex-col gap-1 border-l-[3px] px-4 py-3 text-left transition-colors',
+                        active ? 'border-accent-500 bg-accent-50/70' : 'border-transparent hover:bg-subtle',
+                      )}
                     >
-                      {submittingDecision === 'reject' ? 'Rejecting...' : 'Reject'}
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-[13px] font-semibold text-ink">{item.applicationNumber ?? `Case ${item.kycCaseId}`}</span>
+                        <span className="text-xs text-ink-faint">#{item.kycCaseId}</span>
+                      </span>
+                      <span className="text-xs text-ink-muted">{item.customerNumber} · {formatDateTime(item.createdAt)}</span>
+                      {item.assignedOfficerUserId && (
+                        <span className="text-xs text-info-700">Assigned · {shortId(item.assignedOfficerUserId)}</span>
+                      )}
                     </button>
-                    <button
-                      type="button"
-                      className="primary-button"
-                      onClick={() => submitDecision('approve')}
-                      disabled={!awaitingDecision || submittingDecision !== null}
-                    >
-                      {submittingDecision === 'approve' ? 'Approving...' : 'Approve'}
-                    </button>
-                  </div>
-                </div>
-              </>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Card>
+
+        {/* 2. Evidence */}
+        <Card className="min-w-0 overflow-hidden">
+          <CardHeader
+            icon={<FileText />}
+            title={documentLabel}
+            description={document ? `${document.fileName} · ${(document.size / 1024).toFixed(0)} KB · uploaded ${formatDateTime(document.createdAt)}` : subtitle}
+            actions={selectedCaseId !== null && document && (
+              <a
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent-700 hover:underline"
+                href={`/bff/api/kyc/cases/${selectedCaseId}/${documentRoute}/content`}
+                target="_blank"
+                rel="noopener"
+              >
+                Open in new tab<ExternalLink className="size-3.5" aria-hidden="true" />
+              </a>
             )}
-          </>
-        )}
-      </section>
+          />
+          {selectedCaseId === null && !loading && (
+            <EmptyState icon={<FileText />} title="No case selected">Select a case from the queue to review its evidence.</EmptyState>
+          )}
+          {loadingDocument && <Skeleton className="m-6 h-[calc(100vh-16rem)] min-h-[520px]" />}
+          {document && !loadingDocument && selectedCaseId !== null && (
+            <iframe
+              title={`${documentLabel} PDF`}
+              src={`/bff/api/kyc/cases/${selectedCaseId}/${documentRoute}/content`}
+              className="block h-[calc(100vh-12rem)] min-h-[560px] w-full bg-subtle"
+            />
+          )}
+        </Card>
+
+        {/* 3. Decision */}
+        <div className="flex flex-col gap-6 xl:sticky xl:top-6">
+          {error && <Alert tone="danger">{error}</Alert>}
+
+          <Card>
+            <CardHeader
+              icon={<UserRound />}
+              title="Case summary"
+              actions={selectedCase && <StatusBadge status={selectedCase.status} />}
+            />
+            <CardContent>
+              {selectedCase ? (
+                <div className="space-y-5">
+                  <DescriptionList
+                    items={[
+                      { label: 'Application', value: <span className="font-mono text-[13px]">{selectedCase.applicationNumber ?? '—'}</span> },
+                      { label: 'Customer', value: <span className="font-mono text-[13px]">{selectedCase.customerNumber}</span> },
+                      { label: 'Branch', value: selectedCase.branchCode ?? '—' },
+                      { label: 'Opened', value: formatDateTime(selectedCase.createdAt) },
+                    ]}
+                  />
+                  <div className="space-y-2 rounded-control border border-line bg-subtle/70 p-3">
+                    <StageRow label="Identity verification" status={selectedCase.identityVerificationStatus} current={verificationStage === 'IdentityVerification'} />
+                    <StageRow label="Document verification" status={selectedCase.documentVerificationStatus} current={verificationStage === 'DocumentVerification'} />
+                  </div>
+                  <p className="text-xs leading-5 text-ink-muted">
+                    {selectedCase.assignedOfficerUserId
+                      ? <>Assigned to officer <span className="font-mono">{shortId(selectedCase.assignedOfficerUserId)}</span>. Only the assigned officer can decide this case.</>
+                      : <>Unassigned. Your first decision assigns this case to you.</>}
+                  </p>
+                  <Link
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent-700 hover:underline"
+                    href={caseDetailsHref(selectedCase.kycCaseId)}
+                  >
+                    Case details<ArrowRight className="size-3.5" aria-hidden="true" />
+                  </Link>
+                </div>
+              ) : (
+                <p className="text-sm text-ink-muted">Select a case to see its details.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader title={`${stageName} decision`} description="Approve the evidence, or reject it with a reason. The KYC API makes the final authorization decision." />
+            <CardContent className="space-y-2">
+              <label htmlFor="decisionRemarks" className="text-[13px] font-medium text-ink">
+                Remarks <span className="font-normal text-ink-faint">(required to reject)</span>
+              </label>
+              <Textarea
+                id="decisionRemarks"
+                value={decisionRemarks}
+                onChange={event => setDecisionRemarks(event.target.value)}
+                maxLength={REMARKS_LIMIT}
+                rows={5}
+                disabled={!awaitingDecision || submittingDecision !== null}
+                placeholder="Approval notes, or the reason for rejection…"
+              />
+              <p className="text-right text-xs text-ink-faint">{decisionRemarks.length} / {REMARKS_LIMIT}</p>
+            </CardContent>
+            <div className="grid grid-cols-2 gap-3 border-t border-line px-6 py-4">
+              <Button
+                variant="danger-outline"
+                size="lg"
+                onClick={() => submitDecision('reject')}
+                disabled={!awaitingDecision || submittingDecision !== null}
+              >
+                <ThumbsDown aria-hidden="true" />
+                {submittingDecision === 'reject' ? 'Rejecting…' : 'Reject'}
+              </Button>
+              <Button
+                variant="accent"
+                size="lg"
+                onClick={() => submitDecision('approve')}
+                disabled={!awaitingDecision || submittingDecision !== null}
+              >
+                <ThumbsUp aria-hidden="true" />
+                {submittingDecision === 'approve' ? 'Approving…' : 'Approve'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      </div>
     </MfeShell>
+  );
+}
+
+function StageRow({ label, status, current }: { label: string; status: string; current: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className={cn('flex items-center gap-2 whitespace-nowrap text-[13px]', current ? 'font-semibold text-ink' : 'text-ink-muted')}>
+        {current && <span className="size-1.5 rounded-full bg-accent-500" aria-hidden="true" />}
+        {label}
+        {current && <span className="sr-only">(this step)</span>}
+      </span>
+      <StatusBadge status={status} />
+    </div>
   );
 }

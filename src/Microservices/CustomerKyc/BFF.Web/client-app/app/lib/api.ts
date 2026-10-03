@@ -5,8 +5,7 @@ export async function getJson<T>(url: string): Promise<T> {
     throw new Error('Authentication required.');
   }
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `Request failed with HTTP ${response.status}.`);
+    throw new Error(errorMessage(await response.text(), response.status));
   }
   return response.json() as Promise<T>;
 }
@@ -36,6 +35,26 @@ export async function postJson<T>(url: string, body: unknown): Promise<T> {
     throw new Error('Authentication required.');
   }
   const text = await response.text();
-  if (!response.ok) throw new Error(text || `Request failed with HTTP ${response.status}.`);
+  if (!response.ok) throw new Error(errorMessage(text, response.status));
   return (text ? JSON.parse(text) : undefined) as T;
+}
+
+/**
+ * Extracts a human-readable reason from an error body: the KYC API's { error },
+ * the BFF's { message }, or ProblemDetails ({ detail, title }). A 403 without a
+ * body (authorization denied, e.g. the case is assigned to another officer)
+ * gets a clear default.
+ */
+function errorMessage(text: string, status: number): string {
+  const fallback = status === 403
+    ? 'You are not permitted to perform this action on this case (for example, it is assigned to another officer).'
+    : `Request failed with HTTP ${status}.`;
+  if (!text) return fallback;
+
+  try {
+    const data = JSON.parse(text) as { error?: string; detail?: string; message?: string; title?: string };
+    return data.error ?? data.detail ?? data.message ?? data.title ?? fallback;
+  } catch {
+    return fallback;
+  }
 }

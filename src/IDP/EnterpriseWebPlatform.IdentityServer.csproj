@@ -20,4 +20,12 @@
     <ProjectReference Include="..\Common\Landscape\EnterpriseWebPlatform.Common.Landscape.csproj" />
   </ItemGroup>
 
+  <!-- The shared design tokens and brand mark (src/Common/DesignSystem) are the single
+       source of the look. Copied into wwwroot on every build, so the IDP stays
+       independently deployable and serves them itself (CSP 'self'). -->
+  <Target Name="CopyDesignSystemAssets" BeforeTargets="BeforeBuild">
+    <Copy SourceFiles="..\Common\DesignSystem\ewp-tokens.css" DestinationFolder="wwwroot\css" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="..\Common\DesignSystem\four-walls-mark.svg" DestinationFolder="wwwroot\res\img" SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>

@@ -1,18 +1,38 @@
- 'use client';
+'use client';
 
+import { ArrowLeft, FileSearch, IdCard, Landmark } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { MfeShell } from '../../../../components/MfeShell';
+import { buttonVariants } from '../../../../components/ui/button';
+import { Card, CardContent, CardHeader } from '../../../../components/ui/card';
+import { cn } from '../../../../components/ui/cn';
+import { DescriptionList, formatDateTime } from '../../../../components/ui/data';
+import { Alert, Skeleton, StatusBadge } from '../../../../components/ui/feedback';
 import { getJson } from '../../../../lib/api';
 
 interface KycCaseDetail {
   kycCaseId: number;
   customerNumber: string;
+  applicationNumber?: string;
+  branchCode?: string;
+  assignedOfficerUserId?: string | null;
   status: string;
+  identityVerificationStatus?: string;
+  identityVerificationByUserId?: string | null;
+  identityVerificationAt?: string | null;
+  identityVerificationRemarks?: string | null;
+  documentVerificationStatus?: string;
+  documentVerificationByUserId?: string | null;
+  documentVerificationAt?: string | null;
+  documentVerificationRemarks?: string | null;
   initiatedByUserId?: string | null;
+  decisionAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
+
+const shortId = (id: string | null | undefined) => (id ? `${id.slice(0, 8)}…` : '—');
 
 export default function KycCaseDetailsPage() {
   const [caseId, setCaseId] = useState<number | null>(null);
@@ -35,34 +55,91 @@ export default function KycCaseDetailsPage() {
   }, []);
 
   return (
-    <MfeShell>
-      <section className="card">
-        <div className="header compact-header">
-          <div>
-            <h2>KYC Case Details</h2>
-            <div className="hint">Authoritative case information from the Customer KYC API.</div>
+    <MfeShell title={data?.applicationNumber ? `KYC case · ${data.applicationNumber}` : `KYC case ${caseId ?? ''}`} subtitle="Customer KYC">
+      <div className="mb-6">
+        <Link className={buttonVariants({ variant: 'ghost', size: 'sm' })} href="/v1/kyc/cases/view-all/">
+          <ArrowLeft aria-hidden="true" />Back to work queue
+        </Link>
+      </div>
+
+      {error && <Alert tone="danger">{error}</Alert>}
+      {!data && !error && <Skeleton className="h-64" />}
+
+      {data && (
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+          <Card>
+            <CardHeader icon={<FileSearch />} title="Case details" description="Authoritative information from the Customer KYC API." actions={<StatusBadge status={data.status} />} />
+            <CardContent>
+              <DescriptionList
+                columns={3}
+                items={[
+                  { label: 'Application', value: <span className="font-mono text-[13px]">{data.applicationNumber ?? '—'}</span> },
+                  { label: 'Customer', value: <span className="font-mono text-[13px]">{data.customerNumber}</span> },
+                  { label: 'Branch', value: data.branchCode ?? '—' },
+                  { label: 'KYC case', value: `#${data.kycCaseId}` },
+                  { label: 'Assigned officer', value: data.assignedOfficerUserId ? <span className="font-mono text-[13px]">{shortId(data.assignedOfficerUserId)}</span> : 'Unassigned' },
+                  { label: 'Initiated by', value: <span className="font-mono text-[13px]">{shortId(data.initiatedByUserId)}</span> },
+                  { label: 'Opened', value: formatDateTime(data.createdAt) },
+                  { label: 'Last updated', value: formatDateTime(data.updatedAt) },
+                  { label: 'Decided', value: formatDateTime(data.decisionAt) },
+                ]}
+              />
+            </CardContent>
+          </Card>
+
+          <div className="flex flex-col gap-4">
+            <StageCard
+              icon={<IdCard />}
+              title="Identity verification"
+              status={data.identityVerificationStatus}
+              decidedBy={data.identityVerificationByUserId}
+              decidedAt={data.identityVerificationAt}
+              remarks={data.identityVerificationRemarks}
+              href={`/v1/kyc/identity-verification/view-all?caseId=${data.kycCaseId}`}
+            />
+            <StageCard
+              icon={<Landmark />}
+              title="Document verification"
+              status={data.documentVerificationStatus}
+              decidedBy={data.documentVerificationByUserId}
+              decidedAt={data.documentVerificationAt}
+              remarks={data.documentVerificationRemarks}
+              href={`/v1/kyc/documents/view-all?caseId=${data.kycCaseId}`}
+            />
           </div>
-          <span className="badge">CASE {caseId ?? '—'}</span>
         </div>
-
-        {error && <div className="error">{error}</div>}
-        {!data && !error && <div className="empty">Loading KYC case...</div>}
-
-        {data && (
-          <div className="detail-grid">
-            <div className="detail-item"><span>KYC Case ID</span><strong>{data.kycCaseId}</strong></div>
-            <div className="detail-item"><span>Customer Number</span><strong>{data.customerNumber}</strong></div>
-            <div className="detail-item"><span>Status</span><strong><span className="status">{data.status}</span></strong></div>
-            <div className="detail-item"><span>Initiated By User ID</span><strong>{data.initiatedByUserId ?? '—'}</strong></div>
-            <div className="detail-item"><span>Created</span><strong>{new Date(data.createdAt).toLocaleString()}</strong></div>
-            <div className="detail-item"><span>Last Updated</span><strong>{new Date(data.updatedAt).toLocaleString()}</strong></div>
-          </div>
-        )}
-
-        <div className="detail-actions">
-          <Link className="secondary-button" href="/v1/kyc/cases/view-all/">Back to KYC Cases</Link>
-        </div>
-      </section>
+      )}
     </MfeShell>
+  );
+}
+
+function StageCard({
+  icon, title, status, decidedBy, decidedAt, remarks, href,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  status?: string;
+  decidedBy?: string | null;
+  decidedAt?: string | null;
+  remarks?: string | null;
+  href: string;
+}) {
+  const pending = (status ?? '').toUpperCase() === 'PENDING_REVIEW';
+  return (
+    <Card>
+      <CardHeader icon={icon} title={title} actions={<StatusBadge status={status} />} />
+      <CardContent className="space-y-3">
+        {pending ? (
+          <Link className={cn(buttonVariants({ variant: 'accent', size: 'sm' }), 'w-full')} href={href}>Review evidence</Link>
+        ) : (
+          <>
+            <p className="text-xs text-ink-muted">
+              Decided by <span className="font-mono">{shortId(decidedBy)}</span> · {formatDateTime(decidedAt)}
+            </p>
+            {remarks && <p className="rounded-control bg-subtle px-3 py-2 text-[13px] text-ink">{remarks}</p>}
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

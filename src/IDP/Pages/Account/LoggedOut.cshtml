@@ -1,24 +1,37 @@
 @page
 @model EnterpriseWebPlatform.IdentityServer.Pages.Account.LoggedOutModel
+@{
+    ViewData["Title"] = "Signed out";
+}
 
-<div class="logged-out-page">
-    <div class="page-header">
-        <h1>You are now signed out</h1>
-    </div>
+<section class="card" aria-labelledby="loggedout-title">
+    <header class="card-head">
+        <span class="card-icon is-success" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        </span>
+        <h1 class="card-title" id="loggedout-title">You're signed out</h1>
+        <p class="card-lead">Your session has ended in every workspace. It is now safe to close this window.</p>
+    </header>
 
     @if (Model.PostLogoutRedirectUri is not null)
     {
-        <p>
-            <a class="post-logout-redirect" href="@Model.PostLogoutRedirectUri">Return to @(Model.ClientName ?? "the application")</a>
+        <div class="actions">
+            <a class="btn btn-secondary btn-block post-logout-redirect" href="@Model.PostLogoutRedirectUri">
+                Return to @(Model.ClientName ?? "the application")
+            </a>
+        </div>
+        <p class="status-line" role="status">
+            <span class="spinner" aria-hidden="true"></span>
+            Taking you back automatically&hellip;
         </p>
     }
 
     @if (Model.SignOutIframeUrl is not null)
     {
-        <iframe class="signout" width="0" height="0" title="Sign-out" src="@Model.SignOutIframeUrl"></iframe>
+        <iframe class="signout" title="Sign-out" src="@Model.SignOutIframeUrl"></iframe>
     }
-</div>
+</section>
 
 @section scripts {
-    <script src="~/js/signout-redirect.js"></script>
+    <script src="~/js/signout-redirect.js" asp-append-version="true"></script>
 }
