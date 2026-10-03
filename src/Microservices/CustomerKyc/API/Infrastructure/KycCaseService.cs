@@ -10,21 +10,21 @@ public sealed class KycCaseService(KycDbContext db, ILogger<KycCaseService> logg
 {
     public async Task<KycCaseResult> CreateOrGetAsync(CreateKycCaseRequest request, CancellationToken ct)
     {
-        var existing = await db.KycCases.SingleOrDefaultAsync(x => x.CustomerNumber == request.CustomerNumber, ct);
+        var existing = await db.KycCases.SingleOrDefaultAsync(x => x.ApplicationId == request.ApplicationId, ct);
         if (existing is not null)
             return new(existing, false);
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         try
         {
-            existing = await db.KycCases.SingleOrDefaultAsync(x => x.CustomerNumber == request.CustomerNumber, ct);
+            existing = await db.KycCases.SingleOrDefaultAsync(x => x.ApplicationId == request.ApplicationId, ct);
             if (existing is not null)
             {
                 await transaction.RollbackAsync(ct);
                 return new(existing, false);
             }
 
-            var entity = new KycCase(request.CustomerNumber, "PENDING_REVIEW", request.InitiatedByUserId);
+            var entity = new KycCase(request.ApplicationId, request.ApplicationNumber, request.CustomerNumber, "PENDING_REVIEW", request.InitiatedByUserId);
             db.KycCases.Add(entity);
             await db.SaveChangesAsync(ct);
 
@@ -39,6 +39,8 @@ public sealed class KycCaseService(KycDbContext db, ILogger<KycCaseService> logg
                 request.CorrelationId,
                 request.CausationId,
                 entity.Id,
+                entity.ApplicationId,
+                entity.ApplicationNumber,
                 entity.CustomerNumber,
                 entity.Status,
                 entity.InitiatedByUserId));
@@ -70,7 +72,7 @@ public sealed class KycCaseService(KycDbContext db, ILogger<KycCaseService> logg
         catch (DbUpdateException)
         {
             await transaction.RollbackAsync(ct);
-            existing = await db.KycCases.SingleOrDefaultAsync(x => x.CustomerNumber == request.CustomerNumber, ct);
+            existing = await db.KycCases.SingleOrDefaultAsync(x => x.ApplicationId == request.ApplicationId, ct);
             if (existing is not null) return new(existing, false);
             throw;
         }
@@ -233,6 +235,8 @@ public sealed class KycCaseService(KycDbContext db, ILogger<KycCaseService> logg
                 correlationId,
                 stageCausationId,
                 caseId,
+                existing.ApplicationId,
+                existing.ApplicationNumber,
                 existing.CustomerNumber,
                 stage == KycVerificationStage.IdentityVerification
                     ? "IDENTITY_VERIFICATION"
@@ -308,6 +312,8 @@ public sealed class KycCaseService(KycDbContext db, ILogger<KycCaseService> logg
                     correlationId,
                     stageMessageId,
                     caseId,
+                    existing.ApplicationId,
+                    existing.ApplicationNumber,
                     existing.CustomerNumber,
                     "PENDING_REVIEW",
                     overallNewStatus,
@@ -392,6 +398,8 @@ public sealed record KycVerificationStageDecisionEvent(
     Guid? CorrelationId,
     Guid CausationId,
     long KycCaseId,
+    long ApplicationId,
+    string ApplicationNumber,
     string CustomerNumber,
     string Stage,   // "IDENTITY_VERIFICATION" / "DOCUMENT_VERIFICATION" - a stable code, not an enum ordinal
     string PreviousStageStatus,
@@ -410,6 +418,8 @@ public sealed record KycCaseDecisionEvent(
     Guid? CorrelationId,
     Guid CausationId,
     long KycCaseId,
+    long ApplicationId,
+    string ApplicationNumber,
     string CustomerNumber,
     string PreviousStatus,
     string NewStatus,
@@ -465,6 +475,8 @@ public sealed record KycCaseStageDecisionResult(
 }
 
 public sealed record CreateKycCaseRequest(
+    long ApplicationId,
+    string ApplicationNumber,
     string CustomerNumber,
     string? InitiatedByUserId,
     Guid? WorkflowId,
@@ -481,6 +493,8 @@ public sealed record KycCaseCreatedEvent(
     Guid? CorrelationId,
     Guid CausationId,
     long KycCaseId,
+    long ApplicationId,
+    string ApplicationNumber,
     string CustomerNumber,
     string Status,
     string? InitiatedByUserId);

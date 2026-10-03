@@ -79,25 +79,33 @@ Workflow identifiers currently travel only in the message body, not in Kafka hea
 
 | Event type | Topic | Key | Payload | Consumers | Status |
 |---|---|---|---|---|---|
-| `CustomerCreated` | `customer.created` | Customer ID | `CustomerId`, `CustomerNumber`, `SubjectId`, `CustomerType`, `Status` | `CustomerKycSubscriber` (interim KYC trigger — see §5) | Present |
-| `OnboardingApplicationSubmitted` | `onboarding.application.submitted` | Application ID | `ApplicationId`, `CustomerId`, `ApplicationNumber` | Customer KYC (target trigger) | Published; **no consumer yet** |
-| `OnboardingApplicationStatusChanged` | `onboarding.application.status.changed` | Application ID | `ApplicationId`, `CustomerId`, `PreviousStatus`, `NewStatus` | Notifications (planned) | Published; **no consumer yet** |
+| `CustomerCreated` | `customer.created` | Customer ID | `CustomerId`, `CustomerNumber`, `SubjectId`, `CustomerType`, `Status` | — | Published; no consumer |
+| `OnboardingApplicationSubmitted` | `onboarding.application.submitted` | Application ID | `ApplicationId`, `CustomerId`, `ApplicationNumber`, `CustomerNumber` | `CustomerKycSubscriber` → Customer KYC opens one case per application | Present |
+| `OnboardingApplicationStatusChanged` | `onboarding.application.status.changed` | Application ID | `ApplicationId`, `CustomerId`, `PreviousStatus`, `NewStatus` | Notifications (planned) | Published; no consumer yet |
 
 ### 4.2 Customer KYC (producer: Customer KYC API, in-process Outbox relay)
 
 | Event type | Topic | Key | Consumers | Status |
 |---|---|---|---|---|
-| `KycCaseCreated` | `kyc.case.created` | KYC case ID | Notifications (planned) | Published; no consumer |
+| `KycCaseCreated` | `kyc.case.created` | KYC case ID | `CustomerOnboardingKycSubscriber` (application → KYC_IN_PROGRESS); Notifications (planned) | Present |
 | `KycIdentityVerificationApproved` | `kyc.identity.verification.approved` | KYC case ID | — | Published; no consumer |
 | `KycIdentityVerificationRejected` | `kyc.identity.verification.rejected` | KYC case ID | — | Published; no consumer |
 | `KycDocumentVerificationApproved` | `kyc.document.verification.approved` | KYC case ID | — | Published; no consumer |
 | `KycDocumentVerificationRejected` | `kyc.document.verification.rejected` | KYC case ID | — | Published; no consumer |
-| `KycCaseApproved` | `kyc.case.approved` | KYC case ID | Customer Onboarding, Compliance (planned) | Published; **no consumer yet** |
-| `KycCaseRejected` | `kyc.case.rejected` | KYC case ID | Customer Onboarding (planned) | Published; **no consumer yet** |
+| `KycCaseApproved` | `kyc.case.approved` | KYC case ID | `CustomerOnboardingKycSubscriber` (application → KYC_COMPLETED); Compliance (planned) | Present |
+| `KycCaseRejected` | `kyc.case.rejected` | KYC case ID | `CustomerOnboardingKycSubscriber` (application → REJECTED) | Present |
 
-The KYC payload fields are `KycCaseId` and `CustomerNumber`, plus the status fields (`Status`, or `PreviousStatus`/`NewStatus`, or the `Stage` with `PreviousStageStatus`/`NewStageStatus`) and the decision fields (`DecisionByUserId`, `DecisionAt`, remarks).
+All KYC payloads carry `KycCaseId`, `ApplicationId`, `ApplicationNumber` and `CustomerNumber`, plus the status fields (`Status`, or `PreviousStatus`/`NewStatus`, or the `Stage` with `PreviousStageStatus`/`NewStageStatus`) and the decision fields (`DecisionByUserId`, `DecisionAt`, remarks).
 
-### 4.3 Planned events
+**Cross-topic ordering.** Kafka orders messages only within one partition of one topic. `kyc.case.created` and `kyc.case.approved` are different topics, so a consumer may see the approval first. Consumers must tolerate this; Customer Onboarding's aggregate applies the outstanding transitions and ignores facts it is already beyond.
+
+### 4.3 Dead-letter topics
+
+| Topic | Owner | Contents |
+|---|---|---|
+| `customer-onboarding.kyc-subscriber.dlq` | `CustomerOnboardingKycSubscriber` | Messages that can never be processed (malformed, unknown type, no application, rejected with 4xx), copied unchanged with headers `dlq-reason`, `dlq-original-topic`, `dlq-original-partition`, `dlq-original-offset`, `dlq-consumer-group`, `dlq-failed-at`. Transient failures are never dead-lettered. |
+
+### 4.4 Planned events
 
 | Event type | Topic | Producer | Consumers | Status |
 |---|---|---|---|---|
@@ -109,8 +117,6 @@ The KYC payload fields are `KycCaseId` and `CustomerNumber`, plus the status fie
 
 ## 5. Known Deviations from the Target
 
-1. **KYC trigger.** KYC currently opens one case per *customer* from `customer.created`. The target is one KYC case per *onboarding application*, triggered by `onboarding.application.submitted` (see the [Saga plan](EWP-V3-Saga-Choreography-and-Orchestration-Plans.md)).
-2. **No consumer** exists yet for the `onboarding.application.*` or `kyc.*` topics, so the choreography stops after the KYC decision.
-3. **No dead-letter topics.** A consumer that cannot process a message cannot park it.
-4. **No Inbox.** Consumer idempotency currently relies on a business unique key (`customer_number` in KYC), not on `MessageId`.
-5. **KYC events do not use the standard envelope** (see §3.1).
+1. **Only Customer Onboarding has an Inbox.** `CustomerKycSubscriber` still relies on the business key (one KYC case per `application_id`) for idempotency, and has no dead-letter topic.
+2. **KYC events do not use the standard envelope** (see §3.1).
+3. **Workflow identifiers travel in the body**, not in Kafka headers.

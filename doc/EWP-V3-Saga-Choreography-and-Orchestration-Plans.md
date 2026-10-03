@@ -1,6 +1,6 @@
 # Enterprise Web Platform V3 — Saga Plans
 
-**Status:** Living document. Customer Onboarding choreography is partially implemented (first hop); Payments orchestration is planned.
+**Status:** Living document. Customer Onboarding choreography is implemented from submission through the KYC decision and back (both directions between CO and KYC); Compliance and Accounts are planned; Payments orchestration is planned.
 
 ---
 
@@ -38,16 +38,18 @@ There is no central coordinator. Each participating context:
 | # | Step | Trigger | Producer → event | Status |
 |---|---|---|---|---|
 | 1 | Customer and application created; application submitted | Human (agent) via the CO MFE / BFF | CO → `CustomerCreated`, `OnboardingApplicationSubmitted`, `OnboardingApplicationStatusChanged` | Present |
-| 2 | KYC case opened | `customer.created` (**interim**) → target: `onboarding.application.submitted` | KYC → `KycCaseCreated` | Present (interim trigger) |
-| 3 | Application moves to KYC_IN_PROGRESS | `kyc.case.created` | CO → `OnboardingApplicationStatusChanged` | Planned |
+| 2 | KYC case opened, one per application | `onboarding.application.submitted` | KYC → `KycCaseCreated` | Present |
+| 3 | Application moves to KYC_IN_PROGRESS | `kyc.case.created` | CO → `OnboardingApplicationStatusChanged` | Present |
 | 4 | Human KYC review of two stages (may take days) | KYC officers | KYC → stage events, then `KycCaseApproved` / `KycCaseRejected` | Present |
-| 5 | CO records the KYC outcome | `kyc.case.approved` / `rejected` | CO → status changed | Planned |
+| 5 | CO records the KYC outcome (KYC_COMPLETED or REJECTED) | `kyc.case.approved` / `rejected` | CO → status changed | Present |
 | 6 | Compliance case, screening, human decision | `kyc.case.approved` | Compliance → `ComplianceCaseApproved` / `Rejected` | Planned |
 | 7 | Account application, human approval, account opened | `compliance.case.approved` | Accounts → `AccountOpened` / `AccountOpeningFailed` | Planned |
 | 8 | Onboarding completes or compensates | Accounts outcome | CO → status changed | Planned |
 | 9 | Initiator and other entitled users notified | status-change events | Notifications → SignalR | Planned |
 
-**Why the KYC trigger moves to submission.** A customer may have more than one application over time. KYC belongs to an *application*, and only submission means the evidence is complete.
+**Why KYC is triggered by submission.** A customer may have more than one application over time. KYC belongs to an *application*, and only submission means the evidence is complete.
+
+**Steps 3 and 5 run in Customer Onboarding's own worker** (`CustomerOnboardingKycSubscriber`). It delivers each KYC fact to the CO API, where the `OnboardingApplication` aggregate decides the transition. Because the facts arrive on different topics, they can arrive out of order or more than once: the aggregate applies only the transitions still outstanding, and the Inbox makes each fact count once.
 
 ## 1.3 The MFE / BFF boundary
 
@@ -154,10 +156,11 @@ Retry, timeout and circuit breaker protect **individual technical interactions**
 - [x] CO publishes business events through its Outbox, with workflow, correlation, causation and initiator data
 - [x] KYC subscriber consumes, authenticates with M2M and creates the KYC case
 - [x] Human KYC approval / rejection as domain state plus Outbox events
-- [ ] KYC triggered by `onboarding.application.submitted` (one case per application)
-- [ ] CO consumes `kyc.*` outcomes
-- [ ] Inbox / idempotency in every consumer
-- [ ] Timeout, circuit breaker and dead-letter handling in every consumer
+- [x] KYC triggered by `onboarding.application.submitted` (one case per application)
+- [x] CO consumes `kyc.*` outcomes (`CustomerOnboardingKycSubscriber`)
+- [x] Inbox / idempotency in the CO consumer
+- [x] Timeout, retry, circuit breaker and dead-letter handling in the CO consumer
+- [ ] The same Inbox and dead-letter handling in `CustomerKycSubscriber`
 - [ ] Compliance participant
 - [ ] Accounts participant
 - [ ] Compensation paths, including DM document invalidation

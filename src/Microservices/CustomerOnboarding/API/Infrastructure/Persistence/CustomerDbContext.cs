@@ -6,6 +6,7 @@ using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Persiste
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Aggregates;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Common;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Entities;
+using EnterpriseWebPlatform.CustomerOnboarding.Domain.Enums;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Events;
 using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Messaging;
 using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence.Inbox;
@@ -17,8 +18,17 @@ public sealed class CustomerDbContext :
     DbContext,
     IApplicationUnitOfWork,
     ICustomerReadContext,
-    IOnboardingApplicationReadContext
+    IOnboardingApplicationReadContext,
+    IInboxStore
 {
+    /// <summary>
+    /// The only M2M client that may state a human initiator (X-Initiated-By-User-Id):
+    /// the Customer Onboarding KYC subscriber, which copies it from the KYC event.
+    /// </summary>
+    private static readonly string TrustedInitiatorAssertingClient =
+        EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo.CustomerOnboardingMicroservice
+            .CLIENT_ID_FOR_IDP_FOR_CUST_ONBOARDING_KYC_SUBSCRIBER_TO_CUST_ONBOARDING_API_M2M;
+
     private readonly IHttpContextAccessor _httpContextAccessor;
 
     public CustomerDbContext(
@@ -198,10 +208,17 @@ public sealed class CustomerDbContext :
                         context.CausationId,
                         lastMessageIdByAggregate);
 
+                    var customerNumber = await Customers
+                        .AsNoTracking()
+                        .Where(x => x.Id == submitted.CustomerId)
+                        .Select(x => x.CustomerNumber.Value)
+                        .SingleAsync(cancellationToken);
+
                     var integrationEvent = new OnboardingApplicationSubmittedIntegrationEvent(
                         submitted.ApplicationId,
                         submitted.CustomerId,
-                        submitted.ApplicationNumber);
+                        submitted.ApplicationNumber,
+                        customerNumber);
 
                     var envelope = new IntegrationEventEnvelope<OnboardingApplicationSubmittedIntegrationEvent>(
                         messageId,
@@ -248,8 +265,8 @@ public sealed class CustomerDbContext :
                     var integrationEvent = new OnboardingApplicationStatusChangedIntegrationEvent(
                         statusChanged.ApplicationId,
                         statusChanged.CustomerId,
-                        statusChanged.PreviousStatus.ToString().ToUpperInvariant(),
-                        statusChanged.NewStatus.ToString().ToUpperInvariant());
+                        statusChanged.PreviousStatus.ToCode(),
+                        statusChanged.NewStatus.ToCode());
 
                     var envelope = new IntegrationEventEnvelope<OnboardingApplicationStatusChangedIntegrationEvent>(
                         messageId,
@@ -380,11 +397,44 @@ public sealed class CustomerDbContext :
 
     private Guid? GetInitiatedByUserId()
     {
-        var subject = _httpContextAccessor.HttpContext?.User.FindFirst("sub")?.Value;
+        var httpContext = _httpContextAccessor.HttpContext;
+        var subject = httpContext?.User.FindFirst("sub")?.Value;
 
-        return Guid.TryParse(subject, out var subjectId)
-            ? subjectId
-            : null;
+        if (subject is not null)
+        {
+            // A human caller is the initiator.
+            return Guid.TryParse(subject, out var subjectId) ? subjectId : null;
+        }
+
+        // An M2M caller has no human subject. Only the pinned KYC subscriber may
+        // carry the ORIGINAL human initiator forward (it copies it from the KYC
+        // event), so the workflow's accountability survives the asynchronous hop.
+        // It is attribution only - never an authorization grant.
+        var clientId = httpContext?.User.FindFirst("client_id")?.Value;
+        if (string.Equals(clientId, TrustedInitiatorAssertingClient, StringComparison.Ordinal) &&
+            Guid.TryParse(httpContext!.Request.Headers["X-Initiated-By-User-Id"].FirstOrDefault(), out var initiator))
+        {
+            return initiator;
+        }
+
+        return null;
+    }
+
+    // ------------------------------------------------------------------
+    // IInboxStore
+    // ------------------------------------------------------------------
+
+    public Task<bool> HasProcessedAsync(Guid messageId, string consumer, CancellationToken cancellationToken) =>
+        InboxMessages
+            .AsNoTracking()
+            .AnyAsync(x => x.MessageId == messageId && x.Consumer == consumer, cancellationToken);
+
+    public void RecordProcessed(Guid messageId, string consumer)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var inboxMessage = InboxMessage.Create(messageId, consumer, now);
+        inboxMessage.MarkProcessed(now);
+        InboxMessages.Add(inboxMessage);
     }
 
     private static void ClearDomainEvents(

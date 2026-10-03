@@ -196,6 +196,7 @@ The domain layer has no knowledge of HTTP, EF Core, Kafka or the IDP.
 | CO BFF + MFE | Customer Onboarding | ASP.NET Core 10 + Next.js | — | Present |
 | CO API | Customer Onboarding | ASP.NET Core 10 | `EwpCustomerDb` | Present |
 | CustomerOutboxPublisher | Customer Onboarding | .NET worker | `EwpCustomerDb` (Outbox table only) | Present |
+| CustomerOnboardingKycSubscriber | Customer Onboarding | .NET worker | — (records outcomes through the CO API) | Present |
 | KYC BFF + MFE | Customer KYC | NestJS + Next.js | — | Present |
 | KYC API (+ in-process Outbox relay) | Customer KYC | ASP.NET Core 10 | `EwpKycDb` | Present |
 | CustomerKycSubscriber | Customer KYC | .NET worker | — | Present |
@@ -394,11 +395,11 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Standard event envelope; Workflow / Correlation / Causation IDs | Present (CO); Partial (KYC flat messages) |
 | Kafka backbone, at-least-once model | Present |
 | KYC subscriber (M2M, bounded retry) | Present |
-| Inbox / idempotent consumer | Planned |
-| Timeouts | Partial |
-| Circuit breakers | Planned |
-| Dead-letter / poison-message handling | Planned |
-| Saga choreography | Partial (first hop: CO → KYC) |
+| Inbox / idempotent consumer | Partial (Customer Onboarding; KYC relies on a business key) |
+| Timeouts | Partial (CO KYC subscriber: per attempt and total) |
+| Circuit breakers | Partial (CO KYC subscriber → CO API) |
+| Dead-letter / poison-message handling | Partial (CO KYC subscriber; not yet the KYC subscriber) |
+| Saga choreography | Partial (CO ⇄ KYC both directions; Compliance and Accounts planned) |
 | Compensation | Planned |
 | Saga orchestration (Payments) | Planned |
 | User-specific SignalR notifications | Planned |
@@ -436,17 +437,17 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [x] API authorization of the M2M caller
 - [x] Bounded retry
 - [x] Transactional business update + next Outbox event (KYC)
-- [ ] Inbox / idempotency
+- [x] Inbox / idempotency (Customer Onboarding consumer)
+- [x] Timeout, circuit breaker, dead-letter handling (Customer Onboarding consumer)
+- [ ] The same for the KYC subscriber
 - [ ] Timeout on every call
-- [ ] Circuit breaker
-- [ ] Dead-letter / poison-message handling
 - [ ] Structured tracing
 
 **Phase 3 — Distributed workflow:** a complete choreographed saga
 - [x] Customer Onboarding
 - [x] KYC human review
-- [ ] KYC triggered per application
-- [ ] CO reacts to KYC outcomes
+- [x] KYC triggered per application
+- [x] CO reacts to KYC outcomes
 - [ ] Compliance
 - [ ] Account opening
 - [ ] Compensation

@@ -20,6 +20,8 @@ public static class PersistenceRegistration
 
         services.AddScoped<IOnboardingApplicationReadContext>(
             provider => provider.GetRequiredService<CustomerDbContext>());
+        services.AddScoped<IInboxStore>(
+            provider => provider.GetRequiredService<CustomerDbContext>());
 
         return services;
     }

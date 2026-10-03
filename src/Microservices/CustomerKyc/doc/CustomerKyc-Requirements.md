@@ -66,7 +66,8 @@ API scopes: `customer-kyc.read`, `customer-kyc.write`.
 
 `KycCase` is currently an **anemic entity**: statuses are strings, and the decision rules live in `KycCaseService`. Its fields:
 
-- `CustomerNumber` — unique; this is the current idempotency key.
+- `ApplicationId` (unique) and `ApplicationNumber` — the onboarding application, held by value. The unique `ApplicationId` is the idempotency key for case creation.
+- `CustomerNumber` — the application's customer (not unique: one customer can have several applications).
 - `Status` — the overall case status.
 - Identity-verification stage: status, decided-by user, decided-at, remarks.
 - Document-verification stage: status, decided-by user, decided-at, remarks.
@@ -79,7 +80,6 @@ The database backs the rules with CHECK constraints: valid statuses, stage metad
 
 - `KycCase` aggregate root with typed statuses and behaviour (`DecideStage`, `RequestInformation`, `Hold`) that enforces the §6 rules itself.
 - `VerificationStage` value or entity (Identity, Document) with its own status and decision.
-- `ApplicationId` / `ApplicationNumber` reference: one case per **onboarding application** (see §7).
 - A resource `Branch` for ABAC, and `AssignedOfficer` for ReBAC.
 - Domain events raised by the aggregate and mapped to integration events by the Outbox.
 
@@ -87,7 +87,7 @@ The database backs the rules with CHECK constraints: valid statuses, stage metad
 
 | Term | Meaning |
 |---|---|
-| KYC Case | The unit of KYC work for one onboarding application (currently: one customer) |
+| KYC Case | The unit of KYC work for one onboarding application |
 | Verification Stage | Identity Verification or Document Verification; each is decided independently |
 | Stage Decision | Approve or reject one stage, with remarks |
 | Case Decision | The derived overall outcome |
@@ -133,9 +133,9 @@ Target additional states: `AWAITING_INFORMATION` (more evidence requested; retur
 
 | Direction | What | Status |
 |---|---|---|
-| In | `customer.created` → subscriber → `POST /internal/v1/kyc/cases/from-customer-created` (M2M) | Present (**interim** trigger) |
-| In | `onboarding.application.submitted` → one case per application | Planned (target trigger) |
-| Out | `kyc.case.created`, `kyc.identity.verification.*`, `kyc.document.verification.*`, `kyc.case.approved`, `kyc.case.rejected` | Present |
+| In | `onboarding.application.submitted` → subscriber → `POST /internal/v1/kyc/cases/from-application-submitted` (M2M): one case per application | Present |
+| Out | `kyc.case.created`, `kyc.identity.verification.*`, `kyc.document.verification.*`, `kyc.case.approved`, `kyc.case.rejected`, each carrying `ApplicationId` / `ApplicationNumber` | Present |
+| Consumed by | Customer Onboarding (`CustomerOnboardingKycSubscriber`) records `kyc.case.created` / `approved` / `rejected` on the application | Present |
 | Sync | KYC BFF → Documents Management (`documents-management.read`, M2M) for the identity proof and tax proof | Present |
 
 Contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Event-Catalogue.md).
@@ -176,9 +176,9 @@ Contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Event-Ca
 | Branch scope and `assigned_to` ReBAC | Planned (the case has no branch or assignee yet) |
 | SoD fails closed when the initiator is missing | **Gap**: the check is skipped when `InitiatedByUserId` is null |
 | Aggregate-based domain model (§4.2) | Planned |
-| One case per application | Planned (currently one per customer) |
+| One case per application | Present (`uq_kyc_cases_application_id`) |
 | Standard event envelope | **Gap**: KYC events are flat |
-| Inbox in the subscriber | Planned (idempotency currently relies on unique `customer_number`) |
+| Inbox in the subscriber | Planned (idempotency currently relies on the unique `application_id`) |
 | Poison-message handling / dead-letter topic in the subscriber | **Gap**: an unprocessable message stops the worker |
 | Document lookup | Present: by business reference and document type only (the filename fallback is removed). The officer's branch is passed to Documents Management, so an officer sees only evidence uploaded in their own branch. |
 | Safe evidence display | Present: only DM-verified PDF is shown inline (`nosniff`, framable only by the KYC MFE); other types are downloaded; content is streamed |

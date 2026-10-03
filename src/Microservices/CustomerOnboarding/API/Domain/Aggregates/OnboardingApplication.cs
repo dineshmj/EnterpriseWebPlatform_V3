@@ -77,6 +77,49 @@ public sealed class OnboardingApplication : AggregateRoot
             Id, CustomerId, previous, Status, UpdatedAt));
     }
 
+    // ------------------------------------------------------------------
+    // Reactions to Customer KYC facts (saga choreography).
+    //
+    // KYC facts arrive asynchronously, at least once, and on different topics,
+    // so they can be repeated or arrive out of order (e.g. "approved" before
+    // "case opened"). Each method is therefore tolerant: it applies the
+    // transition(s) still outstanding and is a no-op when the application is
+    // already at or beyond the state the fact implies. Returns true when the
+    // application changed.
+    // ------------------------------------------------------------------
+
+    /// <summary>KYC opened a case for this application: SUBMITTED → KYC_IN_PROGRESS.</summary>
+    public bool RecordKycCaseOpened()
+    {
+        if (Status != OnboardingApplicationStatus.Submitted)
+            return false;
+
+        StartKyc();
+        return true;
+    }
+
+    /// <summary>KYC approved: (SUBMITTED →) KYC_IN_PROGRESS → KYC_COMPLETED.</summary>
+    public bool RecordKycApproved()
+    {
+        var changed = RecordKycCaseOpened();
+
+        if (Status != OnboardingApplicationStatus.KycInProgress)
+            return changed;
+
+        CompleteKyc();
+        return true;
+    }
+
+    /// <summary>KYC rejected: SUBMITTED / KYC_IN_PROGRESS → REJECTED (terminal).</summary>
+    public bool RecordKycRejected()
+    {
+        if (Status is not (OnboardingApplicationStatus.Submitted or OnboardingApplicationStatus.KycInProgress))
+            return false;
+
+        Reject();
+        return true;
+    }
+
     public void Reject() => SetTerminalStatus(OnboardingApplicationStatus.Rejected);
     public void Cancel() => SetTerminalStatus(OnboardingApplicationStatus.Cancelled);
 

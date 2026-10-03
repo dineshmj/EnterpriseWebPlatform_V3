@@ -56,6 +56,7 @@ The IDP authenticates humans and services and issues the tokens and claims that 
 | `CustomerOnboarding.BFF.To.DocumentsManagement.M2M.ClientID` | M2M | CO BFF → DM (`documents-management.write`) | Present |
 | `Kyc.BFF.To.DocumentsManagement.M2M.ClientID` | M2M | KYC BFF → DM (`documents-management.read`) | Present |
 | `CustomerKyc.Subscriber.To.CustomerKycApi.M2M.ClientID` | M2M | KYC subscriber → KYC API (`customer-kyc.write`) | Present |
+| `CustomerOnboarding.KycSubscriber.To.CustomerOnboardingApi.M2M.ClientID` | M2M | CO KYC subscriber → CO API internal endpoint (`customer-onboarding.write`) | Present |
 | `BSS.ApiTesting.Bruno.ClientID` | Interactive (public, PKCE) | Developer API testing with Bruno; redirect URIs `http://127.0.0.1:3000/callback` and `https://oauth.usebruno.com/callback` | Present, registered **only in Development** |
 
 ## 4. API Resources and Scopes

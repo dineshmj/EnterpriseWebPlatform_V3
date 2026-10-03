@@ -33,6 +33,11 @@
         "DebugTarget": "CustomerKycSubscriber"
       },
       {
+        "Path": "src\\AsyncWorkflows\\Subscribers\\CustomerOnboarding\\CustomerOnboardingKycSubscriber\\CustomerOnboardingKycSubscriber.csproj",
+        "Action": "Start",
+        "DebugTarget": "CustomerOnboardingKycSubscriber"
+      },
+      {
         "Path": "src\\Shell\\EnterpriseWebPlatform.BSS.BFFWeb.csproj",
         "Action": "Start",
         "DebugTarget": "https"

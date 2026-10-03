@@ -151,7 +151,8 @@ What the platform is, how it is designed and what each component must do are doc
 				"kyc.identity.verification.approved",
 				"kyc.identity.verification.rejected",
 				"kyc.document.verification.approved",
-				"kyc.document.verification.rejected"
+				"kyc.document.verification.rejected",
+				"customer-onboarding.kyc-subscriber.dlq"
 			)
 
 			foreach ($t in $topics) {
@@ -159,6 +160,12 @@ What the platform is, how it is designed and what each component must do are doc
 			}
 
 		The authoritative topic list is doc\Integration-Event-Catalogue.md.
+
+		IMPORTANT - recreating databases means recreating topics:
+			Database IDs restart at 1 when a database is recreated, but Kafka keeps the old messages, and consumer groups would replay
+			them against the new data (e.g. an old "application 1" event applied to a new application 1). Whenever you recreate the
+			Customer Onboarding or KYC database, delete and recreate the topics above (Kafka UI, or kafka-topics.sh --delete followed by the
+			creation loop above). Deleting a topic also discards the consumer groups' offsets for it.
 
 	g) Build and export the front ends:
 
@@ -181,7 +188,12 @@ What the platform is, how it is designed and what each component must do are doc
 
 	a) Visual Studio: use the multi-project launch profile in EnterpriseWebPlatform.BSS.slnLaunch. It starts:
 
-		IDP, Documents Management API, Customer Onboarding API, Customer KYC API, CustomerOutboxPublisher, CustomerKycSubscriber, Shell BFF and Customer Onboarding BFF.
+		IDP, Documents Management API, Customer Onboarding API, Customer KYC API, CustomerOutboxPublisher, CustomerKycSubscriber, CustomerOnboardingKycSubscriber, Shell BFF and Customer Onboarding BFF.
+
+		Every publisher and subscriber is a console (generic host) application. Several instances of each may run in parallel:
+		publishers claim Outbox rows with FOR UPDATE SKIP LOCKED, subscribers share one Kafka consumer group per subscriber (one
+		partition = one instance), and consumers are idempotent. Topics are created with 1 partition, so extra subscriber instances
+		are hot standbys until the partition count is raised.
 
 	b) The Customer KYC BFF is NestJS and is NOT in that profile. Start it separately:
 
@@ -197,6 +209,8 @@ What the platform is, how it is designed and what each component must do are doc
 		- In Kafka UI, check that customer.created and the onboarding.application.* topics received messages.
 		- Sign out, sign in as ethan.kyc or noah.kyc, open KYC Cases, and decide the identity and document stages.
 		- In Kafka UI, check the kyc.* topics.
+		- Back as sophie.cs, the application's status has moved SUBMITTED -> KYC_IN_PROGRESS (when the KYC case opened) -> KYC_COMPLETED
+		  (when KYC approved), recorded by CustomerOnboardingKycSubscriber. EwpCustomerDb.inbox_messages holds one row per KYC event processed.
 
 
 5) Troubleshooting:

@@ -5,21 +5,21 @@ Kafka subscriber **owned by the Customer KYC bounded context**: it is deployed a
 ## Current flow
 
 ```text
-Kafka customer.created
+Kafka onboarding.application.submitted
         |
         v
-Deserialize / validate event
+Deserialize / validate event (ApplicationId, ApplicationNumber, CustomerNumber)
         |
         v
 Acquire M2M access token
         |
         v
-POST /internal/v1/kyc/cases/from-customer-created
+POST /internal/v1/kyc/cases/from-application-submitted
         |
         v
 Customer KYC API
         |
-        +--> idempotent KYC case creation
+        +--> idempotent KYC case creation (one case per application)
         +--> KYC business state
         +--> KYC Outbox event
         |
@@ -61,4 +61,4 @@ Other current limitations:
 
 ## Event compatibility
 
-The subscriber understands the current V3 envelope shape containing `Payload`, and also accepts the older direct-event shape. When `InitiatedByUserId` is present in the envelope or payload it is forwarded to the KYC API. If it is absent, the KYC API receives `null` and the subscriber logs a warning.
+The subscriber reads the standard envelope (workflow metadata at the top level, the event under `Payload`) as a tolerant reader: unknown fields are ignored. `InitiatedByUserId` is forwarded to the KYC API; if it is absent the KYC API receives `null` and the subscriber logs a warning. Events published before `CustomerNumber` was added to `OnboardingApplicationSubmitted` are rejected as invalid. Recreate the topics when you recreate the databases (ReadMe.txt §3f).

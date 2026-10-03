@@ -42,6 +42,30 @@ public sealed class KafkaProducer : IKafkaProducer, IDisposable
             cancellationToken);
     }
 
+    public async Task ProduceAsync(
+        string topic,
+        string key,
+        string payload,
+        IReadOnlyDictionary<string, string> headers,
+        CancellationToken cancellationToken)
+    {
+        var kafkaHeaders = new Headers();
+        foreach (var (name, value) in headers)
+        {
+            kafkaHeaders.Add(name, System.Text.Encoding.UTF8.GetBytes(value));
+        }
+
+        await _producer.ProduceAsync(
+            topic,
+            new Message<string, string>
+            {
+                Key = key,
+                Value = payload,
+                Headers = kafkaHeaders
+            },
+            cancellationToken);
+    }
+
     public void Dispose()
     {
         _producer.Flush(TimeSpan.FromSeconds(5));

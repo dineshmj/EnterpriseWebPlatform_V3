@@ -3,6 +3,15 @@ DROP TABLE IF EXISTS outbox_messages CASCADE;
 
 CREATE TABLE IF NOT EXISTS kyc_cases (
     id BIGSERIAL PRIMARY KEY,
+
+    -- One KYC case per onboarding APPLICATION (owned by Customer Onboarding and
+    -- referenced here by value only - no cross-database foreign key). The unique
+    -- application_id is also the business idempotency key for case creation.
+    application_id BIGINT NOT NULL,
+    application_number VARCHAR(30) NOT NULL,
+
+    -- The customer the application belongs to; a customer can have several
+    -- applications and therefore several KYC cases over time.
     customer_number VARCHAR(100) NOT NULL,
 
     -- Overall KYC case status. This becomes APPROVED only after
@@ -32,7 +41,7 @@ CREATE TABLE IF NOT EXISTS kyc_cases (
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
 
-    CONSTRAINT uq_kyc_cases_customer_number UNIQUE (customer_number),
+    CONSTRAINT uq_kyc_cases_application_id UNIQUE (application_id),
 
     CONSTRAINT ck_kyc_cases_status
         CHECK (status IN ('PENDING_REVIEW','APPROVED','REJECTED')),
@@ -116,6 +125,10 @@ CREATE TABLE IF NOT EXISTS kyc_cases (
 
 CREATE INDEX IF NOT EXISTS ix_kyc_cases_status
     ON kyc_cases (status);
+
+-- Evidence and case history are looked up per customer.
+CREATE INDEX IF NOT EXISTS ix_kyc_cases_customer_number
+    ON kyc_cases (customer_number);
 
 CREATE TABLE IF NOT EXISTS outbox_messages (
     id UUID PRIMARY KEY,

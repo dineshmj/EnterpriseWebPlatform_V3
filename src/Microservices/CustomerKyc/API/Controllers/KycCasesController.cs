@@ -43,6 +43,7 @@ public sealed class KycCasesController(KycDbContext db, KycCaseService service) 
             .Select(x => new KycCaseListItem(
                 x.Id,
                 x.CustomerNumber,
+                x.ApplicationNumber,
                 x.Status,
                 x.IdentityVerificationStatus,
                 x.IdentityVerificationByUserId,
@@ -74,6 +75,7 @@ public sealed class KycCasesController(KycDbContext db, KycCaseService service) 
             .Select(x => new KycCaseDetail(
                 x.Id,
                 x.CustomerNumber,
+                x.ApplicationNumber,
                 x.Status,
                 x.IdentityVerificationStatus,
                 x.IdentityVerificationByUserId,
@@ -176,6 +178,7 @@ public sealed class KycCasesController(KycDbContext db, KycCaseService service) 
 public sealed record KycCaseListItem(
     long KycCaseId,
     string CustomerNumber,
+    string ApplicationNumber,
     string Status,
     string IdentityVerificationStatus,
     string? IdentityVerificationByUserId,
@@ -201,6 +204,7 @@ public sealed record PagedKycCasesResponse(
 public sealed record KycCaseDetail(
     long KycCaseId,
     string CustomerNumber,
+    string ApplicationNumber,
     string Status,
     string IdentityVerificationStatus,
     string? IdentityVerificationByUserId,

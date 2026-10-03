@@ -17,7 +17,7 @@ public sealed class CustomerKycApiClient(
     private readonly CustomerKycSubscriberOptions _options = options.Value;
 
     public async Task CallAsync(
-        CustomerCreatedMessage message,
+        ApplicationSubmittedMessage message,
         string accessToken,
         CancellationToken cancellationToken)
     {
@@ -25,9 +25,11 @@ public sealed class CustomerKycApiClient(
 
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            "/internal/v1/kyc/cases/from-customer-created")
+            "/internal/v1/kyc/cases/from-application-submitted")
         {
             Content = JsonContent.Create(new CreateKycCaseRequest(
+                message.ApplicationId,
+                message.ApplicationNumber,
                 message.CustomerNumber,
                 message.InitiatedByUserId,
                 message.WorkflowId,
@@ -73,6 +75,8 @@ public sealed class CustomerKycApiClient(
         (int)statusCode >= 500;
 
     private sealed record CreateKycCaseRequest(
+        long ApplicationId,
+        string ApplicationNumber,
         string CustomerNumber,
         string? InitiatedByUserId,
         Guid? WorkflowId,

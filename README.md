@@ -21,7 +21,7 @@ Enterprise Web Platform V3 (EWP V3) is a demonstration banking-services platform
 |---|---|---|---|
 | Identity Provider | `src/IDP` | Duende IdentityServer 8, ASP.NET Core 10 | Present |
 | Shell (BFF + SPA) | `src/Shell` | ASP.NET Core 10 + Next.js | Present |
-| Customer Onboarding (MFE/BFF, API, Outbox relay) | `src/Microservices/CustomerOnboarding`, `src/AsyncWorkflows/Publishers/CustomerOnboarding` | Next.js, ASP.NET Core 10, .NET worker | Present |
+| Customer Onboarding (MFE/BFF, API, Outbox relay, KYC subscriber) | `src/Microservices/CustomerOnboarding`, `src/AsyncWorkflows/Publishers/CustomerOnboarding`, `src/AsyncWorkflows/Subscribers/CustomerOnboarding` | Next.js, ASP.NET Core 10, .NET workers | Present |
 | Customer KYC (MFE/BFF, API, subscriber) | `src/Microservices/CustomerKyc`, `src/AsyncWorkflows/Subscribers/CustomerKyc` | Next.js, NestJS, ASP.NET Core 10, .NET worker | Present |
 | Documents Management (API) | `src/Microservices/DocumentsManagement` | ASP.NET Core 10 | Present |
 | Compliance, Accounts, Payments | `src/Microservices/…` | — | Planned |
@@ -66,6 +66,7 @@ How to build, configure and run one deployable:
 - [CO BFF README](src/Microservices/CustomerOnboarding/BFF.Web/README.md)
 - [KYC BFF README](src/Microservices/CustomerKyc/BFF.Web/README.md)
 - [KYC Subscriber README](src/AsyncWorkflows/Subscribers/CustomerKyc/README.md)
+- [CO KYC Subscriber README](src/AsyncWorkflows/Subscribers/CustomerOnboarding/CustomerOnboardingKycSubscriber/README.md)
 - [DM API README](src/Microservices/DocumentsManagement/API/README.md)
 
 ### Local development

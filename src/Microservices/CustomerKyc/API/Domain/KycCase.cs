@@ -4,8 +4,15 @@ public sealed class KycCase
 {
     private KycCase() { }
 
-    public KycCase(string customerNumber, string status, string? initiatedByUserId)
+    public KycCase(
+        long applicationId,
+        string applicationNumber,
+        string customerNumber,
+        string status,
+        string? initiatedByUserId)
     {
+        ApplicationId = applicationId;
+        ApplicationNumber = applicationNumber;
         CustomerNumber = customerNumber;
         Status = status;
         InitiatedByUserId = initiatedByUserId;
@@ -16,6 +23,11 @@ public sealed class KycCase
     }
 
     public long Id { get; private set; }
+
+    /// <summary>The onboarding application this case verifies (Customer Onboarding's ID, held by value).</summary>
+    public long ApplicationId { get; private set; }
+
+    public string ApplicationNumber { get; private set; } = string.Empty;
 
     public string CustomerNumber { get; private set; } = string.Empty;
 

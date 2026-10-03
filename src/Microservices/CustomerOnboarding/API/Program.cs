@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
 using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
+using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 using EnterpriseWebPlatform.CustomerOnboarding.API.Authorization;
 using EnterpriseWebPlatform.CustomerOnboarding.Application;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Exceptions;
@@ -163,6 +164,17 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAuthenticatedUser();
         policy.RequireClaim("scope", CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_WRITE);
         policy.RequireRole("customer_service_agent");
+    });
+
+    // Internal, machine-only endpoint: workflow facts from other bounded contexts.
+    // Pinned to the one M2M client that exists to deliver them.
+    options.AddPolicy("KycOutcomeSubscriberWrite", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireClaim("scope", CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_WRITE);
+        policy.RequireClaim(
+            "client_id",
+            CustomerOnboardingMicroservice.CLIENT_ID_FOR_IDP_FOR_CUST_ONBOARDING_KYC_SUBSCRIBER_TO_CUST_ONBOARDING_API_M2M);
     });
 });
 

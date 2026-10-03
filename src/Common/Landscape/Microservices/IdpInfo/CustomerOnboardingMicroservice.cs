@@ -6,6 +6,11 @@ public static class CustomerOnboardingMicroservice
 
 	public const string CLIENT_ID_FOR_IDP = "CustomerOnboarding.Microservice.BFF.ClientID";
 
+	// M2M: the Customer Onboarding KYC subscriber (consumes kyc.case.* and records the
+	// outcome on the onboarding application through the Customer Onboarding API).
+	public const string CLIENT_NAME_FOR_IDP_FOR_CUST_ONBOARDING_KYC_SUBSCRIBER_TO_CUST_ONBOARDING_API_M2M = "Customer Onboarding KYC Subscriber to Customer Onboarding API M2M Client";
+	public const string CLIENT_ID_FOR_IDP_FOR_CUST_ONBOARDING_KYC_SUBSCRIBER_TO_CUST_ONBOARDING_API_M2M = "CustomerOnboarding.KycSubscriber.To.CustomerOnboardingApi.M2M.ClientID";
+
 
 	public const string BFF_CLIENT_BASE_URL = "https://customer.dev.localhost:44311";
 

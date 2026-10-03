@@ -39,12 +39,13 @@ public sealed class CustomerKycSubscriberHostedService(
         string payload,
         CancellationToken cancellationToken)
     {
-        var message = DeserializeCustomerCreatedMessage(payload);
+        var message = DeserializeApplicationSubmittedMessage(payload);
 
         // DEBUG POINT #1: Put a breakpoint here to inspect the Kafka event before any downstream call.
         logger.LogInformation(
-            "Received customer.created. MessageId={MessageId}, CustomerNumber={CustomerNumber}, InitiatedByUserId={InitiatedByUserId}, WorkflowId={WorkflowId}, CorrelationId={CorrelationId}, CausationId={CausationId}, KafkaKey={KafkaKey}",
+            "Received onboarding.application.submitted. MessageId={MessageId}, ApplicationNumber={ApplicationNumber}, CustomerNumber={CustomerNumber}, InitiatedByUserId={InitiatedByUserId}, WorkflowId={WorkflowId}, CorrelationId={CorrelationId}, CausationId={CausationId}, KafkaKey={KafkaKey}",
             message.MessageId,
+            message.ApplicationNumber,
             message.CustomerNumber,
             message.InitiatedByUserId,
             message.WorkflowId,
@@ -52,19 +53,24 @@ public sealed class CustomerKycSubscriberHostedService(
             message.CausationId,
             key);
 
-        if (!string.Equals(message.EventType, "CustomerCreated", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(message.EventType, "OnboardingApplicationSubmitted", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
                 $"Unexpected event type '{message.EventType}' on topic '{_options.Topic}'.");
         }
 
-        if (string.IsNullOrWhiteSpace(message.CustomerNumber))
-            throw new InvalidOperationException("CustomerCreated event did not contain CustomerNumber.");
+        if (message.ApplicationId <= 0 ||
+            string.IsNullOrWhiteSpace(message.ApplicationNumber) ||
+            string.IsNullOrWhiteSpace(message.CustomerNumber))
+        {
+            throw new InvalidOperationException(
+                "OnboardingApplicationSubmitted event did not contain ApplicationId, ApplicationNumber and CustomerNumber.");
+        }
 
         if (string.IsNullOrWhiteSpace(message.InitiatedByUserId))
         {
             logger.LogWarning(
-                "CustomerCreated event {MessageId} does not contain InitiatedByUserId. The KYC case will be created without human initiator attribution.",
+                "OnboardingApplicationSubmitted event {MessageId} does not contain InitiatedByUserId. The KYC case will be created without human initiator attribution.",
                 message.MessageId);
         }
 
@@ -112,55 +118,28 @@ public sealed class CustomerKycSubscriberHostedService(
             lastException);
     }
 
-    private static CustomerCreatedMessage DeserializeCustomerCreatedMessage(string payload)
+    private static ApplicationSubmittedMessage DeserializeApplicationSubmittedMessage(string payload)
     {
-        using var document = JsonDocument.Parse(payload);
-        var root = document.RootElement;
+        // onboarding.application.submitted is published in the standard envelope:
+        // workflow metadata at the top level, the event itself under "Payload".
+        var envelope = JsonSerializer.Deserialize<ApplicationSubmittedEnvelope>(payload, JsonOptions)
+            ?? throw new InvalidOperationException("OnboardingApplicationSubmitted envelope could not be deserialized.");
 
-        // Current V3 customer.created messages are envelopes containing Payload.
-        if (root.TryGetProperty("Payload", out var payloadElement) ||
-            root.TryGetProperty("payload", out payloadElement))
-        {
-            var envelope = JsonSerializer.Deserialize<CustomerCreatedEnvelope>(
-                payload,
-                JsonOptions);
+        var application = envelope.Payload
+            ?? throw new InvalidOperationException("OnboardingApplicationSubmitted envelope did not contain a Payload.");
 
-            if (envelope is null)
-                throw new InvalidOperationException("CustomerCreated event envelope could not be deserialized.");
-
-            var customer = JsonSerializer.Deserialize<CustomerCreatedPayload>(
-                payloadElement.GetRawText(),
-                JsonOptions);
-
-            if (customer is null)
-                throw new InvalidOperationException("CustomerCreated event payload could not be deserialized.");
-
-            return new CustomerCreatedMessage(
-                envelope.MessageId,
-                envelope.EventType,
-                envelope.OccurredAt,
-                customer.CustomerNumber,
-                envelope.InitiatedByUserId ?? customer.InitiatedByUserId,
-                envelope.WorkflowId,
-                envelope.CorrelationId,
-                envelope.CausationId,
-                envelope.Source);
-        }
-
-        // Compatibility with the older direct-event shape used by the original subscriber.
-        var direct = JsonSerializer.Deserialize<LegacyCustomerCreatedEvent>(payload, JsonOptions)
-            ?? throw new InvalidOperationException("CustomerCreated event could not be deserialized.");
-
-        return new CustomerCreatedMessage(
-            direct.MessageId,
-            direct.EventType,
-            direct.OccurredAt,
-            direct.CustomerNumber,
-            direct.InitiatedByUserId,
-            null,
-            ParseNullableGuid (direct.CorrelationId),
-            ParseNullableGuid (direct.CausationId),
-            null);
+        return new ApplicationSubmittedMessage(
+            envelope.MessageId,
+            envelope.EventType,
+            envelope.OccurredAt,
+            application.ApplicationId,
+            application.ApplicationNumber,
+            application.CustomerNumber,
+            envelope.InitiatedByUserId,
+            envelope.WorkflowId,
+            envelope.CorrelationId,
+            envelope.CausationId,
+            envelope.Source);
     }
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -168,7 +147,8 @@ public sealed class CustomerKycSubscriberHostedService(
         PropertyNameCaseInsensitive = true
     };
 
-    private sealed record CustomerCreatedEnvelope(
+    // Tolerant reader: only the fields KYC needs; unknown fields are ignored.
+    private sealed record ApplicationSubmittedEnvelope(
         Guid MessageId,
         string EventType,
         string? Source,
@@ -176,41 +156,18 @@ public sealed class CustomerKycSubscriberHostedService(
         Guid? WorkflowId,
         Guid? CorrelationId,
         Guid? CausationId,
-        string? InitiatedByUserId);
+        string? InitiatedByUserId,
+        ApplicationSubmittedPayload? Payload);
 
-    private sealed record CustomerCreatedPayload(
+    private sealed record ApplicationSubmittedPayload(
+        long ApplicationId,
         long CustomerId,
-        string CustomerNumber,
-        Guid? SubjectId,
-        string CustomerType,
-        string Status,
-        string? InitiatedByUserId = null);
-
-    private sealed record LegacyCustomerCreatedEvent(
-        Guid MessageId,
-        string EventType,
-        DateTimeOffset OccurredAt,
-        string CustomerNumber,
-        string? FirstName,
-        string? LastName,
-        string? Email,
-        string? CustomerType,
-        string? Status,
-        long? BranchId,
-        string? InitiatedByUserId = null,
-        string? CorrelationId = null,
-        string? CausationId = null);
+        string ApplicationNumber,
+        string CustomerNumber);
 
     public override Task StopAsync(CancellationToken cancellationToken)
     {
         logger.LogInformation("Customer KYC Subscriber is stopping.");
         return base.StopAsync(cancellationToken);
-    }
-
-    private static Guid? ParseNullableGuid(string? value)
-    {
-        return Guid.TryParse(value, out var guid)
-            ? guid
-            : null;
     }
 }

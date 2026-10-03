@@ -40,10 +40,8 @@ public sealed class OnboardingApplicationConfiguration
         builder.Property(x => x.Status)
             .HasColumnName("status")
             .HasConversion(
-                value => value.ToString().ToUpperInvariant(),
-                value => Enum.Parse<OnboardingApplicationStatus>(
-                    value,
-                    ignoreCase: true))
+                value => value.ToCode(),
+                value => OnboardingApplicationStatusCode.FromCode(value))
             .HasMaxLength(50)
             .IsRequired();
 

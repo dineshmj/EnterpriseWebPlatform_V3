@@ -27,6 +27,7 @@ Customer Onboarding owns the **customer** and the **onboarding application** —
 | CO BFF | `BFF.Web` | ASP.NET Core 10 + Duende BFF |
 | CO API | `API` | ASP.NET Core 10, EF Core, PostgreSQL |
 | CO Outbox relay | `src/AsyncWorkflows/Publishers/CustomerOnboarding/CustomerOutboxPublisher` | .NET worker service. Reads `EwpCustomerDb`, so it is **part of this bounded context**, not a shared component. |
+| CO KYC subscriber | `src/AsyncWorkflows/Subscribers/CustomerOnboarding/CustomerOnboardingKycSubscriber` | .NET worker service. Consumes `kyc.case.*` and records each outcome through the CO API (M2M). **Part of this bounded context.** |
 | Database | `EwpCustomerDb` (`API/CustomerDB/EwpCustomerDb.sql`) | PostgreSQL |
 
 ---
@@ -74,6 +75,7 @@ API scopes: `customer-onboarding.read`, `customer-onboarding.write`.
 - References its customer **by ID only** (`CustomerId`). The customer is not part of the application aggregate.
 - Attributes: `OnboardingApplicationStatus`, `SubmittedAt`, `CompletedAt`, `Version` (optimistic concurrency).
 - Raises: `OnboardingApplicationSubmitted`, `OnboardingApplicationStatusChanged`.
+- Reacts to KYC facts through `RecordKycCaseOpened`, `RecordKycApproved` and `RecordKycRejected`. These are tolerant of repeated and out-of-order facts: they apply only the transitions still outstanding, and report whether anything changed.
 
 ### 4.2 Invariants
 
@@ -145,9 +147,9 @@ Any non-terminal ──StartCompensation──► COMPENSATING ──► COMPENS
 
 | Incoming event | CO reaction | Status |
 |---|---|---|
-| `KycCaseCreated` (for this application) | SUBMITTED → KYC_IN_PROGRESS | Planned |
-| `KycCaseApproved` | KYC_IN_PROGRESS → KYC_COMPLETED | Planned |
-| `KycCaseRejected` | → REJECTED | Planned |
+| `KycCaseCreated` (for this application) | SUBMITTED → KYC_IN_PROGRESS | Present |
+| `KycCaseApproved` | (SUBMITTED →) KYC_IN_PROGRESS → KYC_COMPLETED; ignored when already beyond | Present |
+| `KycCaseRejected` | SUBMITTED / KYC_IN_PROGRESS → REJECTED; ignored after KYC_COMPLETED | Present |
 | `ComplianceCaseApproved` / `Rejected` | → COMPLIANCE_COMPLETED / REJECTED | Planned |
 | `AccountOpened` / `AccountOpeningFailed` | → COMPLETED / COMPENSATING | Planned |
 
@@ -174,7 +176,7 @@ Event contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Ev
 | Create a customer | `customer_service_agent` + write scope + the residential address is within the agent's branch scope (otherwise 403) |
 | Submit | `customer.onboarding.submit` + application in DRAFT + version match |
 | Customer self-service | `_own` permissions + the customer `owns` the application |
-| Workflow-driven transitions (§5.3) | Only via the event consumer's service identity, never via user endpoints |
+| Workflow-driven transitions (§5.3) | Only through `POST /internal/v1/onboarding/applications/{id}/kyc-outcomes`, pinned to the `CustomerOnboarding.KycSubscriber.To.CustomerOnboardingApi.M2M.ClientID` client with `customer-onboarding.write`; never via user endpoints. That client alone may state the human initiator (`X-Initiated-By-User-Id`), so the resulting events keep the original initiator for attribution. |
 
 ---
 
@@ -195,8 +197,10 @@ Event contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Ev
 | Aggregates, value objects, domain events, CQRS handlers | Present |
 | Transactional Outbox with workflow, correlation and causation IDs and `initiated_by` | Present |
 | Outbox relay publishing all three event types | Present: `SKIP LOCKED` claiming (multi-instance safe), per-aggregate ordering, bounded retries with exponential backoff, parking after `MaxAttempts`, idempotent `acks=all` producer |
-| Reactions to KYC / Compliance / Accounts events (§5.3) | Planned |
-| Inbox / idempotent consumer (`InboxMessage` exists but is unused) | Planned |
+| Reactions to KYC events (§5.3) | Present (`CustomerOnboardingKycSubscriber`) |
+| Reactions to Compliance / Accounts events | Planned |
+| Inbox / idempotent consumer | Present: `inbox_messages` (unique `message_id` + `consumer`) is written in the same transaction as the transition and its Outbox events; a redelivered KYC event returns `Duplicate` |
+| Consumer resilience | Present: timeout, retry with jitter and circuit breaker on the API call; transient failures retried in place; permanent failures to `customer-onboarding.kyc-subscriber.dlq` |
 | API scope enforced per operation | Present (read policies require `customer-onboarding.read`, write policies `customer-onboarding.write`) |
 | Role-based endpoint policies | Present |
 | Branch-scoped object-level authorization | Present (`CustomerResourceAuthorization` + `CustomerAccessScope`): applied to single reads, lists (filtered in the database), updates, application creation and submission; out-of-scope resources return 404 |

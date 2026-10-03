@@ -16,6 +16,9 @@ public sealed class KycDbContext(DbContextOptions<KycDbContext> options) : DbCon
             e.ToTable("kyc_cases");
             e.HasKey(x => x.Id).HasName("pk_kyc_cases");
             e.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
+            e.Property(x => x.ApplicationId).HasColumnName("application_id").IsRequired();
+            e.Property(x => x.ApplicationNumber).HasColumnName("application_number").HasMaxLength(30).IsRequired();
+            e.HasIndex(x => x.ApplicationId).IsUnique().HasDatabaseName("uq_kyc_cases_application_id");
             e.Property(x => x.CustomerNumber).HasColumnName("customer_number").HasMaxLength(100).IsRequired();
             e.Property(x => x.Status).HasColumnName("status").HasMaxLength(50).IsRequired();
             e.Property(x => x.InitiatedByUserId).HasColumnName("initiated_by_user_id").HasMaxLength(200);
