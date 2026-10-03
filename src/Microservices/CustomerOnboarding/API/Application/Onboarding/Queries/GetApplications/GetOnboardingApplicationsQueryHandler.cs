@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 
+using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Authorization;
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Persistence;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Application.Onboarding.Queries.GetApplications;
@@ -8,20 +9,32 @@ public sealed class GetOnboardingApplicationsQueryHandler
 {
     private readonly IOnboardingApplicationReadContext _readContext;
 
+    private readonly ICustomerReadContext _customerReadContext;
+
     public GetOnboardingApplicationsQueryHandler(
-        IOnboardingApplicationReadContext readContext)
+        IOnboardingApplicationReadContext readContext,
+        ICustomerReadContext customerReadContext)
     {
         _readContext = readContext;
+        _customerReadContext = customerReadContext;
     }
 
     public async Task<PagedResult<OnboardingApplicationListItemDto>> HandleAsync(
         GetOnboardingApplicationsQuery query,
+        CustomerAccessScope scope,
         CancellationToken cancellationToken)
     {
         var pageNumber = Math.Max(1, query.PageNumber);
         var pageSize = Math.Clamp(query.PageSize, 1, 100);
 
-        var applications = _readContext.OnboardingApplications.AsNoTracking();
+        // Only applications of customers within the caller's scope.
+        var customersInScope = _customerReadContext.Customers
+            .WithinScope(scope)
+            .Select(customer => customer.Id);
+
+        var applications = _readContext.OnboardingApplications
+            .AsNoTracking()
+            .Where(application => customersInScope.Contains(application.CustomerId));
 
         if (query.CustomerId.HasValue)
         {

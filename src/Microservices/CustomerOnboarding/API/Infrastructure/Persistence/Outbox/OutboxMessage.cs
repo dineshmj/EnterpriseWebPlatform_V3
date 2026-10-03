@@ -34,6 +34,9 @@ public sealed class OutboxMessage
 
     public Guid Id { get; private set; }
 
+    /// <summary>Database-assigned insertion order; defines publication order per aggregate.</summary>
+    public long Sequence { get; private set; }
+
     public string AggregateType { get; private set; } = string.Empty;
 
     public string AggregateId { get; private set; } = string.Empty;
@@ -60,7 +63,12 @@ public sealed class OutboxMessage
 
     public string? LastError { get; private set; }
 
+    /// <param name="messageId">
+    /// The integration event's MessageId. The Outbox row uses the same identifier,
+    /// so a row, its Kafka message and any CausationId pointing at it all agree.
+    /// </param>
     public static OutboxMessage Create(
+        Guid messageId,
         string aggregateType,
         string aggregateId,
         string eventType,
@@ -71,13 +79,15 @@ public sealed class OutboxMessage
         Guid? causationId,
         Guid? initiatedByUserId)
     {
+        if (messageId == Guid.Empty)
+            throw new ArgumentException("A message ID is required.", nameof(messageId));
         ArgumentException.ThrowIfNullOrWhiteSpace(aggregateType);
         ArgumentException.ThrowIfNullOrWhiteSpace(aggregateId);
         ArgumentException.ThrowIfNullOrWhiteSpace(eventType);
         ArgumentNullException.ThrowIfNull(payload);
 
         return new OutboxMessage(
-            Guid.NewGuid(),
+            messageId,
             aggregateType,
             aggregateId,
             eventType,

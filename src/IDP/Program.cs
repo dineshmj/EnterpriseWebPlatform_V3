@@ -1,3 +1,5 @@
+using System.Threading.RateLimiting;
+
 using Microsoft.EntityFrameworkCore;
 
 using Serilog;
@@ -34,6 +36,22 @@ try
 
     builder.Services.AddRazorPages();
 
+    // Login throttling per client IP, complementing per-account lockout
+    // (UserRepository): slows password spraying across many usernames.
+    builder.Services.AddRateLimiter(options =>
+    {
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+        options.AddPolicy("login", context =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 20,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0
+                }));
+    });
+
     builder.Services.ConfigureApplicationCookie(options =>
     {
         options.Cookie.SameSite = SameSiteMode.None;
@@ -46,6 +64,11 @@ try
         // potentially causing authentication or silent-login failures.
     });
 
+    // Client secrets come from this deployable's configuration. The client list
+    // is materialized now, so a missing secret stops start-up (fail closed).
+    ClientSecretStore.Initialize(builder.Configuration);
+    var clients = Config.GetClients(builder.Environment.IsDevelopment()).ToList();
+
     builder.Services
         .AddIdentityServer(options =>
         {
@@ -57,10 +80,9 @@ try
         .AddInMemoryIdentityResources(Config.IdentityResources)
         .AddInMemoryApiScopes(Config.ApiScopes)
         .AddInMemoryApiResources(Config.ApiResources)
-        .AddInMemoryClients(Config.Clients)
-        .AddResourceOwnerValidator<CustomResourceOwnerPasswordValidator>()
+        .AddInMemoryClients(clients)
         .AddProfileService<CustomProfileService>()
-        .AddDeveloperSigningCredential();
+        .AddSigningCredential(builder);
 
     var app = builder.Build();
 
@@ -81,6 +103,7 @@ try
     app.UseStaticFiles();
 
     app.UseRouting();
+    app.UseRateLimiter();
 
     app.UseCookiePolicy();
 

@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 
 using EnterpriseWebPlatform.IdentityServer.Data;
 using EnterpriseWebPlatform.IdentityServer.Data.Entities;
@@ -133,14 +134,53 @@ public sealed class UserRepository : IUserRepository
                 candidate => candidate.UserName == username,
                 cancellationToken);
 
-        if (user is null || !user.IsActive)
+        var now = DateTimeOffset.UtcNow;
+
+        // Unknown, inactive and locked-out users cost the same hash computation
+        // as a real check and get the same generic failure, so the response
+        // neither reveals which usernames exist nor that an account is locked.
+        if (user is null || !user.IsActive || user.LockoutEnd > now)
         {
+            _passwordManager.VerifyAgainstDummyHash(password);
             return false;
         }
 
-        return _passwordManager.VerifyPassword(
+        var result = _passwordManager.VerifyPassword(
             user,
             user.HashedPassword,
             password);
+
+        if (result == PasswordVerificationResult.Failed)
+        {
+            user.AccessFailedCount++;
+
+            if (user.AccessFailedCount >= MaxFailedAccessAttempts)
+            {
+                user.LockoutEnd = now.Add(LockoutDuration);
+                user.AccessFailedCount = 0;
+            }
+
+            user.UpdatedAt = now;
+            await _context.SaveChangesAsync(cancellationToken);
+            return false;
+        }
+
+        // Success or SuccessRehashNeeded: both are valid credentials. A rehash is
+        // required after a hasher upgrade; failing it would lock out valid users.
+        if (result == PasswordVerificationResult.SuccessRehashNeeded)
+        {
+            user.HashedPassword = _passwordManager.HashPassword(user, password);
+        }
+
+        user.AccessFailedCount = 0;
+        user.LockoutEnd = null;
+        user.UpdatedAt = now;
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return true;
     }
+
+    private const int MaxFailedAccessAttempts = 5;
+
+    private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
 }

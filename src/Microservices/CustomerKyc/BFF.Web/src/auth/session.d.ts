@@ -11,6 +11,8 @@ export interface KycUserSession {
   subject: string;
   name?: string;
   roles: string[];
+  /** The user's branch code (ABAC). Sent to Documents Management as the acting branch. */
+  branch?: string;
 }
 
 declare module 'express-session' {

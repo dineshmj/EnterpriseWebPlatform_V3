@@ -22,7 +22,12 @@ public sealed class CustomerOnboardingApiResource : IDuendeApiResource
                 {
                     "role",
                     "name",
-                    "email"
+                    "email",
+
+                    // ABAC: branch scope of a Customer Service Agent
+                    "branch",
+                    "branch_city",
+                    "branch_country_code"
                 }
         };
 }

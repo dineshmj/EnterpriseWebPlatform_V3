@@ -266,7 +266,14 @@ CREATE TABLE onboarding_applications
 
 CREATE TABLE outbox_messages
 (
+    -- Equals the integration event's MessageId, so a row and its Kafka message
+    -- share one identifier.
     id                  UUID         NOT NULL,
+
+    -- Monotonic insertion order, assigned by the database. Events raised in one
+    -- transaction (e.g. Submitted + StatusChanged) share the same occurred_at;
+    -- the relay publishes each aggregate's events strictly in this order.
+    sequence            BIGINT       GENERATED ALWAYS AS IDENTITY,
 
     aggregate_type      VARCHAR(100) NOT NULL,
     aggregate_id        VARCHAR(100) NOT NULL,
@@ -389,12 +396,15 @@ CREATE INDEX ix_onboarding_applications_status_created_at
 -- Unpublished messages are the primary polling workload of the
 -- Outbox Publisher. A partial index keeps this index focused on the
 -- rows that still need to be published.
+CREATE UNIQUE INDEX ux_outbox_messages_sequence
+    ON outbox_messages (sequence);
+
 CREATE INDEX ix_outbox_messages_unpublished
-    ON outbox_messages (occurred_at)
+    ON outbox_messages (sequence)
     WHERE published_at IS NULL;
 
 CREATE INDEX ix_outbox_messages_aggregate
-    ON outbox_messages (aggregate_type, aggregate_id);
+    ON outbox_messages (aggregate_type, aggregate_id, sequence);
 
 CREATE INDEX ix_outbox_messages_initiated_by
     ON outbox_messages (initiated_by);

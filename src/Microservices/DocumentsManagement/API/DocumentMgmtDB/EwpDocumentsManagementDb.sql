@@ -64,6 +64,10 @@ CREATE TABLE documents
     document_type       VARCHAR(100)  NULL,
     business_reference  VARCHAR(255)  NULL,
 
+    -- Branch scope of the uploading actor; used for object-level
+    -- authorization. NULL (legacy rows) is accessible to nobody.
+    resource_branch     VARCHAR(20)   NULL,
+
     created_at          TIMESTAMPTZ   NOT NULL,
     updated_at          TIMESTAMPTZ   NOT NULL,
 
@@ -82,8 +86,9 @@ CREATE TABLE documents
 CREATE INDEX ix_documents_content_hash
     ON documents (content_hash);
 
-CREATE INDEX ix_documents_business_reference_document_type
-    ON documents (business_reference, document_type);
+CREATE INDEX ix_documents_resource_branch_business_reference_document_type
+    ON documents (resource_branch, business_reference, document_type);
+
 
 -- ============================================================================
 -- DESIGN NOTE

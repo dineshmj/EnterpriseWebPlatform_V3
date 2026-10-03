@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
 using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
+using EnterpriseWebPlatform.CustomerOnboarding.API.Authorization;
 using EnterpriseWebPlatform.CustomerOnboarding.Application;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Exceptions;
 using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence;
@@ -70,6 +71,7 @@ builder.Services.AddDbContext<CustomerDbContext>(options =>
 
 builder.Services.AddCustomerOnboardingPersistence();
 builder.Services.AddCustomerOnboardingApplication();
+builder.Services.AddScoped<CustomerResourceAuthorization>();
 
 var authority =
     builder.Configuration["Authentication:Authority"]
@@ -119,12 +121,18 @@ builder.Services.AddAuthorization(options =>
             CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_WRITE);
     });
 
-    // These policies are intentionally role-based at this stage. They provide
-    // a clean hook for the V3 authorization model without embedding business
-    // authorization logic inside controllers.
+    // Operation policies: the client must hold the scope for THIS kind of
+    // operation (a read-only token never passes a write endpoint), and the user
+    // must hold an appropriate role. Object-level (branch) scope is enforced by
+    // CustomerResourceAuthorization in the controllers.
+    //
+    // Writes are business operations: only Customer Service Agents perform them.
+    // Operations and platform administrators read for support purposes but never
+    // change customer data (operational authority is not business authority).
     options.AddPolicy("CustomerRead", policy =>
     {
         policy.RequireAuthenticatedUser();
+        policy.RequireClaim("scope", CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_READ);
         policy.RequireRole(
             "customer_service_agent",
             "operations_administrator",
@@ -135,15 +143,14 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("CustomerWrite", policy =>
     {
         policy.RequireAuthenticatedUser();
-        policy.RequireRole(
-            "customer_service_agent",
-            "operations_administrator",
-            "platform_administrator");
+        policy.RequireClaim("scope", CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_WRITE);
+        policy.RequireRole("customer_service_agent");
     });
 
     options.AddPolicy("OnboardingRead", policy =>
     {
         policy.RequireAuthenticatedUser();
+        policy.RequireClaim("scope", CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_READ);
         policy.RequireRole(
             "customer_service_agent",
             "operations_administrator",
@@ -154,10 +161,8 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("OnboardingWrite", policy =>
     {
         policy.RequireAuthenticatedUser();
-        policy.RequireRole(
-            "customer_service_agent",
-            "operations_administrator",
-            "platform_administrator");
+        policy.RequireClaim("scope", CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_WRITE);
+        policy.RequireRole("customer_service_agent");
     });
 });
 

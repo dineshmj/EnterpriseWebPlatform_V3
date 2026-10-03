@@ -1,50 +1,33 @@
-# Documents Management Microservice API
+# Documents Management API
 
-Initial V3 implementation of the Documents Management bounded context.
+Technical guide to the Documents Management API. Purpose, boundary, rules and gaps: [DocumentsManagement-Requirements.md](../doc/DocumentsManagement-Requirements.md).
 
-## Purpose
+## Run
 
-The service owns generic document metadata and the storage boundary. It deliberately does not know about Customer Onboarding, KYC, AML, risk, or other business contexts.
+ASP.NET Core 10 on Kestrel, launch profile `https`: `https://documents-management-api.dev.localhost:49486`.
 
 ## Database
 
-Database: `EwpDocumentsManagementDb`
+- Database: `EwpDocumentsManagementDb`
+- Script: `DocumentMgmtDB/EwpDocumentsManagementDb.sql`. Connect to the database first; the script recreates its table.
 
-SQL: `DocumentMgmtDB/EwpDocumentsManagementDb.sql`
+## Storage
+
+`LocalFileSystemDocumentStorage` stores content under the configured `DocumentStorage:RootPath`. Storage references are resolved under that root only (path-traversal safe). The implementation sits behind `IDocumentStorage` and can be replaced by object storage.
 
 ## API
 
-- `POST /v1/documents` - multipart upload
-- `GET /v1/documents` - list metadata
-- `GET /v1/documents/{documentId}` - get metadata
-- `GET /v1/documents/{documentId}/content` - retrieve content
-- `DELETE /v1/documents/{documentId}` - delete document and storage object
+| Method and route | Policy | Purpose |
+|---|---|---|
+| `POST /v1/documents` (multipart field `File`; optional headers `X-Document-Type`, `X-Business-Reference`) | `DocumentWrite` | Upload |
+| `GET /v1/documents?businessReference=&documentType=` | `DocumentRead` | List metadata, optionally filtered |
+| `GET /v1/documents/{id}` | `DocumentRead` | Metadata |
+| `GET /v1/documents/{id}/content` | `DocumentRead` | Content |
+| `DELETE /v1/documents/{id}` | `DocumentWrite` | Delete the document and its stored content |
 
-## Local storage
+## Security configuration
 
-The initial storage provider is `LocalFileSystemDocumentStorage` and stores content beneath the configured `DocumentStorage:RootPath`.
-
-The storage abstraction is deliberately replaceable by an S3/Documentum-style implementation later.
-
-## Security
-
-The API validates JWT bearer tokens issued by the V3 IDP and requires the `documents-management-api` API resource scope. Endpoint policies are currently separated into read/write policy names while using the same API resource permission, matching the current V3 client/resource convention. Granular `documents-management.read` / `documents-management.write` enforcement can be introduced when the client registrations begin requesting those scopes.
-
-## Important consistency rule
-
-Document BLOBs are never placed in Kafka events. Other bounded contexts should persist only document IDs/references and retrieve content through this service when required.
-
-## Solution integration
-
-Add `API/EnterpriseWebPlatform.BSS.Microservices.DocumentsManagement.Api.csproj` to the V3 solution under the Documents Management microservice area.
-
-The project expects the Landscape project reference at the same relative location used by the V3 `src/Microservices/*/API` projects.
-
-
-## Generic document metadata
-
-Documents may optionally carry:
-- `document_type`
-- `business_reference`
-
-These are generic strings; Documents Management does not own or interpret Customer/KYC domain identifiers. Other bounded contexts may use them to retrieve their documents through the API without introducing cross-service database foreign keys.
+- JWT bearer tokens from the V3 IDP, with audience and issuer validated.
+- `DocumentRead` requires the scope `documents-management.read`; `DocumentWrite` requires `documents-management.write`.
+- Object-level authorization (`Authorization/DocumentResourceAuthorization.cs`): every operation is confined to the actor's branch. M2M callers state it in the `X-Actor-Branch` header, which is accepted only from the CO BFF and KYC BFF clients. Only the CO BFF client may delete.
+- Uploads must be PDF, PNG or JPEG; the type is verified from the file signature (`DocumentContentPolicy`). Content is returned as an attachment with `nosniff`.

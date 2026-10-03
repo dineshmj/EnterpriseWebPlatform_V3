@@ -81,10 +81,17 @@ public sealed class CustomerDbContext :
                     initiatedByUserId,
                     cancellationToken);
 
-            OutboxMessages.AddRange(outboxMessages);
-
-            // Persist the Outbox rows using the SAME database transaction.
-            await base.SaveChangesAsync(cancellationToken);
+            // Persist the Outbox rows using the SAME database transaction, one at a
+            // time and in domain-event order. outbox_messages.sequence is assigned in
+            // INSERT order, and EF Core does not guarantee that rows added in one
+            // SaveChanges are inserted in the order they were added. The relay
+            // publishes per aggregate in sequence order, so a cause (e.g. Submitted)
+            // must be inserted before its effect (StatusChanged).
+            foreach (var outboxMessage in outboxMessages)
+            {
+                OutboxMessages.Add(outboxMessage);
+                await base.SaveChangesAsync(cancellationToken);
+            }
 
             // Customer state + Outbox event become durable together.
             await transaction.CommitAsync(cancellationToken);
@@ -162,6 +169,7 @@ public sealed class CustomerDbContext :
                     var payload = JsonSerializer.SerializeToDocument(envelope);
 
                     messages.Add(OutboxMessage.Create(
+                        messageId,
                         "Customer",
                         customer.Id.ToString(),
                         "CustomerCreated",
@@ -207,6 +215,7 @@ public sealed class CustomerDbContext :
                         integrationEvent);
 
                     messages.Add(OutboxMessage.Create(
+                        messageId,
                         "OnboardingApplication",
                         submitted.ApplicationId.ToString(),
                         "OnboardingApplicationSubmitted",
@@ -254,6 +263,7 @@ public sealed class CustomerDbContext :
                         integrationEvent);
 
                     messages.Add(OutboxMessage.Create(
+                        messageId,
                         "OnboardingApplication",
                         statusChanged.ApplicationId.ToString(),
                         "OnboardingApplicationStatusChanged",
@@ -289,7 +299,7 @@ public sealed class CustomerDbContext :
             .AsNoTracking()
             .Where(x => x.AggregateType == "OnboardingApplication" &&
                         x.AggregateId == applicationId.ToString())
-            .OrderByDescending(x => x.OccurredAt)
+            .OrderByDescending(x => x.Sequence)
             .Select(x => new WorkflowLookup(x.WorkflowId, x.CorrelationId, x.Id))
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -306,7 +316,7 @@ public sealed class CustomerDbContext :
             .Where(x => x.AggregateType == "Customer" &&
                         x.AggregateId == customerId.ToString() &&
                         x.EventType == "CustomerCreated")
-            .OrderBy(x => x.OccurredAt)
+            .OrderBy(x => x.Sequence)
             .Select(x => new WorkflowLookup(x.WorkflowId, x.CorrelationId, x.Id))
             .FirstOrDefaultAsync(cancellationToken);
 

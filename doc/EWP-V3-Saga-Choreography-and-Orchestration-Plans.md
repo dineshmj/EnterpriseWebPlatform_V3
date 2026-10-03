@@ -1,747 +1,192 @@
 # Enterprise Web Platform V3 — Saga Plans
 
+**Status:** Living document. Customer Onboarding choreography is partially implemented (first hop); Payments orchestration is planned.
+
+---
+
 ## Purpose
 
-This document records the two Saga patterns planned for demonstration in EnterpriseWebPlatform V3 (EWP V3):
+This document owns the **cross-context workflow design** of EWP V3: which saga style each workflow uses, the order of steps, how failures and compensation behave, and the saga design rules.
 
-1. **Saga with Choreography** — used for the Customer Onboarding workflow.
-2. **Saga with Orchestration** — proposed for the Payments workflow.
+| Owned elsewhere | Where |
+|---|---|
+| Topics and event contracts | [Integration-Event-Catalogue.md](Integration-Event-Catalogue.md) |
+| Each context's own states and its reaction to an event | That context's requirements document |
+| Human vs service identity, and SoD | [Authorization-Model.md §8–9](Authorization-Model.md#8-separation-of-duties-sod) |
 
-The intent is to demonstrate both approaches deliberately, rather than treating either pattern as universally preferable.
+EWP V3 demonstrates both saga styles deliberately:
 
----
-
-# 1. Saga with Choreography — Customer Onboarding
-
-## 1.1 Architectural Intent
-
-The existing Customer Onboarding workflow will continue to use **Saga with Choreography**.
-
-This preserves the event-driven architecture already established between Customer Onboarding (CO), Documents Management (DM), KYC, and subsequent microservices.
-
-The workflow is driven by domain/integration events published through Kafka. There is no central Saga orchestrator directing every participant.
-
-Conceptually:
-
-```text
-Customer Onboarding
-        |
-        | Onboarding / Customer event
-        v
-      Kafka
-        |
-        v
-       KYC
-        |
-        | KYC event
-        v
-      Kafka
-        |
-        v
-   Next participant
-```
-
-Each participating bounded context:
-
-1. Performs its own local business transaction.
-2. Writes its own transactional Outbox entry.
-3. Publishes the resulting event to Kafka.
-4. Reacts to events from other bounded contexts where appropriate.
-5. Changes only the business state that it owns.
+1. **Choreography** for Customer Onboarding.
+2. **Orchestration** for Payments.
 
 ---
 
-## 1.2 Document Uploading Remains at the MFE/BFF Boundary
+# 1. Choreography — Customer Onboarding
 
-The existing document-upload design should **not** be moved into the Customer Onboarding API merely to make the Saga more centralized.
+## 1.1 Intent
 
-The Customer Onboarding MFE/BFF can perform the lightweight synchronous orchestration required to upload documents to the Documents Management API using an appropriate M2M/service identity.
+There is no central coordinator. Each participating context:
 
-This avoids introducing unnecessary application/node hops for document-upload scenarios.
+1. performs its own local transaction;
+2. writes its Outbox row in the same transaction;
+3. has the event published to Kafka;
+4. reacts to other contexts' events where its own business requires it;
+5. changes and compensates **only the state it owns**.
 
-The BFF is not the Saga coordinator.
+## 1.2 The event chain
 
-It should not own:
+| # | Step | Trigger | Producer → event | Status |
+|---|---|---|---|---|
+| 1 | Customer and application created; application submitted | Human (agent) via the CO MFE / BFF | CO → `CustomerCreated`, `OnboardingApplicationSubmitted`, `OnboardingApplicationStatusChanged` | Present |
+| 2 | KYC case opened | `customer.created` (**interim**) → target: `onboarding.application.submitted` | KYC → `KycCaseCreated` | Present (interim trigger) |
+| 3 | Application moves to KYC_IN_PROGRESS | `kyc.case.created` | CO → `OnboardingApplicationStatusChanged` | Planned |
+| 4 | Human KYC review of two stages (may take days) | KYC officers | KYC → stage events, then `KycCaseApproved` / `KycCaseRejected` | Present |
+| 5 | CO records the KYC outcome | `kyc.case.approved` / `rejected` | CO → status changed | Planned |
+| 6 | Compliance case, screening, human decision | `kyc.case.approved` | Compliance → `ComplianceCaseApproved` / `Rejected` | Planned |
+| 7 | Account application, human approval, account opened | `compliance.case.approved` | Accounts → `AccountOpened` / `AccountOpeningFailed` | Planned |
+| 8 | Onboarding completes or compensates | Accounts outcome | CO → status changed | Planned |
+| 9 | Initiator and other entitled users notified | status-change events | Notifications → SignalR | Planned |
 
-- distributed Saga state;
-- long-running workflow execution;
-- distributed compensation;
-- Kafka workflow choreography;
-- business recovery decisions.
+**Why the KYC trigger moves to submission.** A customer may have more than one application over time. KYC belongs to an *application*, and only submission means the evidence is complete.
 
----
+## 1.3 The MFE / BFF boundary
 
-## 1.3 Long-Running Human Approval
+Document upload stays at the MFE / BFF boundary. The CO BFF uploads evidence to Documents Management with its M2M identity, so the CO API never receives document content. This is lightweight synchronous orchestration of **one user request**, not saga coordination. The BFF never owns long-running state, distributed compensation, Kafka choreography or business-recovery decisions.
 
-The choreography-based workflow can span days.
+If that request fails partway, the BFF removes documents it uploaded in the same request, and any customer or application already created remains in DRAFT for retry. This is **request-level cleanup of something never submitted**. It is not saga compensation, so it does not conflict with the retention rule in §1.5.
 
-For example:
+## 1.4 Long-running human approval
 
-```text
-Day 1
-Susan starts Camilla Parker's onboarding
-        |
-        v
-Customer Onboarding
-        |
-        v
-Kafka
-        |
-        v
-KYC Case
-        |
-        v
-WAITING FOR HUMAN REVIEW
-```
+Human review is a **persisted business state**, not a waiting process. No request, thread or process stays alive while an officer is away. The officer's decision is a new local transaction whose Outbox event resumes the workflow.
 
-The system does not keep an HTTP request, thread, or process alive while waiting.
+## 1.5 Rejection and compensation
 
-The relevant bounded context persists its business state.
+A business rejection (KYC, compliance or account) is published as an event. Each interested context compensates its own state:
 
-Later:
+- CO marks the application REJECTED (or COMPENSATING → … for later failures).
+- KYC or Compliance closes its case.
+- Documents Management marks documents INVALIDATED — **retained, not deleted**, because regulation and audit may require retention.
 
-```text
-Day 3
-KYC Officer reviews Camilla Parker's KYC documents
-        |
-        +---- Approve
-        |
-        +---- Reject
-```
+No context rolls back another context's database.
 
-A human decision changes KYC business state and produces an event through the KYC Outbox.
+## 1.6 Technical vs business failure
 
-The event then becomes the trigger for the next part of the distributed workflow.
+| | Technical failure | Business failure |
+|---|---|---|
+| Examples | API unavailable, timeout, Kafka or network error | KYC rejects evidence; compliance rejects; account cannot be opened |
+| Handling | Timeout → bounded retry with backoff and jitter → circuit breaker → recovery state or dead-letter | Domain event → compensation by each owner → final business outcome |
+
+> **Retry handles transient technical failure. Compensation handles business failure, or the inability to finish after work has already been done.**
 
 ---
 
-## 1.4 Rejection and Compensation
+# 2. Orchestration — Payments
 
-If the KYC Officer rejects a document or the KYC process, the KYC bounded context publishes a rejection event.
+## 2.1 Intent
 
-For example:
+A **Payment Saga Orchestrator**, owned by the Payments context, persists the workflow state and decides the next step. Participants (Payments, Accounts) own their data and perform their own state changes. The orchestrator never touches their databases. Commands and replies may still travel over Kafka:
+
+> **Kafka does not imply choreography.** The difference is where the workflow decision lives.
+
+## 2.2 Persisted saga state
 
 ```text
-KYC_REJECTED
-      |
-      v
-    Kafka
-      |
-      +--------------------+
-      |                    |
-      v                    v
-     CO              Other interested
-                      participants
+SagaId, PaymentId, CurrentStep, Status, WorkflowId, CorrelationId, CausationId, InitiatedByUserId, CreatedAt, UpdatedAt
 ```
 
-The appropriate participants react to the event and compensate **only the business state they own**.
+## 2.3 Successful path
 
-The system must not perform cross-microservice database rollback.
+```text
+Payment initiated ─► Validate ─► Reserve funds (Accounts) ─► Human approval (if the tier requires it) ─► Execute ─► Completed
+```
 
-For example:
+When approval is required, the orchestrator persists `PAYMENT_APPROVAL_PENDING` and stops. The officer's decision event resumes it, possibly days later.
 
-- CO can mark the onboarding application as rejected/failed.
-- KYC can close/cancel its KYC case.
-- DM can apply the appropriate document lifecycle state if the business rules require it.
+## 2.4 Compensation
 
-Document deletion should not automatically be assumed to be the correct compensation. In a banking-style system, retention, auditability, and regulatory requirements may require documents to be retained while being marked invalidated or otherwise unusable.
+```text
+Execute fails ─► Compensation required ─► Release reserved funds (Accounts) ─► Funds released ─► Payment FAILED
+```
+
+## 2.5 Compensation failure
+
+```text
+Release funds ─✗─► retry #1 ─✗─► retry #2 ─✗─► retry #3 ─✗─► circuit breaker OPEN
+              ─► COMPENSATION_REQUIRED / COMPENSATION_FAILED ─► operations recovery
+```
+
+The saga must never claim a rollback that did not happen. It records the truth and exposes a recoverable operational state.
+
+Payment business states, approval tiers and rules: [Payments-Requirements.md](../src/Microservices/Payments/doc/Payments-Requirements.md).
 
 ---
 
-## 1.5 Technical Failure vs Business Failure
+# 3. Resilience Is Not the Saga
 
-The choreography workflow must distinguish between technical and business failures.
+Retry, timeout and circuit breaker protect **individual technical interactions**. They are not compensation, and they are not the saga:
 
-### Technical failure
-
-Examples:
-
-- temporary API unavailability;
-- network failure;
-- transient timeout;
-- Kafka delivery/processing failure.
-
-Typical handling:
-
-```text
-Transient failure
-      |
-      v
-Retry with bounded backoff
-      |
-      +---- recovered ----> Continue
-      |
-      +---- exhausted ----> Technical failure / recovery state
-```
-
-Circuit breakers, timeouts, retries, and idempotent consumers protect the technical execution.
-
-### Business failure
-
-Examples:
-
-- KYC Officer rejects submitted identity evidence;
-- compliance decision rejects the onboarding;
-- a business rule prevents account creation.
-
-Typical handling:
-
-```text
-Business rejection
-       |
-       v
-Domain event
-       |
-       v
-Saga compensation
-       |
-       v
-Final business outcome
-```
-
-The key distinction is:
-
-> **Retry handles transient technical failure; compensation handles business failure or an inability to complete a distributed business transaction after the relevant work has already occurred.**
+- a transient failure that is still unresolved after bounded retries leads to a recovery state;
+- a permanent business failure leads to a saga transition and compensation.
 
 ---
 
-# 2. Saga with Orchestration — Payments
-
-## 2.1 Architectural Intent
-
-The Payments domain is proposed as the demonstration area for **Saga with Orchestration**.
-
-This provides EWP V3 with a deliberate second Saga style without requiring the existing Customer Onboarding choreography to be rewritten.
-
-The orchestration-based workflow has a central workflow component that maintains the distributed business process state and decides which step should happen next.
-
-Conceptually:
-
-```text
-                 Payment Saga
-                  Orchestrator
-                       |
-          +------------+------------+
-          |            |            |
-          v            v            v
-      Payments      Accounts     Other
-         API           API       services
-```
-
-The orchestrator coordinates the workflow but does not own the business data belonging to the participating bounded contexts.
-
----
-
-## 2.2 Why Payments Is a Good Candidate
-
-A payment workflow can naturally contain multiple dependent business steps, for example:
-
-```text
-Payment Initiated
-       |
-       v
-Validate Payment
-       |
-       v
-Reserve Funds
-       |
-       v
-Human / Risk Approval
-       |
-       v
-Execute Payment
-       |
-       v
-Payment Completed
-```
-
-The workflow can therefore demonstrate:
-
-- persisted Saga state;
-- multiple participating services;
-- asynchronous commands/events;
-- human approval;
-- retry and timeout;
-- circuit breaker;
-- compensation;
-- compensation failure;
-- recovery of a long-running workflow.
-
----
-
-## 2.3 Long-Running Orchestration
-
-The orchestrator must not hold an HTTP request open while waiting for a human decision.
-
-For example:
-
-```text
-Day 1
-Payment initiated
-       |
-       v
-Validation completed
-       |
-       v
-Funds reservation completed
-       |
-       v
-AWAITING HUMAN APPROVAL
-```
-
-The orchestrator persists its state:
-
-```text
-SagaId
-PaymentId
-CurrentStep
-Status
-CorrelationId
-CausationId
-InitiatedByUserId
-CreatedAt
-UpdatedAt
-```
-
-The orchestration execution can stop.
-
-Days later:
-
-```text
-Payment Officer
-       |
-       v
-Approve / Reject
-       |
-       v
-Payment domain transaction
-       |
-       v
-Approval event
-       |
-       v
-Saga Orchestrator
-```
-
-The orchestrator loads the persisted Saga state and continues from the appropriate state.
-
----
-
-# 3. Orchestrated Payment — Successful Path
-
-A representative successful workflow is:
-
-```text
-Payment Initiated
-       |
-       v
-Validate Payment
-       |
-       v
-Reserve Funds
-       |
-       v
-Human Approval
-       |
-       v
-Execute Payment
-       |
-       v
-Payment Completed
-```
-
-The orchestrator explicitly understands the workflow sequence.
-
-It may communicate with participating services through commands and events rather than requiring synchronous service-to-service calls.
-
-Kafka can therefore still be used in the orchestration model.
-
-> **Kafka does not imply choreography.**
-
-The distinction is where the workflow decision-making resides.
-
----
-
-# 4. Orchestrated Payment — Compensation
-
-Consider:
-
-```text
-Payment Initiated          ✓
-Validation                 ✓
-Funds Reserved             ✓
-Human Approval             ✓
-Payment Execution          ✗
-```
-
-The payment cannot be completed.
-
-The orchestrator determines that the previously completed funds reservation requires compensation.
-
-```text
-Payment Execution Failed
-        |
-        v
-Compensation Required
-        |
-        v
-Release Reserved Funds
-        |
-        v
-Funds Released
-        |
-        v
-Payment Failed
-```
-
-The orchestrator coordinates the compensation, while the Accounts/Payments bounded context performs the actual state change it owns.
-
-The orchestrator must not directly manipulate another microservice's database.
-
----
-
-# 5. Compensation Failure
-
-Compensation itself can fail.
-
-For example:
-
-```text
-Payment Execution
-       |
-       X
-     Failed
-       |
-       v
-Release Funds
-       |
-       X
-Account service unavailable
-       |
-       v
-Retry #1
-       |
-       v
-Retry #2
-       |
-       v
-Retry #3
-       |
-       v
-Circuit Breaker OPEN
-```
-
-The Saga must **not** falsely report that the transaction has been completely rolled back.
-
-Instead, it should enter an explicit recovery state, for example:
-
-```text
-COMPENSATION_REQUIRED
-```
-
-or:
-
-```text
-COMPENSATION_FAILED
-```
-
-This state can then be surfaced to operations/support tooling for controlled recovery.
-
-This demonstrates an important enterprise principle:
-
-> A distributed transaction cannot always be made to appear atomically rolled back. The system must preserve the truth about incomplete compensation and provide a recoverable operational state.
-
----
-
-# 6. Retry, Timeout and Circuit Breaker
-
-These are resilience mechanisms around individual technical interactions.
-
-They are not themselves the Saga.
-
-For example:
-
-```text
-Saga Orchestrator
-       |
-       v
-Call / Command
-       |
-       +---- Timeout
-       |
-       +---- Retry
-       |
-       +---- Circuit Breaker
-       |
-       v
-Service
-```
-
-The policy should distinguish:
-
-### Transient technical failure
-
-```text
-Service unavailable
-       |
-       v
-Bounded retry
-       |
-       +---- success ----> Continue Saga
-       |
-       +---- exhausted --> Recovery / technical failure state
-```
-
-### Permanent business failure
-
-```text
-Business rejection
-       |
-       v
-Saga transition
-       |
-       v
-Compensation
-```
-
----
-
-# 7. Human Approval in the Orchestrated Saga
-
-Human approval is a business state, not a technical wait.
-
-Example:
-
-```text
-PAYMENT_APPROVAL_PENDING
-```
-
-The orchestrator persists this state and stops active execution.
-
-A human later makes a decision:
-
-```text
-Approve
-   |
-   v
-PaymentApproved
-   |
-   v
-Orchestrator resumes
-```
-
-or:
-
-```text
-Reject
-   |
-   v
-PaymentRejected
-   |
-   v
-Orchestrator
-   |
-   v
-Compensation, where required
-```
-
-This allows the orchestrated Saga to span days without keeping application processes alive.
-
----
-
-# 8. Human Identity and Service Identity
-
-The two Saga styles share the same identity model.
-
-A human initiating a workflow is represented by:
-
-```text
-InitiatedByUserId
-```
-
-A service/subscriber executing an M2M operation has a separate service identity.
-
-For example:
-
-```text
-Susan
-  |
-  | initiates
-  v
-Payment Saga
-  |
-  | M2M execution
-  v
-Payment Service
-```
-
-The M2M identity must not be mistaken for the human originator.
-
-The event/envelope metadata should preserve appropriate traceability, including:
-
-```text
-MessageId
-EventType
-Source
-OccurredAt
-WorkflowId
-CorrelationId
-CausationId
-InitiatedByUserId
-Payload
-```
-
-`InitiatedByUserId` is workflow accountability/context; it is not, by itself, an authorization grant.
-
----
-
-# 9. Choreography vs Orchestration in EWP V3
-
-The two demonstrations intentionally have different responsibilities.
+# 4. Choreography vs Orchestration in EWP V3
 
 | Concern | Customer Onboarding | Payments |
 |---|---|---|
-| Saga style | Choreography | Orchestration |
-| Central coordinator | No | Yes |
-| Kafka | Yes | Yes |
-| Transactional Outbox | Yes | Yes |
-| Inbox / idempotency | Yes | Yes |
-| Human approval | KYC review | Payment approval, where applicable |
-| Long-running workflow | Yes | Yes |
-| Retry | Yes | Yes |
-| Timeout | Yes | Yes |
-| Circuit breaker | Yes | Yes |
-| Compensation | Yes | Yes |
-| Workflow state | Distributed across contexts | Explicit persisted orchestration state |
-| Business data ownership | Each service owns its data | Each service still owns its data |
-| Cross-service DB access | Never | Never |
+| Style | Choreography | Orchestration |
+| Central coordinator | No | Yes (owned by Payments) |
+| Workflow state | Distributed: each context's own state | Explicit persisted saga state, plus each context's own state |
+| Kafka, Outbox, Inbox | Yes | Yes |
+| Human approval | KYC, compliance and account review | Payment approval by tier |
+| Retry, timeout, circuit breaker | Yes | Yes |
+| Compensation | Each owner reacts to rejection events | The orchestrator issues compensating commands |
+| Cross-service database access | Never | Never |
 
-The important architectural lesson is:
-
-> **Event-driven messaging and Saga choreography are not synonyms.**
-
-Both the choreography and orchestration demonstrations can use Kafka.
-
-The difference is:
-
-```text
-Choreography:
-Service A emits an event
-        |
-        v
-Service B decides how to react
-        |
-        v
-Service B emits another event
-```
-
-versus:
-
-```text
-Orchestration:
-Saga Orchestrator
-        |
-        +---- command/event ---> Service A
-        |
-        +---- command/event ---> Service B
-        |
-        +---- command/event ---> Service C
-```
+> **Event-driven messaging and saga choreography are not synonyms.**
 
 ---
 
-# 10. Overall EWP V3 Saga Demonstration
+# 5. Implementation Checklist
 
-The intended architecture is therefore:
+**Customer Onboarding — choreography**
 
-```text
-                  EWP V3 SAGA DEMONSTRATIONS
-                              |
-              +---------------+---------------+
-              |                               |
-              v                               v
-       CUSTOMER ONBOARDING                PAYMENTS
-              |                               |
-              v                               v
-       CHOREOGRAPHY                     ORCHESTRATION
-              |                               |
-        CO / DM / KYC                    Payment Saga
-              |                           Orchestrator
-              |                               |
-        Kafka events                  Commands / Events
-              |                               |
-        Human KYC review              Payments / Accounts
-              |                               |
-        Compensation                   Human approval
-                                              |
-                                         Compensation
-```
+- [x] CO publishes business events through its Outbox, with workflow, correlation, causation and initiator data
+- [x] KYC subscriber consumes, authenticates with M2M and creates the KYC case
+- [x] Human KYC approval / rejection as domain state plus Outbox events
+- [ ] KYC triggered by `onboarding.application.submitted` (one case per application)
+- [ ] CO consumes `kyc.*` outcomes
+- [ ] Inbox / idempotency in every consumer
+- [ ] Timeout, circuit breaker and dead-letter handling in every consumer
+- [ ] Compliance participant
+- [ ] Accounts participant
+- [ ] Compensation paths, including DM document invalidation
+- [ ] Notifications to the initiator and other entitled users
 
-This gives EWP V3 a deliberate demonstration of both distributed transaction coordination models without forcing the entire platform into one pattern.
+**Payments — orchestration** (after the choreography is stable)
 
----
-
-# 11. Planned Implementation Sequence
-
-## Customer Onboarding — Choreography
-
-Continue the existing implementation first:
-
-1. Customer Onboarding publishes business events through its Outbox.
-2. Kafka subscribers consume events.
-3. KYC participates in the workflow.
-4. Human KYC approval/rejection is represented as domain state and events.
-5. Compensation is performed through events by the bounded contexts that own the affected state.
-6. Retry, timeout, circuit breaker and idempotency are applied to technical interactions.
-7. `InitiatedByUserId`, `CorrelationId`, `CausationId` and related metadata are propagated.
-8. SignalR can notify the human workflow initiator about relevant workflow outcomes.
-
-## Payments — Orchestration
-
-Implement separately after the choreography workflow is stable:
-
-1. Define the Payment Saga state machine.
-2. Define persisted Saga state.
-3. Define participating Payments/Accounts responsibilities.
-4. Define commands and events.
-5. Implement the Saga Orchestrator.
-6. Add transactional Outbox and Inbox/idempotency.
-7. Add retry, timeout and circuit breaker policies.
-8. Implement a successful payment scenario.
-9. Implement a business failure requiring compensation.
-10. Implement a deliberate compensation failure.
-11. Demonstrate recovery from the compensation-required state.
-12. Add human approval as a long-running state where appropriate.
-13. Integrate SignalR workflow notifications.
-14. Add observability using WorkflowId, CorrelationId and CausationId.
+1. Payment state machine and saga state
+2. Commands and events, added to the Event Catalogue
+3. Orchestrator with Outbox and Inbox
+4. Retry, timeout and circuit breaker
+5. Successful scenario
+6. Business failure with compensation
+7. Deliberate compensation failure and recovery
+8. Human approval as a long-running state
+9. Notifications
+10. End-to-end observability by WorkflowId, CorrelationId and CausationId
 
 ---
 
-# 12. Design Rules
+# 6. Saga Design Rules
 
-The following rules should remain consistent across both demonstrations:
+These apply in addition to the platform principles in the [Blueprint §2](Enterprise-Web-Platform-V3-Architectural-Vision-and-Security-Blueprint.md#2-architectural-principles):
 
-1. **No cross-microservice database access.**
-2. **A service compensates only the business state it owns.**
-3. **BFFs do not own long-running Saga state.**
-4. **BFFs do not become distributed transaction coordinators.**
-5. **Human approval is a persisted business state, not a running process.**
-6. **M2M identity is distinct from human identity.**
-7. **Retry is not compensation.**
-8. **Circuit breaker is not compensation.**
-9. **At-least-once delivery requires idempotent consumers.**
-10. **Outbox records must be created atomically with the associated business transaction.**
-11. **The system must not report successful rollback when compensation has actually failed.**
-12. **Workflow/audit metadata should preserve causality and the initiating human identity.**
-13. **The Shell remains a presentation/composition boundary and does not become the Saga coordinator.**
-14. **Application Workspace remains a passive human-context aid and does not acquire business workflow logic.**
-
----
-
-## Status
-
-**Planning document — implementation to follow.**
-
-The Customer Onboarding choreography is already partially implemented and should be extended without redesigning the existing document-upload interaction.
-
-The Payments orchestration is a planned second Saga demonstration and should be designed and implemented independently of the Customer Onboarding choreography.
+1. A context compensates only the state it owns.
+2. BFFs never own long-running saga state and never coordinate distributed transactions.
+3. The Shell and the Application Workspace never acquire workflow logic.
+4. Human approval is a persisted state, not a running process.
+5. Retry is not compensation; a circuit breaker is not compensation.
+6. Never report a successful rollback when compensation failed.
+7. Every saga step preserves causality and the initiating human. The initiator is accountability, not authorization.
+8. Business-relevant documents are invalidated and retained, not deleted, as compensation.

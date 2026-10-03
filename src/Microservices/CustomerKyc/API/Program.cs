@@ -73,6 +73,7 @@ builder.Services.AddAuthorization(options =>
 
 builder.Services.AddSingleton<IAuthorizationHandler, KycCaseDecisionAuthorizationHandler>();
 builder.Services.AddScoped<KycCaseService>();
+builder.Services.AddSingleton<KycKafkaProducer>();
 builder.Services.AddScoped<KycOutboxPublisher>();
 builder.Services.AddHostedService<KycOutboxPublisherHostedService>();
 

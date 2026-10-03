@@ -148,8 +148,9 @@ INSERT INTO microservices (name, base_url)
 VALUES
     ('Customer Onboarding', 'https://customer.dev.localhost:44311'),
     ('Customer KYC',        'https://kyc.dev.localhost:33800'),
-    ('Accounts',            'https://accounts.dev.localhost:34000'),
-    ('Payments',            'https://payments.dev.localhost:35000');
+    ('Compliance',          'https://compliance.dev.localhost:44399'),
+    ('Accounts',            'https://accounts.dev.localhost:45456'),
+    ('Payments',            'https://payments.dev.localhost:44388');
 
 -- ============================================================
 -- Seed: Management Areas
@@ -191,7 +192,7 @@ VALUES
     (
         'Compliance',
         'Monitor compliance checks, screening and decisions.',
-        (SELECT id FROM microservices WHERE name = 'Customer KYC')
+        (SELECT id FROM microservices WHERE name = 'Compliance')
     ),
     (
         'Account Applications',
@@ -311,7 +312,7 @@ VALUES
          WHERE name = 'Compliance'
            AND microservice_id =
                (SELECT id FROM microservices
-                WHERE name = 'Customer KYC'))
+                WHERE name = 'Compliance'))
     );
 
 -- ------------------------------------------------------------

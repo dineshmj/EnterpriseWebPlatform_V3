@@ -17,6 +17,12 @@ public sealed class OutboxMessageConfiguration
             .HasColumnName("id")
             .ValueGeneratedNever();
 
+        // GENERATED ALWAYS AS IDENTITY: assigned by PostgreSQL on INSERT and read
+        // back by EF Core; never written by the application.
+        builder.Property(x => x.Sequence)
+            .HasColumnName("sequence")
+            .UseIdentityAlwaysColumn();
+
         builder.Property(x => x.AggregateType)
             .HasColumnName("aggregate_type")
             .HasMaxLength(100)

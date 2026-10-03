@@ -4,34 +4,25 @@ namespace EnterpriseWebPlatform.DocumentsManagement.Application.Documents.Querie
 
 public sealed class GetDocumentsQueryHandler(IDocumentRepository repository)
 {
+    public const int MaxPageSize = 100;
+
     public async Task<IReadOnlyList<DocumentListItemDto>> HandleAsync(
+        string resourceBranch,
         string? businessReference,
         string? documentType,
+        int pageNumber,
+        int pageSize,
         CancellationToken cancellationToken)
     {
-        var documents = await repository.GetAllAsync(cancellationToken);
+        var documents = await repository.ListAsync(
+            resourceBranch,
+            businessReference,
+            documentType,
+            Math.Max(1, pageNumber),
+            Math.Clamp(pageSize, 1, MaxPageSize),
+            cancellationToken);
 
-        var filtered = documents.AsEnumerable();
-
-        if (!string.IsNullOrWhiteSpace(businessReference))
-        {
-            filtered = filtered.Where(document =>
-                string.Equals(
-                    document.BusinessReference,
-                    businessReference,
-                    StringComparison.OrdinalIgnoreCase));
-        }
-
-        if (!string.IsNullOrWhiteSpace(documentType))
-        {
-            filtered = filtered.Where(document =>
-                string.Equals(
-                    document.DocumentType,
-                    documentType,
-                    StringComparison.OrdinalIgnoreCase));
-        }
-
-        return filtered
+        return documents
             .Select(document => new DocumentListItemDto(
                 document.Id,
                 document.FileName,

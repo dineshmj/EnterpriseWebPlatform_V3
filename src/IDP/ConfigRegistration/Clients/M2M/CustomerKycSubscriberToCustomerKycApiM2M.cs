@@ -1,4 +1,5 @@
-﻿using Duende.IdentityServer.Models;
+﻿using EnterpriseWebPlatform.IdentityServer.Security;
+using Duende.IdentityServer.Models;
 
 using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
@@ -18,7 +19,7 @@ public sealed class CustomerKycSubscriberToCustomerKycApiM2M
                 {
                     ClientId = CustomerKycMicroservice.CLIENT_ID_FOR_IDP_FOR_CUST_KYC_SUBSCRIBER_TO_CUST_KYC_API_M2M,
                     ClientName = CustomerKycMicroservice.CLIENT_NAME_FOR_IDP_FOR_CUST_KYC_SUBSCRIBER_TO_CUST_KYC_API_M2M,
-                    ClientSecrets = { new Secret(CustomerKycMicroservice.CLIENT_SECRET_FOR_IDP_FOR_CUST_KYC_SUBSCRIBER_TO_CUST_KYC_API_M2M.Sha256()) },
+                    ClientSecrets = { ClientSecretStore.For(CustomerKycMicroservice.CLIENT_ID_FOR_IDP_FOR_CUST_KYC_SUBSCRIBER_TO_CUST_KYC_API_M2M) },
 
                     AllowedGrantTypes = GrantTypes.ClientCredentials,
                     // 🡡__ WHY   : The Customer KYC Subscriber M2M client is a machine identity and does not represent an

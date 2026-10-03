@@ -119,6 +119,12 @@ CREATE INDEX IF NOT EXISTS ix_kyc_cases_status
 
 CREATE TABLE IF NOT EXISTS outbox_messages (
     id UUID PRIMARY KEY,
+
+    -- Monotonic insertion order, assigned by the database. Events raised together
+    -- (e.g. a stage decision and the resulting case decision) can share the same
+    -- occurred_at; the relay publishes each aggregate's events strictly in this order.
+    sequence BIGINT GENERATED ALWAYS AS IDENTITY,
+
     aggregate_type VARCHAR(100) NOT NULL,
     aggregate_id VARCHAR(100) NOT NULL,
     event_type VARCHAR(200) NOT NULL,
@@ -141,8 +147,13 @@ CREATE TABLE IF NOT EXISTS outbox_messages (
     last_error TEXT NULL
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS ux_kyc_outbox_sequence
+    ON outbox_messages (sequence);
 CREATE INDEX IF NOT EXISTS ix_kyc_outbox_unpublished
-    ON outbox_messages (occurred_at)
+    ON outbox_messages (sequence)
+    WHERE published_at IS NULL;
+CREATE INDEX IF NOT EXISTS ix_kyc_outbox_aggregate_unpublished
+    ON outbox_messages (aggregate_type, aggregate_id, sequence)
     WHERE published_at IS NULL;
 CREATE INDEX IF NOT EXISTS ix_kyc_outbox_workflow_id ON outbox_messages (workflow_id);
 CREATE INDEX IF NOT EXISTS ix_kyc_outbox_correlation_id ON outbox_messages (correlation_id);

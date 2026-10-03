@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 
+using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Authorization;
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Persistence;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Application.Customers.Queries.GetCustomers;
@@ -15,12 +16,15 @@ public sealed class GetCustomersQueryHandler
 
     public async Task<PagedResult<CustomerListItemDto>> HandleAsync(
         GetCustomersQuery query,
+        CustomerAccessScope scope,
         CancellationToken cancellationToken)
     {
         var pageNumber = Math.Max(1, query.PageNumber);
         var pageSize = Math.Clamp(query.PageSize, 1, 100);
 
-        var customers = _readContext.Customers.AsNoTracking();
+        var customers = _readContext.Customers
+            .AsNoTracking()
+            .WithinScope(scope);
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {

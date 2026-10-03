@@ -1,5 +1,26 @@
 ## EWP V3 Review
 
+**Type:** Point-in-time code review (static; nothing was executed)  
+**Baseline:** the codebase as it was before commit `7a4e4b8` (early October 2026)  
+**Purpose of this document:** a record of findings. The findings below are kept as originally written. Their current status is tracked in the table immediately below; the owning requirements documents carry the remediation as "Gap" items.
+
+### Remediation status
+
+| # | Finding | Status | Notes |
+|---|---|---|---|
+| 1 | Customer Outbox relay stall | **Fixed** | `7a4e4b8` fixed the routing and the query filter. Both relays (CO and KYC) now also: claim rows with `FOR UPDATE SKIP LOCKED`; publish only the oldest unpublished message per aggregate; bound attempts with exponential backoff and park exhausted rows; use one idempotent `acks=all` producer. |
+| 2 | Documents Management authorization is scope-only | **Fixed** | Branch-scoped object-level authorization on every operation. The list query is filtered and paged in the database. Only the CO BFF client may delete. The acting branch comes from the user token, or from `X-Actor-Branch` sent by a pinned BFF client. Remaining: delegated user context (token exchange) instead of the asserted header. |
+| 3 | Stored-XSS chain on the KYC origin | **Fixed** | DM allow-lists PDF / PNG / JPEG, verifies magic bytes, and stores and serves only the verified type, as an attachment with `nosniff`. The KYC BFF streams the content, rendering only verified PDF inline and sending any other type as a download. The filename fallback is removed. The Bruno client is registered in Development only. |
+| 4 | Customer Onboarding is RBAC-only; the scope policy accepts either scope | **Fixed** | The scope is enforced per operation. Branch-scoped access applies to reads, lists and writes (agent branch city = customer's primary residential city). Administrators have no write access. `SubjectId` / `BranchId` are no longer accepted from the caller. |
+| 5 | Secrets and key management | **Mostly fixed** | Secrets are removed from `Common.Landscape` and come from each deployable's own configuration; components fail closed if one is missing. The developer signing key is used in Development only. Remaining: development values still live in `appsettings.Development.json` / `runnow.bat`; one PostgreSQL superuser for all services. |
+| 6 | IDP hardening | **Fixed** | Account lockout, IP throttling, no username enumeration, `SuccessRehashNeeded` accepted with rehash, security headers on Razor Pages, POST-only logout, front-channel logout iframe, ROPC validator removed, refresh-token rotation. Remaining: MFA. |
+| 7 | Browser and iframe boundary | **Mostly fixed** | Static parent-origin allow-list in the MFEs; CSP `frame-ancestors` / `nosniff` on the Shell and both BFFs; Shell session 30 minutes; `UseBff()` order; server-side sessions in the .NET BFFs; KYC session regenerated at login, refresh token revoked and IDP session ended at logout. Remaining: the NestJS BFF still uses the in-memory session store; `SameSite=None` cookies. |
+| Medium | Circuit breakers, saga depth, SoD edge cases, uneven DDD, exception leakage, observability, document data protection | Open | Not in this remediation pass. |
+| Low | README said IdentityServer 7 | **Fixed** | |
+| Low | KYC BFF `.env.example` variable names differ from the code | **Fixed** | Unified on `KYC_DOCUMENTS_MANAGEMENT_*`; the default M2M client ID is corrected; secrets have no fallbacks. |
+| Low | NestJS: failed discovery cached; CSRF compared with `!==`; documents buffered | **Fixed** | |
+| Low | CO BFF: `/api/auth/user` returns every claim; logout is a GET | **Fixed** | |
+
 I read 247 hand-written source files: the IDP, three APIs, both BFF stacks, the Shell, the Kafka publishers and subscriber, the SQL schemas and your four design docs. I excluded build output. This is a static review; I did not run anything, so each finding comes from code I read, and I note where I'm less certain.
 
 The BFF token handling, the KYC maker-checker logic and the outbox write path are carefully built. The recurring gap is that the docs and comments claim more than the code delivers. The sections below take that gap one area at a time.

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
+using EnterpriseWebPlatform.DocumentsManagement.API.Authorization;
 using EnterpriseWebPlatform.DocumentsManagement.Application;
 using EnterpriseWebPlatform.DocumentsManagement.Domain.Exceptions;
 using EnterpriseWebPlatform.DocumentsManagement.Infrastructure.Persistence;
@@ -62,6 +63,7 @@ builder.Services.AddDbContext<DocumentsManagementDbContext>(options =>
 
 builder.Services.AddDocumentsManagementPersistence();
 builder.Services.AddDocumentsManagementApplication();
+builder.Services.AddSingleton<DocumentResourceAuthorization>();
 
 var storageRoot = builder.Configuration["DocumentStorage:RootPath"];
 if (string.IsNullOrWhiteSpace(storageRoot))

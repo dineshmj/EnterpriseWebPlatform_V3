@@ -294,6 +294,57 @@ export function CustomerOnboardingForm({
         </div>
       </div>
 
+      {!selectedCustomer && (
+        <div className="card">
+          <h2>Primary residential address</h2>
+          <p>
+            <small>
+              The address determines which branch serves the customer. It must
+              be in your branch&apos;s city.
+            </small>
+          </p>
+
+          <div className="grid">
+            <div className="field">
+              <label htmlFor="addressLine1">Address line 1</label>
+              <input id="addressLine1" name="addressLine1" required maxLength={200}
+                onChange={() => setUnsavedChanges(true)} />
+            </div>
+
+            <div className="field">
+              <label htmlFor="addressLine2">Address line 2 (optional)</label>
+              <input id="addressLine2" name="addressLine2" maxLength={200}
+                onChange={() => setUnsavedChanges(true)} />
+            </div>
+
+            <div className="field">
+              <label htmlFor="city">City</label>
+              <input id="city" name="city" required maxLength={100}
+                onChange={() => setUnsavedChanges(true)} />
+            </div>
+
+            <div className="field">
+              <label htmlFor="state">State</label>
+              <input id="state" name="state" required maxLength={100}
+                onChange={() => setUnsavedChanges(true)} />
+            </div>
+
+            <div className="field">
+              <label htmlFor="postalCode">Postal code</label>
+              <input id="postalCode" name="postalCode" required maxLength={20}
+                onChange={() => setUnsavedChanges(true)} />
+            </div>
+
+            <div className="field">
+              <label htmlFor="countryCode">Country code (ISO, 2 letters)</label>
+              <input id="countryCode" name="countryCode" required minLength={2} maxLength={2}
+                pattern="[A-Za-z]{2}" defaultValue="AU"
+                onChange={() => setUnsavedChanges(true)} />
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="card">
         <h2>KYC proof documents</h2>
 

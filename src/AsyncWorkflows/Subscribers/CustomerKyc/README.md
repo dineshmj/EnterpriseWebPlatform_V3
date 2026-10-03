@@ -1,6 +1,6 @@
 # CustomerKycSubscriber
 
-Kafka subscriber for the Customer KYC bounded context.
+Kafka subscriber **owned by the Customer KYC bounded context**: it is deployed and versioned with KYC, even though it lives under `src/AsyncWorkflows`. Business requirements: [CustomerKyc-Requirements.md](../../../Microservices/CustomerKyc/doc/CustomerKyc-Requirements.md). Topic contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Event-Catalogue.md).
 
 ## Current flow
 
@@ -33,17 +33,9 @@ The subscriber is a workflow adapter. It does not contain KYC business rules.
 
 The worker uses OAuth 2.0 Client Credentials against the IdentityServer authority and API/client settings defined centrally by the Landscape project.
 
-The subscriber does **not** hard-code the M2M client ID, client secret, IdentityServer authority, scope, or Customer KYC API URL in its own configuration. These values are obtained from:
+The defaults for the IDP authority, client ID, scope and KYC API URL come from `Common.Landscape`. They can be overridden in the `CustomerKycSubscriber` configuration section, as can the topic, consumer group, retry settings and timeout.
 
-- `EnterpriseWebPlatform.Common.Landscape.IDP.AUTHORITY`
-- `CustomerKycMicroservice.CLIENT_ID_FOR_IDP_FOR_CUST_KYC_SUBSCRIBER_TO_CUST_KYC_API_M2M`
-- `CustomerKycMicroservice.CLIENT_SECRET_FOR_IDP_FOR_CUST_KYC_SUBSCRIBER_TO_CUST_KYC_API_M2M`
-- `CustomerKycApiScopesRequired.CUSTOMER_KYC_WRITE`
-- `CustomerKycMicroservice.MICROSERVICE_API_BASE_URL`
-
-The remaining operational settings (topic, consumer group, retry settings and timeout) remain configurable in `appsettings.json`.
-
-For a real deployment, move secrets out of source-controlled configuration/compiled constants into a secret store.
+The **client secret** is configuration only (`CustomerKycSubscriber:ClientSecret`); there is no compiled-in default, and the worker refuses to start without it. The Development value is in `appsettings.Development.json`, and the `CustomerKycSubscriber` launch profile sets `DOTNET_ENVIRONMENT=Development`. Elsewhere supply it from the environment or a secret store.
 
 ## Debug points
 
@@ -57,9 +49,15 @@ The implementation deliberately marks three useful debugging locations:
 
 Kafka auto-commit is disabled. The consumer commits the Kafka offset only after the handler completes successfully.
 
-Transient KYC API failures (408, 429 and 5xx) receive bounded exponential retries. Non-transient HTTP failures are surfaced immediately. A message that ultimately fails is therefore not committed and can be redelivered by Kafka.
+Transient KYC API failures (408, 429 and 5xx) receive bounded exponential retries (`MaxAttempts`, `InitialRetryDelayMilliseconds`). Non-transient HTTP failures are surfaced immediately.
 
-Inbox persistence is not implemented in this slice. The KYC API itself is idempotent for a customer through its unique customer-number constraint, and the next implementation slice can add a formal Inbox/ProcessedMessages store to the subscriber.
+**Current failure behaviour.** A message that still fails after the retries is not committed. The exception escapes the hosted service, which **stops the worker process**. On restart, Kafka redelivers the same message, so one unprocessable ("poison") message blocks the topic until it is fixed or skipped by hand. A dead-letter topic is planned to replace this.
+
+Other current limitations:
+
+- The M2M token is requested for every message rather than cached until expiry.
+- There is no Inbox. Idempotency relies on the KYC API's unique `customer_number` constraint.
+- The `X-Workflow-Message-Id` header is sent, but the KYC API does not read it yet.
 
 ## Event compatibility
 

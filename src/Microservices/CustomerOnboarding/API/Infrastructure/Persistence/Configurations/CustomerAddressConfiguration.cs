@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Entities;
+using EnterpriseWebPlatform.CustomerOnboarding.Domain.Enums;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence.Configurations;
 
@@ -23,7 +24,11 @@ public sealed class CustomerAddressConfiguration : IEntityTypeConfiguration<Cust
 
         builder.Property(x => x.AddressType)
             .HasColumnName("address_type")
-            .HasConversion<string>()
+            // Upper case, matching ck_customer_addresses_address_type and the
+            // convention used for the other customer enums.
+            .HasConversion(
+                value => value.ToString().ToUpperInvariant(),
+                value => Enum.Parse<AddressType>(value, ignoreCase: true))
             .HasMaxLength(30)
             .IsRequired();
 

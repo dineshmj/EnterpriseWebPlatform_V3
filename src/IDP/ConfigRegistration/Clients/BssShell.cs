@@ -1,4 +1,5 @@
-﻿using Duende.IdentityServer;
+﻿using EnterpriseWebPlatform.IdentityServer.Security;
+using Duende.IdentityServer;
 using Duende.IdentityServer.Models;
 
 using EnterpriseWebPlatform.Common.Landscape;
@@ -18,7 +19,7 @@ public sealed class BssClient
                 {
                     ClientId = BSSShellBFF.CLIENT_ID_FOR_IDP,
                     ClientName = BSSShellBFF.CLIENT_NAME_FOR_IDP,
-                    ClientSecrets = { new Secret(BSSShellBFF.CLIENT_SECRET_FOR_IDP.Sha256()) },
+                    ClientSecrets = { ClientSecretStore.For(BSSShellBFF.CLIENT_ID_FOR_IDP) },
 
                     AllowedGrantTypes = GrantTypes.Code,
                     // 🡡__ WHY   : The Authorization Code flow is the recommended OIDC flow for confidential server-side clients (BFFs).
@@ -54,13 +55,15 @@ public sealed class BssClient
                     // For the Shell application, show the content page.
                     RequireConsent = true,
 
-                    RefreshTokenUsage = TokenUsage.ReUse,
-                    // 🡡__ WHY   : ReUse leaves the same refresh token valid for multiple refresh operations until it expires. This reduces storage
-                    //              churn on the server and is simpler to implement. It is acceptable for many server-side clients where refresh tokens
-                    //              are kept securely.
-                    // 🡡__ IF NOT: If you choose TokenUsage.OneTimeOnly, the server issues a new refresh token each time the client uses the old one
-                    //              (rotation). Rotation is more secure because stolen refresh tokens are invalidated after use, but it requires
-                    //              tracking token rotation state and can increase complexity (and race-condition handling) on the server.
+                    UpdateAccessTokenClaimsOnRefresh = true,
+                    // 🡡__ WHY   : Each refresh re-reads the user's CURRENT roles and ABAC attributes (e.g. branch), so an
+                    //              administrative change takes effect within one access-token lifetime.
+                    // 🡡__ IF NOT: Refreshed tokens keep the claims of the original sign-in until the user signs in again.
+
+                    RefreshTokenUsage = TokenUsage.OneTimeOnly,
+                    // 🡡__ WHY   : Rotation (OAuth 2.1 / RFC 9700): every refresh returns a NEW refresh token and invalidates the old one, so a
+                    //              stolen refresh token stops working after its next legitimate use, and replay of a used token is detectable.
+                    // 🡡__ IF NOT: With ReUse, one leaked refresh token stays valid until it expires, silently granting new access tokens.
 
 
                     RefreshTokenExpiration = TokenExpiration.Sliding,

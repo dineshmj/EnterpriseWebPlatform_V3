@@ -93,6 +93,14 @@ public sealed class IdentityDbContext : DbContext
             .HasColumnName("is_active")
             .IsRequired();
 
+        entity.Property(x => x.AccessFailedCount)
+            .HasColumnName("access_failed_count")
+            .IsRequired();
+
+        entity.Property(x => x.LockoutEnd)
+            .HasColumnName("lockout_end")
+            .HasColumnType("timestamp with time zone");
+
         entity.Property(x => x.CreatedAt)
             .HasColumnName("created_at")
             .HasColumnType("timestamp with time zone")
@@ -302,6 +310,14 @@ public sealed class IdentityDbContext : DbContext
         entity.Property(x => x.Region)
             .HasColumnName("region")
             .HasMaxLength(100);
+
+        entity.Property(x => x.City)
+            .HasColumnName("city")
+            .HasMaxLength(100);
+
+        entity.Property(x => x.CountryCode)
+            .HasColumnName("country_code")
+            .HasMaxLength(2);
 
         entity.Property(x => x.IsActive)
             .HasColumnName("is_active")

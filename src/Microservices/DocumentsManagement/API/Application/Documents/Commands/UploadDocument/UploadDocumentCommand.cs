@@ -4,5 +4,6 @@ public sealed record UploadDocumentCommand(
     string FileName,
     string ContentType,
     Stream Content,
+    string ResourceBranch,
     string? DocumentType,
     string? BusinessReference);

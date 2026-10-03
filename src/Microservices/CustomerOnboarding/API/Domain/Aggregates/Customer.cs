@@ -112,7 +112,14 @@ public sealed class Customer : AggregateRoot
         }
 
         _addresses.Add(address);
-        address.AssignToCustomer(Id);
+
+        // A new customer has no database ID yet; persistence links the address
+        // through the aggregate's relationship when the customer is saved.
+        if (Id > 0)
+        {
+            address.AssignToCustomer(Id);
+        }
+
         Touch();
     }
 

@@ -1,5 +1,7 @@
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Persistence;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Aggregates;
+using EnterpriseWebPlatform.CustomerOnboarding.Domain.Entities;
+using EnterpriseWebPlatform.CustomerOnboarding.Domain.Enums;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Application.Customers.Commands.CreateCustomer;
@@ -39,9 +41,20 @@ public sealed class CreateCustomerCommandHandler
             command.LastName,
             EmailAddress.Create(command.Email),
             PhoneNumber.Create(command.PhoneNumber),
-            command.CustomerType,
-            command.SubjectId,
-            command.BranchId);
+            command.CustomerType);
+
+        var address = command.ResidentialAddress;
+        customer.AddAddress(
+            CustomerAddress.Create(
+                AddressType.Residential,
+                PostalAddress.Create(
+                    address.AddressLine1,
+                    address.AddressLine2,
+                    address.City,
+                    address.State,
+                    address.PostalCode,
+                    address.CountryCode),
+                isPrimary: true));
 
         await _customerRepository.AddAsync(
             customer,

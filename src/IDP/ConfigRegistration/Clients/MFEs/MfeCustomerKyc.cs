@@ -1,4 +1,5 @@
-﻿using Duende.IdentityServer;
+﻿using EnterpriseWebPlatform.IdentityServer.Security;
+using Duende.IdentityServer;
 using Duende.IdentityServer.Models;
 
 using EnterpriseWebPlatform.Common.Landscape.Microservices;
@@ -20,7 +21,7 @@ public sealed class MfeCustomerKyc
                 {
                     ClientId = CustomerKycMicroservice.CLIENT_ID_FOR_IDP,
                     ClientName = CustomerKycMicroservice.CLIENT_NAME_FOR_IDP,
-                    ClientSecrets = { new Secret(CustomerKycMicroservice.CLIENT_SECRET_FOR_IDP.Sha256()) },
+                    ClientSecrets = { ClientSecretStore.For(CustomerKycMicroservice.CLIENT_ID_FOR_IDP) },
 
                     AllowedGrantTypes = GrantTypes.Code,
                     // 🡡__ WHY   : The CustomerKyc microservice (if acting as a confidential client or BFF) should use Authorization Code to keep tokens
@@ -45,6 +46,7 @@ public sealed class MfeCustomerKyc
                         IdentityServerConstants.StandardScopes.Profile,
                         IdentityServerConstants.StandardScopes.Email,
                         "roles",
+                        "organization",
                         MicroserviceApiResourceNames.CUSTOMER_KYC_API,
                         CustomerKycApiScopesRequired.CUSTOMER_KYC_READ,
                         CustomerKycApiScopesRequired.CUSTOMER_KYC_WRITE
@@ -55,11 +57,15 @@ public sealed class MfeCustomerKyc
                 
                     },
 
-                    RefreshTokenUsage = TokenUsage.ReUse,
-                    // 🡡__ WHY   : ReUse simplifies server-side handling for refresh tokens and avoids the need to implement rotation/one-time logic.
-                    //              Use ReUse for scenarios where the refresh token is stored securely and where you prefer simpler lifecycle management.
-                    // 🡡__ IF NOT: OneTimeOnly (rotation) would increase security by invalidating refresh tokens after use, but requires additional server-side
-                    //              bookkeeping and careful handling of concurrent refresh requests.
+                    UpdateAccessTokenClaimsOnRefresh = true,
+                    // 🡡__ WHY   : Each refresh re-reads the user's CURRENT roles and ABAC attributes (e.g. branch), so an
+                    //              administrative change takes effect within one access-token lifetime.
+                    // 🡡__ IF NOT: Refreshed tokens keep the claims of the original sign-in until the user signs in again.
+
+                    RefreshTokenUsage = TokenUsage.OneTimeOnly,
+                    // 🡡__ WHY   : Rotation (OAuth 2.1 / RFC 9700): every refresh returns a NEW refresh token and invalidates the old one, so a
+                    //              stolen refresh token stops working after its next legitimate use, and replay of a used token is detectable.
+                    // 🡡__ IF NOT: With ReUse, one leaked refresh token stays valid until it expires, silently granting new access tokens.
 
                     RefreshTokenExpiration = TokenExpiration.Sliding,
                     SlidingRefreshTokenLifetime = 3600

@@ -1,32 +1,44 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace EnterpriseWebPlatform.IdentityServer;
 
+/// <summary>
+/// Security headers for the IDP's interactive pages (login, consent, logout).
+/// Razor Pages return a PageResult, MVC views a ViewResult: both are covered.
+/// </summary>
 public sealed class SecurityHeadersAttribute
     : ActionFilterAttribute
 {
     public override void OnResultExecuting(ResultExecutingContext context)
     {
-        var result = context.Result;
-		
-        if (result is ViewResult)
+        if (context.Result is not (ViewResult or PageResult))
         {
-            if (!context.HttpContext.Response.Headers.ContainsKey("X-Content-Type-Options"))
-            {
-                context.HttpContext.Response.Headers.Append("X-Content-Type-Options", "nosniff");
-            }
-            if (!context.HttpContext.Response.Headers.ContainsKey("X-Frame-Options"))
-            {
-                context.HttpContext.Response.Headers.Append("X-Frame-Options", "SAMEORIGIN");
-            }
-
-            var csp = "default-src 'self'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; script-src 'self' https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net;";
-			
-            if (!context.HttpContext.Response.Headers.ContainsKey("Content-Security-Policy"))
-            {
-                context.HttpContext.Response.Headers.Append("Content-Security-Policy", csp);
-            }
+            return;
         }
+
+        var headers = context.HttpContext.Response.Headers;
+
+        headers.TryAdd("X-Content-Type-Options", "nosniff");
+
+        // The login page must never be framed (clickjacking / credential capture).
+        headers.TryAdd("X-Frame-Options", "DENY");
+
+        headers.TryAdd("Referrer-Policy", "no-referrer");
+
+        // frame-src 'self': the logged-out page embeds the IDP's own end-session
+        // callback, which in turn renders the clients' front-channel logout iframes.
+        headers.TryAdd(
+            "Content-Security-Policy",
+            "default-src 'self'; " +
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
+            "script-src 'self' https://cdn.jsdelivr.net; " +
+            "font-src 'self' https://cdn.jsdelivr.net; " +
+            "frame-src 'self'; " +
+            "frame-ancestors 'none'; " +
+            "object-src 'none'; " +
+            "base-uri 'self'; " +
+            "form-action 'self' https:;");
     }
 }

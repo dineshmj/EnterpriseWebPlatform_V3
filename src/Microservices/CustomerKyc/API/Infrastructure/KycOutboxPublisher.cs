@@ -4,61 +4,117 @@ using Confluent.Kafka;
 
 namespace EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure;
 
-public sealed class KycOutboxPublisher(KycDbContext db, IConfiguration config, ILogger<KycOutboxPublisher> logger)
+/// <summary>
+/// One long-lived, idempotent Kafka producer for the KYC Outbox relay
+/// (a producer is expensive to create and must not be built per poll).
+/// </summary>
+public sealed class KycKafkaProducer : IDisposable
 {
+    public KycKafkaProducer(IConfiguration config)
+    {
+        Producer = new ProducerBuilder<string, string>(new ProducerConfig
+        {
+            BootstrapServers = config["Kafka:BootstrapServers"] ?? "localhost:9092",
+            Acks = Acks.All,
+            EnableIdempotence = true,
+            MaxInFlight = 5,
+            MessageTimeoutMs = 30_000
+        }).Build();
+    }
+
+    public IProducer<string, string> Producer { get; }
+
+    public void Dispose()
+    {
+        Producer.Flush(TimeSpan.FromSeconds(5));
+        Producer.Dispose();
+    }
+}
+
+/// <summary>
+/// Relays committed KYC Outbox rows to Kafka, with the same guarantees as the
+/// Customer Onboarding relay: FOR UPDATE SKIP LOCKED claiming (multi-instance
+/// safe), per-aggregate ordering, bounded attempts with exponential backoff,
+/// and parking of messages that keep failing. Unknown event types are never
+/// selected (previously they were silently sent to the kyc.case.created topic).
+/// </summary>
+public sealed class KycOutboxPublisher(
+    KycDbContext db,
+    KycKafkaProducer kafka,
+    IConfiguration config,
+    ILogger<KycOutboxPublisher> logger)
+{
+    private const int BatchSize = 50;
+    private const int MaxCyclesPerPoll = 10;
+
     public async Task PublishPendingAsync(CancellationToken ct)
     {
-        var servers = config["Kafka:BootstrapServers"] ?? "localhost:9092";
+        var topics = GetTopicMap();
 
-        var defaultTopic = config["Kafka:KycCaseCreatedTopic"] ?? "kyc.case.created";
+        for (var cycle = 0; cycle < MaxCyclesPerPoll; cycle++)
+        {
+            if (await PublishBatchAsync(topics, ct) == 0)
+                break;
+        }
+    }
 
-        var approvedTopic = config["Kafka:KycCaseApprovedTopic"] ?? "kyc.case.approved";
+    private Dictionary<string, string> GetTopicMap() => new(StringComparer.Ordinal)
+    {
+        ["KycCaseCreated"] = config["Kafka:KycCaseCreatedTopic"] ?? "kyc.case.created",
+        ["KycCaseApproved"] = config["Kafka:KycCaseApprovedTopic"] ?? "kyc.case.approved",
+        ["KycCaseRejected"] = config["Kafka:KycCaseRejectedTopic"] ?? "kyc.case.rejected",
+        ["KycIdentityVerificationApproved"] =
+            config["Kafka:KycIdentityVerificationApprovedTopic"] ?? "kyc.identity.verification.approved",
+        ["KycIdentityVerificationRejected"] =
+            config["Kafka:KycIdentityVerificationRejectedTopic"] ?? "kyc.identity.verification.rejected",
+        ["KycDocumentVerificationApproved"] =
+            config["Kafka:KycDocumentVerificationApprovedTopic"] ?? "kyc.document.verification.approved",
+        ["KycDocumentVerificationRejected"] =
+            config["Kafka:KycDocumentVerificationRejectedTopic"] ?? "kyc.document.verification.rejected"
+    };
 
-        var rejectedTopic = config["Kafka:KycCaseRejectedTopic"] ?? "kyc.case.rejected";
+    private async Task<int> PublishBatchAsync(IReadOnlyDictionary<string, string> topics, CancellationToken ct)
+    {
+        var maxAttempts = config.GetValue("KycOutbox:MaxAttempts", 10);
+        var baseDelaySeconds = (double)config.GetValue("KycOutbox:RetryBaseDelaySeconds", 5);
+        var eventTypes = topics.Keys.ToArray();
 
-
-        var identityVerificationApprovedTopic =
-            config["Kafka:KycIdentityVerificationApprovedTopic"] ?? "kyc.identity.verification.approved";
-
-        var identityVerificationRejectedTopic =
-            config["Kafka:KycIdentityVerificationRejectedTopic"] ?? "kyc.identity.verification.rejected";
-
-        var documentVerificationApprovedTopic =
-
-            config["Kafka:KycDocumentVerificationApprovedTopic"] ?? "kyc.document.verification.approved";
-        var documentVerificationRejectedTopic =
-            config["Kafka:KycDocumentVerificationRejectedTopic"] ?? "kyc.document.verification.rejected";
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
         var messages = await db.OutboxMessages
-            .Where(x => x.PublishedAt == null)
-            .OrderBy(x => x.OccurredAt)
-            .Take(50)
+            .FromSql($"""
+                SELECT o.*
+                FROM outbox_messages o
+                WHERE o.published_at IS NULL
+                  AND o.event_type = ANY({eventTypes})
+                  AND o.attempt_count < {maxAttempts}
+                  AND (o.last_attempt_at IS NULL
+                       OR o.last_attempt_at
+                          + make_interval(secs => {baseDelaySeconds} * power(2, greatest(o.attempt_count - 1, 0)))
+                          <= now())
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM outbox_messages earlier
+                      WHERE earlier.aggregate_type = o.aggregate_type
+                        AND earlier.aggregate_id = o.aggregate_id
+                        AND earlier.published_at IS NULL
+                        AND earlier.sequence < o.sequence)
+                ORDER BY o.sequence
+                LIMIT {BatchSize}
+                FOR UPDATE SKIP LOCKED
+                """)
             .ToListAsync(ct);
 
-        if (messages.Count == 0) return;
-
-        using var producer = new ProducerBuilder<string, string>(new ProducerConfig
-        {
-            BootstrapServers = servers
-        }).Build();
+        var published = 0;
 
         foreach (var message in messages)
         {
-            var topic = message.EventType switch
-            {
-                "KycCaseCreated" => defaultTopic,
-                "KycIdentityVerificationApproved" => identityVerificationApprovedTopic,
-                "KycIdentityVerificationRejected" => identityVerificationRejectedTopic,
-                "KycDocumentVerificationApproved" => documentVerificationApprovedTopic,
-                "KycDocumentVerificationRejected" => documentVerificationRejectedTopic,
-                "KycCaseApproved" => approvedTopic,
-                "KycCaseRejected" => rejectedTopic,
-                _ => defaultTopic
-            };
+            var topic = topics[message.EventType];
+            var attemptedAt = DateTimeOffset.UtcNow;
 
             try
             {
-                await producer.ProduceAsync(
+                await kafka.Producer.ProduceAsync(
                     topic,
                     new Message<string, string>
                     {
@@ -67,29 +123,40 @@ public sealed class KycOutboxPublisher(KycDbContext db, IConfiguration config, I
                     },
                     ct);
 
-                message.PublishedAt = DateTimeOffset.UtcNow;
-                message.LastAttemptAt = DateTimeOffset.UtcNow;
+                message.PublishedAt = attemptedAt;
+                message.LastAttemptAt = attemptedAt;
+                message.LastError = null;
                 message.AttemptCount++;
-                await db.SaveChangesAsync(ct);
+                published++;
+
                 logger.LogInformation(
                     "Published KYC outbox message {MessageId} EventType={EventType} to {Topic}.",
                     message.Id,
                     message.EventType,
                     topic);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 message.AttemptCount++;
-                message.LastAttemptAt = DateTimeOffset.UtcNow;
-                message.LastError = ex.Message;
-                await db.SaveChangesAsync(ct);
-                logger.LogError(
+                message.LastAttemptAt = attemptedAt;
+                message.LastError = ex.Message.Length > 2000 ? ex.Message[..2000] : ex.Message;
+
+                logger.Log(
+                    message.AttemptCount >= maxAttempts ? LogLevel.Error : LogLevel.Warning,
                     ex,
-                    "Failed to publish KYC outbox message {MessageId} EventType={EventType}.",
+                    message.AttemptCount >= maxAttempts
+                        ? "KYC outbox message {MessageId} EventType={EventType} failed {AttemptCount} times and is now PARKED."
+                        : "Failed to publish KYC outbox message {MessageId} EventType={EventType}. Attempt {AttemptCount}.",
                     message.Id,
-                    message.EventType);
+                    message.EventType,
+                    message.AttemptCount);
             }
         }
+
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+
+        return published;
     }
 }
 

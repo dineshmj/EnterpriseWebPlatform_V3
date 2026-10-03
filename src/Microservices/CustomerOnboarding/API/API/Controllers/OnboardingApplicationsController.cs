@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+using EnterpriseWebPlatform.CustomerOnboarding.API.Authorization;
 using EnterpriseWebPlatform.CustomerOnboarding.API.Models;
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Onboarding.Commands.CreateApplication;
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Onboarding.Commands.SubmitApplication;
@@ -21,16 +22,20 @@ public sealed class OnboardingApplicationsController : ControllerBase
 
     private readonly GetOnboardingApplicationsQueryHandler _getApplicationsHandler;
 
+    private readonly CustomerResourceAuthorization _resourceAuthorization;
+
     public OnboardingApplicationsController(
         CreateOnboardingApplicationCommandHandler createApplicationHandler,
         SubmitOnboardingApplicationCommandHandler submitApplicationHandler,
         GetOnboardingApplicationQueryHandler getApplicationHandler,
-        GetOnboardingApplicationsQueryHandler getApplicationsHandler)
+        GetOnboardingApplicationsQueryHandler getApplicationsHandler,
+        CustomerResourceAuthorization resourceAuthorization)
     {
         _createApplicationHandler = createApplicationHandler;
         _submitApplicationHandler = submitApplicationHandler;
         _getApplicationHandler = getApplicationHandler;
         _getApplicationsHandler = getApplicationsHandler;
+        _resourceAuthorization = resourceAuthorization;
     }
 
     [HttpGet]
@@ -41,6 +46,7 @@ public sealed class OnboardingApplicationsController : ControllerBase
     {
         var result = await _getApplicationsHandler.HandleAsync(
             query,
+            _resourceAuthorization.GetScope(User),
             cancellationToken);
 
         return Ok(result);
@@ -52,6 +58,11 @@ public sealed class OnboardingApplicationsController : ControllerBase
         long id,
         CancellationToken cancellationToken)
     {
+        if (!await _resourceAuthorization.CanAccessApplicationAsync(User, id, cancellationToken))
+        {
+            return NotFound();
+        }
+
         var result = await _getApplicationHandler.HandleAsync(
             new GetOnboardingApplicationQuery(id),
             cancellationToken);
@@ -70,6 +81,13 @@ public sealed class OnboardingApplicationsController : ControllerBase
         [FromBody] CreateOnboardingApplicationRequest request,
         CancellationToken cancellationToken)
     {
+        // The customer must be within the caller's scope; this also protects the
+        // BFF's "existing customer" path from a client-supplied CustomerId.
+        if (!await _resourceAuthorization.CanAccessCustomerAsync(User, request.CustomerId, cancellationToken))
+        {
+            return NotFound();
+        }
+
         var command = new CreateOnboardingApplicationCommand(
             request.CustomerId,
             request.ApplicationNumber);
@@ -91,6 +109,11 @@ public sealed class OnboardingApplicationsController : ControllerBase
         [FromBody] SubmitOnboardingApplicationRequest request,
         CancellationToken cancellationToken)
     {
+        if (!await _resourceAuthorization.CanAccessApplicationAsync(User, id, cancellationToken))
+        {
+            return NotFound();
+        }
+
         var command = new SubmitOnboardingApplicationCommand(
             id,
             request.ExpectedVersion);

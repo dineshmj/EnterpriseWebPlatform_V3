@@ -17,6 +17,19 @@ async function bootstrap() {
     ),
   });
 
+  // Browser security headers. This MFE may be framed only by the Shell, and by
+  // the IDP (which loads /signout-oidc in a hidden iframe for front-channel logout).
+  const idpOrigin = new URL(options.authority).origin;
+  app.use((_req: express.Request, res: express.Response, next: express.NextFunction) => {
+    res.setHeader(
+      'Content-Security-Policy',
+      `frame-ancestors ${options.shellOrigin} ${idpOrigin}; object-src 'none'; base-uri 'self'`,
+    );
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    next();
+  });
+
   app.use(
     express.static(path.resolve(options.staticRoot), {
       extensions: ['html'],

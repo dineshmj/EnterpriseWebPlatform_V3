@@ -234,7 +234,9 @@ public sealed class KycCaseService(KycDbContext db, ILogger<KycCaseService> logg
                 stageCausationId,
                 caseId,
                 existing.CustomerNumber,
-                stage,
+                stage == KycVerificationStage.IdentityVerification
+                    ? "IDENTITY_VERIFICATION"
+                    : "DOCUMENT_VERIFICATION",
                 "PENDING_REVIEW",
                 stageNewStatus,
                 existing.InitiatedByUserId,
@@ -250,6 +252,13 @@ public sealed class KycCaseService(KycDbContext db, ILogger<KycCaseService> logg
             ActedByUserId = decisionByUserId
         });
 
+        // Save the stage event BEFORE adding the case-level event (same transaction).
+        // outbox_messages.sequence is assigned in INSERT order, and EF Core does not
+        // guarantee that rows added in one SaveChanges are inserted in the order they
+        // were added. The relay publishes per aggregate in sequence order, so the
+        // cause (stage decision) must be inserted before its effect (case decision).
+        await db.SaveChangesAsync(ct);
+
         if (overallNewStatus is "APPROVED" or "REJECTED")
         {
             var overallEventType = overallNewStatus == "APPROVED"
@@ -264,6 +273,7 @@ public sealed class KycCaseService(KycDbContext db, ILogger<KycCaseService> logg
                     .AsNoTracking()
                     .Where(x => x.AggregateType == "KycCase" &&
                                 x.AggregateId == caseId.ToString() &&
+                                x.Id != stageMessageId &&   // the OTHER stage's approval (this one is already saved)
                                 (x.EventType == "KycIdentityVerificationApproved" ||
                                  x.EventType == "KycDocumentVerificationApproved"))
                     .OrderByDescending(x => x.OccurredAt)
@@ -383,7 +393,7 @@ public sealed record KycVerificationStageDecisionEvent(
     Guid CausationId,
     long KycCaseId,
     string CustomerNumber,
-    KycVerificationStage Stage,
+    string Stage,   // "IDENTITY_VERIFICATION" / "DOCUMENT_VERIFICATION" - a stable code, not an enum ordinal
     string PreviousStageStatus,
     string NewStageStatus,
     string? InitiatedByUserId,

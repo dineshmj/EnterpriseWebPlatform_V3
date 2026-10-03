@@ -63,7 +63,11 @@ public sealed class DocumentsManagementDbContext(DbContextOptions<DocumentsManag
                 .HasColumnName("business_reference")
                 .HasMaxLength(255);
 
-            entity.HasIndex(x => new { x.BusinessReference, x.DocumentType });
+            entity.Property(x => x.ResourceBranch)
+                .HasColumnName("resource_branch")
+                .HasMaxLength(20);
+
+            entity.HasIndex(x => new { x.ResourceBranch, x.BusinessReference, x.DocumentType });
 
             entity.HasIndex(x => x.ContentHash);
         });

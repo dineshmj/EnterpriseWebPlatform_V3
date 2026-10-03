@@ -2,1924 +2,322 @@
 ## Authorization Model
 
 **Document:** Authorization Model  
-**Version:** 1.1  
+**Version:** 2.0  
 **Domain:** Banking Services  
-**Status:** Maintained / Living Document  
-**Purpose:** Business and authorization requirements for the Enterprise Web Platform V3 PoC
+**Status:** Living document
 
 ---
 
 ## 1. Purpose
 
-This document defines the authorization model for the Enterprise Web Platform V3 Banking Services PoC.
+This document defines **how authorization decisions are made** across EWP V3. It is platform-wide and technology-neutral.
 
-It establishes the relationship between:
+| This document owns | Owned elsewhere |
+|---|---|
+| Authorization principles and the decision pipeline | Persona descriptions and role codes → [Application-Personas.md](Application-Personas.md) |
+| Permission naming and platform-level (cross-context) permissions | Context-specific permissions, states and approval rules → each context's requirements document |
+| Scopes vs permissions | Claims the IDP issues, demo users, attributes and relationships → [IDP-Requirements.md](../src/IDP/doc/IDP-Requirements.md) |
+| ABAC, ReBAC, SoD, workflow-state and notification authorization mechanics | Which rules each service enforces today → the "Implementation status" section of each context's requirements document |
+| Human vs service identity in authorization | Event envelope fields → [Integration-Event-Catalogue.md](Integration-Event-Catalogue.md) |
+
+EWP V3 is an architectural PoC, not a production banking platform. The banking domain provides realistic pressure for the authorization patterns described here.
+
+---
+
+## 2. Principles
+
+1. Authentication establishes **who** the caller is; it never by itself authorizes anything.
+2. Authorization is **deny-by-default**: every mandatory predicate must succeed.
+3. Authorization is enforced **server-side** in the BFF and, authoritatively, in the API that owns the resource. UI visibility and menu visibility are never authorization.
+4. **RBAC alone is insufficient.** Roles grant broad capability; attributes, relationships, workflow state and Separation of Duties narrow it.
+5. Authorization is evaluated against the **specific resource** being accessed (object-level authorization), not merely the endpoint.
+6. **Operational privileges never imply business approval privileges.**
+7. **Human identity and service identity are distinct** security contexts and must stay distinct across asynchronous boundaries.
+8. The human who **initiated** a workflow is accountability context, **not** an authorization grant.
+9. Authorization failures reveal no more than necessary; the detail goes to secure logs and audit.
+10. Significant authorization decisions and all business approvals are **auditable**.
+11. Workflow **notifications are authorization decisions** too.
+12. Authorization **fails closed**: missing attributes, missing relationships or missing initiator data result in denial, never in skipped checks.
+
+---
+
+## 3. Roles and Permissions
+
+### 3.1 Roles
+
+There is one role per persona. The role codes are listed in [Application-Personas.md §2](Application-Personas.md#2-personas).
+
+### 3.2 Permissions
+
+A permission is a single business or operational capability. Roles receive permissions through the role–permission relationship held by the IDP:
 
 ```text
-Persona
-   ↓
-Role
-   ↓
-Permission
-   ↓
-ABAC Attributes
-   ↓
-ReBAC Relationships
-   ↓
-Workflow State
-   ↓
-Approval / Separation of Duties
-   ↓
-Authorization Decision
+User ──► Role ──► Permission
 ```
 
-The document is intended to serve as the business-level source of truth from which the Identity Provider (IDP), authorization policies, API authorization handlers, workflow implementation, test cases, and UI behavior are derived.
-
-The V3 PoC is not intended to represent a production banking platform. The banking domain is used to provide realistic enterprise scenarios in which distributed workflows, authorization, security, resilience, auditability, and architectural patterns can be demonstrated.
-
----
-
-# 2. Authorization Principles
-
-The authorization model follows these principles:
-
-1. Authentication establishes **who the user is**.
-2. RBAC establishes **what broad responsibilities the user has**.
-3. Permissions establish **what operations the user may perform**.
-4. ABAC determines whether the operation is permitted under relevant user, resource, and environmental attributes.
-5. ReBAC determines whether the user has the required relationship with the target business resource.
-6. Workflow state determines whether the requested operation is valid at that point in the business process.
-7. Separation of Duties prevents conflicting operations from being performed by the same user where required.
-8. Authorization must be enforced server-side.
-9. UI visibility is not authorization.
-10. Operational privileges must not automatically confer business approval privileges.
-11. Service-to-service authentication is separate from human-user authorization.
-12. Significant authorization decisions and business approvals must be auditable.
-13. Authorization failures must not reveal unnecessary business or security information.
-14. Authorization is **deny-by-default**; every mandatory authorization predicate must succeed before an operation is permitted.
-15. Resource/object-level authorization must be evaluated for the specific business entity being accessed; possession of a permission alone is not sufficient.
-16. The identity of the human who initiated a long-running workflow is **workflow/accountability context**, not an authorization grant.
-17. Human-user identity and machine/service identity must remain distinct throughout distributed workflow execution.
-18. Workflow notifications must be delivered only to users who are authorized to receive them.
-
----
-
-# 3. Personas
-
-The principal application personas are:
-
-| Persona | Description |
-|---|---|
-| Customer | End customer using customer-facing banking services |
-| Customer Service Agent | Assists customers with onboarding and customer information |
-| KYC Officer | Performs identity and document verification |
-| Compliance Officer | Performs AML, compliance, and risk-related decisions |
-| Account Officer | Reviews and approves account-opening activities |
-| Payments Officer | Reviews and processes payment instructions |
-| Operations Administrator | Performs operational monitoring and exception handling |
-| Auditor | Performs independent read-only audit and investigation activities |
-| Platform Administrator | Administers the PoC platform and selected technical configuration |
-
-A persona represents a business responsibility. It is not necessarily identical to a physical employee, organizational job title, or technical role.
-
----
-
-# 4. Roles
-
-The initial V3 RBAC model defines the following roles.
-
-| Role Code | Role Name | Primary Persona |
-|---|---|---|
-| `customer` | Customer | Customer |
-| `customer_service_agent` | Customer Service Agent | Customer Service Agent |
-| `kyc_officer` | KYC Officer | KYC Officer |
-| `compliance_officer` | Compliance Officer | Compliance Officer |
-| `account_officer` | Account Officer | Account Officer |
-| `payments_officer` | Payments Officer | Payments Officer |
-| `operations_administrator` | Operations Administrator | Operations Administrator |
-| `auditor` | Auditor | Auditor |
-| `platform_administrator` | Platform Administrator | Platform Administrator |
-
-A user may possess more than one role where organizational policy permits it. Multiple roles do not automatically bypass Separation of Duties requirements.
-
----
-
-# 5. Permission Model
-
-Permissions represent individual business or operational capabilities.
-
-The recommended naming convention is:
+Naming convention:
 
 ```text
 <bounded-context>.<resource>.<action>
 ```
 
-Examples:
+The suffix `_own` (e.g. `customer.account.view_own`) means the permission is usable **only** together with an ownership relationship (see §6).
 
-```text
-customer.onboarding.create
-customer.onboarding.view
-kyc.case.approve
-payment.approve
-audit.view
-```
+Each bounded context's requirements document lists the permissions that belong to it. The permissions below are **platform-level**: they are not owned by any single business context.
 
-Permissions are independent of roles.
-
-A role receives permissions through the role-permission relationship.
-
-```text
-User
-  ↓
-Role
-  ↓
-Permission
-```
-
-This allows permissions to be reused by multiple roles without duplicating authorization logic.
-
----
-
-# 6. Customer Permissions
-
-The Customer may have the following permissions:
-
-```text
-customer.onboarding.create
-customer.onboarding.view_own
-customer.onboarding.update_own
-customer.onboarding.submit
-customer.account.view_own
-customer.payment.create
-customer.payment.view_own
-```
-
-The `_own` designation indicates that RBAC alone is insufficient. Resource ownership must also be evaluated.
-
-For example:
-
-```text
-customer.account.view_own
-```
-
-requires both:
-
-```text
-Customer role
-+
-Customer owns the Account
-```
-
----
-
-# 7. Customer Service Agent Permissions
-
-```text
-customer.onboarding.create
-customer.onboarding.view
-customer.onboarding.update
-customer.onboarding.submit
-customer.onboarding.assist
-customer.profile.view
-customer.profile.update
-workflow.status.view
-```
-
-The Customer Service Agent does not receive KYC approval or Compliance approval permissions merely because the agent can view the corresponding workflow.
-
----
-
-# 8. KYC Officer Permissions
-
-```text
-kyc.case.view
-kyc.case.update
-kyc.identity.verify
-kyc.document.verify
-kyc.case.request_information
-kyc.case.approve
-kyc.case.reject
-kyc.case.hold
-workflow.status.view
-```
-
-KYC approval additionally requires:
-
-- appropriate workflow state;
-- appropriate organizational attributes;
-- required resource relationship;
-- Separation of Duties checks.
-
----
-
-# 9. Compliance Officer Permissions
-
-```text
-compliance.case.view
-compliance.case.review
-compliance.aml.review
-compliance.risk.assess
-compliance.case.request_information
-compliance.case.approve
-compliance.case.reject
-compliance.case.hold
-compliance.case.release
-workflow.status.view
-```
-
-A Compliance Officer must not bypass mandatory KYC prerequisites.
-
----
-
-# 10. Account Officer Permissions
-
-```text
-account.application.view
-account.application.review
-account.application.approve
-account.application.reject
-account.application.hold
-account.lifecycle.view
-workflow.status.view
-```
-
-Account approval requires successful completion of mandatory preceding workflow stages.
-
----
-
-# 11. Payments Officer Permissions
-
-```text
-payment.view
-payment.validate
-payment.approve
-payment.reject
-payment.hold
-payment.release
-payment.retry
-workflow.status.view
-```
-
-Payment approval may additionally depend on:
-
-- payment amount;
-- payment risk classification;
-- payment status;
-- user's organizational attributes;
-- approval level;
-- Separation of Duties.
-
----
-
-# 12. Operations Administrator Permissions
-
-```text
-workflow.view
-workflow.retry
-workflow.pause
-workflow.resume
-workflow.reprocess
-integration.status.view
-service.health.view
-outbox.view
-inbox.view
-consumer.status.view
-```
-
-The Operations Administrator does not automatically receive:
-
-```text
-kyc.case.approve
-compliance.case.approve
-account.application.approve
-payment.approve
-```
-
-This is an intentional separation between **technical/operational authority** and **business approval authority**.
-
----
-
-# 13. Auditor Permissions
-
-The Auditor receives read-only permissions:
-
-```text
-audit.view
-audit.search
-workflow.history.view
-customer.history.view
-kyc.history.view
-account.history.view
-payment.history.view
-approval.history.view
-```
-
-The Auditor must not receive business mutation permissions.
-
----
-
-# 14. Platform Administrator Permissions
-
-The Platform Administrator is responsible for administration of the PoC environment.
-
-Potential permissions include:
-
-```text
-platform.configuration.view
-platform.configuration.update
-platform.user.view
-platform.user.manage
-platform.role.view
-platform.role.manage
-platform.permission.view
-platform.health.view
-```
-
-Platform administration must not implicitly grant business approval permissions.
-
-For example:
-
-```text
-platform_administrator
-```
-
-must not automatically imply:
-
-```text
-kyc.case.approve
-payment.approve
-account.application.approve
-```
-
-This distinction is important for demonstrating least privilege.
-
----
-
-# 15. Permission Matrix
-
-The initial coarse-grained permission matrix is:
-
-| Capability | Customer | CSA | KYC | Compliance | Account | Payments | Ops | Auditor | Platform Admin |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Create onboarding | ✓ | ✓ | | | | | | | |
-| View onboarding | Own | ✓ | ✓ | ✓ | ✓ | | ✓ | ✓ | ✓ |
-| Update onboarding | Own | ✓ | Limited | | | | | | |
-| Submit onboarding | ✓ | ✓ | | | | | | | |
-| Verify identity | | | ✓ | | | | | | |
-| Verify documents | | | ✓ | | | | | | |
-| Approve KYC | | | ✓* | | | | | | |
-| Review AML | | | | ✓ | | | | | |
-| Approve compliance | | | | ✓* | | | | | |
-| Approve account | | | | | ✓* | | | | |
-| Validate payment | | | | | | ✓ | | | |
-| Approve payment | | | | | | ✓* | | | |
-| Retry workflow | | | | | | | ✓ | | |
-| View audit | Own/Limited | Limited | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Modify audit | | | | | | | | ✗ | ✗ |
-
-`*` indicates that the permission alone is not sufficient. Additional authorization rules apply.
-
----
-
-# 16. ABAC Model
-
-RBAC determines the user's broad capabilities. ABAC adds contextual restrictions.
-
-ABAC decisions may evaluate:
-
-```text
-User Attributes
-+
-Resource Attributes
-+
-Environmental Attributes
-```
-
-## 16.1 User Attributes
-
-The initial user authorization profile may include:
-
-```text
-employeeId
-department
-branch
-region
-employmentType
-clearanceLevel
-```
-
-Example:
-
-```text
-employeeId       = EMP-10042
-department       = KYC
-branch           = BLR001
-region           = SOUTH
-employmentType   = FULL_TIME
-clearanceLevel   = 3
-```
-
----
-
-## 16.2 Resource Attributes
-
-Depending on the bounded context, resources may expose attributes such as:
-
-```text
-customerId
-branchId
-riskLevel
-classification
-paymentAmount
-workflowStatus
-assignedOfficerId
-```
-
-These attributes are owned by the relevant business microservice.
-
-The IDP must not become the owner of Customer, KYC Case, Account, or Payment business entities.
-
----
-
-## 16.3 Environmental Attributes
-
-Where appropriate, authorization may also consider:
-
-```text
-requestTime
-channel
-authenticationStrength
-```
-
-The PoC should use environmental attributes selectively rather than creating artificial complexity.
-
----
-
-# 17. ABAC Examples
-
-## 17.1 Branch Restriction
-
-A KYC Officer may access a case when:
-
-```text
-Role = kyc_officer
-+
-Permission = kyc.case.view
-+
-User.Branch = KycCase.Branch
-```
-
-If cross-branch access is not authorized:
-
-```text
-User.Branch != KycCase.Branch
-```
-
-results in denial.
-
----
-
-## 17.2 Clearance Restriction
-
-A high-risk KYC case may require:
-
-```text
-clearanceLevel >= requiredClearanceLevel
-```
-
-Example:
-
-```text
-KYC Case Risk = HIGH
-Required Clearance = 3
-User Clearance = 2
-```
-
-Result:
-
-```text
-DENY
-```
-
----
-
-## 17.3 Payment Amount
-
-Payment approval may depend on amount:
-
-```text
-PaymentAmount
-+
-User clearance
-+
-Approval permission
-```
-
-For example, a payment exceeding a configured approval threshold may require a higher authorization level or additional approval.
-
-The exact thresholds should be configuration rather than UI constants.
-
----
-
-# 18. ReBAC Model
-
-Relationship-Based Access Control evaluates relationships between users and resources.
-
-Examples include:
-
-```text
-User ──works_at──────► Branch
-User ──assigned_to───► KYC Case
-Agent ──manages──────► Customer
-Officer ──assigned_to─► Workflow
-Customer ──owns──────► Account
-Customer ──owns──────► Payment
-```
-
-ReBAC should complement RBAC and ABAC rather than replace them.
-
----
-
-# 19. ReBAC Examples
-
-## 19.1 Customer Ownership
-
-To view an account:
-
-```text
-Role = customer
-+
-Permission = customer.account.view_own
-+
-Customer ──owns──► Account
-```
-
----
-
-## 19.2 Assigned KYC Case
-
-To approve a KYC case:
-
-```text
-Role = kyc_officer
-+
-Permission = kyc.case.approve
-+
-KYC Officer ──assigned_to──► KYC Case
-```
-
-Additional ABAC and SoD checks still apply.
-
----
-
-## 19.3 Customer Service Assignment
-
-A Customer Service Agent may be permitted to manage a customer when:
-
-```text
-Agent ──manages──► Customer
-```
-
-or through an organizational relationship such as:
-
-```text
-Agent ──works_at──► Branch
-Customer ──belongs_to──► Branch
-```
-
-The exact relationship used should be determined by the business rule being demonstrated.
-
----
-
-# 20. Ownership of ReBAC Information
-
-Business relationships should normally be owned by the bounded context that owns the underlying business entity.
-
-For example:
-
-```text
-Customer Service
-    owns Customer assignment relationships
-
-KYC Service
-    owns KYC Case assignment relationships
-
-Accounts Service
-    owns Account ownership relationships
-
-Payments Service
-    owns Payment relationships
-```
-
-For the V3 PoC, a simplified authorization relationship store may be maintained by the IDP for demonstration purposes.
-
-However, business microservices remain the authoritative owners of their business entities.
-
-The IDP must not contain:
-
-```text
-Customers
-KycCases
-Accounts
-Payments
-```
-
-as duplicated business master data.
-
----
-
-# 21. Workflow Authorization
-
-Authorization must consider workflow state.
-
-A valid permission does not mean that an operation is valid at every point in the workflow.
-
-For example:
-
-```text
-kyc.case.approve
-```
-
-is meaningful only when the KYC case is in an approval-ready state.
-
-Conceptually:
-
-```text
-Role
-+
-Permission
-+
-ABAC
-+
-ReBAC
-+
-Workflow State
-+
-SoD
-=
-Authorization Decision
-```
-
----
-
-# 22. Customer Onboarding Workflow States
-
-The primary Customer Onboarding workflow uses the following conceptual states:
-
-```text
-DRAFT
-   ↓
-SUBMITTED
-   ↓
-KYC_IN_PROGRESS
-   ↓
-KYC_COMPLETED
-   ↓
-COMPLIANCE_IN_PROGRESS
-   ↓
-COMPLIANCE_COMPLETED
-   ↓
-ACCOUNT_OPENING_IN_PROGRESS
-   ↓
-COMPLETED
-```
-
-Terminal or exception states include:
-
-```text
-REJECTED
-CANCELLED
-COMPENSATING
-COMPENSATION_FAILED
-```
-
----
-
-# 23. Customer Onboarding State Definitions
-
-## DRAFT
-
-The application is being created or edited.
-
-Permitted activities include:
-
-```text
-Customer: create/update own information
-Customer Service Agent: create/update/assist
-```
-
-The application has not yet entered the formal approval workflow.
-
----
-
-## SUBMITTED
-
-The customer or authorized Customer Service Agent has submitted the application.
-
-Normal editing is restricted.
-
-The workflow is ready for downstream processing.
-
----
-
-## KYC_IN_PROGRESS
-
-The KYC process is executing.
-
-Typical activities:
-
-```text
-Identity verification
-Document verification
-KYC review
-```
-
----
-
-## KYC_COMPLETED
-
-KYC requirements have successfully completed.
-
-The workflow may proceed to compliance.
-
----
-
-## COMPLIANCE_IN_PROGRESS
-
-Compliance and AML activities are being performed.
-
-Typical activities:
-
-```text
-AML screening
-Risk assessment
-Compliance review
-```
-
----
-
-## COMPLIANCE_COMPLETED
-
-Compliance requirements have successfully completed.
-
-The workflow may proceed to account opening.
-
----
-
-## ACCOUNT_OPENING_IN_PROGRESS
-
-The Accounts bounded context is creating or preparing the account.
-
----
-
-## COMPLETED
-
-All mandatory onboarding steps have successfully completed.
-
-The customer onboarding workflow is complete.
-
----
-
-## REJECTED
-
-The application has been rejected.
-
-A rejection must identify the relevant business decision and be auditable.
-
----
-
-## CANCELLED
-
-The workflow has been intentionally cancelled.
-
----
-
-## COMPENSATING
-
-A downstream failure requires previously completed actions to be reversed or compensated.
-
----
-
-## COMPENSATION_FAILED
-
-Compensation itself has failed and requires operational investigation.
-
-This state is particularly useful for demonstrating Saga failure handling.
-
----
-
-# 24. KYC Case States
-
-The KYC bounded context may use:
-
-```text
-CREATED
-IN_PROGRESS
-AWAITING_INFORMATION
-AWAITING_REVIEW
-APPROVED
-REJECTED
-ON_HOLD
-```
-
-Typical transitions:
-
-```text
-CREATED
-   ↓
-IN_PROGRESS
-   ↓
-AWAITING_REVIEW
-   ├──► APPROVED
-   └──► REJECTED
-```
-
-or:
-
-```text
-IN_PROGRESS
-   ↓
-AWAITING_INFORMATION
-   ↓
-IN_PROGRESS
-```
-
----
-
-# 25. Compliance Case States
-
-The Compliance bounded context may use:
-
-```text
-CREATED
-SCREENING
-UNDER_REVIEW
-AWAITING_INFORMATION
-APPROVED
-REJECTED
-ON_HOLD
-```
-
-A compliance approval must not occur while mandatory screening is incomplete.
-
----
-
-# 26. Account Application States
-
-The Accounts bounded context may use:
-
-```text
-CREATED
-PENDING_REVIEW
-APPROVED
-OPENING
-OPENED
-REJECTED
-FAILED
-```
-
-Account opening requires successful completion of mandatory onboarding and compliance prerequisites.
-
----
-
-# 27. Payment States
-
-The Payments bounded context may use:
-
-```text
-INITIATED
-VALIDATING
-PENDING_APPROVAL
-APPROVED
-PROCESSING
-COMPLETED
-FAILED
-REJECTED
-CANCELLED
-ON_HOLD
-```
-
-Example:
-
-```text
-INITIATED
-    ↓
-VALIDATING
-    ↓
-PENDING_APPROVAL
-    ↓
-APPROVED
-    ↓
-PROCESSING
-    ↓
-COMPLETED
-```
-
-Failure paths may lead to:
-
-```text
-FAILED
-```
-
-or:
-
-```text
-ON_HOLD
-```
-
-depending on the nature of the failure.
-
----
-
-# 28. Approval Rules
-
-Approval operations must satisfy all applicable conditions.
-
-A generic approval decision is:
-
-```text
-1. User is authenticated
-2. User has required role
-3. User has required permission
-4. User satisfies ABAC requirements
-5. User satisfies ReBAC requirements
-6. Resource is in an approvable workflow state
-7. Prerequisite steps are complete
-8. Separation of Duties checks succeed
-9. Required approval level is satisfied
-10. Operation is not already completed
-```
-
-If any mandatory condition fails:
-
-```text
-Authorization = DENIED
-```
-
----
-
-# 29. KYC Approval Rule
-
-A KYC approval requires:
-
-```text
-Role = kyc_officer
-+
-Permission = kyc.case.approve
-+
-Department = KYC
-+
-Required clearance
-+
-Permitted branch/resource scope
-+
-Assigned-to relationship where applicable
-+
-KYC status = AWAITING_REVIEW
-+
-SoD check passed
-```
-
----
-
-# 30. Compliance Approval Rule
-
-A compliance approval requires:
-
-```text
-Role = compliance_officer
-+
-Permission = compliance.case.approve
-+
-Department = COMPLIANCE
-+
-Required clearance
-+
-Required AML screening completed
-+
-Required risk assessment completed
-+
-Compliance status = UNDER_REVIEW
-+
-SoD check passed
-```
-
----
-
-# 31. Account Approval Rule
-
-An account-opening approval requires:
-
-```text
-Role = account_officer
-+
-Permission = account.application.approve
-+
-Required KYC completion
-+
-Required compliance completion
-+
-Account application = PENDING_REVIEW
-+
-SoD check passed
-```
-
----
-
-# 32. Payment Approval Rule
-
-A payment approval requires:
-
-```text
-Role = payments_officer
-+
-Permission = payment.approve
-+
-Payment status = PENDING_APPROVAL
-+
-User satisfies amount/risk authorization requirements
-+
-User satisfies branch/organizational restrictions
-+
-SoD check passed
-```
-
-Higher-value or higher-risk payments may require additional authorization.
-
----
-
-# 33. Separation of Duties
-
-Separation of Duties prevents a single user from performing conflicting actions.
-
-The PoC should demonstrate both:
-
-### Static SoD
-
-Certain role combinations may be considered incompatible.
-
-Example:
-
-```text
-kyc_officer
-+
-compliance_officer
-```
-
-may be disallowed for the same user if the business scenario requires complete separation between verification and compliance decisions.
-
-### Dynamic SoD
-
-A role may be valid for the user, but a particular action is denied because of what the user already did in the current workflow.
-
-Example:
-
-```text
-User A submitted / performed KYC work
-             ↓
-User A attempts KYC approval
-             ↓
-DENIED
-```
-
-even though User A possesses:
-
-```text
-kyc.case.approve
-```
-
----
-
-# 34. Core Dynamic SoD Rule
-
-For sensitive approvals:
-
-```text
-CurrentUser != PreviousActor
-```
-
-where the previous actor performed a conflicting workflow operation.
-
-Examples:
-
-```text
-SubmittedBy != KycApprovedBy
-```
-
-```text
-KycReviewedBy != ComplianceApprovedBy
-```
-
-```text
-ComplianceReviewedBy != AccountApprovedBy
-```
-
-The exact SoD rules should be associated with the workflow operation rather than implemented as generic UI rules.
-
----
-
-# 35. SoD Audit Requirements
-
-Every sensitive action should record:
-
-```text
-UserId
-Role
-Action
-EntityType
-EntityId
-WorkflowId
-CorrelationId
-Timestamp
-Result
-```
-
-For approval actions, the audit trail must allow an auditor to determine:
-
-```text
-Who submitted?
-Who reviewed?
-Who approved?
-When?
-For which entity?
-Under which workflow?
-```
-
----
-
-# 36. Workflow State Transition Authorization
-
-State transitions must be explicit.
-
-Example:
-
-```text
-DRAFT
-  └── Submit ──► SUBMITTED
-
-SUBMITTED
-  └── Start KYC ──► KYC_IN_PROGRESS
-
-KYC_IN_PROGRESS
-  └── KYC complete ──► KYC_COMPLETED
-
-KYC_COMPLETED
-  └── Start compliance ──► COMPLIANCE_IN_PROGRESS
-
-COMPLIANCE_IN_PROGRESS
-  └── Compliance approved ──► COMPLIANCE_COMPLETED
-
-COMPLIANCE_COMPLETED
-  └── Start account opening ──► ACCOUNT_OPENING_IN_PROGRESS
-
-ACCOUNT_OPENING_IN_PROGRESS
-  └── Account opened ──► COMPLETED
-```
-
-Invalid transitions must be rejected server-side.
-
----
-
-# 37. Compensation Authorization
-
-Compensation is not equivalent to business approval.
-
-An Operations Administrator may have:
-
-```text
-workflow.retry
-workflow.reprocess
-```
-
-but should not thereby receive:
-
-```text
-account.application.approve
-```
-
-Compensation actions must be:
-
-- explicitly authorized;
-- auditable;
-- idempotent where possible;
-- restricted to eligible workflow states.
-
----
-
-# 38. M2M Authorization
-
-Human-user tokens and machine-to-machine tokens represent different security contexts.
-
-Typical human flow:
-
-```text
-Browser
-   ↓
-BFF
-   ↓
-Business API
-```
-
-The BFF operates on behalf of an authenticated user.
-
-Service-to-service flow:
-
-```text
-Service A
-   ↓
-M2M access token
-   ↓
-Service B
-```
-
-M2M authentication establishes:
-
-```text
-Which service is calling?
-```
-
-It does not automatically answer:
-
-```text
-Which business operation is permitted?
-```
-
-The receiving service must still authorize the requested operation.
-
----
-
-# 39. Delegated User Context
-
-Where a downstream operation genuinely needs to preserve the identity of the initiating human user, the architecture may later demonstrate delegated identity or token exchange.
-
-The distinction is:
-
-```text
-M2M identity:
-"Customer Service BFF is calling."
-
-Delegated user identity:
-"Customer Service BFF is calling on behalf of user EMP-10042."
-```
-
-The PoC should introduce token exchange only where it demonstrates a real authorization requirement rather than adding it solely for complexity.
-
----
-
-# 40.1 Human Workflow Initiator and Service Identity
-
-For a long-running distributed workflow, the platform must preserve the distinction between:
-
-```text
-Human workflow initiator
-        ≠
-Machine/service identity
-```
-
-When a human user initiates a business workflow, the initiating identity should be captured at the business transaction/outbox boundary and propagated with the integration event metadata.
-
-The Customer Onboarding bounded context persists this information as:
-
-```text
-outbox_messages.initiated_by
-```
-
-The semantic meaning is:
-
-```text
-initiated_by
-    = human identity that originally initiated the workflow
-```
-
-It does **not** mean:
-
-```text
-initiated_by
-    = current service executing the workflow step
-```
-
-For example:
-
-```text
-Susan
-   |
-   | starts onboarding
-   v
-Customer Onboarding API
-   |
-   +-- initiated_by = Susan
-   |
-   v
-Kafka
-   |
-   v
-KYC Subscriber
-   |
-   +-- M2M identity = CustomerKycSubscriber
-   +-- initiated_by = Susan
-```
-
-`initiated_by` must not by itself grant access to the underlying business resource. Authorization must still evaluate:
-
-```text
-Identity
-+
-Role
-+
-Permission
-+
-ABAC
-+
-ReBAC
-+
-Workflow State
-+
-Separation of Duties
-```
-
-The initiator is primarily used for accountability, workflow context and determining an appropriate notification audience.
-
----
-
-# 40.2 Object-Level Authorization
-
-Authorization must apply to the **specific resource** being accessed.
-
-For example:
-
-```text
-customer.account.view
-```
-
-does not automatically mean that the caller may view every account.
-
-The decision may require:
-
-```text
-Permission
-+
-Target Resource
-+
-Ownership / Relationship
-+
-Organizational Scope
-+
-Workflow State
-```
-
-This prevents authorization from becoming merely a coarse-grained menu or endpoint check.
-
----
-
-# 40.3 Notification Authorization
-
-Where the platform sends real-time workflow notifications through SignalR, notification delivery must be treated as an authorization decision.
-
-A workflow event may identify:
-
-```text
-InitiatedByUserId
-```
-
-but the platform must still determine whether the authenticated recipient is authorized to receive that notification.
-
-The intended model is:
-
-```text
-Workflow Event
-      |
-      v
-Notification Audience
-      |
-      +-- Initiating user
-      +-- Assigned officer
-      +-- Supervisor
-      +-- Authorized operations role
-      |
-      v
-Authenticated SignalR connection
-```
-
-The exact audience may vary by workflow and business policy.
-
-The platform must not broadcast sensitive workflow information to every connected user.
-
----
-
-# 40. Authorization Decision Model
-
-The overall authorization model can be represented as:
-
-```text
-                   ┌───────────────┐
-                   │ Authenticated │
-                   │     User      │
-                   └───────┬───────┘
-                           │
-                           ▼
-                    ┌─────────────┐
-                    │    RBAC     │
-                    │ Role/Perm.  │
-                    └──────┬──────┘
-                           │
-                           ▼
-                    ┌─────────────┐
-                    │    ABAC     │
-                    │ Attributes  │
-                    └──────┬──────┘
-                           │
-                           ▼
-                    ┌─────────────┐
-                    │    ReBAC    │
-                    │ Relationship│
-                    └──────┬──────┘
-                           │
-                           ▼
-                    ┌─────────────┐
-                    │  Workflow   │
-                    │    State    │
-                    └──────┬──────┘
-                           │
-                           ▼
-                    ┌─────────────┐
-                    │     SoD     │
-                    │   Checks    │
-                    └──────┬──────┘
-                           │
-                           ▼
-                  ┌──────────────────┐
-                  │ Authorization    │
-                  │ Decision         │
-                  └──────────────────┘
-```
-
-The `InitiatedByUserId` / `initiated_by` value is intentionally **not another authorization layer** in this diagram. It provides workflow/accountability context and may contribute to notification-audience determination, but it must never bypass the authorization checks above.
-
----
-
-# 41. Authorization Decision Examples
-
-## Example A — Allowed KYC Approval
-
-```text
-User:
-  Role = kyc_officer
-  Permission = kyc.case.approve
-  Department = KYC
-  Branch = BLR001
-  Clearance = 3
-
-KYC Case:
-  Branch = BLR001
-  Status = AWAITING_REVIEW
-  AssignedOfficer = user
-
-SoD:
-  User did not perform conflicting previous action
-```
-
-Result:
-
-```text
-ALLOW
-```
-
----
-
-## Example B — Branch Restriction
-
-```text
-User.Branch = MUM001
-KycCase.Branch = BLR001
-```
-
-If cross-branch access is not authorized:
-
-```text
-DENY
-```
-
----
-
-## Example C — Insufficient Clearance
-
-```text
-Required Clearance = 3
-User Clearance = 2
-```
-
-Result:
-
-```text
-DENY
-```
-
----
-
-## Example D — Dynamic SoD Violation
-
-```text
-User A performed KYC verification.
-
-User A has kyc.case.approve.
-
-User A attempts to approve the same case.
-```
-
-Result:
-
-```text
-DENY
-Reason: Separation of Duties violation
-```
-
----
-
-## Example E — Operations Administrator
-
-```text
-User:
-  Role = operations_administrator
-  Permission = workflow.retry
-
-Action:
-  Retry failed workflow
-```
-
-Result:
-
-```text
-ALLOW
-```
-
-But:
-
-```text
-User:
-  Role = operations_administrator
-
-Action:
-  Approve KYC case
-```
-
-Result:
-
-```text
-DENY
-```
-
-unless a separate explicit business role/permission has been granted.
-
----
-
-# 42. Authorization Failure Semantics
-
-Authorization failures should be handled consistently.
-
-The API should distinguish, where appropriate:
-
-```text
-401 Unauthorized
-```
-
-for an unauthenticated request, and:
-
-```text
-403 Forbidden
-```
-
-for an authenticated user who is not authorized to perform the operation.
-
-The response should not unnecessarily disclose internal authorization policy details.
-
-For example, a client generally does not need to know the complete internal ABAC or SoD evaluation.
-
-Detailed authorization information may instead be recorded in secure structured logs and audit records according to policy.
-
----
-
-# 43. UI Requirements
-
-The UI may use authorization information to improve the user experience.
-
-For example:
-
-```text
-Approve
-Reject
-Hold
-```
-
-buttons may be displayed only when the current user is expected to be able to perform the operation.
-
-However:
-
-> **Hiding a button is not an authorization mechanism.**
-
-Every sensitive operation must be authorized by the server.
-
-Therefore:
-
-```text
-UI
- ↓
-BFF
- ↓
-API
- ↓
-Authorization
- ↓
-Business operation
-```
-
-must remain secure even if a user manually invokes an API endpoint.
-
----
-
-# 44. Audit and Traceability
-
-Every significant business authorization decision should be traceable through:
-
-```text
-UserId
-Role
-Permission
-EntityId
-WorkflowId
-CorrelationId
-TraceId
-Action
-Result
-Timestamp
-```
-
-The V3 architecture should propagate correlation information across:
-
-```text
-Browser
- ↓
-BFF
- ↓
-API
- ↓
-Database
- ↓
-Outbox
- ↓
-Kafka
- ↓
-Consumer
- ↓
-Downstream API
- ↓
-SignalR
-```
-
-For long-running workflows, the traceability model should distinguish at least:
-
-```text
-MessageId
-WorkflowId
-CorrelationId
-CausationId
-TraceId
-InitiatedByUserId
-```
-
-where these values are applicable.
-
-`InitiatedByUserId` answers:
-
-```text
-Who originally initiated the workflow?
-```
-
-while the service identity answers:
-
-```text
-Which technical principal performed this step?
-```
-
-This distinction enables investigation of distributed workflow behavior without confusing human accountability with machine execution identity.
-
----
-
-# 45. Relationship to the IDP Database
-
-The IDP's `IdentityAccessDb` should contain authorization information such as:
-
-```text
-Users
-Roles
-Permissions
-UserRoles
-RolePermissions
-Branches
-Departments
-UserEmploymentProfiles
-UserRelationships
-```
-
-It should not contain the master business data for:
-
-```text
-Customers
-KYC Cases
-Accounts
-Payments
-```
-
-Those remain owned by their respective bounded contexts.
-
----
-
-# 46. Initial Demonstration Users
-
-The PoC should contain at least one user for each primary persona.
-
-Suggested users:
-
-| Username | Persona | Role |
+| Permission | Purpose | Held by |
 |---|---|---|
-| `customer.demo` | Customer | `customer` |
-| `ananya.cs` | Customer Service Agent | `customer_service_agent` |
-| `rahul.kyc` | KYC Officer | `kyc_officer` |
-| `meera.compliance` | Compliance Officer | `compliance_officer` |
-| `arjun.accounts` | Account Officer | `account_officer` |
-| `priya.payments` | Payments Officer | `payments_officer` |
-| `vikram.ops` | Operations Administrator | `operations_administrator` |
-| `sanjay.audit` | Auditor | `auditor` |
-| `platform.admin` | Platform Administrator | `platform_administrator` |
+| `workflow.status.view` | See business workflow status | All staff roles |
+| `workflow.view` | See operational workflow detail | `operations_administrator` |
+| `workflow.retry`, `workflow.pause`, `workflow.resume`, `workflow.reprocess` | Technical recovery of workflows | `operations_administrator` |
+| `integration.status.view`, `consumer.status.view`, `outbox.view`, `inbox.view` | Integration / messaging diagnostics | `operations_administrator` |
+| `service.health.view` | Service health | `operations_administrator`, `platform_administrator` |
+| `audit.view`, `audit.search`, `workflow.history.view`, `approval.history.view` | Audit and investigation | `auditor` |
+| `platform.configuration.view` / `.update`, `platform.user.view` / `.manage`, `platform.role.view` / `.manage`, `platform.permission.view`, `platform.health.view` | Platform administration | `platform_administrator` |
 
-These are demonstration identities only and must not represent real people.
+None of these permissions authorizes a business approval.
 
----
+### 3.3 Scopes vs Permissions
 
-# 47. Suggested Organizational Attributes for Demonstration
+Two different questions must both be answered with "yes":
 
-Example employee attributes:
+| Concept | Question it answers | Carried in | Example |
+|---|---|---|---|
+| **API scope** | May this *client application* call this API for this kind of operation? | `scope` claim of the access token | `customer-kyc.write` |
+| **Permission** | May this *user* perform this business operation? | `permission` claims of the user | `kyc.case.approve` |
 
-| User | Department | Branch | Region | Employment Type | Clearance |
-|---|---|---|---|---|---:|
-| `ananya.cs` | CUSTOMER_SERVICE | BLR001 | SOUTH | FULL_TIME | 2 |
-| `rahul.kyc` | KYC | BLR001 | SOUTH | FULL_TIME | 3 |
-| `meera.compliance` | COMPLIANCE | BLR001 | SOUTH | FULL_TIME | 4 |
-| `arjun.accounts` | ACCOUNTS | BLR002 | SOUTH | FULL_TIME | 3 |
-| `priya.payments` | PAYMENTS | BLR002 | SOUTH | FULL_TIME | 4 |
-| `vikram.ops` | OPERATIONS | BLR001 | SOUTH | FULL_TIME | 4 |
-| `sanjay.audit` | AUDIT | BLR001 | SOUTH | FULL_TIME | 5 |
-| `platform.admin` | IT | BLR001 | SOUTH | FULL_TIME | 5 |
-
-The values are illustrative PoC data.
-
-The differing branches, departments, and clearance levels are intentional so that ABAC scenarios can be demonstrated.
+An API must therefore check the scope **per operation** (a read scope must not pass a write endpoint) **and** the user's permission, attributes, relationships and the resource's state. A scope never substitutes for a permission, and vice versa.
 
 ---
 
-# 48. Suggested ReBAC Demonstration Relationships
-
-The initial demonstration dataset should contain relationships such as:
+## 4. The Decision Pipeline
 
 ```text
-ananya.cs
-    └── manages ──► Customer CUST-10045
-
-rahul.kyc
-    └── assigned_to ──► KYC-10045
-
-meera.compliance
-    └── assigned_to ──► KYC-10045
-
-arjun.accounts
-    └── assigned_to ──► Account Application ACCAPP-10045
-```
-
-The actual resource identifiers are owned by the corresponding microservices.
-
----
-
-# 49. Authorization Test Scenarios
-
-The V3 PoC should explicitly demonstrate both positive and negative authorization scenarios.
-
-## RBAC
-
-- Customer can create own onboarding.
-- Customer Service Agent can manage onboarding.
-- KYC Officer can perform KYC operations.
-- Compliance Officer can perform compliance operations.
-- Account Officer can approve account opening.
-- Payments Officer can approve eligible payments.
-- Auditor cannot modify business data.
-
-## ABAC
-
-- KYC Officer can access cases within permitted branch.
-- KYC Officer cannot access restricted cross-branch cases.
-- High-risk case requires sufficient clearance.
-- Payment approval threshold requires appropriate authorization level.
-
-## ReBAC
-
-- Customer can access owned account.
-- Customer cannot access another customer's account.
-- Assigned KYC Officer can access assigned case.
-- Unassigned KYC Officer is denied where assignment is required.
-
-## SoD
-
-- User who performed a conflicting action cannot perform the approval.
-- Customer cannot approve own onboarding.
-- Operational retry does not grant business approval authority.
-
-## Workflow
-
-- KYC cannot be approved before review-ready state.
-- Account cannot be opened before mandatory compliance completion.
-- Payment cannot be approved after it has already completed.
-- Invalid state transitions are rejected.
-
----
-
-# 50.1 Human Initiator Does Not Grant Authorization
-
-The following must be denied unless the user independently satisfies the authorization policy:
-
-```text
-User = workflow initiator
-+
-InitiatedByUserId = User
-+
-No required permission
-```
-
-The fact that a user originally initiated a workflow does not automatically grant access to every downstream resource or operation.
-
----
-
-# 50.2 M2M Identity Does Not Replace Human Attribution
-
-A subscriber may authenticate using:
-
-```text
-CustomerKycSubscriber
-```
-
-while the event still carries:
-
-```text
-InitiatedByUserId = Susan
-```
-
-The service identity authorizes the technical operation. The human initiator provides workflow accountability.
-
----
-
-# 50.3 Notification Audience
-
-A user should receive a workflow notification only when the notification-audience policy permits it.
-
-Example:
-
-```text
-Susan starts Customer 1
-Margaret starts Customer 2
-
-Customer 1 workflow event
-    └──► Susan
-
-Customer 2 workflow event
-    └──► Margaret
-```
-
-The notification mechanism must not treat all authenticated SignalR connections as an implicit audience.
-
----
-
-# 51. Guiding Principle
-
-The Enterprise Web Platform V3 authorization model follows this principle:
-
-> **A user should be authorized based not merely on who they are, but on what they are responsible for, what they are permitted to do, their relationship to the business resource, the attributes governing their access, and the current state of the business process.**
-
-The resulting authorization model is therefore:
-
-```text
-Identity
-   +
-RBAC
-   +
-Permissions
-   +
-ABAC
-   +
-ReBAC
-   +
-Workflow Authorization
-   +
+Authenticated principal
+        │
+        ▼
+Scope (client may call this operation)
+        │
+        ▼
+RBAC (role → permission)
+        │
+        ▼
+ABAC (user, resource and environment attributes)
+        │
+        ▼
+ReBAC (relationship between user and resource)
+        │
+        ▼
+Workflow state (operation valid in the resource's current state)
+        │
+        ▼
 Separation of Duties
-   +
-Auditability
+        │
+        ▼
+ALLOW / DENY  ──► audit
 ```
 
-This provides the business foundation for the V3 PoC's enterprise security architecture.
+A generic approval is permitted only when **all** of the following hold:
+
+1. The user is authenticated.
+2. The client holds the required scope.
+3. The user holds the required permission.
+4. ABAC requirements are satisfied.
+5. ReBAC requirements are satisfied where the operation requires a relationship.
+6. The resource is in an approvable workflow state.
+7. All prerequisite steps are complete.
+8. Separation of Duties checks succeed.
+9. The required approval level is satisfied.
+10. The operation has not already been completed.
+
+`InitiatedByUserId` is intentionally **not** a stage in this pipeline (see §9).
+
+---
+
+## 5. ABAC — Attribute-Based Access Control
+
+ABAC narrows a permission using attributes of three kinds:
+
+| Kind | Examples | Owner |
+|---|---|---|
+| User | `employee_id`, `department`, `branch`, `region`, `employment_type`, `clearance_level` | IDP (issued as claims) |
+| Resource | branch of the customer or case, risk level, classification, payment amount, workflow status | The bounded context that owns the resource |
+| Environment | request time, channel, authentication strength | Request context |
+
+Rules:
+
+- The IDP owns **user** attributes only. Resource attributes are owned and evaluated by the bounded context that owns the resource; the IDP never holds business master data.
+- Thresholds (e.g. a payment approval limit or a minimum clearance) are **configuration or domain rules**, never UI constants.
+- Environmental attributes are used selectively, only where they demonstrate a real requirement.
+
+Typical rule shapes:
+
+```text
+Branch scope:      user.branch == resource.branch            (unless cross-branch access is granted)
+Clearance:         user.clearance_level >= resource.requiredClearance
+Amount threshold:  resource.amount <= limitFor(user.clearance_level)
+```
+
+---
+
+## 6. ReBAC — Relationship-Based Access Control
+
+ReBAC asks whether the user has the **required relationship** with this particular resource:
+
+```text
+RBAC:  "Are you a KYC Officer?"
+ABAC:  "Are you a KYC Officer in the right branch with sufficient clearance?"
+ReBAC: "Are you the KYC Officer assigned to this case?"
+```
+
+Relationship types used in EWP V3: `works_at`, `manages`, `assigned_to`, `owns`, `belongs_to`.
+
+**Ownership of relationship data.** A relationship is a business fact. It is owned by the bounded context that owns the resource (customer assignment by Customer Onboarding, case assignment by KYC or Compliance, account ownership by Accounts). For the PoC, the IDP holds a simplified `user_relationships` store for demonstration. That store is an interim convenience: the target is for each context to own its relationship facts.
+
+---
+
+## 7. Workflow-State Authorization
+
+Holding a permission does not make an operation valid at every point in a workflow. For example, `kyc.case.approve` is meaningful only while the KYC stage is awaiting review.
+
+- Each bounded context defines its states and valid transitions in its own requirements document.
+- Invalid transitions are rejected **server-side by the domain model** (aggregate), not by the UI.
+- An operation already completed cannot be performed again (idempotent "already decided" responses or a 409 Conflict).
+
+---
+
+## 8. Separation of Duties (SoD)
+
+### 8.1 Static SoD
+
+Certain role combinations may be declared incompatible for the same user (for example `kyc_officer` + `compliance_officer` where complete independence is required). Static SoD is evaluated when roles are assigned.
+
+### 8.2 Dynamic SoD
+
+A user may hold a valid role and still be denied because of **what they have already done in this workflow**:
+
+```text
+CurrentUser != PreviousActor (for the conflicting operation)
+```
+
+Examples of conflicting pairs:
+
+```text
+Workflow initiator     != KYC decision maker
+KYC decision maker     != Compliance approver
+Compliance approver    != Account-opening approver
+Payment initiator      != Payment approver
+```
+
+The exact SoD rules of a workflow step are defined in the owning context's requirements document, close to the operation, not as generic UI rules.
+
+### 8.3 SoD must fail closed
+
+If the information needed to evaluate an SoD rule is missing (for example, the initiator is unknown), the decision is **DENY** or escalation to a supervisor — never "skip the check".
+
+---
+
+## 9. Human Initiator, Service Identity and M2M Authorization
+
+### 9.1 Two identities, two purposes
+
+```text
+Human workflow initiator  = who originally started the business workflow   (accountability)
+Service identity          = which technical principal executes this step   (authentication of the caller)
+```
+
+The initiator is captured at the business-transaction / Outbox boundary and travels in the event envelope as `InitiatedByUserId`. It is used for accountability, SoD evaluation and choosing the notification audience. It **never** grants access by itself:
+
+```text
+User = workflow initiator, but lacking the required permission  ──►  DENY
+```
+
+### 9.2 M2M authorization
+
+M2M (client-credentials) authentication answers *"which service is calling?"*. It does not answer *"is this business operation permitted?"*. The receiving API must still authorize:
+
+```text
+Calling client (pinned client_id) + required scope + requested operation + target resource + workflow state
+```
+
+An M2M caller must be pinned by `client_id`, hold the narrowest scope that works, and be limited to the specific operations it exists to perform.
+
+### 9.3 Delegated user context
+
+When a downstream service genuinely needs to know **which human** an M2M call is acting for (e.g. Documents Management deciding whether a document may be read), the target pattern is delegated identity, such as OAuth 2.0 Token Exchange (RFC 8693) or a signed actor claim. Unsigned headers asserted by the caller are not a substitute. Token exchange is introduced only where it demonstrates a real authorization requirement.
+
+---
+
+## 10. Object-Level Authorization
+
+Every read or write is evaluated against the specific resource:
+
+```text
+Permission + target resource + ownership / relationship + organizational scope + workflow state
+```
+
+List endpoints must filter to the resources the caller may see; they must not return everything and rely on the UI to hide rows. This is the primary defense against IDOR / BOLA.
+
+---
+
+## 11. Notification Authorization
+
+Delivering a real-time notification is an authorization decision:
+
+```text
+Workflow event ──► candidate audience (initiator, assigned officer, supervisor, authorized operations role)
+              ──► authorization policy per recipient
+              ──► authenticated notification connection of that recipient only
+```
+
+The platform never treats "all connected users" as an implicit audience.
+
+---
+
+## 12. Operational and Compensation Actions
+
+Retry, reprocess, pause, resume and compensation are **operational** actions. They must be explicitly authorized, auditable, idempotent where possible, restricted to eligible workflow states, and must never constitute or imply a business approval.
+
+---
+
+## 13. Failure Semantics
+
+| Situation | Response |
+|---|---|
+| Not authenticated | `401 Unauthorized` |
+| Authenticated but not permitted | `403 Forbidden` |
+| Resource exists but caller may not know that | `404 Not Found` (where disclosing existence would leak information) |
+| Operation invalid in the current workflow state, or already completed | `409 Conflict` |
+
+Responses do not reveal internal ABAC or SoD evaluation details. Those details are recorded in structured logs and audit records.
+
+---
+
+## 14. Authorization Audit
+
+Every significant authorization decision and every business approval records at least:
+
+```text
+UserId, Role, Permission, Action, EntityType, EntityId,
+WorkflowId, CorrelationId, TraceId, Timestamp, Result (and SoD rule evaluated, where applicable)
+```
+
+so that an auditor can answer: who submitted, who reviewed, who approved, when, for which entity, under which workflow, and which service identity performed any technical step.
+
+---
+
+## 15. Authorization Test Categories
+
+Every bounded context must demonstrate both positive and negative cases in each category below. The concrete scenarios live in the context's requirements document.
+
+| Category | Must demonstrate |
+|---|---|
+| Scope | A read-only token is rejected by a write operation |
+| RBAC | A role without the permission is denied |
+| ABAC | Cross-branch and insufficient-clearance access is denied |
+| ReBAC | An unrelated or unassigned user is denied; an owner or assignee is allowed |
+| Workflow state | An operation in the wrong state is rejected |
+| SoD | The conflicting previous actor is denied; missing SoD data fails closed |
+| Operational vs business | `operations_administrator` and `platform_administrator` cannot approve |
+| Initiator | Being the initiator grants nothing |
+| Object level | List endpoints return only resources the caller may see |

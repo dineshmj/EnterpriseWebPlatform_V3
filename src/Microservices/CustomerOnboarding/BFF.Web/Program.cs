@@ -32,7 +32,12 @@ builder.Services.AddAntiforgery(options =>
     options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
 });
 
-builder.Services.AddBff().AddRemoteApis();
+// Server-side sessions: the cookie carries only a session reference; tokens stay
+// on the server and sessions can be revoked. The default store is in-memory
+// (sessions end on restart); use a persistent store for multiple instances.
+builder.Services.AddBff()
+    .AddServerSideSessions()
+    .AddRemoteApis();
 builder.Services.AddOpenIdConnectAccessTokenManagement();
 
 builder.Services
@@ -56,7 +61,15 @@ builder.Services
     {
         options.Authority = IDP.AUTHORITY;
         options.ClientId = CustomerOnboardingMicroservice.CLIENT_ID_FOR_IDP;
-        options.ClientSecret = CustomerOnboardingMicroservice.CLIENT_SECRET_FOR_IDP;
+
+        // Front-channel logout (/signout-oidc, called by the IDP in a hidden iframe)
+        // must clear THIS BFF's session cookie. Without an explicit scheme it falls
+        // back to the default sign-out scheme ("oidc") and merely redirects to the
+        // IDP again, leaving the session - and its stale tokens/claims - alive.
+        options.SignOutScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+        // From this deployable's configuration / secret store; never compiled in.
+        options.ClientSecret = builder.Configuration["Oidc:ClientSecret"]
+            ?? throw new InvalidOperationException("Oidc:ClientSecret is not configured.");
         options.ResponseType = "code";
         options.ResponseMode = "query";
         options.UsePkce = true;
@@ -68,10 +81,13 @@ builder.Services
         options.Scope.Add("profile");
         options.Scope.Add("email");
         options.Scope.Add("roles");
+        options.Scope.Add("organization");
         options.Scope.Add("offline_access");
         options.Scope.Add("customer-onboarding.read");
         options.Scope.Add("customer-onboarding.write");
         options.ClaimActions.MapJsonKey("role", "role", "role");
+        // The acting user's branch, sent to Documents Management (X-Actor-Branch).
+        options.ClaimActions.MapJsonKey("branch", "branch");
         options.TokenValidationParameters.NameClaimType = "name";
         options.TokenValidationParameters.RoleClaimType = "role";
 
@@ -122,6 +138,25 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// Browser security headers. This MFE may be framed only by the Shell, and by
+// the IDP (which loads /signout-oidc in a hidden iframe for front-channel logout).
+var shellOrigin = builder.Configuration["ShellOrigin"] ?? BSSShellBFF.SHELL_BFF_CLIENT_BASE_URL;
+var idpOrigin = new Uri(IDP.AUTHORITY).GetLeftPart(UriPartial.Authority);
+app.Use(async (context, next) =>
+{
+    context.Response.OnStarting(() =>
+    {
+        var headers = context.Response.Headers;
+        headers.TryAdd("Content-Security-Policy", $"frame-ancestors {shellOrigin} {idpOrigin}; object-src 'none'; base-uri 'self'");
+        headers.TryAdd("X-Content-Type-Options", "nosniff");
+        headers.TryAdd("Referrer-Policy", "strict-origin-when-cross-origin");
+        return Task.CompletedTask;
+    });
+
+    await next();
+});
+
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseRouting();

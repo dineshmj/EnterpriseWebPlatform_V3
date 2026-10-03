@@ -15,23 +15,45 @@ public sealed class UploadDocumentCommandHandler(
         var documentId = Guid.NewGuid();
         var fileName = Path.GetFileName(command.FileName);
 
+        // Verify the real content type from the file signature before anything
+        // is stored. A non-seekable stream is buffered so it can be rewound.
+        var content = command.Content;
+        if (!content.CanSeek)
+        {
+            var buffered = new MemoryStream();
+            await content.CopyToAsync(buffered, cancellationToken);
+            buffered.Position = 0;
+            content = buffered;
+        }
+
+        var header = new byte[DocumentContentPolicy.SignatureLength];
+        var headerLength = await content.ReadAtLeastAsync(
+            header,
+            header.Length,
+            throwOnEndOfStream: false,
+            cancellationToken);
+        content.Position = 0;
+
+        var verifiedContentType = DocumentContentPolicy.VerifyContentType(
+            header.AsSpan(0, headerLength),
+            command.ContentType);
+
         var stored = await storage.StoreAsync(
             documentId,
             fileName,
-            command.Content,
+            content,
             cancellationToken);
 
         var now = DateTimeOffset.UtcNow;
         var document = Document.Create(
             documentId,
             fileName,
-            string.IsNullOrWhiteSpace(command.ContentType)
-                ? "application/octet-stream"
-                : command.ContentType,
+            verifiedContentType,
             stored.Size,
             stored.ContentHash,
             stored.StorageReference,
             now,
+            command.ResourceBranch,
             command.DocumentType,
             command.BusinessReference);
 

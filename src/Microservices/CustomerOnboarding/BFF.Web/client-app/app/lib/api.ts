@@ -26,26 +26,35 @@ export async function postForm<T>(url: string, form: FormData, csrfToken: string
   });
 
   const text = await response.text();
+
+  if (!response.ok) {
+    throw new Error(errorMessage(text, response.status));
+  }
+
   let data: T;
   try { data = text ? JSON.parse(text) as T : ({} as T); }
   catch { data = {} as T; }
-
-  if (!response.ok) {
-    const message = typeof data === 'object' && data !== null && 'message' in data
-      ? String((data as { message?: unknown }).message)
-      : `Request failed with HTTP ${response.status}.`;
-    throw new Error(message);
-  }
 
   return { status: response.status, data };
 }
 
 async function readError(response: Response): Promise<string> {
-  const text = await response.text();
+  return errorMessage(await response.text(), response.status);
+}
+
+/**
+ * Extracts a human-readable reason from an error body. Handles both the BFF's
+ * own { message } responses and ProblemDetails ({ detail, title }) relayed from
+ * the Customer Onboarding API, e.g. the branch-scope 403.
+ */
+function errorMessage(text: string, status: number): string {
+  const fallback = `Request failed with HTTP ${status}.`;
+  if (!text) return fallback;
+
   try {
     const data = JSON.parse(text) as { detail?: string; title?: string; message?: string };
-    return data.detail ?? data.message ?? data.title ?? `Request failed with HTTP ${response.status}.`;
+    return data.detail ?? data.message ?? data.title ?? fallback;
   } catch {
-    return text || `Request failed with HTTP ${response.status}.`;
+    return fallback;
   }
 }

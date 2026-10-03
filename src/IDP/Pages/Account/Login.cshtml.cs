@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.RateLimiting;
 
 using Duende.IdentityServer;
 using Duende.IdentityServer.Events;
@@ -15,6 +16,7 @@ namespace EnterpriseWebPlatform.IdentityServer.Pages.Account;
 
 [SecurityHeaders]
 [AllowAnonymous]
+[EnableRateLimiting("login")]
 public sealed class LoginModel : PageModel
 {
     private readonly IIdentityServerInteractionService _interaction;

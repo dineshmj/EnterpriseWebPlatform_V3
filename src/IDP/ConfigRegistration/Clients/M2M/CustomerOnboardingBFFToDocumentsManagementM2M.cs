@@ -1,4 +1,5 @@
-﻿using Duende.IdentityServer.Models;
+﻿using EnterpriseWebPlatform.IdentityServer.Security;
+using Duende.IdentityServer.Models;
 
 using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
@@ -18,7 +19,7 @@ public sealed class CustomerOnboardingBFFToDocumentsManagementM2M
                 {
                     ClientId = DocumentsManagementMicroservice.CLIENT_ID_FOR_IDP_FOR_CUST_ONBOARDING_BFF_TO_DOC_MGMT_M2M,
                     ClientName = DocumentsManagementMicroservice.CLIENT_NAME_FOR_IDP_FOR_CUST_ONBOARDING_BFF_TO_DOC_MGMT_M2M,
-                    ClientSecrets = { new Secret(DocumentsManagementMicroservice.CLIENT_SECRET_FOR_IDP_FOR_CUST_ONBOARDING_BFF_TO_DOC_MGMT_M2M.Sha256()) },
+                    ClientSecrets = { ClientSecretStore.For(DocumentsManagementMicroservice.CLIENT_ID_FOR_IDP_FOR_CUST_ONBOARDING_BFF_TO_DOC_MGMT_M2M) },
 
                     AllowedGrantTypes = GrantTypes.ClientCredentials,
                     // 🡡__ WHY   : The Documents Management M2M client is a machine identity and does not represent an

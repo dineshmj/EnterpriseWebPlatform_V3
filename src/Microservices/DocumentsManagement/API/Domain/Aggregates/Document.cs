@@ -23,6 +23,13 @@ public sealed class Document : Entity
 
     public string? BusinessReference { get; private set; }
 
+    /// <summary>
+    /// Organizational (branch) scope of the document, taken from the actor who
+    /// uploaded it. Used for object-level authorization. A document without a
+    /// resource branch is accessible to nobody (fail closed).
+    /// </summary>
+    public string? ResourceBranch { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
 
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -37,9 +44,13 @@ public sealed class Document : Entity
         string contentHash,
         string storageReference,
         DateTimeOffset now,
+        string resourceBranch,
         string? documentType = null,
         string? businessReference = null)
     {
+        if (string.IsNullOrWhiteSpace(resourceBranch))
+            throw new DomainRuleViolationException("A resource branch is required.");
+
         if (documentId == Guid.Empty)
             throw new DomainRuleViolationException("Document ID cannot be empty.");
 
@@ -68,6 +79,7 @@ public sealed class Document : Entity
             StorageReference = storageReference,
             DocumentType = string.IsNullOrWhiteSpace(documentType) ? null : documentType.Trim(),
             BusinessReference = string.IsNullOrWhiteSpace(businessReference) ? null : businessReference.Trim(),
+            ResourceBranch = resourceBranch.Trim().ToUpperInvariant(),
             CreatedAt = now,
             UpdatedAt = now,
             Version = 1

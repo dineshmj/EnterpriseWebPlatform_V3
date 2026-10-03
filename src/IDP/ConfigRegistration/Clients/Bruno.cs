@@ -36,6 +36,9 @@ public sealed class Bruno
 
                 RedirectUris =
             {
+                // Local Bruno callback server (npx @usebruno/oauth2-callback-server --port 3000);
+                // the reliable option during V3 testing. See ReadMe.txt section 6.
+                "http://127.0.0.1:3000/callback",
                 "https://oauth.usebruno.com/callback"
             },
 

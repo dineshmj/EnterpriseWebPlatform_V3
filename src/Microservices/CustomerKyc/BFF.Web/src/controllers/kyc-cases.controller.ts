@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Headers,
+  Inject,
   Param,
   Post,
   Query,
@@ -11,6 +12,10 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { Readable } from 'node:stream';
+import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
+import { safeEqual } from '../auth/csrf';
+import { KycBffOptions } from '../configuration/kyc-bff-options';
 import { KycApiService } from '../services/kyc-api.service';
 import { DocumentsManagementService } from '../services/documents-management.service';
 
@@ -23,6 +28,7 @@ export class KycCasesController {
   constructor(
     private readonly api: KycApiService,
     private readonly documents: DocumentsManagementService,
+    @Inject('KYC_BFF_OPTIONS') private readonly options: KycBffOptions,
   ) {}
 
   @Get('cases')
@@ -96,7 +102,7 @@ export class KycCasesController {
     this.requireSession(req);
     const caseId = this.parseCaseId(caseIdRaw);
     const customerNumber = await this.getCustomerNumber(req, caseId);
-    res.json(await this.documents.getIdentityProof(customerNumber));
+    res.json(await this.documents.getIdentityProof(customerNumber, req.session.user?.branch));
   }
 
   @Get('cases/:caseId/tax-proof')
@@ -104,27 +110,29 @@ export class KycCasesController {
     this.requireSession(req);
     const caseId = this.parseCaseId(caseIdRaw);
     const customerNumber = await this.getCustomerNumber(req, caseId);
-    res.json(await this.documents.getTaxProof(customerNumber));
+    res.json(await this.documents.getTaxProof(customerNumber, req.session.user?.branch));
   }
 
   @Get('cases/:caseId/identity-proof/content')
   async identityProofContent(@Param('caseId') caseIdRaw: string, @Req() req: Request, @Res() res: Response) {
     this.requireSession(req);
+    const branch = req.session.user?.branch;
     const caseId = this.parseCaseId(caseIdRaw);
     const customerNumber = await this.getCustomerNumber(req, caseId);
-    const document = await this.documents.getIdentityProof(customerNumber);
-    const documentResponse = await this.documents.getContent(document.documentId);
-    return this.forwardDocumentContent(documentResponse, res, document.fileName, document.contentType);
+    const document = await this.documents.getIdentityProof(customerNumber, branch);
+    const documentResponse = await this.documents.getContent(document.documentId, branch);
+    return this.forwardDocumentContent(documentResponse, res, document.fileName);
   }
 
   @Get('cases/:caseId/tax-proof/content')
   async taxProofContent(@Param('caseId') caseIdRaw: string, @Req() req: Request, @Res() res: Response) {
     this.requireSession(req);
+    const branch = req.session.user?.branch;
     const caseId = this.parseCaseId(caseIdRaw);
     const customerNumber = await this.getCustomerNumber(req, caseId);
-    const document = await this.documents.getTaxProof(customerNumber);
-    const documentResponse = await this.documents.getContent(document.documentId);
-    return this.forwardDocumentContent(documentResponse, res, document.fileName, document.contentType);
+    const document = await this.documents.getTaxProof(customerNumber, branch);
+    const documentResponse = await this.documents.getContent(document.documentId, branch);
+    return this.forwardDocumentContent(documentResponse, res, document.fileName);
   }
 
   private async decideStage(
@@ -152,7 +160,7 @@ export class KycCasesController {
   }
 
   private requireCsrf(req: Request, suppliedToken?: string): void {
-    if (!suppliedToken || !req.session.csrfToken || suppliedToken !== req.session.csrfToken) {
+    if (!safeEqual(suppliedToken, req.session.csrfToken)) {
       throw new UnauthorizedException('Invalid CSRF token.');
     }
   }
@@ -183,11 +191,33 @@ export class KycCasesController {
     res.status(response.status).type(response.headers.get('content-type') ?? 'application/json').send(body);
   }
 
-  private async forwardDocumentContent(response: globalThis.Response, res: Response, fileName: string, contentType: string) {
-    const buffer = Buffer.from(await response.arrayBuffer());
+  /**
+   * Relays evidence to the officer's browser.
+   *
+   * The content type is the one Documents Management VERIFIED from the file
+   * signature (never the uploader's claim). Only PDF is rendered inline (with
+   * nosniff, framable only by this MFE); every other type is downloaded.
+   * The body is streamed rather than buffered in memory.
+   */
+  private async forwardDocumentContent(response: globalThis.Response, res: Response, fileName: string) {
+    const verifiedType = (response.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
+    const safeName = fileName.replace(/[^\w.\- ]/g, '_');
+    const inline = verifiedType === 'application/pdf';
+
     res.status(response.status);
-    res.type(contentType || 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="${fileName.replace(/"/g, '')}"`);
-    return res.send(buffer);
+    res.setHeader('Content-Type', inline ? 'application/pdf' : 'application/octet-stream');
+    res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${safeName}"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    // frame-ancestors is checked against EVERY ancestor frame: the PDF iframe sits
+    // inside the KYC MFE ('self'), which itself sits inside the Shell. Both must be
+    // allowed; any other site still cannot frame the evidence.
+    res.setHeader('Content-Security-Policy', `frame-ancestors 'self' ${this.options.shellOrigin}`);
+    res.setHeader('Cache-Control', 'no-store');
+
+    const contentLength = response.headers.get('content-length');
+    if (contentLength) res.setHeader('Content-Length', contentLength);
+
+    if (!response.body) return res.end();
+    Readable.fromWeb(response.body as unknown as NodeReadableStream).pipe(res);
   }
 }

@@ -1,5 +1,3 @@
-﻿using System.Text;
-
 using Microsoft.AspNetCore.Identity;
 
 using EnterpriseWebPlatform.IdentityServer.Data.Entities;
@@ -11,15 +9,25 @@ public sealed class PasswordManager
 {
     private readonly PasswordHasher<object> _passwordHasher = new();
 
+    private readonly string _dummyHash;
+
+    public PasswordManager()
+    {
+        _dummyHash = _passwordHasher.HashPassword(new object(), Guid.NewGuid().ToString("N"));
+    }
+
     public string HashPassword(User user, string password)
     {
         return _passwordHasher.HashPassword(user, password);
     }
 
-    public bool VerifyPassword(User user, string storedHash, string providedPassword)
+    public PasswordVerificationResult VerifyPassword(User user, string storedHash, string providedPassword)
     {
-        var result = _passwordHasher.VerifyHashedPassword(user, storedHash, providedPassword);
+        return _passwordHasher.VerifyHashedPassword(user, storedHash, providedPassword);
+    }
 
-        return result == PasswordVerificationResult.Success;
+    public void VerifyAgainstDummyHash(string providedPassword)
+    {
+        _passwordHasher.VerifyHashedPassword(new object(), _dummyHash, providedPassword);
     }
 }

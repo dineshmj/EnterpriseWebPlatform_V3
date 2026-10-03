@@ -31,9 +31,14 @@ const EMPTY: WorkspaceContext = {
 
 let latestWorkspaceContext: WorkspaceContext = EMPTY;
 
+// The only origin allowed to embed this MFE and exchange protocol messages with
+// it. A static allow-list (set at build time), never document.referrer and
+// never '*': a page that frames the MFE must not become its "trusted parent".
+const SHELL_ORIGIN =
+  process.env.NEXT_PUBLIC_SHELL_ORIGIN ?? 'https://shell.dev.localhost:44367';
+
 function parentOrigin(): string {
-  if (typeof document === 'undefined' || window.parent === window) return '*';
-  try { return new URL(document.referrer).origin; } catch { return '*'; }
+  return SHELL_ORIGIN;
 }
 
 export function publishWorkspaceContext(context: WorkspaceContext) {
@@ -77,7 +82,7 @@ export function MfeShell({ children }: { children: React.ReactNode }) {
 
     const handler = (event: MessageEvent) => {
       if (event.source !== parentWindow) return;
-      if (origin !== '*' && event.origin !== origin) return;
+      if (event.origin !== origin) return;
 
       if (event.data?.type === 'BSS_CONTEXT_HANDOFF') {
         const nextContext =

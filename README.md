@@ -1,6 +1,84 @@
-# A sample highly distributed Microservice API + Micro-frontend solution that are protected by Duende IdentityServer 7.
+# Enterprise Web Platform V3 — Banking Services Reference Architecture
+
+Enterprise Web Platform V3 (EWP V3) is a demonstration banking-services platform. It is built as an **architectural reference**: a working example of how enterprise concerns compose without sliding into a distributed monolith.
+
+- **Bounded contexts.** Customer Onboarding, Customer KYC and Documents Management are implemented; Compliance, Accounts and Payments are planned. Each is governed by **Domain-Driven Design**, owns its own database, and is independently deployable.
+- **Micro-frontends.** Each business context has its own MFE, hosted in iframes by a business-neutral **Shell** that provides branding, navigation and the Application Workspace.
+- **Security boundaries.** Each MFE sits behind its own **BFF**. A BFF calls its own domain API with the **user's access token**, and other contexts' APIs with **M2M tokens**, keeping human identity and service identity separate.
+- **Identity.** **Duende IdentityServer 8** provides OpenID Connect and OAuth 2.1 (Authorization Code + PKCE, Client Credentials).
+- **Authorization** goes beyond RBAC: **ABAC, ReBAC, workflow-state authorization and Separation of Duties**.
+- **Asynchronous workflows** use **CQRS, Transactional Outbox, Kafka**, idempotent consumers and **sagas** (choreography for onboarding, orchestration for payments).
+- **Traceability.** Workflow, correlation and causation IDs and the accountable human initiator are carried end to end. Human approvals (e.g. KYC review) are accountable steps.
+- **Operations.** Resilience, observability, auditability and **SignalR** user notifications are covered at different stages of maturity (see the capability matrix).
+
+> EWP V3 is an architectural PoC, not a production banking system and not a claim of regulatory compliance.
+
+---
+
+## Deployable components
+
+| Component | Path | Technology | Status |
+|---|---|---|---|
+| Identity Provider | `src/IDP` | Duende IdentityServer 8, ASP.NET Core 10 | Present |
+| Shell (BFF + SPA) | `src/Shell` | ASP.NET Core 10 + Next.js | Present |
+| Customer Onboarding (MFE/BFF, API, Outbox relay) | `src/Microservices/CustomerOnboarding`, `src/AsyncWorkflows/Publishers/CustomerOnboarding` | Next.js, ASP.NET Core 10, .NET worker | Present |
+| Customer KYC (MFE/BFF, API, subscriber) | `src/Microservices/CustomerKyc`, `src/AsyncWorkflows/Subscribers/CustomerKyc` | Next.js, NestJS, ASP.NET Core 10, .NET worker | Present |
+| Documents Management (API) | `src/Microservices/DocumentsManagement` | ASP.NET Core 10 | Present |
+| Compliance, Accounts, Payments | `src/Microservices/…` | — | Planned |
+| Infrastructure | `docker-compose.yml` | PostgreSQL 18, Kafka 4 (KRaft), Kafka UI | Present |
+
+---
+
+## Documentation map
+
+Each document has one purpose. A fact is written in exactly one place; other documents link to it.
+
+### Platform-wide (`doc/`)
+
+| Document | Owns |
+|---|---|
+| [Architectural Vision & Security Blueprint](doc/Enterprise-Web-Platform-V3-Architectural-Vision-and-Security-Blueprint.md) | Vision, principles, landscape, context map, DDD and deployability rules, cross-cutting security and operations targets, **capability matrix**, roadmap, status legend |
+| [Application Personas](doc/Application-Personas.md) | The persona catalogue, role codes, cross-persona principles |
+| [Authorization Model](doc/Authorization-Model.md) | How authorization decisions are made: pipeline, scopes vs permissions, ABAC / ReBAC / SoD mechanics, platform-level permissions |
+| [Saga Plans](doc/EWP-V3-Saga-Choreography-and-Orchestration-Plans.md) | Cross-context workflows: event chain, compensation, saga rules |
+| [Integration Event Catalogue](doc/Integration-Event-Catalogue.md) | Event envelope, topics, keys, producers, consumers |
+| [Architect Review](doc/Fellow-architect-review-of-v3-ewp.md) | Point-in-time review findings and their remediation status |
+
+### Per component (`src/**/doc/`)
+
+Business requirements of one component: boundary, persona rules within it, permissions, domain model, states, business rules, integration, implementation status and gaps.
+
+| Component | Requirements |
+|---|---|
+| Customer Onboarding | [CustomerOnboarding-Requirements.md](src/Microservices/CustomerOnboarding/doc/CustomerOnboarding-Requirements.md) |
+| Customer KYC | [CustomerKyc-Requirements.md](src/Microservices/CustomerKyc/doc/CustomerKyc-Requirements.md) |
+| Documents Management | [DocumentsManagement-Requirements.md](src/Microservices/DocumentsManagement/doc/DocumentsManagement-Requirements.md) |
+| Compliance | [Compliance-Requirements.md](src/Microservices/Compliance/doc/Compliance-Requirements.md) |
+| Accounts | [Accounts-Requirements.md](src/Microservices/Accounts/doc/Accounts-Requirements.md) |
+| Payments | [Payments-Requirements.md](src/Microservices/Payments/doc/Payments-Requirements.md) |
+| Identity Provider (clients, scopes, claims, **demo users**) | [IDP-Requirements.md](src/IDP/doc/IDP-Requirements.md) |
+| Shell (menu, workspace, MFE protocol, logout, notifications) | [Shell-Requirements.md](src/Shell/doc/Shell-Requirements.md) |
+
+### Technical how-to (next to the code)
+
+How to build, configure and run one deployable:
+
+- [CO BFF README](src/Microservices/CustomerOnboarding/BFF.Web/README.md)
+- [KYC BFF README](src/Microservices/CustomerKyc/BFF.Web/README.md)
+- [KYC Subscriber README](src/AsyncWorkflows/Subscribers/CustomerKyc/README.md)
+- [DM API README](src/Microservices/DocumentsManagement/API/README.md)
+
+### Local development
+
+[ReadMe.txt](ReadMe.txt): host names, HTTPS, databases, Kafka topics, start-up, troubleshooting and Bruno API testing.
+
+---
 
 ## Prerequisites
-- .NET 10.0 SDK
-- Node.js 18+ and npm
-- Visual Studio 2026 and VS Code
+
+- .NET 10 SDK
+- Node.js 18+ and pnpm
+- Docker (PostgreSQL and Kafka)
+- Visual Studio 2026 and / or VS Code
+
+Start with [ReadMe.txt](ReadMe.txt).

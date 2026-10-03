@@ -43,12 +43,14 @@ const EMPTY_WORKSPACE_CONTEXT: WorkspaceContext = {
 // any context item.
 let latestWorkspaceContext: WorkspaceContext = EMPTY_WORKSPACE_CONTEXT;
 
+// The only origin allowed to embed this MFE and exchange protocol messages with
+// it. A static allow-list (set at build time), never document.referrer and
+// never '*': a page that frames the MFE must not become its "trusted parent".
+const SHELL_ORIGIN =
+  process.env.NEXT_PUBLIC_SHELL_ORIGIN ?? 'https://shell.dev.localhost:44367';
+
 function getParentOrigin(): string {
-  try {
-    return document.referrer ? new URL(document.referrer).origin : '*';
-  } catch {
-    return '*';
-  }
+  return SHELL_ORIGIN;
 }
 
 /**
@@ -138,17 +140,15 @@ export function MfeShell({
     useState<PendingNavigationRequest | null>(null);
 
   useEffect(() => {
-    // When the MFE is loaded inside the Shell, document.referrer contains
-    // the embedding Shell URL. Using its origin keeps postMessage scoped to
-    // the actual Shell rather than using a wildcard.
+    // Messages are sent only to, and accepted only from, the configured Shell origin.
     const parentOrigin = getParentOrigin();
 
     const parentWindow = window.parent;
 
     const handler = (event: MessageEvent) => {
-      // Only accept protocol messages from the embedding parent.
+      // Only accept protocol messages from the embedding Shell.
       if (event.source !== parentWindow) return;
-      if (parentOrigin !== '*' && event.origin !== parentOrigin) return;
+      if (event.origin !== parentOrigin) return;
 
       if (event.data?.type === 'BSS_CONTEXT_HANDOFF') {
         latestWorkspaceContext =

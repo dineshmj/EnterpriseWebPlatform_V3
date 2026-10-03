@@ -10,6 +10,12 @@ public sealed class Branch
 
     public string? Region { get; set; }
 
+    // Location of the branch. Issued as the branch_city / branch_country_code
+    // claims, which business contexts use for branch-scoped (ABAC) access.
+    public string? City { get; set; }
+
+    public string? CountryCode { get; set; }
+
     public bool IsActive { get; set; }
 
     // Relationships

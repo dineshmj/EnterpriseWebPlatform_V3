@@ -1,0 +1,24 @@
+@page
+@model EnterpriseWebPlatform.IdentityServer.Pages.Account.LoggedOutModel
+
+<div class="logged-out-page">
+    <div class="page-header">
+        <h1>You are now signed out</h1>
+    </div>
+
+    @if (Model.PostLogoutRedirectUri is not null)
+    {
+        <p>
+            <a class="post-logout-redirect" href="@Model.PostLogoutRedirectUri">Return to @(Model.ClientName ?? "the application")</a>
+        </p>
+    }
+
+    @if (Model.SignOutIframeUrl is not null)
+    {
+        <iframe class="signout" width="0" height="0" title="Sign-out" src="@Model.SignOutIframeUrl"></iframe>
+    }
+</div>
+
+@section scripts {
+    <script src="~/js/signout-redirect.js"></script>
+}

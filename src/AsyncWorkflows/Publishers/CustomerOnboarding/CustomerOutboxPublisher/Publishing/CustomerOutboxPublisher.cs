@@ -7,6 +7,19 @@ using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Publishers.CustomerOnboarding.CustomerOutboxPublisher.Publishing;
 
+/// <summary>
+/// Relays committed Customer Onboarding Outbox rows to Kafka.
+///
+/// Guarantees:
+/// - Multi-instance safe: rows are claimed with FOR UPDATE SKIP LOCKED inside a
+///   transaction, so two relay instances never publish the same row.
+/// - Per-aggregate ordering: only the oldest unpublished message of an aggregate
+///   is eligible. A failing message holds back later messages of the same
+///   aggregate, but never those of other aggregates.
+/// - Bounded retries with exponential backoff; after MaxAttempts a message is
+///   parked for operational recovery instead of being retried forever.
+/// - Unknown event types are never selected, so they cannot block the relay.
+/// </summary>
 public sealed class CustomerOutboxPublisher(
     CustomerOutboxDbContext dbContext,
     IKafkaProducer kafkaProducer,
@@ -14,49 +27,72 @@ public sealed class CustomerOutboxPublisher(
     ILogger<CustomerOutboxPublisher> logger)
     : ICustomerOutboxPublisher
 {
+    // Only event types with an explicit Kafka contract are ever selected.
+    private static readonly IReadOnlyDictionary<string, string> TopicByEventType =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["CustomerCreated"] = KafkaTopicNames.CustomerCreated,
+            ["OnboardingApplicationSubmitted"] = KafkaTopicNames.OnboardingApplicationSubmitted,
+            ["OnboardingApplicationStatusChanged"] = KafkaTopicNames.OnboardingApplicationStatusChanged
+        };
+
+    private const int MaxCyclesPerPoll = 10;
+
     private readonly CustomerOutboxPublisherOptions _options = options.Value;
 
     public async Task PublishPendingAsync(CancellationToken cancellationToken)
     {
-        // Only event types with an explicit Kafka contract are selected.
-        // An unknown/unhandled outbox row must never occupy the batch and
-        // prevent newer, publishable events from being processed.
+        // Several claim cycles per poll, so consecutive events of one aggregate
+        // (e.g. Submitted followed by StatusChanged) do not each wait a full
+        // poll interval.
+        for (var cycle = 0; cycle < MaxCyclesPerPoll; cycle++)
+        {
+            var published = await PublishBatchAsync(cancellationToken);
+            if (published == 0)
+                break;
+        }
+    }
+
+    private async Task<int> PublishBatchAsync(CancellationToken cancellationToken)
+    {
+        await using var transaction =
+            await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var eventTypes = TopicByEventType.Keys.ToArray();
+        var maxAttempts = _options.MaxAttempts;
+        var baseDelaySeconds = (double)_options.RetryBaseDelaySeconds;
+        var batchSize = _options.BatchSize;
+
         var messages = await dbContext.OutboxMessages
-            .Where(x => x.PublishedAt == null &&
-                        (x.EventType == "CustomerCreated" ||
-                         x.EventType == "OnboardingApplicationSubmitted" ||
-                         x.EventType == "OnboardingApplicationStatusChanged"))
-            .OrderBy(x => x.OccurredAt)
-            .ThenBy(x => x.Id)
-            .Take(_options.BatchSize)
+            .FromSql($"""
+                SELECT o.*
+                FROM outbox_messages o
+                WHERE o.published_at IS NULL
+                  AND o.event_type = ANY({eventTypes})
+                  AND o.attempt_count < {maxAttempts}
+                  AND (o.last_attempt_at IS NULL
+                       OR o.last_attempt_at
+                          + make_interval(secs => {baseDelaySeconds} * power(2, greatest(o.attempt_count - 1, 0)))
+                          <= now())
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM outbox_messages earlier
+                      WHERE earlier.aggregate_type = o.aggregate_type
+                        AND earlier.aggregate_id = o.aggregate_id
+                        AND earlier.published_at IS NULL
+                        AND earlier.sequence < o.sequence)
+                ORDER BY o.sequence
+                LIMIT {batchSize}
+                FOR UPDATE SKIP LOCKED
+                """)
             .ToListAsync(cancellationToken);
+
+        var publishedCount = 0;
 
         foreach (var message in messages)
         {
-            var topic = message.EventType switch
-            {
-                "CustomerCreated" => KafkaTopicNames.CustomerCreated,
-                "OnboardingApplicationSubmitted" =>
-                    KafkaTopicNames.OnboardingApplicationSubmitted,
-                "OnboardingApplicationStatusChanged" =>
-                    KafkaTopicNames.OnboardingApplicationStatusChanged,
-                _ => null
-            };
-
-            // The query above and this routing map intentionally form a
-            // defensive double-check. Unknown event types remain visible in
-            // the database for investigation, but can never block known
-            // publishable events.
-            if (topic is null)
-            {
-                logger.LogError(
-                    "Outbox message {MessageId} has unsupported event type {EventType}. " +
-                    "The message will remain unpublished and will not block other outbox messages.",
-                    message.Id,
-                    message.EventType);
-
-                continue;
-            }
+            var topic = TopicByEventType[message.EventType];
+            var attemptedAt = DateTimeOffset.UtcNow;
 
             try
             {
@@ -75,11 +111,11 @@ public sealed class CustomerOutboxPublisher(
                     message.Payload,
                     cancellationToken);
 
-                message.PublishedAt = DateTimeOffset.UtcNow;
-                message.LastAttemptAt = DateTimeOffset.UtcNow;
+                message.PublishedAt = attemptedAt;
+                message.LastAttemptAt = attemptedAt;
+                message.LastError = null;
                 message.AttemptCount++;
-
-                await dbContext.SaveChangesAsync(cancellationToken);
+                publishedCount++;
 
                 logger.LogInformation(
                     "Published Outbox message {MessageId} EventType={EventType} " +
@@ -90,23 +126,43 @@ public sealed class CustomerOutboxPublisher(
                     topic,
                     message.InitiatedByUserId);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 message.AttemptCount++;
-                message.LastAttemptAt = DateTimeOffset.UtcNow;
-                message.LastError = ex.Message;
+                message.LastAttemptAt = attemptedAt;
+                message.LastError = ex.Message.Length > 2000 ? ex.Message[..2000] : ex.Message;
 
-                await dbContext.SaveChangesAsync(cancellationToken);
-
-                logger.LogError(
-                    ex,
-                    "Failed to publish Outbox message {MessageId} EventType={EventType} " +
-                    "for aggregate {AggregateId} to topic {Topic}.",
-                    message.Id,
-                    message.EventType,
-                    message.AggregateId,
-                    topic);
+                if (message.AttemptCount >= _options.MaxAttempts)
+                {
+                    logger.LogError(
+                        ex,
+                        "Outbox message {MessageId} EventType={EventType} for aggregate {AggregateId} " +
+                        "failed {AttemptCount} times and is now PARKED. Later messages of this aggregate " +
+                        "are held back until it is resolved.",
+                        message.Id,
+                        message.EventType,
+                        message.AggregateId,
+                        message.AttemptCount);
+                }
+                else
+                {
+                    logger.LogWarning(
+                        ex,
+                        "Failed to publish Outbox message {MessageId} EventType={EventType} " +
+                        "for aggregate {AggregateId} to topic {Topic}. Attempt {AttemptCount}/{MaxAttempts}.",
+                        message.Id,
+                        message.EventType,
+                        message.AggregateId,
+                        topic,
+                        message.AttemptCount,
+                        _options.MaxAttempts);
+                }
             }
         }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return publishedCount;
     }
 }

@@ -1,4 +1,10 @@
-import { Inject, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { KycBffOptions } from '../configuration/kyc-bff-options';
 import { DocumentsManagementM2mService } from './documents-management-m2m.service';
 
@@ -16,6 +22,16 @@ export interface SelectedKycDocument extends DocumentListItem {
   selectionReason: string;
 }
 
+/**
+ * Reads KYC evidence from Documents Management with this BFF's M2M identity.
+ *
+ * Documents are resolved ONLY by business reference (customer number) and
+ * document type. There is deliberately no fallback that searches other
+ * documents by file name: a missing document is reported as missing.
+ *
+ * Every call states the signed-in user's branch (X-Actor-Branch), so DM applies
+ * branch-scoped object-level authorization to the human behind the M2M call.
+ */
 @Injectable()
 export class DocumentsManagementService {
   constructor(
@@ -23,49 +39,28 @@ export class DocumentsManagementService {
     @Inject('KYC_BFF_OPTIONS') private readonly options: KycBffOptions,
   ) {}
 
-  async getIdentityProof(customerNumber: string): Promise<SelectedKycDocument> {
-    const documents = await this.getDocuments(customerNumber, 'KYCProof');
-    if (documents.length > 0) {
-      return this.selectDocument(
-        documents,
-        /driver|license|licence|identity|kyc/i,
-        'Identity proof',
-      );
-    }
-
-    return this.selectLegacyDocument(
-      await this.getAllDocuments(),
-      /driver|license|licence|identity|kyc/i,
+  async getIdentityProof(customerNumber: string, actorBranch: string | undefined): Promise<SelectedKycDocument> {
+    return this.selectDocument(
+      await this.getDocuments(customerNumber, 'KYCProof', actorBranch),
       'Identity proof',
     );
   }
 
-  async getTaxProof(customerNumber: string): Promise<SelectedKycDocument> {
-    const documents = await this.getDocuments(customerNumber, 'TaxProof');
-    if (documents.length > 0) {
-      return this.selectDocument(
-        documents,
-        /tax|form[\s_-]*16|itr|income/i,
-        'Tax proof',
-      );
-    }
-
-    return this.selectLegacyDocument(
-      await this.getAllDocuments(),
-      /tax|form[\s_-]*16|itr|income/i,
+  async getTaxProof(customerNumber: string, actorBranch: string | undefined): Promise<SelectedKycDocument> {
+    return this.selectDocument(
+      await this.getDocuments(customerNumber, 'TaxProof', actorBranch),
       'Tax proof',
     );
   }
 
-  async getContent(documentId: string): Promise<globalThis.Response> {
+  async getContent(documentId: string, actorBranch: string | undefined): Promise<globalThis.Response> {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(documentId)) {
       throw new NotFoundException('Invalid document ID.');
     }
 
-    const token = await this.m2m.getAccessToken();
     const response = await this.fetchWithRetry(
       `${this.options.documentsManagementApiBaseUrl}/v1/documents/${documentId}/content`,
-      token,
+      actorBranch,
     );
 
     if (response.status === 404) {
@@ -84,17 +79,18 @@ export class DocumentsManagementService {
   private async getDocuments(
     businessReference: string,
     documentType: string,
+    actorBranch: string | undefined,
   ): Promise<DocumentListItem[]> {
-    const token = await this.m2m.getAccessToken();
-    const params = new URLSearchParams({
-      businessReference,
-      documentType,
-    });
+    const params = new URLSearchParams({ businessReference, documentType });
 
     const response = await this.fetchWithRetry(
       `${this.options.documentsManagementApiBaseUrl}/v1/documents?${params.toString()}`,
-      token,
+      actorBranch,
     );
+
+    if (response.status === 403) {
+      throw new ForbiddenException('You are not permitted to view documents of this customer.');
+    }
 
     if (!response.ok) {
       throw new ServiceUnavailableException(
@@ -105,86 +101,45 @@ export class DocumentsManagementService {
     return (await response.json()) as DocumentListItem[];
   }
 
-  private async getAllDocuments(): Promise<DocumentListItem[]> {
-    const token = await this.m2m.getAccessToken();
-
-    const response = await this.fetchWithRetry(
-      `${this.options.documentsManagementApiBaseUrl}/v1/documents`,
-      token,
-    );
-
-    if (!response.ok) {
-      throw new ServiceUnavailableException(
-        `Documents Management document-list request failed with HTTP ${response.status}.`,
-      );
-    }
-
-    return (await response.json()) as DocumentListItem[];
-  }
-
-  private selectLegacyDocument(
-    documents: DocumentListItem[],
-    filenamePattern: RegExp,
-    label: string,
-  ): SelectedKycDocument {
-    const matches = documents.filter(document => filenamePattern.test(document.fileName));
-
-    if (matches.length === 0) {
-      throw new NotFoundException(
-        `No ${label.toLowerCase()} document could be resolved from the existing Documents Management records.`,
-      );
-    }
-
-    if (matches.length > 1) {
-      throw new ServiceUnavailableException(
-        `Multiple legacy ${label.toLowerCase()} documents match the filename-based fallback. Existing documents need business-reference metadata before this KYC case can be displayed safely.`,
-      );
-    }
-
-    return {
-      ...matches[0],
-      selectionReason:
-        'Legacy fallback: this document predates business-reference metadata and was uniquely identified by filename.',
-    };
-  }
-
-  private selectDocument(
-    documents: DocumentListItem[],
-    filenamePattern: RegExp,
-    label: string,
-  ): SelectedKycDocument {
+  private selectDocument(documents: DocumentListItem[], label: string): SelectedKycDocument {
     if (documents.length === 0) {
-      throw new NotFoundException(
-        `No ${label.toLowerCase()} document is associated with this customer.`,
-      );
+      throw new NotFoundException(`No ${label.toLowerCase()} document is associated with this customer.`);
     }
 
-    const ordered = [...documents].sort(
-      (a, b) =>
-        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-    );
-
-    const match = ordered.find(document => filenamePattern.test(document.fileName));
-    const selected = match ?? ordered[0];
+    // The most recently uploaded document of the type is the evidence under review.
+    const latest = [...documents].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    )[0];
 
     return {
-      ...selected,
-      selectionReason: match
-        ? `Selected by filename within the ${label} document type.`
-        : `Selected as the only/first document returned for the customer and document type.`,
+      ...latest,
+      selectionReason:
+        documents.length === 1
+          ? `The only ${label.toLowerCase()} document of this customer.`
+          : `The most recent of ${documents.length} ${label.toLowerCase()} documents of this customer.`,
     };
   }
 
-  private async fetchWithRetry(url: string, accessToken: string): Promise<globalThis.Response> {
+  private async fetchWithRetry(url: string, actorBranch: string | undefined): Promise<globalThis.Response> {
+    if (!actorBranch) {
+      // Fail closed: without the user's branch DM cannot authorize the read.
+      throw new ForbiddenException('Your profile has no branch; documents cannot be shown.');
+    }
+
+    const accessToken = await this.m2m.getAccessToken();
     let lastError: unknown;
 
+    // GET requests only: safe to retry on transient failures.
     for (let attempt = 1; attempt <= 3; attempt++) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 5000);
 
       try {
         const response = await fetch(url, {
-          headers: { Authorization: `Bearer ${accessToken}` },
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'X-Actor-Branch': actorBranch,
+          },
           signal: controller.signal,
         });
 

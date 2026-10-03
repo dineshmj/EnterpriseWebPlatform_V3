@@ -16,11 +16,38 @@ public sealed class DocumentRepository(DocumentsManagementDbContext dbContext)
             .AsNoTracking()
             .SingleOrDefaultAsync(x => x.Id == documentId, cancellationToken);
 
-    public async Task<IReadOnlyList<Document>> GetAllAsync(CancellationToken cancellationToken) =>
-        await dbContext.Documents
+    public async Task<IReadOnlyList<Document>> ListAsync(
+        string resourceBranch,
+        string? businessReference,
+        string? documentType,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var branch = resourceBranch.Trim().ToUpperInvariant();
+
+        var query = dbContext.Documents
             .AsNoTracking()
+            .Where(x => x.ResourceBranch == branch);
+
+        if (!string.IsNullOrWhiteSpace(businessReference))
+        {
+            var reference = businessReference.Trim();
+            query = query.Where(x => x.BusinessReference == reference);
+        }
+
+        if (!string.IsNullOrWhiteSpace(documentType))
+        {
+            var type = documentType.Trim();
+            query = query.Where(x => x.DocumentType == type);
+        }
+
+        return await query
             .OrderByDescending(x => x.CreatedAt)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync(cancellationToken);
+    }
 
     public void Remove(Document document) => dbContext.Documents.Remove(document);
 

@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { AuthController } from './auth/auth.controller';
+import { AuthController, FrontChannelLogoutController } from './auth/auth.controller';
 import { OidcService } from './auth/oidc.service';
 import { KycCasesController } from './controllers/kyc-cases.controller';
 import { loadOptions } from './configuration/kyc-bff-options';
@@ -10,7 +10,7 @@ import { DocumentsManagementService } from './services/documents-management.serv
 const options = loadOptions();
 
 @Module({
-  controllers: [AuthController, KycCasesController],
+  controllers: [AuthController, FrontChannelLogoutController, KycCasesController],
   providers: [
     { provide: 'KYC_BFF_OPTIONS', useValue: options },
     OidcService,

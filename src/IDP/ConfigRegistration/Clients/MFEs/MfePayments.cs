@@ -1,4 +1,5 @@
-﻿using Duende.IdentityServer;
+﻿using EnterpriseWebPlatform.IdentityServer.Security;
+using Duende.IdentityServer;
 using Duende.IdentityServer.Models;
 
 using EnterpriseWebPlatform.Common.Landscape.Microservices;
@@ -19,7 +20,7 @@ public sealed class MfePayments
                 {
                     ClientId = PaymentsMicroservice.CLIENT_ID_FOR_IDP,
                     ClientName = PaymentsMicroservice.CLIENT_NAME_FOR_IDP,
-                    ClientSecrets = { new Secret(PaymentsMicroservice.CLIENT_SECRET_FOR_IDP.Sha256()) },
+                    ClientSecrets = { ClientSecretStore.For(PaymentsMicroservice.CLIENT_ID_FOR_IDP) },
 
                     AllowedGrantTypes = GrantTypes.Code,
                     // 🡡__ WHY   : The Payments microservice (if acting as a confidential client or BFF) should use Authorization Code to keep tokens
@@ -52,11 +53,10 @@ public sealed class MfePayments
                 
                     },
 
-                    RefreshTokenUsage = TokenUsage.ReUse,
-                    // 🡡__ WHY   : ReUse simplifies server-side handling for refresh tokens and avoids the need to implement rotation/one-time logic.
-                    //              Use ReUse for scenarios where the refresh token is stored securely and where you prefer simpler lifecycle management.
-                    // 🡡__ IF NOT: OneTimeOnly (rotation) would increase security by invalidating refresh tokens after use, but requires additional server-side
-                    //              bookkeeping and careful handling of concurrent refresh requests.
+                    RefreshTokenUsage = TokenUsage.OneTimeOnly,
+                    // 🡡__ WHY   : Rotation (OAuth 2.1 / RFC 9700): every refresh returns a NEW refresh token and invalidates the old one, so a
+                    //              stolen refresh token stops working after its next legitimate use, and replay of a used token is detectable.
+                    // 🡡__ IF NOT: With ReUse, one leaked refresh token stays valid until it expires, silently granting new access tokens.
 
                     RefreshTokenExpiration = TokenExpiration.Sliding,
                     SlidingRefreshTokenLifetime = 3600

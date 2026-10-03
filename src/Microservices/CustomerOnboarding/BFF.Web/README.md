@@ -1,6 +1,6 @@
 # Customer Onboarding MFE — Next.js SPA + ASP.NET Core 10 BFF
 
-This project adds the Customer Onboarding MFE to EnterpriseWebPlatform_V3.
+Technical guide to the Customer Onboarding MFE and BFF. Business requirements: [CustomerOnboarding-Requirements.md](../doc/CustomerOnboarding-Requirements.md).
 
 ## Runtime topology
 
@@ -43,11 +43,11 @@ The SPA sends one multipart AJAX request to:
 
 The BFF then:
 
-1. Uses the authenticated user's access token to create the Customer through CO API.
-2. Creates the Onboarding Application through CO API using the same user token.
-3. Gets a dedicated Documents Management M2M access token using Client Credentials.
-4. Uploads the first PDF to DM API using the M2M token.
-5. Uploads the second PDF to DM API using the same cached M2M token.
+1. Creates `WorkflowId` and `CorrelationId` for the workflow, and sends them to the CO API as `X-Workflow-Id` / `X-Correlation-Id` / `X-Causation-Id` headers.
+2. Uses the authenticated user's access token to create the Customer, with the primary residential address from the form, through the CO API (or uses the selected existing customer). The CO API applies branch scope: the address must be in the agent's branch city.
+3. Creates the Onboarding Application through the CO API with the same user token.
+4. Gets a dedicated Documents Management M2M access token using Client Credentials.
+5. Uploads the identity proof (`KYCProof`) and the tax proof (`TaxProof`) to the DM API with the cached M2M token, stating the agent's branch in `X-Actor-Branch` (from the `organization` identity scope). Without a branch the request is refused before anything is created.
 6. Reads the current application version from CO API.
 7. Submits the application through CO API using the user token.
 8. Returns HTTP `201 Created` to the SPA with customer, application and document identifiers.
@@ -59,8 +59,8 @@ The CO API never receives the PDF binary.
 - Safe GET requests have bounded exponential retry (3 attempts) for transient HTTP failures.
 - M2M token acquisition has bounded exponential retry (3 attempts).
 - Non-idempotent POST/DELETE operations are deliberately **not** blindly retried because the current CO and DM APIs do not expose an idempotency-key contract.
-- If the second document upload or final application submission fails after documents were created, the BFF attempts compensating DELETE operations against DM. Any compensation failure is logged.
-- If customer/application creation succeeds and a later operation fails, the application remains available in the CO database rather than pretending the distributed operation was atomic.
+- If a later step fails after documents were uploaded in the same request, the BFF deletes those documents from DM. This is request-level cleanup, not saga compensation (see the [Saga plan §1.3](../../../../doc/EWP-V3-Saga-Choreography-and-Orchestration-Plans.md#13-the-mfe--bff-boundary)). Any cleanup failure is logged.
+- A customer or application that was already created stays in the CO database in DRAFT, so the user can retry.
 
 ## IDP configuration change
 
@@ -98,7 +98,10 @@ For source-only development, `pnpm run dev` starts a standalone Next.js developm
 ## Security notes
 
 - The user access token is attached server-side by Duende Access Token Management; it is never exposed to browser JavaScript.
-- The DM M2M secret is in `appsettings.Development.json` only for this PoC. Move it to a secret store/environment variable for any production-like deployment.
+- Both secrets of this BFF (`Oidc:ClientSecret`, `CustomerOnboardingBff:M2MClientSecret`) come from configuration. Development values are in `appsettings.Development.json`; elsewhere supply them from the environment or a secret store. The BFF refuses to start without the OIDC secret.
+- Sessions are server-side (Duende BFF, in-memory store); the cookie carries only a session reference.
+- Responses carry `Content-Security-Policy: frame-ancestors <Shell> <IDP>`, `nosniff` and a referrer policy. `ShellOrigin` can be configured.
+- `POST /api/auth/logout` requires the anti-forgery token. The user-facing logout is owned by the Shell; the IDP's front-channel logout ends this session through `/signout-oidc`.
 - The silent-login return URL is an allow-listed path rather than an arbitrary redirect target.
 - The BFF validates PDF filename/content type before forwarding it.
 - DM remains the owner of document persistence and storage; CO owns onboarding/customer business state.

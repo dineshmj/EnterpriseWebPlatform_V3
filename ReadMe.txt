@@ -1,1182 +1,306 @@
-My V3 version of Enterprise Web Platform is a demonstration application representing a Banking Services domain, with independently deployable Microservices such as Customer Onboarding, Documents Management, and Customer KYC, each having its own Microservice Frontend (MFE). The platform is protected by Duende IdentityServer 8 using OpenID Connect (OIDC) and OAuth 2.1, with a Shell application providing common branding, navigation, and the overall application experience. Business functionality is rendered within the Shell through iFrame-hosted MFEs, while the Shell remains deliberately neutral and does not contain business-specific functionality.
+Enterprise Web Platform V3 - Local Development Guide
+====================================================
 
-The platform demonstrates modern distributed-system and enterprise application patterns, including Domain-Driven Design (DDD), CQRS, transactional Outbox, Kafka-based asynchronous messaging, and Saga with Choreography. BFFs act as the security and orchestration boundary for their respective MFEs, using User Access Tokens when invoking their own domain APIs and M2M tokens when communicating with other Microservice APIs, thereby maintaining a clear separation between human identity and service identity. The solution also demonstrates workflow, correlation and causation tracking, idempotency, resilience patterns such as retries and circuit breakers, and human-driven workflow stages such as KYC approval with appropriate accountability and authorization.
+This file is ONLY the local-development guide: host names, HTTPS, databases, Kafka, building, starting, troubleshooting and API testing.
 
-Overall, EWP V3 is intended not merely as a functional banking application, but as an architectural reference and demonstration platform covering distributed application design, security, authorization, asynchronous workflows, observability, resilience, auditability, and inter-Microservice communication. The emphasis is on showing how these concerns can be composed together while maintaining clear bounded contexts, independent deployability, separation of responsibilities, and traceable business workflows.
+What the platform is, how it is designed and what each component must do are documented elsewhere - see the "Documentation map" in README.md. Nothing in this file repeats those documents.
 
-0) Local Development Hostnames and HTTPS:
 
-	This project uses dedicated hostnames for the individual tiers of the solution.
+0) Contents:
 
-	This is important because browser cookies are scoped by hostname, not by port. When multiple applications use "localhost" on different ports, cookies created by the different applications can be sent with requests to other "localhost" applications. Authentication, correlation, nonce, session, and BFF cookies can therefore accumulate in the request's Cookie header.
+	1) Local Development Hostnames and HTTPS
+	2) Local URLs
+	3) First-Time Setup
+	4) Starting the Platform
+	5) Troubleshooting
+	6) Bruno API Testing
 
-	In our local development setup, this resulted in the request headers becoming large enough to cause:
+
+1) Local Development Hostnames and HTTPS:
+
+	Each tier uses its own host name. Browser cookies are scoped by host name, not by port. When several applications share "localhost", their authentication, correlation, nonce, session and BFF cookies are all sent to each other, and the request headers grow until the server answers:
 
 		HTTP 400 - Request Too Long
-
-	with the message:
-
 		The size of the request headers is too long.
 
-	Therefore, each major tier is given its own dedicated hostname, while all hostnames still resolve to 127.0.0.1. This gives each application an independent browser cookie namespace and prevents cookie collisions between the tiers.
+	Giving each tier its own host name (all resolving to 127.0.0.1) gives each application an independent cookie namespace.
 
-	Please follow the steps mentioned below to accomplish this:
-
-	a) Go to the folder "C:\Windows\System32\drivers\etc\", and open the "hosts" file in Notepad++.
-
-	b) Ensure that you add the following hostname mappings to 127.0.0.1 for each tier in this solution at the end of the "hosts" file.
+	a) Open "C:\Windows\System32\drivers\etc\hosts" as Administrator and append:
 
 		127.0.0.1    idp.dev.localhost
-		
 		127.0.0.1    shell.dev.localhost
-		
+
 		127.0.0.1    customer.dev.localhost
+		127.0.0.1    customer-api.dev.localhost
+
 		127.0.0.1    kyc.dev.localhost
-		127.0.0.1    accounts.dev.localhost
-		127.0.0.1    payments.dev.localhost
+		127.0.0.1    kyc-api.dev.localhost
+
 		127.0.0.1    documents-management-api.dev.localhost
 
-		127.0.0.1    customer-api.dev.localhost
-		127.0.0.1    kyc-api.dev.localhost
+		127.0.0.1    compliance.dev.localhost
+
+		127.0.0.1    accounts.dev.localhost
 		127.0.0.1    accounts-api.dev.localhost
+		127.0.0.1    payments.dev.localhost
 		127.0.0.1    payments-api.dev.localhost
 
-	c) Test them using ping commands. Each hostname should resolve to 127.0.0.1 and return a valid ping response.
+	b) Check each name with "ping <hostname>"; each must resolve to 127.0.0.1.
 
-		ping idp.dev.localhost
-		ping shell.dev.localhost
+	c) ASP.NET Core applications run on Kestrel using the "https" launch profile (not IIS Express). The ASP.NET Core development certificate covers "*.dev.localhost".
 
-		ping customer.dev.localhost
-		ping customer-api.dev.localhost
-		
-		ping documents-management-api.dev.localhost
+		This applies to: Shell BFF, Customer Onboarding BFF and API, Customer KYC API, Documents Management API, and later the Accounts BFF/API and Payments API.
 
-		ping kyc.dev.localhost
-		ping kyc-api.dev.localhost
+	d) Node.js applications need the development certificate exported as a PFX file:
 
-		ping accounts.dev.localhost
-		ping accounts-api.dev.localhost
-
-		ping payments.dev.localhost
-		ping payments-api.dev.localhost
-
-	d) The local HTTPS URLs for the tiers are:
-
-		Shell BFF				-	https://shell.dev.localhost:44367
-		Shell SPA				-	Static export served by the Shell BFF
-
-		IDP						-	https://idp.dev.localhost:44392
-
-		Customer Onboarding BFF	-	https://customer.dev.localhost:44311
-		Customer Onboarding SPA	-	Static export served by the Customer Onboarding BFF
-		Customer Onboarding API	-	https://customer-api.dev.localhost:44363
-
-		Documents Management API	-	https://documents-management-api.dev.localhost:49486
-
-		Customer KYC BFF		-	https://kyc.dev.localhost:33800
-		Customer KYC SPA		-	Static export served by the Customer KYC BFF
-		Customer KYC API		-	https://kyc-api.dev.localhost:44305
-
-		Accounts BFF			-	https://accounts.dev.localhost:45456
-		Accounts SPA			-	Static export served by the Accounts BFF
-		Accounts API			-	https://accounts-api.dev.localhost:48486
-
-		Payments BFF			-	https://payments.dev.localhost:44388
-		Payments SPA			-	Next.js application; URL to be added when the local HTTPS configuration is finalized
-		Payments API			-	https://payments-api.dev.localhost:44488
-		
-	e) For ASP.NET Core applications, use the Kestrel server for local development rather than IIS Express. Select the "https" Project profile in launchSettings.json for:
-
-		1) Shell BFF
-		2) Customer Onboarding BFF & API
-		3) Customer KYC BFF & API
-		4) Accounts BFF & API
-		5) Payments API
-
-		The "https" Project profile uses Kestrel and the ASP.NET Core HTTPS development certificate. The development certificate includes "*.dev.localhost" in its Subject Alternative Names (SANs).
-
-		The Payments MFE and Payments BFF use Next.js and NestJS respectively, so their HTTPS configuration is separate from the ASP.NET Core applications.
-
-		NOTE:
-		The use of Kestrel for V3 is intentional. In the previous version, IIS Express was used for several applications mainly to avoid opening multiple console windows. V3 uses dedicated hostnames and Kestrel-based HTTPS for the ASP.NET Core tiers so that the local topology is explicit and consistent.
-
-1) Technology Stack and V3 Architecture:
-
-	Enterprise Web Platform V3 (EWP V3) is an enterprise-architecture proof of concept for a modern banking-services platform. It demonstrates independently deployable bounded contexts, micro-frontends, BFF security boundaries, distributed identity, fine-grained authorization, transactional messaging, asynchronous workflows, resilience, auditability and secure application architecture.
-
-	The root ReadMe.txt is intentionally a repository and local-development guide. The complete architectural vision and security roadmap are documented in the canonical documentation listed in section 13.
-
-	a) Identity Provider (IDP):
-
-		- Duende IdentityServer 8 running on ASP.NET Core 10.
-		- Uses PostgreSQL for the Identity and Authorization database.
-		- Database: EwpIdentityAccessDb.
-		- Supports OpenID Connect and OAuth 2.x protocols.
-		- Grant type: Authorization Code Flow with PKCE.
-		- Supports refresh tokens where configured.
-		- Supports role-based access control (R-BAC) using role claims.
-		- Supports a consent page.
-		- Uses a stable opaque SubjectId as the external OIDC "sub" identifier.
-		- Identity data is kept separate from business microservice databases.
-
-	b) Banking Services System (BSS):
-
-		The BSS Shell is the master/composition application for the Banking Services System.
-
-		- Shell SPA: Next.js.
-		- Shell BFF: ASP.NET Core 10.
-		- The Shell composes Microservice experiences and owns the application workspace.
-		- The Shell does not directly own or query Microservice business databases.
-		- Microservice URLs are obtained from the Shell Menu DB rather than hard-coded into the Shell application.
-		- The Application Workspace exchanges opaque structured context between MFEs without requiring the Shell to understand business identifiers.
-
-	c) Microservices / Bounded Contexts:
-
-		1) Customer Onboarding:
-
-			- Bounded Context: Customer Onboarding.
-			- MFE: Next.js.
-			- BFF: ASP.NET Core.
-			- API: ASP.NET Core.
-			- Database: CustomerDb.
-			- Owns customer profile, contact/address information, onboarding applications and onboarding workflow state.
-
-		2) Customer KYC:
-
-			- Bounded Context: Customer KYC.
-			- MFE: Next.js.
-			- BFF: NestJS.
-			- API: ASP.NET Core.
-			- Database: KycDb.
-			- Owns KYC cases, identity/document checks, AML screening, risk assessment and compliance decisions.
-
-		3) Accounts:
-
-			- Bounded Context: Accounts.
-			- MFE: Next.js.
-			- BFF: ASP.NET Core.
-			- API: ASP.NET Core.
-			- Database: AccountsDb.
-			- Owns account applications, accounts, account holders and account lifecycle.
-			- This PoC does not implement a real core-banking ledger.
-
-		4) Payments:
-
-			- Bounded Context: Payments.
-			- MFE: Next.js.
-			- BFF: NestJS.
-			- API: ASP.NET Core.
-			- Database: PaymentsDb.
-			- Owns payment instructions, beneficiaries, payment attempts and payment-processing state.
-			- This is an architectural PoC and not a real banking payment system.
-
-		5) Documents Management:
-
-			- Bounded Context: Documents Management.
-			- API: ASP.NET Core.
-			- Database: EwpDocumentsManagementDb.
-			- Owns document metadata and opaque storage references.
-			- Document BLOB content is kept outside PostgreSQL by the storage abstraction.
-			- The initial implementation uses local file-system storage; enterprise object/document storage can be introduced behind the same abstraction.
-
-	d) Messaging and distributed workflows:
-
-		- Apache Kafka is the intended event/message backbone for the distributed workflows.
-		- Customer Onboarding uses a Transactional Outbox in the Customer Onboarding bounded context.
-		- The Customer Onboarding Outbox records persist the human initiator in the `initiated_by` column so that workflow attribution can survive asynchronous processing.
-		- The current Customer Outbox Publisher publishes supported outbox records to Kafka and marks successfully published records as published.
-		- At-least-once delivery is assumed; therefore duplicate delivery must be treated as an expected condition.
-		- An Inbox / Processed Messages pattern is part of the target consumer architecture, but is not yet implemented in the current Customer KYC subscriber.
-		- The Customer KYC subscriber currently consumes `customer.created`, deserializes the event and commits the Kafka offset after successful handling; its KYC API invocation is still a placeholder.
-		- Saga choreography, compensation, downstream workflow subscribers and SignalR workflow notifications remain planned implementation slices.
-		- The target workflow context includes WorkflowId, CorrelationId, CausationId, TraceId and InitiatedByUserId.
-
-	e) Application architecture:
-
-		Each business microservice follows a layered / clean architecture structure:
-
-			Service
-			├── Domain
-			│   ├── Entities / Aggregates
-			│   ├── Value Objects
-			│   ├── Domain Events
-			│   └── Business Rules
-			├── Application
-			│   ├── Commands
-			│   ├── Queries
-			│   ├── Handlers
-			│   └── DTOs
-			├── Infrastructure
-			│   ├── EF Core
-			│   ├── Outbox
-			│   ├── Inbox
-			│   ├── Kafka
-			│   └── External Services
-			└── API
-				├── Controllers / Endpoints
-				└── Authorization
-
-		Domain entities are owned by their bounded context. Business-domain entities are not shared between microservices.
-
-	f) Data access:
-
-		- PostgreSQL is the database platform.
-		- EF Core is used for data access.
-		- Each bounded context owns its own database.
-		- There is no cross-service database access.
-		- PostgreSQL table and column names use lowercase snake_case.
-		- C# types and properties use normal .NET PascalCase naming.
-		- EF Core migrations are used for database schema evolution.
-		- Transactions are used where business state and Outbox records must be committed atomically.
-		- Optimistic concurrency is used where appropriate.
-		- Stored procedures are not used for ordinary CRUD operations.
-
-	g) Security and authorization:
-
-		- Human authentication is handled by the IDP.
-		- BFFs represent the browser-facing security boundary.
-		- Service-to-service communication can use M2M client-credentials tokens where appropriate.
-		- Authorization is not based on RBAC alone.
-		- The intended authorization pipeline is:
-
-			Authenticated User
-			        ↓
-			      R-BAC
-			        ↓
-			      A-BAC
-			        ↓
-			      Re-BAC
-			        ↓
-			   Workflow State
-			        ↓
-			       SoD
-			        ↓
-			 Authorization Decision
-
-		- R-BAC: Role-Based Access Control.
-		- A-BAC: Attribute-Based Access Control.
-		- Re-BAC: Relationship-Based Access Control.
-		- SoD: Separation of Duties.
-		- Menu visibility is not the authoritative authorization mechanism. BFF/API authorization remains authoritative.
-		- Audit information is propagated with relevant business and security events.
-
-	h) Resilience and observability:
-
-		- Retry with appropriate limits.
-		- Timeout.
-		- Circuit breaker.
-		- Bulkhead where appropriate.
-		- Fallback / compensation for supported failure scenarios.
-		- Idempotency.
-		- Structured logging.
-		- Correlation and distributed tracing.
-		- Health checks.
-		- Rate limiting.
-		- Secure secret handling.
-		- Input validation and appropriate HTTP security controls.
-		- Simulated external KYC/AML providers are used to demonstrate failure, timeout and transient-error handling.
-
-2) Databases and Initial Infrastructure:
-
-	a) PostgreSQL is used as the primary relational database platform.
-
-	b) The current databases are:
-
-		- EwpIdentityAccessDb
-			Identity, users, roles, permissions and authorization relationships.
-
-		- EwpBssShellDb
-			Shell navigation/menu metadata.
-
-		- EwpCustomerDb
-			Customer profile, onboarding applications and onboarding workflow state.
-
-		- EwpDocumentsManagementDb
-			Document metadata and opaque document-storage references.
-
-		The following business databases are planned as their bounded contexts are implemented:
-
-		- KycDb
-		- AccountsDb
-		- PaymentsDb
-
-	c) The database-per-service rule applies to the business bounded contexts. A single local PostgreSQL server/instance may host the individual databases during development.
-
-	d) Kafka and Kafka UI are part of the V3 local infrastructure and are used by the current Customer Onboarding Outbox Publisher / Customer KYC subscriber slice.
-
-3) What to do after cloning the repository:
-
-	a) Ensure that the required .NET 10 SDK, Node.js, pnpm and PostgreSQL installations are available.
-
-	b) Configure the Windows hosts file as described in section 0.
-
-	c) Ensure that the ASP.NET Core HTTPS development certificate is installed and trusted.
-
-		To check the certificate:
-
-			dotnet dev-certs https --check
-
-		To trust it when required:
-
-			dotnet dev-certs https --trust
-
-	d) Ensure that PostgreSQL is running on:
-
-			Host: localhost
-			Port: 5432
-
-	e) Create/restore the following databases before starting the applications:
-
-			EwpIdentityAccessDb
-			EwpBssShellDb
-
-		The database scripts in the repository contain the schema and seed data for the current V3 foundation.
-
-	f) IMPORTANT:
-		The PostgreSQL credentials currently used by the local development configuration are development-only credentials. Do not use these credentials in a real environment. Production/deployment secrets must be supplied through an appropriate secret-management mechanism.
-
-	g) Open the solution in Visual Studio and restore the NuGet packages.
-
-	h) For ASP.NET Core applications, use the "https" Project profile rather than IIS Express.
-
-	i) The IDP is self-hosted and therefore opens its own console window. The other ASP.NET Core applications are intended to run using their Kestrel "https" Project profiles.
-
-	j) The Next.js / NestJS applications are started using their respective package-manager commands as their implementations become available.
-
-4) Current V3 Local Development URLs:
-
-	Shell BFF:
-		https://shell.dev.localhost:44367
-
-	IDP:
-		https://idp.dev.localhost:44392
-
-	Customer Onboarding BFF:
-		https://customer.dev.localhost:44311
-
-	Customer Onboarding API:
-		https://customer-api.dev.localhost:44363
-
-	Customer KYC BFF:
-		https://kyc.dev.localhost:33800
-
-	Customer KYC API:
-		https://kyc-api.dev.localhost:44305
-
-	Accounts BFF:
-		https://accounts.dev.localhost:45456
-
-	Accounts API:
-		https://accounts-api.dev.localhost:48486
-
-	Payments BFF:
-		https://payments.dev.localhost:44388
-
-	Payments API:
-		https://payments-api.dev.localhost:44488
+		- Customer KYC BFF (NestJS)  - see src\Microservices\CustomerKyc\BFF.Web\README.md
+		- Payments BFF (NestJS)      - when implemented
 
 	NOTE:
-		Some of the above applications are reserved/future V3 endpoints. The URL list represents the intended local topology and will be updated as each application is implemented.
+		Kestrel is used deliberately in V3 so that the local topology is explicit and consistent. The IDP is self-hosted and opens its own console window.
 
-5) Current V3 Foundation:
 
-	a) IDP:
+2) Local URLs:
 
-		- PostgreSQL Identity/Authorization database.
-		- Users, roles, permissions and authorization relationships.
-		- OIDC Authorization Code Flow with PKCE.
-		- Demo users representing the intended banking-services personas.
-		- Stable opaque OIDC SubjectId values.
-		- Role claims available to the BSS Shell.
+	Live:
 
-	b) BSS Shell:
+		IDP								https://idp.dev.localhost:44392
+		Shell BFF (serves Shell SPA)	https://shell.dev.localhost:44367
+		Customer Onboarding BFF (MFE)	https://customer.dev.localhost:44311
+		Customer Onboarding API			https://customer-api.dev.localhost:44363
+		Customer KYC BFF (MFE)			https://kyc.dev.localhost:33800
+		Customer KYC API				https://kyc-api.dev.localhost:44305
+		Documents Management API		https://documents-management-api.dev.localhost:49486
+		Kafka UI						http://localhost:8080
 
-		- Banking Services System branding.
-		- Shell BFF authentication.
-		- PostgreSQL-backed menu repository.
-		- Role-aware Microservice menu.
-		- Application Workspace.
-		- Structured context exchange between Shell and MFEs.
-		- Dedicated local hostname.
-		- Kestrel HTTPS development profile.
+	Reserved (not implemented yet):
 
-	c) Customer Onboarding:
+		Compliance BFF (MFE)			https://compliance.dev.localhost:44399
+		Accounts BFF					https://accounts.dev.localhost:45456
+		Accounts API					https://accounts-api.dev.localhost:48486
+		Payments BFF					https://payments.dev.localhost:44388
+		Payments API					https://payments-api.dev.localhost:44488
 
-		- Customer profile and onboarding application screens are operational in the current V3 slice.
-		- Start Onboarding can carry the selected Customer context into the Customer Onboarding MFE.
-		- Application Workspace context is exchanged through the BSS context protocol.
-		- The current implementation persists the initiating user's ID in Customer Onboarding Outbox records as `initiated_by`.
+	The Shell Menu DB seed registers these same URLs.
 
-	d) Documents Management:
 
-		- Documents Management API is implemented as an independently owned bounded context.
-		- Document metadata is stored in EwpDocumentsManagementDb.
-		- Document content is stored through an abstraction rather than in PostgreSQL.
+3) First-Time Setup:
 
-	e) Shell Menu DB:
+	a) Install: .NET 10 SDK, Node.js 18+, pnpm, Docker Desktop.
 
-		The Shell Menu database uses PostgreSQL lowercase snake_case identifiers:
+	b) Configure the hosts file (section 1).
 
-			microservices
-			management_areas
-			menu_items
-			menu_items_and_roles
+	c) Trust the ASP.NET Core development certificate:
 
-		The Shell queries the menu metadata through the BSS Shell BFF. Menu visibility is based on the user's roles, but this visibility does not replace authorization enforcement in the downstream BFF/API.
+			dotnet dev-certs https --check
+			dotnet dev-certs https --trust
 
-6) Application Workspace:
+	d) Start PostgreSQL, Kafka and Kafka UI:
 
-	The Application Workspace is intentionally separate from the Microservice navigation menu.
+			docker compose up -d
 
-	The Microservice menu is responsible for navigation.
+		PostgreSQL listens on localhost:5432 (user "postgres", password "admin").
+		Kafka listens on localhost:9092.
 
-	The Application Workspace is responsible for showing contextual information associated with the user's current work.
+		IMPORTANT:
+			These are development-only credentials. Real environments must use a secret store.
 
-	The intended context model is:
+	e) Create the databases and run their scripts.
 
-		persistentContext
-			Context that remains visible while the user moves between MFEs.
+		Each database has ONE complete script. It drops and recreates that database's tables and seeds its reference/demo data:
 
-		currentContext
-			The entity currently receiving the user's focus.
+			EwpIdentityAccessDb			src\IDP\IdentityAccessDB\IdentityAccessDb.sql
+			EwpBssShellDb				src\Shell\MenuDB\EwpBssShellDb.sql
+			EwpCustomerDb				src\Microservices\CustomerOnboarding\API\CustomerDB\EwpCustomerDb.sql
+			EwpKycDb					src\Microservices\CustomerKyc\API\KycDb\EwpKycDb.sql
+			EwpDocumentsManagementDb	src\Microservices\DocumentsManagement\API\DocumentMgmtDB\EwpDocumentsManagementDb.sql
 
-		retainedContext
-			Previously established context that remains available for reuse.
+		WARNING:
+			Running a script erases that database's data. Each script must run while connected to ITS OWN database.
 
-	The Shell treats this context as opaque data. The MFE that owns the business semantics is responsible for creating and updating it.
+		With PostgreSQL installed locally (Windows service), from the repository root in PowerShell:
 
-7) Current and Planned V3 Customer Onboarding Workflow:
+			$psql = 'C:\Program Files\PostgreSQL\18\bin\psql.exe'
+			$env:PGPASSWORD = 'admin'
 
-	The flagship distributed workflow is Customer Onboarding. The implementation is being built incrementally rather than treating the complete workflow as already implemented.
+			# Create any database that does not exist yet (the quotes keep the mixed-case names used by the connection strings):
+			& $psql -h localhost -U postgres -c 'CREATE DATABASE "EwpBssShellDb";'
 
-	a) Current workflow foundation:
+			# Run a script against its database:
+			& $psql -h localhost -U postgres -d EwpBssShellDb -v ON_ERROR_STOP=1 -f .\src\Shell\MenuDB\EwpBssShellDb.sql
 
-		Customer MFE
-		    ↓
-		Customer BFF
-		    ↓
-		Customer API
-		    ↓
-		Business state + Outbox transaction
-		    ↓
-		Customer Outbox Publisher
-		    ↓
-		Kafka
-		    ↓
-		Customer KYC Subscriber
+		With the docker-compose PostgreSQL container instead, prefix the same psql commands with "docker exec -i ewp-postgres" and pipe the script in, e.g.:
 
-		The current implementation demonstrates:
+			Get-Content .\src\Shell\MenuDB\EwpBssShellDb.sql -Raw | docker exec -i ewp-postgres psql -U postgres -d EwpBssShellDb -v ON_ERROR_STOP=1
 
-		- Customer Onboarding business state changes.
-		- Transactional Outbox creation in the same business transaction.
-		- Persistence of the human initiator in `outbox_messages.initiated_by`.
-		- Kafka publication of the currently supported CustomerCreated event.
-		- A dedicated Customer KYC subscriber consuming `customer.created`.
-		- Kafka offset commit only after successful message handling.
+		(The container creates EwpIdentityAccessDb automatically.) pgAdmin's Query Tool, opened on the right database, works as well.
 
-	b) Planned distributed workflow:
+		After recreating the IDP database, sign out and sign in again so that new claims are issued.
 
-		Customer MFE
-		    ↓
-		Customer BFF
-		    ↓
-		Customer API
-		    ↓
-		Business state + Outbox transaction
-		    ↓
-		Kafka
-		    ↓
-		KYC subscriber / worker
-		    ↓
-		KYC state + Outbox
-		    ↓
-		Kafka
-		    ↓
-		Compliance / AML processing
-		    ↓
-		Kafka
-		    ↓
-		Accounts subscriber / worker
-		    ↓
-		Account opening
-		    ↓
-		Workflow completion
-		    ↓
-		SignalR
-		    ↓
-		BSS Shell
+	f) Create the Kafka topics.
 
-		The planned workflow will demonstrate:
+		docker-compose.yml disables automatic topic creation, so every topic must be created explicitly (PowerShell):
 
-		- Application ID
-		- Workflow / Saga ID
-		- Correlation ID
-		- Causation ID
-		- Trace ID
-		- InitiatedByUserId / `initiated_by` attribution
-		- Current workflow status
-		- Individual workflow steps
-		- Event counts
-		- Outbox activity
-		- Inbox/idempotency processing
-		- Retry and timeout activity
-		- Circuit-breaker behavior where appropriate
-		- Compensation activity
-		- User-specific SignalR workflow notifications
+			$topics = @(
+				"customer.created",
+				"onboarding.application.submitted",
+				"onboarding.application.status.changed",
+				"kyc.case.created",
+				"kyc.case.approved",
+				"kyc.case.rejected",
+				"kyc.identity.verification.approved",
+				"kyc.identity.verification.rejected",
+				"kyc.document.verification.approved",
+				"kyc.document.verification.rejected"
+			)
 
-	IMPORTANT:
-		The Customer KYC subscriber currently contains a placeholder where the KYC API invocation will be implemented. The full multi-step Saga shown above is therefore a target architecture, not a claim that every step is currently operational.
+			foreach ($t in $topics) {
+				docker exec ewp-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --if-not-exists --topic $t --partitions 1 --replication-factor 1
+			}
 
-8) Planned Authorization Demonstrations:
+		The authoritative topic list is doc\Integration-Event-Catalogue.md.
 
-	The intended personas include:
+	g) Build and export the front ends:
 
-		customer
-		customer_service_agent
-		kyc_officer
-		compliance_officer
-		account_officer
-		payments_officer
-		operations_administrator
-		auditor
-		platform_administrator
+			.\CompileAndExportBFFClients_V3.ps1
 
-	Examples of authorization attributes include:
+		This builds the Shell SPA, the Customer Onboarding MFE, the Customer KYC MFE and the KYC NestJS BFF, and copies each static export to where its BFF serves it.
+		(CompileAndExportBFFClients.ps1 is the older V2 script; it refers to V2 projects and is not used in V3.)
 
-		User:
-			employeeId
-			department
-			branch
-			region
-			employmentType
-			clearanceLevel
+	h) Configure the Customer KYC BFF: its environment variables and PFX certificate are described in src\Microservices\CustomerKyc\BFF.Web\README.md (runnow.bat sets them and starts the BFF).
 
-		Resource:
-			customerId
-			branchId
-			riskLevel
-			classification
-			paymentAmount
-			workflowStatus
-			assignedOfficerId
+	NOTE - secrets:
+		Each component reads its own client secrets from its own configuration; nothing is compiled into Common.Landscape any more.
+		Development values: appsettings.Development.json of the IDP, Shell BFF, Customer Onboarding BFF and CustomerKycSubscriber, and runnow.bat of the KYC BFF.
+		A component refuses to start when a secret is missing. Outside Development, supply them as environment variables or from a secret store.
 
-		Relationship:
-			works_at
-			assigned_to
-			manages
-			owns
+	i) Open EnterpriseWebPlatform.BSS.sln in Visual Studio and restore the NuGet packages.
 
-		Separation-of-Duties examples will ensure that a user cannot perform prohibited combinations of actions merely because the user happens to possess multiple roles.
 
-9) Logout:
+4) Starting the Platform:
 
-	The BSS Shell owns the user-facing logout operation.
+	a) Visual Studio: use the multi-project launch profile in EnterpriseWebPlatform.BSS.slnLaunch. It starts:
 
-	The intended logout sequence is:
+		IDP, Documents Management API, Customer Onboarding API, Customer KYC API, CustomerOutboxPublisher, CustomerKycSubscriber, Shell BFF and Customer Onboarding BFF.
 
-		- Clear the Shell authentication session.
-		- Initiate OIDC logout with the IDP.
-		- Perform the required back-channel/silent logout processing for participating Microservice BFFs.
-		- Clear their local authentication sessions.
-		- Allow the IDP to terminate its session.
+	b) The Customer KYC BFF is NestJS and is NOT in that profile. Start it separately:
 
-	Authentication cookies must remain isolated between the dedicated local hostnames.
+			cd src\Microservices\CustomerKyc\BFF.Web
+			pnpm run start
 
-10) Troubleshooting:
+	c) Browse to https://shell.dev.localhost:44367 and sign in. The demo users, their roles and the password convention are listed in src\IDP\doc\IDP-Requirements.md (section 6).
+
+	d) A typical end-to-end check:
+
+		- Sign in as sophie.cs (branch SYD001, Sydney), open Onboarding Applications, create a customer with a residential address in Sydney, AU, attach both PDFs and submit.
+		- Optional ABAC check: sign in as mia.cs (MEL001, Melbourne) - Sophie's customer is not visible, and a Sydney address is refused with 403.
+		- In Kafka UI, check that customer.created and the onboarding.application.* topics received messages.
+		- Sign out, sign in as ethan.kyc or noah.kyc, open KYC Cases, and decide the identity and document stages.
+		- In Kafka UI, check the kyc.* topics.
+
+
+5) Troubleshooting:
 
 	a) "HTTP 400 - Request Too Long" / "The size of the request headers is too long":
 
-		- Confirm that the applications are being accessed using their dedicated *.dev.localhost hostnames rather than localhost.
-		- Do not work around the problem by simply increasing server request-header limits.
-		- Clear the cookies for the affected development host if stale OIDC correlation/nonce cookies are present.
-		- Restart the affected application and repeat the authentication flow.
+		- Use the *.dev.localhost host names, never localhost.
+		- Do not work around this by raising the server header limits.
+		- Clear the cookies of the affected host if stale OIDC correlation or nonce cookies remain.
+		- Restart the application and sign in again.
 
 	b) HTTPS certificate warning for a *.dev.localhost URL:
 
-		- Confirm that the ASP.NET Core application is running with the "https" Project profile.
-		- Do not use the IIS Express profile for the ASP.NET Core V3 applications.
-		- Run:
+		- ASP.NET Core: make sure the "https" launch profile is used, not IIS Express.
+		- Run "dotnet dev-certs https --check", and "--trust" if needed.
+		- Node.js (KYC BFF): re-export the PFX and check the KYC_BFF_TLS_PFX_* settings.
 
-			dotnet dev-certs https --check
+	c) A host name does not resolve: check the hosts file and ping it (section 1).
 
-		- If necessary:
+	d) The menu does not appear:
 
-			dotnet dev-certs https --trust
+		- Check that PostgreSQL is running and EwpBssShellDb exists with its snake_case tables.
+		- Check that the signed-in user has role claims, and that the role codes match the menu_items_and_roles rows.
+		- Remember that menu visibility is not authorization.
 
-		- Confirm that the requested hostname is under *.dev.localhost.
+	e) Expected menu items are missing after a role change: sign out and in again, so new role claims are issued.
 
-	c) A hostname does not resolve:
+	f) Nothing appears in KYC after an onboarding submission:
 
-		- Check the Windows hosts file.
-		- Run the relevant ping command.
-		- Ensure that the hostname resolves to 127.0.0.1.
+		- Check that the Kafka topics exist (3f); auto-creation is disabled.
+		- Check that CustomerOutboxPublisher is running, and look at outbox_messages.published_at and last_error in EwpCustomerDb.
+		- Check that CustomerKycSubscriber is running. A message it cannot process currently stops the worker; its console shows the cause.
 
-	d) Menu does not appear:
+	g) The KYC BFF shows "documents cannot be shown" or 403 for evidence:
 
-		- Confirm that PostgreSQL is running.
-		- Confirm that EwpBssShellDb exists.
-		- Confirm that the Shell Menu tables contain their expected snake_case names.
-		- Confirm that the authenticated user has role claims.
-		- Confirm that the BSS Shell BFF can connect to EwpBssShellDb.
-		- Remember that menu visibility is based on role mappings; it is not a substitute for API authorization.
+		- Documents are branch-scoped. The officer's branch (IDP employment profile) must match the branch of the agent who uploaded them.
+		- Documents uploaded before branch scoping existed have no branch and are inaccessible; re-submit the onboarding.
+		- Sign out and in again after IDP changes, so the "organization" claims are issued.
 
-	e) Authentication succeeds but expected role-based menu items are missing:
+	h) Visual Studio uses a stale launch profile: close VS, delete the solution's ".vs" folder, reopen, and check the start-up profile.
 
-		- Inspect the authenticated user's role claims.
-		- Confirm the user-to-role mappings in EwpIdentityAccessDb.
-		- Confirm that the role codes match the values used by the Shell Menu DB.
-		- Sign out and sign in again after changing role assignments.
 
-	f) Stale Visual Studio state:
+6) Bruno API Testing:
 
-		If Visual Studio behaves as though an old launch profile or project configuration is still being used:
+	Bruno can call the Microservice APIs directly using OAuth 2.0 Authorization Code + PKCE against the IDP.
 
-		- Close Visual Studio.
-		- Remove the solution's local ".vs" folder if necessary.
-		- Reopen the solution.
-		- Verify the configured startup profiles/projects.
-		- Ensure that the ASP.NET Core applications use their "https" Project profiles.
+	a) IDP client:
 
-11) Important Design Rules / Gotchas:
+		Client ID:			BSS.ApiTesting.Bruno.ClientID
+		Grant:				Authorization Code, PKCE required, no client secret (public client)
+		Identity scopes:	openid profile email roles
+		API scopes:			customer-onboarding.read/.write, customer-kyc.read/.write, documents-management.read/.write, accounts.*, payments.*
 
-	a) PostgreSQL naming:
+		Redirect URIs:		http://127.0.0.1:3000/callback (local callback server, recommended - see c)
+							https://oauth.usebruno.com/callback
 
-		- Use lowercase snake_case for PostgreSQL tables and columns.
-		- Use PascalCase for C# classes and properties.
-		- Avoid quoted PascalCase PostgreSQL identifiers.
+		The Bruno client is registered ONLY when the IDP runs in the Development environment.
 
-	b) Database isolation:
+	b) Bruno OAuth settings:
 
-		- Each business bounded context owns its own database.
-		- Do not query another microservice's database directly.
-		- Communicate across bounded contexts through APIs and/or Kafka events.
+		Authorization URL:	https://idp.dev.localhost:44392/connect/authorize
+		Access Token URL:	https://idp.dev.localhost:44392/connect/token
+		Client ID:			BSS.ApiTesting.Bruno.ClientID
+		Client Secret:		(empty)
+		Use PKCE:			enabled
+		Callback URL:		must exactly match a registered redirect URI
 
-	c) Authorization:
+	c) Callback: the hosted Bruno callback can get stuck at "Redirecting to Bruno...". Use the local callback server instead:
 
-		- Menu visibility is not security enforcement.
-		- BFFs and APIs must enforce authorization.
-		- Multiple roles do not automatically grant permission to violate Separation of Duties.
+			npx @usebruno/oauth2-callback-server --port 3000
 
-	d) Messaging:
+		Use the exact URL it reports (it was "/callback", not "/oauth/callback").
+		Do not register Bruno's custom protocol (bruno://app/oauth2/callback) as a redirect URI.
+		If the system browser still hangs, turn off "Use system browser for OAuth" so that Bruno's embedded browser completes the flow.
 
-		- Business state and Outbox messages must be committed atomically.
-		- Consumers must be idempotent.
-		- Assume at-least-once message delivery.
+	d) Scope: the IDP's AllowedScopes only permit scopes; Bruno's "Scope" field decides what is actually requested. Request the API scope explicitly, for example:
 
-	e) Browser security:
+			openid profile email roles customer-onboarding.read
 
-		- Do not expose service access tokens or refresh tokens to the browser unnecessarily.
-		- BFFs are the browser-facing security boundary.
-		- Keep authentication cookies scoped to the appropriate application hostname.
+	e) Clear Bruno's OAuth token cache ("Clear Cache") after any change to the client, the scopes or the IDP, and then sign in again. Issued tokens do not change.
 
-	f) Secrets:
+	f) Before debugging an API, decode the token and check:
 
-		- Development credentials are for local development only.
-		- Do not commit production secrets, private signing keys or certificates to source control.
-		- Production secrets must be supplied through an appropriate secret-management mechanism.
+			iss		https://idp.dev.localhost:44392
+			aud		the API resource (e.g. customer-onboarding-api)
+			scope	the requested API scope
+			role	a role the endpoint accepts
 
-12) Planned V3 Work / Final Touches:
+	g) Choose a demo user whose role fits the endpoint (e.g. sophie.cs for Customer Onboarding reads). Users and passwords: src\IDP\doc\IDP-Requirements.md, section 6.
 
-	The following items are intentionally separated from the Current V3 Foundation because they are planned implementation slices or production-oriented capabilities rather than completed functionality:
+	h) Reading the responses:
 
-	- Generalize the Customer Outbox Publisher to publish the remaining supported onboarding events.
-	- Complete the Customer KYC Subscriber as a real worker: Inbox/idempotency persistence, M2M client-credentials authentication, KYC API invocation, bounded retries and dead-letter handling.
-	- Propagate the human workflow initiator and distributed workflow context through Kafka messages without confusing the human identity with the M2M service identity.
-	- Implement the downstream workflow subscribers for Compliance/AML and Accounts.
-	- Complete Saga/choreography and compensation behavior for supported failure scenarios.
-	- Implement Shell SignalR workflow notifications and ensure notifications are delivered only to the appropriate authenticated user(s).
-	- Complete ABAC, ReBAC and Separation-of-Duties demonstrations.
-	- Complete OpenTelemetry distributed tracing across synchronous and asynchronous boundaries.
-	- Add centralized/structured audit persistence and audit-event processing.
-	- Add Kafka monitoring and consumer-lag visibility.
-	- Add comprehensive health/readiness endpoints.
-	- Add rate limiting and production-grade security headers.
-	- Add production secret-management integration.
-	- Add Terraform scripts to provision the required cloud infrastructure.
-	- Add deployment-specific configuration for Azure/AWS/GCP as appropriate.
-	- Add further enterprise banking controls described in the Architectural Vision & Security Blueprint.
+			unauthorized_client		The client is not registered or not enabled in the IDP.
+			Stuck on "Redirecting"	Use the local callback server or the embedded browser (c).
+			401 Unauthorized		The token lacks the API's audience or scope - fix the Bruno Scope field and clear the cache.
+			403 Forbidden			Authenticated, but the user or role is not authorized for the endpoint - use an appropriate demo user.
 
-13) Canonical V3 Documentation:
+	i) Checklist for a new API:
 
-	The root ReadMe.txt is the repository orientation and local-development guide. It intentionally does not duplicate the complete architectural/security blueprint or the detailed authorization model. The following three documents are the canonical V3 architecture/authorization documents:
-
-	1) Architectural Vision and Security Blueprint:
-
-		doc\Enterprise-Web-Platform-V3-Architectural-Vision-and-Security-Blueprint.md
-
-		This document describes the overall purpose, architectural vision, current capabilities, planned capabilities and enterprise/security roadmap for EWP V3.
-
-	2) Application Personas and Authorization:
-
-		doc\Application-Personas-and-Authorization.md
-
-		This document describes the business personas, responsibilities, authorization requirements, accountability and separation-of-duties expectations.
-
-	3) Authorization Model:
-
-		doc\Authorization-Model.md
-
-		This document describes how authorization decisions are intended to be evaluated using R-BAC, A-BAC, Re-BAC, workflow state and Separation of Duties.
-
-	The three documents deliberately overlap where a business/security concept needs to be described from different perspectives. The root ReadMe.txt should remain a concise repository and development guide rather than becoming a duplicate of those documents.
-
-14) Bruno API Testing
-    ------------------
-
-    This section explains how to configure Bruno for testing the Microservice
-    API endpoints using the OAuth 2.0 Authorization Code + PKCE flow provided
-    by EnterpriseWebPlatform.IdentityServer.
-
-
-    a) Register a dedicated Bruno client in IdentityServer
-
-       Ensure that IdentityServer's Config.cs has one dedicated public client
-       registered for Bruno.
-
-       Client ID:
-
-           BSS.ApiTesting.Bruno.ClientID
-
-       The client should be configured as follows:
-
-           AllowedGrantTypes:
-               Authorization Code
-
-           RequirePkce:
-               true
-
-           RequireClientSecret:
-               false
-
-           RedirectUris:
-               http://127.0.0.1:3000/callback
-
-       The client should be allowed to request the required identity scopes:
-
-           openid
-           profile
-           email
-           roles
-
-       and the Microservice API scopes that are required for testing.
-
-       For Customer Onboarding:
-
-           customer-onboarding.read
-           customer-onboarding.write
-
-       WHY:
-       Bruno is treated as a public OAuth client. Authorization Code + PKCE
-       avoids the need to store a client secret in the developer workstation.
-
-       IF NOT:
-       IdentityServer will reject the OAuth authorization request because the
-       client is unknown, disabled, or not permitted to use the requested
-       grant/scopes.
-
-
-    b) Configure OAuth 2.0 in Bruno
-
-       In Bruno, configure the request/collection to use:
-
-           Grant Type:
-               Authorization Code
-
-           Authorization URL:
-               https://idp.dev.localhost:44392/connect/authorize
-
-           Access Token URL:
-               https://idp.dev.localhost:44392/connect/token
-
-           Client ID:
-               BSS.ApiTesting.Bruno.ClientID
-
-           Client Secret:
-               Leave empty
-
-           Use PKCE:
-               Enabled
-
-           Callback URL:
-               http://127.0.0.1:3000/callback
-
-       The access token should be added to the request as:
-
-           Authorization: Bearer <access-token>
-
-
-    c) Configure the OAuth Scope in Bruno
-
-       This is an important Bruno/IdentityServer distinction.
-
-       IdentityServer's AllowedScopes determine which scopes the Bruno client
-       IS ALLOWED TO REQUEST.
-
-       Bruno's OAuth "Scope" field determines which scopes Bruno ACTUALLY
-       REQUESTS during the authorization flow.
-
-       For example, for testing the Customer Onboarding GET endpoints, the
-       Bruno Scope must explicitly contain:
-
-           openid profile email roles customer-onboarding.read
-
-       For a write operation, request the corresponding write scope:
-
-           openid profile email roles customer-onboarding.write
-
-       Do not assume that adding a scope to IdentityServer's AllowedScopes
-       automatically causes that scope to appear in the access token.
-
-       During testing, the initial token contained only:
-
-           openid
-           profile
-           email
-           roles
-
-       because Bruno was requesting only those scopes.
-
-       The token therefore did not contain:
-
-           customer-onboarding.read
-
-       After adding customer-onboarding.read to Bruno's OAuth Scope and
-       obtaining a new token, the access token contained the expected API
-       scope.
-
-
-    d) Clear Bruno's OAuth token cache after configuration changes
-
-       Bruno caches OAuth access tokens.
-
-       Whenever the OAuth configuration, requested scopes, IdentityServer
-       client configuration, or related IdentityServer configuration changes,
-       use Bruno's:
-
-           Clear Cache
-
-       option before obtaining a new token.
-
-       Then authenticate again and obtain a fresh access token.
-
-       WHY:
-       An already-issued access token does not change when IdentityServer
-       configuration changes.
-
-
-    e) Verify the access token before troubleshooting the API
-
-       Decode the JWT access token and verify the important claims.
-
-       For Customer Onboarding API testing, the token should contain:
-
-           iss:
-               https://idp.dev.localhost:44392
-
-           aud:
-               customer-onboarding-api
-
-           scope:
-               customer-onboarding.read
-
-       When testing with the Sophie user, the token should also contain the
-       expected identity information, including the user's role.
-
-       This makes it possible to distinguish an OAuth/IdentityServer/Bruno
-       problem from an API authentication or authorization problem.
-
-
-    f) OAuth callback - Bruno hosted callback
-
-       Bruno can use its hosted OAuth callback:
-
-           https://oauth.usebruno.com/callback
-
-       During our V3 testing, the browser successfully completed the
-       IdentityServer login and redirected to the hosted callback, but remained
-       on:
-
-           Redirecting to Bruno...
-
-       and did not return control to Bruno.
-
-       Browser developer tools did not show useful network activity while the
-       page remained in this state.
-
-       Therefore, for local development we moved to Bruno's local callback
-       server.
-
-
-    g) Local OAuth callback server
-
-       Start Bruno's OAuth callback server from a terminal:
-
-           npx @usebruno/oauth2-callback-server --port 3000
-
-       The installed callback server reported:
-
-           OAuth2 callback server running at
-           http://127.0.0.1:3000/callback
-
-       Therefore, the IdentityServer client's RedirectUris must contain the
-       exact URI reported by the callback server:
-
-           http://127.0.0.1:3000/callback
-
-       IMPORTANT:
-       The callback path can differ between Bruno documentation and the
-       installed callback-server package/version.
-
-       Always use the endpoint reported by the callback server that is
-       actually running.
-
-       During this testing session, the actual endpoint was:
-
-           /callback
-
-       NOT:
-
-           /oauth/callback
-
-
-    h) Do not use Bruno's custom protocol as the IdentityServer Redirect URI
-
-       Bruno uses a custom protocol internally:
-
-           bruno://app/oauth2/callback
-
-       Manual testing confirmed that this protocol was correctly registered
-       with Windows. Opening the URI caused Edge to ask whether Bruno should
-       be opened, and selecting "Open" launched Bruno.
-
-       However, this does NOT mean that the IdentityServer client RedirectUri
-       should simply be changed to:
-
-           bruno://app/oauth2/callback
-
-       The hosted/local callback mechanism is responsible for forwarding the
-       OAuth result back to Bruno.
-
-       For our local setup, use:
-
-           http://127.0.0.1:3000/callback
-
-
-    i) Bruno system browser vs embedded browser
-
-       Bruno provides an option:
-
-           Use system browser for OAuth
-
-       During testing, the system-browser flow reached the hosted callback but
-       remained at:
-
-           Redirecting to Bruno...
-
-       For local troubleshooting, disable:
-
-           Use system browser for OAuth
-
-       This allows Bruno's embedded browser to perform the complete OAuth flow:
-
-           Bruno
-             |
-             v
-           IdentityServer Login
-             |
-             v
-           Authentication
-             |
-             v
-           OAuth Consent (if enabled)
-             |
-             v
-           Callback
-             |
-             v
-           Bruno
-             |
-             v
-           API Request
-
-       This successfully completed the OAuth flow during V3 development.
-
-
-    j) IdentityServer consent
-
-       If the Bruno client has:
-
-           RequireConsent = true
-
-       the IdentityServer consent page is displayed during authentication.
-
-       This is useful for demonstrating the OAuth consent process.
-
-       For troubleshooting, RequireConsent can temporarily be set to false so
-       that successful authentication proceeds directly to the callback.
-
-       Consent configuration does not replace or bypass API authorization.
-
-
-    k) Use the correct test user
-
-       For Customer Onboarding Customer Read testing, use the demo user:
-
-           Username:
-               sophie.cs
-
-           Password:
-               sophie.cs@bss
-
-       Sophie represents the:
-
-           customer_service_agent
-
-       role.
-
-       When testing a specific Microservice endpoint, make sure that the
-       selected demo user's role is appropriate for the operation being tested.
-
-
-    l) Expected troubleshooting progression
-
-       During the initial Bruno setup, the following problems were encountered:
-
-       1. IdentityServer returned:
-
-              unauthorized_client
-              Unknown client or client not enabled
-
-          Cause:
-              The Bruno client had not yet been registered in IdentityServer.
-
-          Resolution:
-              Register BSS.ApiTesting.Bruno.ClientID.
-
-
-       2. Bruno/browser remained at:
-
-              Redirecting to Bruno...
-
-          Cause:
-              The hosted/system-browser callback did not return control to
-              Bruno during local development.
-
-          Resolution:
-              Use the local OAuth callback server and/or Bruno's embedded
-              browser.
-
-
-       3. The JWT did not contain:
-
-              customer-onboarding.read
-
-          Cause:
-              Bruno's OAuth Scope field did not request the API scope.
-
-          Resolution:
-              Explicitly add the required API scope to Bruno's Scope field and
-              clear Bruno's OAuth cache before obtaining a new token.
-
-
-       4. The API subsequently returned:
-
-              401 Unauthorized
-
-          At this point the API was receiving a token, but the token did not
-          yet represent the required Customer Onboarding API access.
-
-
-       5. After requesting customer-onboarding.read, the JWT contained:
-
-              aud:
-                  customer-onboarding-api
-
-              scope:
-                  customer-onboarding.read
-
-          The API authentication/scope portion of the flow was then working.
-
-
-       6. The API subsequently returned:
-
-              403 Forbidden
-
-          This indicated that authentication had succeeded but the authenticated
-          user did not satisfy the API's authorization requirements.
-
-          Testing with the appropriate Customer Onboarding demo user then
-          allowed the request to reach the controller.
-
-
-    m) Successful end-to-end Bruno flow
-
-       The final successful flow is:
-
-           Bruno
-             |
-             | Authorization Code + PKCE
-             v
-           IdentityServer
-             |
-             | Login as sophie.cs
-             v
-           OAuth authorization
-             |
-             | customer-onboarding.read
-             v
-           Access Token
-             |
-             +--> aud = customer-onboarding-api
-             |
-             +--> scope = customer-onboarding.read
-             |
-             +--> role = customer_service_agent
-             |
-             v
-           Customer Onboarding API
-             |
-             v
-           GET /v1/customers
-             |
-             v
-           CustomerController
-
-
-    n) General rule for future Microservice APIs
-
-       The same Bruno client can be used to test the other V3 Microservice APIs.
-
-       Only the requested API scope needs to change.
-
-       Examples:
-
-           Customer Onboarding:
-               customer-onboarding.read
-               customer-onboarding.write
-
-           Customer KYC:
-               customer-kyc.read
-               customer-kyc.write
-
-           Accounts:
-               accounts.read
-               accounts.write
-
-           Payments:
-               payments.read
-               payments.write
-
-       The corresponding API resource/audience must also be present in the
-       issued access token.
-
-       Therefore, when troubleshooting a new Microservice API, always verify:
-
-           1. Bruno client is registered.
-           2. Redirect URI matches exactly.
-           3. PKCE is enabled.
-           4. Bruno requests the required scope.
-           5. Bruno OAuth cache is cleared after configuration changes.
-           6. The access token contains the expected scope.
-           7. The access token contains the expected audience.
-           8. The appropriate demo user is being used.
+		1. Bruno client registered.
+		2. Redirect URI matches exactly.
+		3. PKCE enabled.
+		4. Bruno requests the API scope.
+		5. Cache cleared after changes.
+		6. Token has the expected scope.
+		7. Token has the expected audience.
+		8. Suitable demo user.

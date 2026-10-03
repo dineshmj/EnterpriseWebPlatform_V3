@@ -9,6 +9,14 @@ using Duende.IdentityServer.Services;
 
 namespace EnterpriseWebPlatform.IdentityServer.Pages.Account;
 
+/// <summary>
+/// Logout.
+///
+/// GET signs out immediately ONLY when IdentityServer says no prompt is needed,
+/// i.e. a registered client initiated the logout with a valid id_token_hint.
+/// Any other GET shows a confirmation page whose form is POSTed with an
+/// anti-forgery token, so a third-party page cannot log the user out (CSRF).
+/// </summary>
 [SecurityHeaders]
 [AllowAnonymous]
 public sealed class LogoutModel
@@ -33,22 +41,44 @@ public sealed class LogoutModel
 
     public async Task<IActionResult> OnGet(string? logoutId)
     {
-		Input = new InputModel { LogoutId = logoutId };
-		return await OnPost ();
-	}
+        Input = new InputModel { LogoutId = logoutId };
 
-    public async Task<IActionResult> OnPost()
+        if (User.Identity?.IsAuthenticated != true)
+        {
+            // Nothing to sign out of; still show the logged-out page.
+            return await SignOutAndContinueAsync();
+        }
+
+        var context = await _interaction.GetLogoutContextAsync(logoutId, HttpContext.RequestAborted);
+
+        if (context?.ShowSignoutPrompt == false)
+        {
+            return await SignOutAndContinueAsync();
+        }
+
+        return Page();
+    }
+
+    // Razor Pages validate the anti-forgery token on POST automatically.
+    public Task<IActionResult> OnPost() => SignOutAndContinueAsync();
+
+    private async Task<IActionResult> SignOutAndContinueAsync()
     {
-        var ct = new CancellationToken ();
+        var cancellationToken = HttpContext.RequestAborted;
 
         if (User.Identity?.IsAuthenticated == true)
         {
+            // Capture the session's client list before the session is removed,
+            // so the front-channel logout iframes can be rendered afterwards.
+            Input.LogoutId ??= await _interaction.CreateLogoutContextAsync(cancellationToken);
+
             await HttpContext.SignOutAsync();
-            await _events.RaiseAsync(new UserLogoutSuccessEvent(User.GetSubjectId(), User.GetDisplayName()), ct);
+
+            await _events.RaiseAsync(
+                new UserLogoutSuccessEvent(User.GetSubjectId(), User.GetDisplayName()),
+                cancellationToken);
         }
 
-        var logout = await _interaction.GetLogoutContextAsync(Input.LogoutId, ct);
-
-        return Redirect(logout?.PostLogoutRedirectUri ?? "~/");
+        return RedirectToPage("/Account/LoggedOut", new { logoutId = Input.LogoutId });
     }
 }

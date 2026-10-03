@@ -50,6 +50,17 @@ public sealed class OnboardingController(
             return UnprocessableEntity(new { message = "Both KYC documents must be PDF files." });
         }
 
+        // Documents are branch-scoped in Documents Management. Without the
+        // agent's branch the documents could never be read again, so stop
+        // before creating anything.
+        if (ActorBranch is null)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                message = "Your profile has no branch. Documents cannot be submitted."
+            });
+        }
+
         // The BFF is the workflow entry point for this human onboarding action.
         // Establish the business workflow context once and propagate it only to
         // the workflow-owning Customer Onboarding API. Documents Management is
@@ -238,7 +249,16 @@ public sealed class OnboardingController(
                 lastName = request.LastName,
                 email = request.Email,
                 phoneNumber = request.PhoneNumber,
-                customerType = 1
+                customerType = 1,
+                residentialAddress = new
+                {
+                    addressLine1 = request.AddressLine1,
+                    addressLine2 = request.AddressLine2,
+                    city = request.City,
+                    state = request.State,
+                    postalCode = request.PostalCode,
+                    countryCode = request.CountryCode
+                }
             })
         };
         AddWorkflowHeaders(httpRequest, workflowId, correlationId, commandId);
@@ -303,6 +323,7 @@ public sealed class OnboardingController(
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", m2mToken);
         request.Headers.Add("X-Document-Type", documentType);
         request.Headers.Add("X-Business-Reference", businessReference);
+        request.Headers.Add("X-Actor-Branch", ActorBranch);
         // IMPORTANT: this POST is deliberately not retried automatically. The current
         // DM API has no idempotency-key contract, so a retry could create a duplicate file.
         using var response = await client.SendAsync(request, cancellationToken);
@@ -375,6 +396,7 @@ public sealed class OnboardingController(
                     HttpMethod.Delete,
                     $"/v1/documents/{documentId}");
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", m2mToken);
+                request.Headers.Add("X-Actor-Branch", ActorBranch);
 
                 using var response = await client.SendAsync(request, cancellationToken);
                 if (!response.IsSuccessStatusCode)
@@ -409,6 +431,15 @@ public sealed class OnboardingController(
         }
     }
 
+    /// <summary>
+    /// The signed-in user's branch. Documents Management trusts it only from this
+    /// BFF's pinned M2M client and uses it for branch-scoped document access.
+    /// </summary>
+    private string? ActorBranch =>
+        User.FindFirst("branch")?.Value is { Length: > 0 } branch
+            ? branch.Trim().ToUpperInvariant()
+            : null;
+
     private static bool IsPdf(IFormFile file)
         => string.Equals(file.ContentType, "application/pdf", StringComparison.OrdinalIgnoreCase)
            && file.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
@@ -441,6 +472,27 @@ public sealed class OnboardingController(
         public string PhoneNumber { get; init; } = string.Empty;
 
         public long? CustomerId { get; init; }
+
+        // Primary residential address of a NEW customer (ignored when CustomerId
+        // selects an existing customer). The CO API validates it and uses it for
+        // branch-scoped access.
+        [MaxLength(200)]
+        public string? AddressLine1 { get; init; }
+
+        [MaxLength(200)]
+        public string? AddressLine2 { get; init; }
+
+        [MaxLength(100)]
+        public string? City { get; init; }
+
+        [MaxLength(100)]
+        public string? State { get; init; }
+
+        [MaxLength(20)]
+        public string? PostalCode { get; init; }
+
+        [MaxLength(2)]
+        public string? CountryCode { get; init; }
 
         [Required]
         public IFormFile? KycProof { get; init; }

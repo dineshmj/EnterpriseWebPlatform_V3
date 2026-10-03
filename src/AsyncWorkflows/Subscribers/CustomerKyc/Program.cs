@@ -10,8 +10,13 @@ var builder = Host.CreateApplicationBuilder(args);
 builder.Services.Configure<KafkaOptions>(
     builder.Configuration.GetSection(KafkaOptions.SectionName));
 
-builder.Services.Configure<CustomerKycSubscriberOptions>(
-    builder.Configuration.GetSection(CustomerKycSubscriberOptions.SectionName));
+builder.Services
+    .AddOptions<CustomerKycSubscriberOptions>()
+    .Bind(builder.Configuration.GetSection(CustomerKycSubscriberOptions.SectionName))
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(options.ClientSecret),
+        "CustomerKycSubscriber:ClientSecret is not configured.")
+    .ValidateOnStart();
 
 builder.Services.AddHttpClient("IdentityServer", (serviceProvider, client) =>
 {

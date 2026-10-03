@@ -1,3 +1,5 @@
+-- Test message
+
 -- Enterprise Web Platform V3 - IdentityAccessDb_Australian_Demo.sql
 -- PostgreSQL schema and demonstration seed data.
 -- This version is intentionally aligned with IdentityDbContext.cs.
@@ -33,6 +35,9 @@ CREATE TABLE users (
     user_name VARCHAR(100) NOT NULL,
     hashed_password VARCHAR(500) NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    -- Account lockout: consecutive failed sign-ins and the end of a lockout.
+    access_failed_count INT NOT NULL DEFAULT 0,
+    lockout_end TIMESTAMPTZ NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -72,6 +77,8 @@ CREATE TABLE branches (
     code VARCHAR(20) NOT NULL,
     name VARCHAR(150) NOT NULL,
     region VARCHAR(100),
+    city VARCHAR(100),
+    country_code CHAR(2),
     is_active BOOLEAN NOT NULL DEFAULT TRUE
 );
 
@@ -310,10 +317,17 @@ INSERT INTO permissions (name, code, description) VALUES
 -- 12. BRANCHES
 -- =========================================================
 
-INSERT INTO branches (code, name, region) VALUES
-('BLR001','Bengaluru Central','SOUTH'),
-('BLR002','Bengaluru East','SOUTH'),
-('MUM001','Mumbai Central','WEST');
+-- city / country_code are issued as the branch_city / branch_country_code claims.
+-- Customer Onboarding scopes a Customer Service Agent to customers whose primary
+-- residential address is in the agent's branch city and country.
+INSERT INTO branches (code, name, region, city, country_code) VALUES
+-- region = Australian state / territory.
+('SYD001','Sydney CBD','NSW','Sydney','AU'),
+('SYD002','Sydney North','NSW','Sydney','AU'),
+('MEL001','Melbourne Central','VIC','Melbourne','AU'),
+('BNE001','Brisbane City','QLD','Brisbane','AU'),
+('ADL001','Adelaide City','SA','Adelaide','AU'),
+('PER001','Perth City','WA','Perth','AU');
 
 -- =========================================================
 -- 13. DEPARTMENTS
@@ -340,9 +354,15 @@ INSERT INTO departments (code, name) VALUES
 -- KYC work-queue demonstration users:
 -- ethan.kyc / ethan.kyc@bss
 -- noah.kyc  / noah.kyc@bss
--- Both are KYC officers in BLR001 with clearance level 3. They are intentionally
+-- Both are KYC officers in SYD001 with clearance level 3. They are intentionally
 -- not assigned to a specific KYC case so the human-review queue can demonstrate
 -- optimistic concurrency: the first authorized officer to complete the case wins.
+--
+-- Branch-scope (ABAC) demonstration users:
+-- sophie.cs / sophie.cs@bss  - Customer Service Agent, SYD001 (Sydney)
+-- mia.cs    / mia.cs@bss     - Customer Service Agent, MEL001 (Melbourne)
+-- Each can onboard and see only customers whose primary residential address is
+-- in their own branch's city; the Sydney KYC officers review Sophie's onboardings.
 
 INSERT INTO users
 (subject_id, first_name, last_name, email, user_name, hashed_password)
@@ -357,7 +377,8 @@ VALUES
 ('88888888-8888-4888-8888-888888888888','Sarah','Collins','sarah.audit@ewp.local','sarah.audit','AQAAAAIAAYagAAAAED8RxCLXVADbAjiHytlh6xfOD3F2J+l3DguFIe42jd677n9a4wH4+HwRdjoOzChhNw=='),
 ('99999999-9999-4999-8999-999999999999','Michael','Turner','platform.admin@ewp.local','platform.admin','AQAAAAIAAYagAAAAECfATzS4UHKPpe6PWJ7voKLlapzMU22k1YdQpx7PayeDKBT/vSeYFJVI0O7nw7Pn1w=='),
 ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','Ethan','Parker','ethan.kyc@ewp.local','ethan.kyc','AQAAAAIAAYagAAAAEKRsMC96qN6pkuEwNtKRnAxFQ8dS6Da0/+RBkXoL8jNKVRM/3GcQqxKB27ClDVvqWg=='),
-('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','Noah','Hughes','noah.kyc@ewp.local','noah.kyc','AQAAAAIAAYagAAAAEKi316gXNJpixuDi0xLAI8oh6s/FIhmH+cqKU2ktAIB7AInf9Nb0Z6y130jVEAZyKA==');
+('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','Noah','Hughes','noah.kyc@ewp.local','noah.kyc','AQAAAAIAAYagAAAAEKi316gXNJpixuDi0xLAI8oh6s/FIhmH+cqKU2ktAIB7AInf9Nb0Z6y130jVEAZyKA=='),
+('cccccccc-cccc-4ccc-8ccc-cccccccccccc','Mia','Robinson','mia.cs@ewp.local','mia.cs','AQAAAAIAAYagAAAAEGfsNE93UJWybUddYUydvOF9uHg/AjFhOcjxV3tAza3cKkMzRB71EZHAnCnDWeFaiw==');
 
 -- =========================================================
 -- 15. EMPLOYMENT / ABAC PROFILES
@@ -373,16 +394,17 @@ SELECT
     x.employment_type,
     x.clearance_level
 FROM (VALUES
-    ('sophie.cs','EMP-10042','CUSTOMER_SERVICE','BLR001','FULL_TIME',2),
-    ('liam.kyc','EMP-10043','KYC','BLR001','FULL_TIME',3),
-    ('olivia.compliance','EMP-10044','COMPLIANCE','BLR001','FULL_TIME',4),
-    ('jack.accounts','EMP-10045','ACCOUNTS','BLR002','FULL_TIME',3),
-    ('emily.payments','EMP-10046','PAYMENTS','BLR002','FULL_TIME',4),
-    ('daniel.ops','EMP-10047','OPERATIONS','BLR001','FULL_TIME',4),
-    ('sarah.audit','EMP-10048','AUDIT','BLR001','FULL_TIME',5),
-    ('platform.admin','EMP-10049','IT','BLR001','FULL_TIME',5),
-    ('ethan.kyc','EMP-10050','KYC','BLR001','FULL_TIME',3),
-    ('noah.kyc','EMP-10051','KYC','BLR001','FULL_TIME',3)
+    ('sophie.cs','EMP-10042','CUSTOMER_SERVICE','SYD001','FULL_TIME',2),
+    ('liam.kyc','EMP-10043','KYC','SYD001','FULL_TIME',3),
+    ('olivia.compliance','EMP-10044','COMPLIANCE','SYD001','FULL_TIME',4),
+    ('jack.accounts','EMP-10045','ACCOUNTS','SYD002','FULL_TIME',3),
+    ('emily.payments','EMP-10046','PAYMENTS','SYD002','FULL_TIME',4),
+    ('daniel.ops','EMP-10047','OPERATIONS','BNE001','FULL_TIME',4),
+    ('sarah.audit','EMP-10048','AUDIT','ADL001','FULL_TIME',5),
+    ('platform.admin','EMP-10049','IT','PER001','FULL_TIME',5),
+    ('ethan.kyc','EMP-10050','KYC','SYD001','FULL_TIME',3),
+    ('noah.kyc','EMP-10051','KYC','SYD001','FULL_TIME',3),
+    ('mia.cs','EMP-10052','CUSTOMER_SERVICE','MEL001','FULL_TIME',2)
 ) AS x(user_name,employee_id,department_code,branch_code,employment_type,clearance_level)
 JOIN users u ON u.user_name = x.user_name
 JOIN departments d ON d.code = x.department_code
@@ -402,7 +424,7 @@ INSERT INTO user_roles (user_id, role_id)
 SELECT u.id, r.id
 FROM users u
 JOIN roles r ON r.code = 'customer_service_agent'
-WHERE u.user_name = 'sophie.cs';
+WHERE u.user_name IN ('sophie.cs','mia.cs');
 
 INSERT INTO user_roles (user_id, role_id)
 SELECT u.id, r.id
@@ -613,7 +635,7 @@ FROM users u
 JOIN (VALUES
     ('sophie.cs','manages','Customer','CUST-10045'),
     ('liam.kyc','assigned_to','KYC_Case','KYC-10045'),
-    ('olivia.compliance','assigned_to','KYC_Case','KYC-10045'),
+    ('olivia.compliance','assigned_to','Compliance_Case','COMP-10045'),
     ('jack.accounts','assigned_to','Account_Application','ACCAPP-10045'),
     ('customer.demo','owns','Account','ACC-100001'),
     ('customer.demo','owns','Payment','PAY-100001')
@@ -627,6 +649,7 @@ ON u.user_name = x.user_name;
 -- Expected role assignments:
 -- customer.demo      -> customer
 -- sophie.cs          -> customer_service_agent
+-- mia.cs             -> customer_service_agent
 -- liam.kyc           -> kyc_officer
 -- ethan.kyc          -> kyc_officer
 -- noah.kyc           -> kyc_officer

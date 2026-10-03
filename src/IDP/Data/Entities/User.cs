@@ -22,6 +22,11 @@ public sealed class User
 
     public bool IsActive { get; set; }
 
+    // Account lockout (brute-force protection).
+    public int AccessFailedCount { get; set; }
+
+    public DateTimeOffset? LockoutEnd { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }

@@ -16,7 +16,11 @@ public sealed class CustomerKycSubscriberOptions
 
     public string ClientId { get; init; } = CustomerKycMicroservice.CLIENT_ID_FOR_IDP_FOR_CUST_KYC_SUBSCRIBER_TO_CUST_KYC_API_M2M;
 
-    public string ClientSecret { get; init; } = CustomerKycMicroservice.CLIENT_SECRET_FOR_IDP_FOR_CUST_KYC_SUBSCRIBER_TO_CUST_KYC_API_M2M;
+    /// <summary>
+    /// M2M client secret. From this worker's configuration / secret store
+    /// (CustomerKycSubscriber__ClientSecret); there is no compiled-in default.
+    /// </summary>
+    public string ClientSecret { get; init; } = string.Empty;
 
     public string Scope { get; init; } = CustomerKycApiScopesRequired.CUSTOMER_KYC_WRITE;
 

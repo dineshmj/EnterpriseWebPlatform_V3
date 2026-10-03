@@ -4,2280 +4,599 @@
 **Document status:** Living architectural blueprint  
 **Version:** 3.x  
 **Domain:** Banking / Financial Services  
-**Audience:** Solution Architects, Application Architects, Security Architects, Developers, DevSecOps Engineers, Platform Engineers and Technical Reviewers  
-**Last updated:** September 2026
+**Audience:** Solution, application and security architects; developers; DevSecOps and platform engineers; technical reviewers  
+**Last updated:** October 2026
+
+This document owns the **platform-wide** architecture: vision, principles, landscape, context map, DDD and deployability rules, cross-cutting security and operational targets, the capability matrix and the roadmap. Context-specific requirements live with each component. The document map is in the root [README.md](../README.md#documentation-map).
 
 ---
 
-## 1. Purpose of Enterprise Web Platform V3
+## 1. Purpose
 
-Enterprise Web Platform V3 (EWP V3) is a deliberately engineered enterprise-architecture proof of concept for a **modern banking-services platform**.
+Enterprise Web Platform V3 (EWP V3) is a deliberately engineered **reference architecture for a modern banking-services platform**. It shows how a financial institution can build a **secure, independently deployable, observable, resilient and auditable distributed application** in which:
 
-Its purpose is not merely to demonstrate that several microservices can communicate with one another. The platform is intended to demonstrate how a financial institution can design a **secure, independently deployable, observable, resilient and auditable distributed application** in which:
+- business capabilities are separated into bounded contexts, each governed by Domain-Driven Design and owning its own data;
+- each component is independently deployable and maintainable, so the system never degrades into a distributed monolith;
+- human authentication and machine authentication are distinct, and authorization goes far beyond RBAC (ABAC, ReBAC, workflow state, Separation of Duties);
+- browser applications are protected by BFF security boundaries and composed by a business-neutral Shell;
+- bounded contexts integrate asynchronously through Kafka, with Transactional Outbox, idempotent consumers and sagas;
+- workflow identity, causality and the accountable human are preserved across asynchronous boundaries;
+- users receive real-time notifications only for what they are entitled to see;
+- security, observability and auditability are architectural concerns, not afterthoughts.
 
-- business capabilities are separated into bounded contexts;
-- each bounded context owns its own data;
-- human authentication and machine authentication are distinct;
-- authorization goes beyond simple RBAC;
-- browser applications are protected by BFF security boundaries;
-- microservices communicate asynchronously where appropriate;
-- distributed workflows survive retries, duplicate delivery and partial failure;
-- business transactions and integration events are committed atomically;
-- workflow identity and causality are preserved across asynchronous boundaries;
-- human users receive only the notifications that belong to their workflows;
-- sensitive operations are subject to workflow-state, relationship, attribute and Separation-of-Duties controls;
-- security, observability and auditability are treated as architectural concerns rather than afterthoughts;
-- the platform can evolve toward cloud-native production characteristics without coupling the business domain to a particular cloud provider.
+The banking domain is used because it creates realistic pressure: onboarding, KYC, compliance, account opening, payments, documents, approvals, audit, sensitive personal data and long-running workflows.
 
-The banking domain is intentionally used because it creates realistic architectural pressures: customer onboarding, KYC, compliance, account opening, payments, document handling, approvals, audit, fraud controls, sensitive personal data and long-running workflows.
-
-> **Important:** EWP V3 is an architectural PoC, not a production banking platform and not a declaration of regulatory compliance. A real financial institution would require additional controls, operational processes, certifications, regulatory interpretation, resilience testing and governance appropriate to its jurisdiction and risk profile.
+> **Important:** EWP V3 is an architectural PoC, not a production banking platform and not a declaration of regulatory compliance (see §20).
 
 ---
 
-# 2. Architectural Philosophy
+## 2. Architectural Principles
 
-EWP V3 follows these principles:
-
-1. **Bounded-context ownership over shared-domain models.**
-2. **Database-per-bounded-context.**
-3. **Business rules belong to the domain/application layer, not the UI.**
-4. **The Shell composes experiences; it does not become a business-service aggregator.**
-5. **The BFF is a browser-facing security boundary.**
-6. **Human identity is different from service identity.**
-7. **Authorization is enforced server-side.**
-8. **RBAC alone is insufficient for enterprise banking authorization.**
-9. **Asynchronous integration is designed for at-least-once delivery.**
-10. **Consumers are therefore idempotent.**
-11. **Business state changes and outgoing messages use Transactional Outbox.**
-12. **Distributed workflows propagate causality and correlation information.**
-13. **Failures are expected architectural conditions, not exceptional surprises.**
-14. **Retries must be bounded and combined with timeouts/circuit breakers where appropriate.**
-15. **Compensation is used where a distributed transaction cannot be rolled back atomically.**
-16. **Auditability is a first-class business requirement.**
-17. **Sensitive information is minimized, protected and retained only as required.**
-18. **Security controls are layered: identity, authorization, data, network, application, infrastructure and operational controls.**
-19. **Observability must work across synchronous and asynchronous boundaries.**
-20. **The platform should fail safely rather than fail open.**
-21. **Every important architectural decision should have a clear ownership boundary.**
-22. **The UI may guide a user, but it is never the authoritative security boundary.**
+1. Bounded-context ownership over shared domain models.
+2. Database per bounded context; no cross-context database access.
+3. Business rules live in the domain model of the owning context, not in UIs, BFFs or infrastructure.
+4. Every deployable component can be built, tested, released and rolled back on its own.
+5. The Shell composes experiences; it never becomes a business aggregator or a saga coordinator.
+6. The BFF is the browser-facing security boundary; it never becomes a generic proxy or a distributed-transaction coordinator.
+7. Human identity is different from service identity.
+8. Authorization is enforced server-side, deny-by-default, and beyond RBAC.
+9. Asynchronous integration assumes at-least-once delivery; consumers are idempotent.
+10. Business state changes and outgoing events commit together (Transactional Outbox).
+11. Distributed workflows propagate workflow, correlation and causation identity, and the accountable human.
+12. Failures are expected: retries are bounded and paired with timeouts and circuit breakers; business failures are compensated, not retried.
+13. Auditability is a first-class business requirement.
+14. Sensitive data is minimized, protected and retained only as required.
+15. Security is layered: identity, authorization, data, network, application, infrastructure, operations.
+16. Observability spans synchronous and asynchronous boundaries.
+17. Fail safely, never open.
+18. The UI may guide a user; it is never the security boundary.
+19. Every important decision has a clear owning component and document.
 
 ---
 
-# 3. Current V3 Architectural Landscape
+## 3. Status Legend
 
-The current platform is organized around a Shell and independently deployable bounded contexts.
-
-```text
-                         +----------------------+
-                         |   Duende Identity    |
-                         |      Server 8        |
-                         +----------+-----------+
-                                    |
-                         OIDC / OAuth 2.x
-                                    |
-                                    v
-+-------------------------------------------------------------------+
-|                         BSS Shell                                  |
-|                                                                   |
-|  Next.js Shell SPA + ASP.NET Core BFF                             |
-|                                                                   |
-|  - Composition                                                   |
-|  - Menu/navigation                                               |
-|  - Application Workspace                                         |
-|  - MFE context exchange                                          |
-|  - User-facing workflow notifications                            |
-+-------------+----------------------+------------------------------+
-              |                      |
-              | iframe/MFE           | authenticated browser
-              v                      v
-     +----------------+       +-------------------+
-     | Customer       |       | Future / other    |
-     | Onboarding MFE |       | bounded contexts  |
-     +-------+--------+       +-------------------+
-             |
-             v
-     +----------------------+
-     | Customer Onboarding  |
-     | BFF -> API -> DB     |
-     +----------+-----------+
-                |
-                | Kafka / Outbox
-                v
-        +---------------+
-        | Async Workflow|
-        | Subscribers   |
-        +-------+-------+
-                |
-        +-------+--------+------------------+
-        |                |                  |
-        v                v                  v
-   Customer KYC       Accounts          Payments
-   Bounded Context    Bounded Context   Bounded Context
-
-        +---------------------------------------+
-        | Documents Management                  |
-        | Document metadata / storage ownership |
-        +---------------------------------------+
-```
-
----
-
-# 4. Bounded Contexts and Ownership
-
-## 4.1 Customer Onboarding
-
-**Owns:**
-
-- Customer profile.
-- Contact/address information.
-- Customer lifecycle state.
-- Onboarding applications.
-- Onboarding workflow state.
-- Customer-related workflow initiation.
-
-**Technology direction:**
-
-- Next.js MFE.
-- ASP.NET Core BFF.
-- ASP.NET Core API.
-- PostgreSQL.
-- EF Core.
-- Transactional Outbox.
-- Kafka integration.
-
----
-
-## 4.2 Customer KYC
-
-**Owns:**
-
-- KYC cases.
-- Identity verification.
-- Document verification results.
-- AML screening results.
-- Risk assessment.
-- KYC/compliance decision state.
-
-A KYC subscriber/worker is intended to react to Customer Onboarding events and invoke the appropriate KYC business capability using a service identity.
-
----
-
-## 4.3 Accounts
-
-**Owns:**
-
-- Account-opening applications.
-- Accounts.
-- Account holders.
-- Account lifecycle state.
-
-This PoC deliberately does not represent a real core-banking ledger.
-
----
-
-## 4.4 Payments
-
-**Owns:**
-
-- Payment instructions.
-- Beneficiaries.
-- Payment attempts.
-- Payment-processing state.
-
-This is an architectural demonstration, not a production payment-processing platform.
-
----
-
-## 4.5 Documents Management
-
-**Owns:**
-
-- Document metadata.
-- Document lifecycle.
-- Document storage integration.
-- Document validation/scanning workflows.
-
-Large binary transfers should not unnecessarily pass through unrelated business APIs.
-
-The architectural direction is toward direct, narrowly authorized uploads and/or pre-signed object-storage URLs, so that:
-
-- the Customer Onboarding API does not become a binary streaming bottleneck;
-- document ownership remains with Documents Management;
-- user context and auditability are preserved;
-- large-file processing can scale independently.
-
----
-
-# 5. Front-End Composition and Micro-Frontend Architecture
-
-EWP V3 demonstrates:
-
-- Shell-based application composition.
-- Independently deployable MFEs.
-- Next.js-based MFEs.
-- BFF-backed browser applications.
-- iframe-based MFE isolation where appropriate.
-- Explicit inter-frame communication protocols.
-
-## 5.1 BSS Application Workspace
-
-The Shell owns the Application Workspace.
-
-The Workspace is intentionally a **passive human-context hint**, not a business-service UI.
-
-The Shell must not:
-
-- call Customer APIs to resolve business entities;
-- load onboarding applications itself;
-- interpret business relationships;
-- implement Customer Onboarding rules;
-- become a cross-service business aggregator.
-
-The Workspace transports opaque structured context.
-
-The intended context model is:
-
-```text
-persistentContext
-    |
-    +-- Root business context
-        e.g. Customer
-
-currentContext
-    |
-    +-- Information actively relevant to the displayed MFE/page
-
-retainedContext
-    |
-    +-- Previously relevant context retained for possible reuse
-```
-
-The Shell transports the context without owning its business meaning.
-
----
-
-# 6. BSS MFE Context and Navigation Protocol
-
-The V3 Shell/MFE protocol includes:
-
-- `BSS_MFE_READY`
-- `BSS_CONTEXT_HANDOFF`
-- `BSS_CONTEXT_UPDATE`
-- `BSS_NAVIGATION_REQUEST`
-- `BSS_NAVIGATION_RESPONSE`
-
-The navigation protocol allows an MFE to prevent navigation when it has unsaved work.
-
-The intended sequence is:
-
-```text
-Shell
-  |
-  | BSS_NAVIGATION_REQUEST
-  v
-Current MFE
-  |
-  +-- clean --------------------> BSS_NAVIGATION_RESPONSE(allowed=true)
-  |
-  +-- dirty --> user confirmation
-                    |
-                    +-- Leave --> allowed=true
-                    |
-                    +-- Stay --> allowed=false
-```
-
-This provides a clean separation between:
-
-- Shell navigation responsibility.
-- MFE business/form state.
-- Human confirmation.
-
----
-
-# 7. Identity and Access Management
-
-## 7.1 Identity Provider
-
-The platform uses **Duende IdentityServer 8.0.8** on ASP.NET Core 10.
-
-The IDP is responsible for:
-
-- authentication;
-- OIDC;
-- OAuth 2.x;
-- client registration;
-- scopes;
-- API resources;
-- role claims;
-- stable opaque subject identifiers;
-- refresh-token support where configured;
-- consent where appropriate.
-
-Identity data remains separate from business microservice databases.
-
----
-
-## 7.2 Human Authentication
-
-The target human authentication architecture is:
-
-```text
-Browser
-   |
-   v
-BFF
-   |
-   v
-IdentityServer
-   |
-   +-- Authorization Code
-   +-- PKCE
-   |
-   v
-Authenticated User Session
-```
-
-The platform should continue to avoid putting long-lived bearer tokens unnecessarily into browser JavaScript.
-
----
-
-## 7.3 Machine Authentication
-
-Service-to-service calls use separate machine identities.
-
-Typical examples:
-
-```text
-CustomerKycSubscriber
-DocumentsManagementClient
-AccountsWorkflowWorker
-PaymentsWorkflowWorker
-```
-
-M2M authentication should normally use OAuth 2.0 Client Credentials or another appropriate workload-identity mechanism.
-
-A service identity **must not be confused with the human who initiated a workflow**.
-
----
-
-# 8. Human Initiator and Workflow Identity
-
-A critical V3 architectural capability is preserving the identity of the human who originally initiated a long-running workflow.
-
-The CO API now persists:
-
-```text
-outbox_messages.initiated_by
-```
-
-The intended semantic distinction is:
-
-```text
-initiated_by
-    = human/user identity that originated the workflow
-
-service identity
-    = machine identity executing a subsequent asynchronous step
-```
-
-Example:
-
-```text
-Susan
-  |
-  | starts onboarding
-  v
-Customer Onboarding API
-  |
-  +-- business transaction
-  |
-  +-- outbox.initiated_by = Susan
-  |
-  v
-Kafka
-  |
-  v
-KYC Subscriber
-  |
-  +-- M2M identity = KYC Subscriber
-  |
-  +-- initiated_by = Susan
-  |
-  v
-KYC API
-```
-
-This distinction is essential for:
-
-- audit;
-- workflow ownership;
-- user-specific notifications;
-- downstream event correlation;
-- operational investigation;
-- future workflow reassignment.
-
-The outbox publisher should **propagate persisted initiator metadata**, not attempt to discover the user after the transaction has completed.
-
----
-
-# 9. Distributed Workflow Architecture
-
-The target workflow model is a combination of:
-
-- event-driven architecture;
-- choreography where appropriate;
-- Saga orchestration/choreography for long-running business workflows;
-- compensating actions;
-- Transactional Outbox;
-- Inbox/idempotent consumer processing;
-- correlation and causation propagation.
-
-Example:
-
-```text
-Customer Onboarding
-        |
-        | customer.created
-        v
-Customer KYC
-        |
-        | kyc.completed
-        v
-Compliance
-        |
-        | compliance.completed
-        v
-Accounts
-        |
-        | account.opened
-        v
-Workflow Completion
-        |
-        v
-SignalR Notification
-```
-
-The exact workflow topology may evolve between choreography and explicit orchestration depending on business complexity.
-
----
-
-# 10. Transactional Outbox
-
-The Transactional Outbox is a core architectural capability.
-
-The business transaction and its outgoing integration event must be committed atomically:
-
-```text
-BEGIN TRANSACTION
-
-    Business state change
-
-    INSERT outbox_messages (...)
-
-COMMIT
-```
-
-Only after commit does the publisher deliver the message to Kafka.
-
-The outbox is therefore the durable bridge between:
-
-```text
-Database transaction
-        |
-        v
-Asynchronous messaging
-```
-
----
-
-# 11. At-Least-Once Delivery
-
-The platform assumes that message delivery can occur more than once.
-
-For example:
-
-```text
-Publisher
-   |
-   | Kafka publish succeeds
-   v
-Kafka
-   |
-   X process crashes before outbox update
-   |
-   v
-Publisher restarts
-   |
-   | publishes again
-   v
-Kafka
-```
-
-Therefore:
-
-> **Consumers must be idempotent.**
-
-Exactly-once business behavior must be achieved through idempotent business processing, unique constraints, Inbox/Processed Message records and appropriate transaction boundaries rather than assuming exactly-once network delivery.
-
----
-
-# 12. Inbox / Idempotent Consumer Pattern
-
-Consumers should record processed message identity.
-
-Typical model:
-
-```text
-message_id
-consumer
-processed_at
-```
-
-with an appropriate uniqueness constraint such as:
-
-```text
-UNIQUE(message_id, consumer)
-```
-
-Processing should conceptually be:
-
-```text
-Receive message
-     |
-     v
-Check Inbox
-     |
-     +-- already processed --> ACK / ignore
-     |
-     +-- new
-          |
-          v
-      Begin transaction
-          |
-          +-- business change
-          +-- next outbox event
-          +-- inbox record
-          |
-          v
-        Commit
-          |
-          v
-       ACK Kafka
-```
-
-This is a major reliability boundary for the asynchronous architecture.
-
----
-
-# 13. Event Envelope and Workflow Metadata
-
-The target integration-event envelope should provide sufficient information to understand the event without querying the originating service's database.
-
-Recommended metadata:
-
-```text
-MessageId
-EventType
-Source
-OccurredAt
-WorkflowId
-CorrelationId
-CausationId
-TraceId
-InitiatedByUserId
-Payload
-```
-
-Where useful, additional metadata may include:
-
-```text
-SchemaVersion
-TenantId
-Environment
-ProducerVersion
-SecurityClassification
-```
-
-The exact metadata set should remain intentionally small and stable.
-
----
-
-# 14. Correlation, Causation and Traceability
-
-These identifiers have different meanings and should not be conflated.
-
-### Correlation ID
-
-Groups messages belonging to the same business interaction or request chain.
-
-### Causation ID
-
-Identifies the event/message that caused the current event.
-
-### Workflow / Saga ID
-
-Identifies the long-running business process.
-
-### Trace ID
-
-Identifies a distributed technical execution trace.
-
-### Message ID
-
-Uniquely identifies an individual message.
-
-### Initiated By User ID
-
-Identifies the human originator of the workflow.
-
-Conceptually:
-
-```text
-Susan
-  |
-  +-- WorkflowId = W123
-       |
-       +-- CorrelationId = C456
-       |
-       +-- CustomerCreated
-              MessageId = M001
-              CausationId = null
-              InitiatedBy = Susan
-                    |
-                    v
-              KYCRequested
-              MessageId = M002
-              CausationId = M001
-              InitiatedBy = Susan
-                    |
-                    v
-              KycCompleted
-              MessageId = M003
-              CausationId = M002
-              InitiatedBy = Susan
-```
-
----
-
-# 15. Subscriber / Worker Architecture
-
-The Customer KYC Subscriber is intended to become a representative enterprise workflow worker.
-
-Target responsibilities:
-
-1. Consume a specific Kafka event/topic.
-2. Deserialize and validate the event envelope.
-3. Check Inbox/idempotency.
-4. Extract workflow metadata.
-5. Acquire an M2M access token.
-6. Call the appropriate bounded-context API.
-7. Apply retries/timeouts/circuit breaking as appropriate.
-8. Execute the business operation.
-9. Persist the resulting business state and next outbox event atomically.
-10. Record successful consumption.
-11. Acknowledge the Kafka message only after successful processing.
-12. Emit structured logs and tracing information.
-13. Route unrecoverable messages to a dead-letter/recovery mechanism.
-
-The worker must not impersonate the human initiator merely because it carries the initiator's identity as workflow metadata.
-
----
-
-# 16. SignalR Workflow Notifications
-
-The Shell is intended to provide human-facing real-time workflow notifications.
-
-The target architecture is:
-
-```text
-Kafka
-  |
-  v
-Notification Subscriber
-  |
-  +-- reads InitiatedByUserId
-  |
-  v
-SignalR Hub
-  |
-  +-- authenticated user identity
-  |
-  v
-Specific user's browser
-```
-
-Example:
-
-```text
-Susan starts Customer 1
-Margaret starts Customer 2
-
-Customer 1 events
-    -> Susan's SignalR channel
-
-Customer 2 events
-    -> Margaret's SignalR channel
-```
-
-A broadcast-to-all-users model is explicitly not the intended design for workflow-specific notifications.
-
-Future notification authorization may additionally support:
-
-- workflow initiator;
-- assigned officer;
-- supervisor;
-- authorized operations team;
-- escalation recipient.
-
----
-
-# 17. Authorization Model
-
-The target authorization pipeline is:
-
-```text
-Authenticated User
-        |
-        v
-      R-BAC
-        |
-        v
-      A-BAC
-        |
-        v
-     Re-BAC
-        |
-        v
- Workflow State
-        |
-        v
- Separation of Duties
-        |
-        v
-Authorization Decision
-```
-
-## RBAC
-
-Role-based responsibilities:
-
-- Customer
-- Customer Service Agent
-- KYC Officer
-- Compliance Officer
-- Account Officer
-- Payments Officer
-- Operations Administrator
-- Auditor
-- Platform Administrator
-
-## ABAC
-
-Potential attributes include:
-
-- branch;
-- department;
-- employment type;
-- clearance level;
-- risk classification;
-- transaction amount;
-- device/session trust;
-- geographic/environmental restrictions;
-- business hours;
-- customer segment.
-
-## ReBAC
-
-Potential relationships include:
-
-- customer assigned to branch;
-- officer assigned to case;
-- employee belongs to department;
-- account belongs to customer;
-- KYC case belongs to onboarding application;
-- supervisor manages officer;
-- workflow task assigned to user/team.
-
-## Workflow-State Authorization
-
-An operation may be denied because the resource is in the wrong business state even when the user has the appropriate role.
-
-Example:
-
-```text
-KYC approval
-    requires:
-        KYC Officer
-        +
-        KYC case in reviewable state
-        +
-        correct organizational scope
-        +
-        SoD satisfied
-```
-
----
-
-# 18. Separation of Duties
-
-Banking workflows must be designed to prevent incompatible actions from being performed by the same person where policy requires independence.
-
-Examples:
-
-```text
-Application creator
-        !=
-KYC approver
-
-KYC approver
-        !=
-Compliance approver
-
-Payment initiator
-        !=
-Payment approver
-```
-
-The exact SoD matrix should be represented as business policy rather than scattered across UI code.
-
----
-
-# 19. Auditability
-
-The platform should support a durable audit trail for significant actions.
-
-An audit record should be able to answer:
-
-- Who performed the action?
-- What action was performed?
-- On which business resource?
-- When?
-- From which application/service?
-- Under which workflow?
-- What was the previous state?
-- What was the resulting state?
-- What authorization decision permitted it?
-- Which approval or SoD rule was evaluated?
-- Which message or request caused the action?
-
-Audit records should be:
-
-- tamper-resistant;
-- access-controlled;
-- time-synchronized;
-- searchable;
-- retained according to policy;
-- separated from ordinary application logs where appropriate.
-
----
-
-# 20. Data Protection and Privacy
-
-A banking platform should apply data minimization and privacy-by-design.
-
-Target capabilities include:
-
-- data classification;
-- encryption in transit;
-- encryption at rest;
-- key management;
-- secrets management;
-- field-level protection/tokenization where justified;
-- masking of sensitive values in logs;
-- PII-aware telemetry;
-- controlled data export;
-- retention policies;
-- secure deletion where legally permissible;
-- purpose limitation;
-- least-privilege access;
-- controlled operational support access.
-
-Passwords, access tokens, secrets, private keys and sensitive personal data must never be written to ordinary application logs.
-
----
-
-# 21. Document Security
-
-For KYC/customer documents, target controls include:
-
-- short-lived upload authorization;
-- narrow document/application scope;
-- object-level authorization;
-- malware/antivirus scanning;
-- content-type validation;
-- file signature validation;
-- file-size limits;
-- filename normalization;
-- storage encryption;
-- immutable or controlled document versions;
-- document retention policy;
-- secure download authorization;
-- download auditing;
-- quarantine for suspicious files.
-
-Where cloud object storage is used, the preferred pattern is:
-
-```text
-MFE
- |
- | request narrowly scoped upload authorization
- v
-Documents Management
- |
- | pre-signed URL / scoped token
- v
-Object Storage
- |
- | asynchronous validation/scanning
- v
-Document becomes trusted/available
-```
-
----
-
-# 22. API Security
-
-All APIs should follow a defense-in-depth model.
-
-Target controls include:
-
-- OAuth/OIDC;
-- audience validation;
-- scope validation;
-- issuer validation;
-- token lifetime controls;
-- least-privilege scopes;
-- server-side authorization;
-- object-level authorization;
-- input validation;
-- output encoding;
-- request-size limits;
-- rate limiting;
-- anti-forgery protection where applicable;
-- secure HTTP headers;
-- CORS restrictions;
-- content-type validation;
-- replay protection where appropriate;
-- idempotency keys for suitable commands;
-- API versioning;
-- consistent error handling;
-- secure error responses.
-
-API endpoints should never rely on menu visibility or front-end checks as the security boundary.
-
----
-
-# 23. Modern OAuth / Financial-Grade Security Direction
-
-The platform currently uses Authorization Code + PKCE.
-
-The security roadmap should remain aligned with current OAuth security guidance, including:
-
-- exact redirect URI validation;
-- PKCE;
-- avoiding insecure implicit-style flows;
-- protection against authorization-code injection;
-- careful refresh-token handling;
-- sender-constrained tokens where justified;
-- strong TLS;
-- secure token storage;
-- narrowly scoped access tokens;
-- short-lived access tokens where appropriate;
-- key rotation;
-- metadata discovery where appropriate;
-- secure client authentication.
-
-For higher-risk financial APIs, the architecture should evaluate **FAPI 2.0** and related OpenID Foundation profiles rather than assuming ordinary OAuth configuration is sufficient.
-
----
-
-# 24. BFF Security Model
-
-The BFF is a key browser security boundary.
-
-Target characteristics:
-
-- secure session cookies;
-- HttpOnly;
-- Secure;
-- appropriate SameSite configuration;
-- anti-forgery protection;
-- session fixation protection;
-- session renewal;
-- logout propagation;
-- strict origin validation;
-- controlled downstream token handling;
-- no unnecessary exposure of access tokens to JavaScript;
-- authorization checks on server-side endpoints;
-- appropriate CSRF protection.
-
-The BFF should not become a generic unrestricted proxy.
-
-Each downstream operation should have explicit authorization and purpose.
-
----
-
-# 25. Cross-Origin and Browser Security
-
-Target browser security controls include:
-
-- strict Content Security Policy;
-- frame-ancestors policy;
-- controlled iframe origins;
-- explicit postMessage origin validation;
-- explicit postMessage source validation;
-- X-Content-Type-Options;
-- Referrer-Policy;
-- Permissions-Policy;
-- HSTS in deployed HTTPS environments;
-- secure cookie configuration;
-- controlled CORS;
-- protection against clickjacking;
-- protection against open redirects.
-
-The existing BSS MFE protocol should continue to validate both:
-
-```text
-event.origin
-event.source
-```
-
-before accepting inter-frame messages.
-
----
-
-# 26. Input and Output Security
-
-All externally supplied data should be treated as untrusted.
-
-Target controls:
-
-- validation at API boundaries;
-- domain invariant validation;
-- length limits;
-- range validation;
-- enum validation;
-- canonicalization;
-- safe parsing;
-- parameterized database access;
-- output encoding;
-- HTML sanitization where HTML is accepted;
-- SSRF protection;
-- path traversal protection;
-- command injection protection;
-- deserialization restrictions;
-- secure URL validation.
-
----
-
-# 27. Secrets and Cryptographic Key Management
-
-Production architecture should not depend on secrets stored in source code, Git repositories or plaintext configuration.
-
-Target design:
-
-```text
-Application
-    |
-    v
-Managed Identity / Workload Identity
-    |
-    v
-Secrets / Key Management Service
-    |
-    +-- database credentials
-    +-- OAuth client secrets where unavoidable
-    +-- signing keys
-    +-- encryption keys
-    +-- external-service credentials
-```
-
-Capabilities should include:
-
-- rotation;
-- versioning;
-- expiration;
-- access auditing;
-- least privilege;
-- separation of development/test/production keys.
-
----
-
-# 28. Cryptography and Key Rotation
-
-Target cryptographic capabilities include:
-
-- TLS 1.2+ with modern cipher configuration;
-- preferably TLS 1.3 where supported and appropriate;
-- strong asymmetric signing algorithms;
-- key rotation;
-- certificate lifecycle automation;
-- separation of signing and encryption keys;
-- hardware-backed key protection where required;
-- cryptographic agility;
-- no hard-coded cryptographic secrets.
-
----
-
-# 29. Service-to-Service Security
-
-M2M communication should provide:
-
-- strong client authentication;
-- least-privilege scopes;
-- audience restrictions;
-- certificate/mTLS where justified;
-- workload identity where available;
-- network-level segmentation;
-- explicit authorization;
-- short-lived tokens;
-- credential rotation;
-- service identity auditing.
-
-A successful M2M authentication does not automatically mean that the caller is authorized to perform every business operation.
-
----
-
-# 30. Zero-Trust Direction
-
-The platform should evolve toward a zero-trust model:
-
-```text
-Never implicitly trust
-        |
-        v
-Authenticate
-        |
-        v
-Authorize
-        |
-        v
-Validate context
-        |
-        v
-Apply least privilege
-        |
-        v
-Continuously observe
-```
-
-Network location alone must not be considered sufficient proof of authorization.
-
----
-
-# 31. Resilience Engineering
-
-Target resilience patterns include:
-
-- bounded retries;
-- exponential backoff;
-- jitter;
-- timeout;
-- circuit breaker;
-- bulkhead isolation;
-- rate limiting;
-- load shedding;
-- graceful degradation;
-- idempotency;
-- dead-letter queues;
-- poison-message handling;
-- compensation;
-- health checks;
-- readiness/liveness separation;
-- dependency isolation.
-
-Retries must be used carefully.
-
-A retry must not turn:
-
-```text
-one failed payment
-```
-
-into:
-
-```text
-multiple payment attempts
-```
-
-without explicit idempotency protection.
-
----
-
-# 32. Kafka Architecture
-
-Kafka is the event backbone.
-
-Target capabilities include:
-
-- explicit topic naming conventions;
-- event schema versioning;
-- consumer groups;
-- partition strategy;
-- key selection;
-- ordering requirements documented per event;
-- retention policies;
-- retry topics;
-- dead-letter topics;
-- poison-message handling;
-- producer/consumer observability;
-- message-size limits;
-- ACLs;
-- encryption in transit;
-- authentication;
-- authorization;
-- consumer lag monitoring.
-
-Event contracts should evolve compatibly.
-
-Breaking changes should require a deliberate schema/versioning strategy.
-
----
-
-# 33. Event Contract Governance
-
-Each integration event should have:
-
-- stable event name;
-- version;
-- producer ownership;
-- consumer expectations;
-- schema;
-- compatibility policy;
-- security classification;
-- PII classification;
-- retention requirements;
-- ordering requirements;
-- idempotency requirements.
-
-The event payload should contain enough information for the consumer to perform its intended task without requiring synchronous calls merely to reconstruct basic event context.
-
----
-
-# 34. Observability
-
-The platform should provide three complementary observability pillars:
-
-```text
-Logs
-Metrics
-Traces
-```
-
-Target implementation:
-
-- OpenTelemetry;
-- distributed tracing;
-- trace context propagation;
-- structured logging;
-- metrics;
-- Kafka consumer lag;
-- API latency;
-- error rates;
-- dependency latency;
-- database performance;
-- circuit-breaker state;
-- retry counts;
-- workflow duration;
-- workflow failure rate.
-
-Sensitive data must be excluded or masked.
-
----
-
-# 35. Security Monitoring and SIEM Integration
-
-A real banking deployment should feed security-relevant events into centralized security monitoring.
-
-Examples:
-
-- authentication failures;
-- unusual login behavior;
-- authorization failures;
-- privilege changes;
-- role changes;
-- service credential misuse;
-- suspicious API access;
-- large-volume data access;
-- document download anomalies;
-- payment anomalies;
-- repeated workflow failures;
-- administrative operations.
-
-The architecture should support integration with:
-
-- SIEM;
-- SOC;
-- SOAR;
-- threat-intelligence feeds;
-- fraud-monitoring systems.
-
----
-
-# 36. Fraud and Risk Controls
-
-A banking platform should be capable of integrating with fraud/risk decision systems.
-
-Examples:
-
-```text
-Transaction
-   |
-   v
-Risk signals
-   |
-   +-- customer profile
-   +-- device
-   +-- location
-   +-- transaction history
-   +-- velocity
-   +-- beneficiary history
-   +-- behavioral signals
-   |
-   v
-Risk decision
-   |
-   +-- allow
-   +-- challenge
-   +-- hold
-   +-- reject
-   +-- manual review
-```
-
-The PoC can simulate these decisions without implementing a real production fraud engine.
-
----
-
-# 37. KYC / AML Architecture
-
-The platform should demonstrate that KYC and compliance are independent bounded responsibilities.
-
-Target workflow:
-
-```text
-Customer Onboarding
-        |
-        v
-Identity Verification
-        |
-        v
-Document Verification
-        |
-        v
-AML Screening
-        |
-        v
-Risk Assessment
-        |
-        v
-Compliance Decision
-        |
-        v
-Account Opening
-```
-
-Each step should have:
-
-- explicit state;
-- owner;
-- authorization policy;
-- audit event;
-- retry/failure behavior;
-- correlation metadata;
-- compensation/escalation strategy where applicable.
-
----
-
-# 38. Business State Machines
-
-Important financial workflows should use explicit state models.
-
-Example:
-
-```text
-DRAFT
-  |
-  v
-SUBMITTED
-  |
-  v
-KYC_IN_PROGRESS
-  |
-  v
-KYC_COMPLETED
-  |
-  v
-COMPLIANCE_IN_PROGRESS
-  |
-  v
-COMPLIANCE_COMPLETED
-  |
-  v
-ACCOUNT_OPENING_IN_PROGRESS
-  |
-  v
-COMPLETED
-```
-
-Exceptional states may include:
-
-```text
-REJECTED
-CANCELLED
-COMPENSATING
-COMPENSATION_FAILED
-```
-
-Invalid transitions must be rejected by the domain/application layer.
-
----
-
-# 39. Concurrency and Consistency
-
-Target controls include:
-
-- optimistic concurrency;
-- version columns;
-- unique constraints;
-- transaction boundaries;
-- idempotency keys;
-- duplicate detection;
-- deterministic state transitions;
-- safe retry behavior.
-
-Distributed systems should prefer explicit consistency boundaries over pretending that a single ACID transaction spans multiple databases.
-
----
-
-# 40. Database Architecture
-
-Each bounded context owns its database.
-
-Rules:
-
-- no cross-service database access;
-- no shared business tables;
-- no foreign keys across databases;
-- integration through APIs/events;
-- schema changes through migrations/versioned scripts;
-- least-privilege DB accounts;
-- encrypted database connections;
-- database backups;
-- restore testing;
-- point-in-time recovery where required;
-- audit access to privileged database operations.
-
----
-
-# 41. Database Security
-
-Target database controls include:
-
-- separate credentials per service;
-- minimum required privileges;
-- no application use of superuser accounts;
-- encryption at rest;
-- TLS connections;
-- credential rotation;
-- connection limits;
-- query timeouts;
-- auditing;
-- backup encryption;
-- tested restoration;
-- protected administrative access.
-
----
-
-# 42. Secure File and Object Storage
-
-For customer documents:
-
-- encryption at rest;
-- short-lived access URLs;
-- object-level authorization;
-- private buckets/containers;
-- malware scanning;
-- immutable retention where required;
-- versioning;
-- access logging;
-- lifecycle policies;
-- data classification;
-- geographic/data-residency controls where required.
-
----
-
-# 43. Supply-Chain Security
-
-Modern enterprise security must include the software supply chain.
-
-Target capabilities:
-
-- dependency vulnerability scanning;
-- Software Composition Analysis (SCA);
-- SBOM generation;
-- signed artifacts;
-- provenance/attestation;
-- trusted package feeds;
-- dependency pinning;
-- automated patching;
-- container image scanning;
-- base-image lifecycle management;
-- secret scanning;
-- static application security testing;
-- dynamic application security testing;
-- infrastructure-as-code scanning.
-
----
-
-# 44. Secure SDLC / DevSecOps
-
-Security should be integrated into the delivery pipeline.
-
-Target pipeline:
-
-```text
-Developer
-   |
-   v
-Pre-commit checks
-   |
-   v
-Build
-   |
-   +-- SAST
-   +-- SCA
-   +-- Secret scan
-   +-- SBOM
-   +-- IaC scan
-   |
-   v
-Unit tests
-   |
-   v
-Integration tests
-   |
-   v
-Security tests
-   |
-   v
-Container/image scan
-   |
-   v
-Deploy to controlled environment
-   |
-   v
-DAST / API security testing
-   |
-   v
-Approval / promotion
-```
-
-Security findings should have defined severity, ownership and remediation SLAs.
-
----
-
-# 45. Infrastructure and Platform Security
-
-Target infrastructure controls include:
-
-- network segmentation;
-- private subnets;
-- firewall/security-group controls;
-- API gateway/WAF where appropriate;
-- workload identity;
-- container hardening;
-- Kubernetes RBAC where applicable;
-- pod/container security controls;
-- resource limits;
-- network policies;
-- immutable deployments;
-- infrastructure-as-code;
-- configuration drift detection;
-- centralized secrets;
-- centralized logging.
-
----
-
-# 46. API Gateway / Edge Protection
-
-For production internet-facing systems, an edge layer may provide:
-
-- TLS termination;
-- WAF;
-- DDoS protection;
-- rate limiting;
-- bot protection;
-- request filtering;
-- API authentication integration;
-- routing;
-- versioning;
-- observability.
-
-The gateway should complement, not replace, authorization in the application.
-
----
-
-# 47. Rate Limiting and Abuse Protection
-
-Rate limiting should exist at appropriate boundaries:
-
-- login;
-- token endpoints;
-- public APIs;
-- customer APIs;
-- document uploads;
-- payment initiation;
-- expensive queries;
-- password/account recovery;
-- administrative APIs.
-
-Limits should be based on appropriate identities and dimensions, such as:
-
-- user;
-- client;
-- IP;
-- tenant;
-- API key;
-- endpoint;
-- risk category.
-
----
-
-# 48. Availability and Business Continuity
-
-A real banking platform must address:
-
-- high availability;
-- fault domains;
-- database replication;
-- backup;
-- point-in-time recovery;
-- disaster recovery;
-- RPO;
-- RTO;
-- multi-zone deployment;
-- potentially multi-region deployment;
-- dependency failure;
-- degraded-mode operation;
-- operational runbooks;
-- regular recovery testing.
-
-The PoC can model these concerns even when local infrastructure does not implement full HA.
-
----
-
-# 49. Operational Resilience
-
-The platform should be designed so that operational teams can:
-
-- identify a failed workflow;
-- identify its initiator;
-- identify the last successful step;
-- identify the failed message;
-- replay safely;
-- inspect Inbox state;
-- inspect Outbox state;
-- inspect Saga state;
-- trigger controlled compensation;
-- disable a problematic consumer;
-- recover from poison messages;
-- correlate application logs and Kafka events.
-
-Operational recovery must preserve auditability.
-
----
-
-# 50. Secure Error Handling
-
-External responses should avoid revealing:
-
-- stack traces;
-- SQL details;
-- internal hostnames;
-- secrets;
-- token contents;
-- infrastructure topology;
-- internal exception messages;
-- sensitive business information.
-
-Internally, errors should remain richly diagnosable through secure structured telemetry.
-
----
-
-# 51. Configuration Management
-
-Configuration should be:
-
-- environment-specific;
-- externalized;
-- validated at startup;
-- version controlled where non-sensitive;
-- secret-free in source control;
-- auditable;
-- centrally managed where appropriate.
-
-Configuration should distinguish:
-
-```text
-Development
-Test
-UAT
-Production
-```
-
-Production credentials and cryptographic keys must never be copied into development environments.
-
----
-
-# 52. Testing Strategy
-
-The platform should demonstrate multiple test levels.
-
-## Unit Tests
-
-- domain rules;
-- state transitions;
-- authorization policies;
-- mapping;
-- idempotency rules.
-
-## Integration Tests
-
-- database;
-- Kafka;
-- Outbox;
-- Inbox;
-- IdentityServer;
-- downstream APIs.
-
-## Contract Tests
-
-- event schemas;
-- API contracts;
-- consumer/producer compatibility.
-
-## End-to-End Tests
-
-- user authentication;
-- MFE navigation;
-- onboarding;
-- KYC workflow;
-- account workflow;
-- notification delivery.
-
-## Security Tests
-
-- authentication;
-- authorization;
-- IDOR/BOLA;
-- CSRF;
-- XSS;
-- SSRF;
-- injection;
-- token validation;
-- privilege escalation;
-- session security.
-
----
-
-# 53. Chaos and Failure Testing
-
-The distributed workflow should deliberately simulate:
-
-- Kafka unavailable;
-- duplicate Kafka delivery;
-- consumer crash;
-- API timeout;
-- transient HTTP failure;
-- permanent HTTP failure;
-- database failure;
-- downstream service unavailable;
-- stale workflow state;
-- duplicate command;
-- compensation failure.
-
-The objective is to demonstrate that the architecture remains safe and diagnosable under failure.
-
----
-
-# 54. Architectural Status
-
-The following status classification is used in this document.
+Used by every EWP V3 document:
 
 | Status | Meaning |
 |---|---|
-| **Present** | Implemented or demonstrably represented in the current V3 codebase |
-| **In Progress** | Partially implemented and actively being developed |
-| **Planned** | Explicitly discussed and intended for V3 |
-| **Target** | Enterprise capability that the architecture should eventually demonstrate |
-| **Production Concern** | Important for a real bank but intentionally beyond the PoC's immediate scope |
+| **Present** | Implemented and demonstrable in the current codebase |
+| **Partial** | Implemented in part, or in some contexts only |
+| **In Progress** | Actively being implemented |
+| **Planned** | Intended for V3 |
+| **Target** | An enterprise capability the architecture should eventually demonstrate |
+| **Gap** | Contradicts a stated principle or requirement today; needs remediation |
+| **Production Concern** | Required for a real bank, intentionally outside the PoC's immediate scope |
 
 ---
 
-# 55. V3 Capability Matrix
+## 4. Landscape
+
+```text
+                               ┌──────────────────────────────┐
+                               │ IDP — Duende IdentityServer 8 │
+                               └──────────────┬───────────────┘
+                                 OIDC / OAuth 2.1 (Code+PKCE, Client Credentials)
+                                              │
+┌─────────────────────────────────────────────▼──────────────────────────────────────────┐
+│ BSS Shell (Next.js SPA + ASP.NET Core BFF) — menu, workspace, logout, notification view │
+└───────┬──────────────────────────────┬─────────────────────────────┬───────────────────┘
+        │ iframe                       │ iframe                      │ iframe (planned)
+┌───────▼──────────────┐      ┌────────▼─────────────┐      ┌────────▼────────────────────┐
+│ Customer Onboarding  │      │ Customer KYC         │      │ Compliance · Accounts ·     │
+│ MFE + BFF (.NET)     │      │ MFE + BFF (NestJS)   │      │ Payments (planned)          │
+│   │ user token       │      │   │ user token       │      └─────────────────────────────┘
+│ CO API ─ EwpCustomerDb      │ KYC API ─ EwpKycDb   │
+│   │ Outbox            │      │   │ Outbox (in-proc) │
+└───┼──────────┬───────┘      └───┼────────▲─────────┘
+    │          │ M2M (write)       │        │ M2M
+    │          ▼                   │        │
+    │   ┌──────────────────────┐   │  ┌─────┴──────────────┐
+    │   │ Documents Management │◄──┼──┤ KYC BFF M2M (read) │
+    │   │ API ─ EwpDocsMgmtDb  │   │  └────────────────────┘
+    │   └──────────────────────┘   │
+    ▼                              ▼
+CustomerOutboxPublisher ──► Kafka ◄── KYC Outbox relay
+                              │
+                              ▼
+                     CustomerKycSubscriber ──M2M──► KYC API
+                              │
+                              ▼ (planned)
+              CO reactions · Compliance · Accounts · Notifications (SignalR)
+```
+
+---
+
+## 5. Bounded Contexts and Context Map
+
+| Bounded context | Subdomain | Status | Requirements |
+|---|---|---|---|
+| Customer Onboarding | Core | Present | [CustomerOnboarding-Requirements.md](../src/Microservices/CustomerOnboarding/doc/CustomerOnboarding-Requirements.md) |
+| Customer KYC | Core | Present (first slice) | [CustomerKyc-Requirements.md](../src/Microservices/CustomerKyc/doc/CustomerKyc-Requirements.md) |
+| Compliance | Core | Planned | [Compliance-Requirements.md](../src/Microservices/Compliance/doc/Compliance-Requirements.md) |
+| Accounts | Core (simplified) | Planned | [Accounts-Requirements.md](../src/Microservices/Accounts/doc/Accounts-Requirements.md) |
+| Payments | Core | Planned | [Payments-Requirements.md](../src/Microservices/Payments/doc/Payments-Requirements.md) |
+| Documents Management | Generic / supporting | Present | [DocumentsManagement-Requirements.md](../src/Microservices/DocumentsManagement/doc/DocumentsManagement-Requirements.md) |
+| Identity and access | Generic | Present | [IDP-Requirements.md](../src/IDP/doc/IDP-Requirements.md) |
+| Composition (not a business context) | — | Present | [Shell-Requirements.md](../src/Shell/doc/Shell-Requirements.md) |
+| Notifications (technical) | Supporting | Planned | [Shell-Requirements.md §7](../src/Shell/doc/Shell-Requirements.md#7-workflow-notifications-planned) |
+
+### Context map
+
+```text
+Customer Onboarding ──(published events)──► Customer KYC ──► Compliance ──► Accounts
+        ▲                                         │               │             │
+        └──────────── decisions as events ────────┴───────────────┴─────────────┘
+
+CO BFF, KYC BFF ──(Open Host Service, M2M)──► Documents Management
+Payments orchestrator ──(commands / replies)──► Accounts
+Every component ──(conformist)──► IDP claims and scopes
+```
+
+| Relationship | Pattern |
+|---|---|
+| CO → KYC → Compliance → Accounts | **Published Language** (integration events in the [Event Catalogue](Integration-Event-Catalogue.md)). Each downstream subscriber acts as an **anti-corruption layer**: it translates a foreign event into its own command, so no foreign model enters the domain. |
+| Contexts → Documents Management | **Open Host Service**: a generic, business-agnostic API |
+| Payments ↔ Accounts | **Customer–supplier**, coordinated by the Payments saga orchestrator |
+| Everyone → IDP | **Conformist**: all components accept the IDP's claim and scope vocabulary |
+
+---
+
+## 6. Domain-Driven Design
+
+### 6.1 Strategic rules
+
+1. A bounded context owns its model, its language, its database and its deployables. Two contexts may use the same word (e.g. "Customer") with different meanings; they never share the class.
+2. Contexts reference each other's entities **by business identifier** (customer number, application number, case ID), never by foreign key or shared type.
+3. Cross-context collaboration happens only through published integration events or explicit APIs.
+4. Each context keeps a ubiquitous-language glossary in its requirements document.
+
+### 6.2 Tactical building blocks
+
+| Building block | Rule | Reference example |
+|---|---|---|
+| Aggregate | The consistency boundary. All invariants are enforced by its methods. Other aggregates are referenced by ID only. | `Customer`, `OnboardingApplication` (Customer Onboarding) |
+| Value object | Immutable, validated on creation, equality by value | `EmailAddress`, `PhoneNumber`, `CustomerNumber`, `PostalAddress` |
+| Entity | Identity within an aggregate | `CustomerAddress` |
+| Domain event | Raised by an aggregate when a business fact happens. In-process. | `CustomerCreatedDomainEvent` |
+| Integration event | A published contract derived from a domain event, written to the Outbox in the same transaction | `CustomerCreated` on `customer.created` |
+| Repository / unit of work | Persistence of aggregates; one transaction per command | `ICustomerRepository`, `IApplicationUnitOfWork` |
+| Command / query handlers (CQRS) | Commands change one aggregate; queries read projections and never change state | `SubmitOnboardingApplicationCommandHandler` |
+| Optimistic concurrency | Every aggregate carries a version; stale updates are rejected | `OnboardingApplication.Version` |
+
+### 6.3 Layering inside a context's API
+
+```text
+API             controllers, request models, authorization policies   → depends on Application
+Application     commands, queries, handlers, abstractions             → depends on Domain
+Domain          aggregates, value objects, domain events, rules       → depends on nothing
+Infrastructure  EF Core, Outbox / Inbox, Kafka, storage, external     → implements Application abstractions
+```
+
+The domain layer has no knowledge of HTTP, EF Core, Kafka or the IDP.
+
+### 6.4 DDD maturity per context
+
+| Context | Maturity | Main gap |
+|---|---|---|
+| Customer Onboarding | Full tactical DDD | Workflow headers are read in the infrastructure layer |
+| Documents Management | Aggregate with invariants; CRUD-like behaviour | No lifecycle behaviour yet |
+| Customer KYC | **Anemic**: string statuses, rules in a service | Introduce the `KycCase` aggregate (see its requirements, §4.2) |
+
+---
+
+## 7. Independent Deployability
+
+### 7.1 Deployable units
+
+| Deployable | Context | Runtime | Database | Status |
+|---|---|---|---|---|
+| IDP | Identity | ASP.NET Core 10 + Duende IdentityServer 8 | `EwpIdentityAccessDb` | Present |
+| Shell BFF + SPA | Composition | ASP.NET Core 10 + Next.js | `EwpBssShellDb` | Present |
+| CO BFF + MFE | Customer Onboarding | ASP.NET Core 10 + Next.js | — | Present |
+| CO API | Customer Onboarding | ASP.NET Core 10 | `EwpCustomerDb` | Present |
+| CustomerOutboxPublisher | Customer Onboarding | .NET worker | `EwpCustomerDb` (Outbox table only) | Present |
+| KYC BFF + MFE | Customer KYC | NestJS + Next.js | — | Present |
+| KYC API (+ in-process Outbox relay) | Customer KYC | ASP.NET Core 10 | `EwpKycDb` | Present |
+| CustomerKycSubscriber | Customer KYC | .NET worker | — | Present |
+| DM API | Documents Management | ASP.NET Core 10 | `EwpDocumentsManagementDb` + object storage | Present |
+| Compliance, Accounts, Payments, Notifications | — | — | own databases | Planned |
+
+An MFE and its BFF are one deployable: the MFE is a static export served by its BFF.
+
+### 7.2 Rules
+
+1. **Workers belong to a context.** A relay or subscriber is deployed and versioned with the context whose database or API it uses. `src/AsyncWorkflows` is a folder, not a shared layer. EWP V3 deliberately shows two relay styles: a separate worker (Customer Onboarding) and an in-process hosted service (KYC).
+2. **Shared code is technical only.** Allowed: technical libraries (`AsyncWorkflows.Infrastructure.Kafka`, `Common.WebUtilities`) and versioned integration contracts. Forbidden: domain types, DbContexts, business rules. Consumers may keep their own tolerant-reader models instead of a shared contract package (as the KYC subscriber does).
+3. **Configuration and secrets are per deployable.** A deployable receives only its own URLs, client IDs and secrets, from its environment or a secret store.
+   - **Done:** client secrets were removed from `Common.Landscape`; each deployable reads its own from configuration and refuses to start without them.
+   - **Gap:** `Common.Landscape` still compiles every component's URLs and client IDs into every component, so changing one forces a rebuild of the others.
+4. **Contracts evolve compatibly.** Event changes are additive within a version, and consumers tolerate unknown fields and older shapes (see the [Event Catalogue §2](Integration-Event-Catalogue.md#2-conventions)).
+5. **Release checklist** for any component:
+   - It builds and its tests pass in isolation.
+   - It starts with only its own configuration.
+   - It does not require another component to be redeployed.
+   - Its database migrations are backward compatible with the previous release.
+   - It can be rolled back on its own.
+
+---
+
+## 8. Front-End Composition
+
+EWP V3 composes independently deployable Next.js MFEs inside a business-neutral Shell, using iframe isolation and an explicit `postMessage` protocol. Each MFE is backed by its own BFF. The menu, Application Workspace, MFE protocol, sign-in and logout are specified in [Shell-Requirements.md](../src/Shell/doc/Shell-Requirements.md).
+
+---
+
+## 9. Identity and Access
+
+- **Human authentication:** Browser → BFF → IDP using Authorization Code + PKCE. Tokens stay in the BFF and never reach browser JavaScript.
+- **Machine authentication:** OAuth 2.0 Client Credentials, one pinned client per caller–callee purpose.
+- **Human initiator:** captured at the Outbox boundary (`initiated_by`) and carried in events. It provides accountability and determines the notification audience; it is never a grant.
+- **Authorization:** RBAC + ABAC + ReBAC + workflow state + SoD; see [Authorization-Model.md](Authorization-Model.md).
+- IDP clients, scopes, claims and demo data: [IDP-Requirements.md](../src/IDP/doc/IDP-Requirements.md).
+
+---
+
+## 10. Distributed Workflow Architecture
+
+### 10.1 Transactional Outbox
+
+```text
+BEGIN; business state change; INSERT outbox_messages(...); COMMIT;   →  relay  →  Kafka
+```
+
+The relay publishes only after commit. Both relays (Customer Onboarding, KYC) provide:
+
+- safe for multiple instances (`FOR UPDATE SKIP LOCKED` or partition ownership);
+- bounded attempts with a parked or dead-letter state;
+- per-aggregate ordering (a failed message blocks later messages of the same aggregate only);
+- an idempotent producer with `acks=all`.
+
+### 10.2 At-least-once delivery and the Inbox
+
+Duplicates are normal: a relay can crash after publishing and before marking the row. Every consumer therefore records processed `MessageId`s:
+
+```text
+Receive ─► already in Inbox? ─yes─► ACK
+                 │no
+                 ▼
+BEGIN; business change; next Outbox event; INSERT inbox(message_id, consumer); COMMIT ─► ACK
+```
+
+Uniqueness is `UNIQUE(message_id, consumer)`.
+
+### 10.3 Event envelope and traceability
+
+The envelope, the meaning of `WorkflowId` / `CorrelationId` / `CausationId` / `TraceId` / `MessageId` / `InitiatedByUserId`, and every topic are defined in [Integration-Event-Catalogue.md](Integration-Event-Catalogue.md).
+
+### 10.4 Subscriber / worker responsibilities
+
+A reference worker:
+
+1. consumes one topic;
+2. validates the envelope;
+3. checks the Inbox;
+4. extracts workflow metadata;
+5. obtains and caches an M2M token;
+6. calls its own context's API (or command handler);
+7. applies a timeout, bounded retry with jitter, and a circuit breaker;
+8. commits the business change, the next Outbox event and the Inbox row atomically;
+9. acknowledges the message only after success;
+10. emits structured logs and traces;
+11. parks unrecoverable messages in a dead-letter topic **without stopping**.
+
+A worker never impersonates the human initiator.
+
+### 10.5 Sagas
+
+Customer Onboarding uses **choreography**; Payments will use **orchestration**. Both are specified in [EWP-V3-Saga-Choreography-and-Orchestration-Plans.md](EWP-V3-Saga-Choreography-and-Orchestration-Plans.md).
+
+### 10.6 Real-time notifications
+
+A separate Notifications component turns business events into neutral, addressed notifications and pushes them over SignalR to the right users only. The Shell renders them. See [Shell-Requirements §7](../src/Shell/doc/Shell-Requirements.md#7-workflow-notifications-planned) and [Authorization-Model §11](Authorization-Model.md#11-notification-authorization).
+
+---
+
+## 11. Data Architecture
+
+**Rules:**
+
+- one database per context; no cross-database foreign keys or queries;
+- integration only through APIs and events;
+- versioned schema changes (migrations);
+- a least-privilege database account per service;
+- encrypted connections;
+- tested backups and point-in-time recovery where required.
+
+**Conventions:**
+
+- PostgreSQL identifiers are lowercase `snake_case`; C# uses PascalCase; quoted PascalCase identifiers are avoided.
+- Databases are named `Ewp<Context>Db`.
+- Stored procedures are not used for ordinary CRUD.
+- Optimistic concurrency uses version columns.
+
+**Gaps:**
+
+- Every service connects as the PostgreSQL superuser.
+- Schema scripts start with `DROP TABLE`, and there are no migrations yet.
+
+---
+
+## 12. Security Architecture (cross-cutting targets)
+
+Context-specific controls (document security, IDP hardening, Shell browser controls) live in the respective requirements documents. Platform-wide targets:
+
+| Area | Targets |
+|---|---|
+| Data protection | Data classification; encryption in transit and at rest; key management; field-level protection where justified; PII masking in logs and telemetry; retention and secure deletion; purpose limitation. Secrets, tokens and personal data never appear in logs. |
+| API security | Validation of audience, issuer, lifetime and scope (per operation); object-level authorization; input validation; request-size limits; rate limiting; secure headers; CORS restrictions; idempotency keys for commands; versioning; consistent, non-leaking errors |
+| OAuth direction | Aligned with RFC 9700 and OAuth 2.1: exact redirect URIs; PKCE; no implicit or ROPC flows; refresh-token rotation; sender-constrained tokens (DPoP / mTLS) where justified; key rotation. Evaluate **FAPI 2.0** for high-risk financial APIs. |
+| BFF security | HttpOnly + Secure cookies; deliberate SameSite; anti-forgery; session fixation protection and renewal; server-side session storage; logout propagation; strict origin validation; no generic proxying |
+| Browser security | Strict CSP including `frame-ancestors`; `nosniff`; Referrer-Policy; Permissions-Policy; HSTS; clickjacking and open-redirect protection; `postMessage` origin and source validation |
+| Input and output | Untrusted-by-default input; canonicalization; safe parsing; parameterized queries; output encoding; protection against SSRF, path traversal and deserialization attacks |
+| Secrets and keys | Workload / managed identity → secrets and KMS. Rotation, versioning, expiry, access audit; separate keys per environment; no hard-coded secrets. TLS 1.2+ (prefer 1.3). |
+| Service-to-service | Strong client authentication; least-privilege scopes; audience restriction; mTLS or workload identity where justified; short-lived tokens; network segmentation; explicit authorization |
+| Zero trust | Never trust by network location: authenticate, authorize, validate context, least privilege, observe |
+| Supply chain and DevSecOps | SAST, SCA, secret scanning, SBOM, IaC scanning, container scanning, DAST / API testing, signed artifacts and provenance, pinned dependencies — all in the pipeline, with severity and remediation SLAs |
+| Infrastructure and edge | Network segmentation; private subnets; WAF / API gateway; DDoS protection; container hardening; Kubernetes RBAC and network policies; IaC with drift detection. The edge complements application authorization; it never replaces it. |
+| Rate limiting | Login, token endpoints, uploads, payment initiation, expensive queries, administrative APIs. Keyed by user, client, IP, endpoint and risk. |
+| Security monitoring | Authentication and authorization failures, privilege changes, credential misuse, anomalous data access, document-download and payment anomalies feed SIEM / SOC (Production Concern) |
+| Fraud and risk | Risk signals → allow / challenge / hold / reject / manual review; simulated in the PoC |
+
+---
+
+## 13. Resilience, Messaging and Operations
+
+| Area | Targets |
+|---|---|
+| Resilience | Bounded retries with exponential backoff and jitter; timeouts; circuit breakers; bulkheads; load shedding; graceful degradation; health checks with liveness / readiness separation. A retry must never turn one payment into two (idempotency keys). |
+| Kafka | Explicit topics (no auto-create); keys and ordering documented per event; retry and dead-letter topics; ACLs, authentication and TLS; retention policies; consumer-lag monitoring; schema versioning |
+| Observability | OpenTelemetry logs, metrics and traces; W3C trace context propagated through HTTP **and Kafka headers**; workflow duration and failure rates; circuit-breaker state; retry counts; masked sensitive data |
+| Operational resilience | Operators can find a failed workflow, its initiator, its last successful step and the failed message; inspect Outbox, Inbox and saga state; replay safely; trigger controlled compensation; disable a consumer. All of this is audited. |
+| Availability | HA, replication, backups, PITR, DR (RPO / RTO), multi-zone or multi-region deployment, runbooks (Production Concern; modelled in the PoC) |
+| Configuration | Externalized, validated at start-up, environment-specific, secret-free in source control |
+
+---
+
+## 14. Testing Strategy
+
+| Level | Scope |
+|---|---|
+| Unit | Aggregates and value objects, state transitions, authorization handlers, idempotency rules |
+| Integration | Database, Outbox / Inbox, Kafka, IDP, downstream APIs |
+| Contract | Event schemas and API contracts, producer / consumer compatibility |
+| End-to-end | Login, MFE navigation, onboarding, KYC review, notifications |
+| Security | Authorization categories of [Authorization-Model §15](Authorization-Model.md#15-authorization-test-categories); CSRF, XSS, SSRF, injection, token validation, session security |
+| Chaos / failure | Kafka down; duplicate delivery; consumer crash; API timeout; transient and permanent HTTP failures; database failure; stale workflow state; duplicate commands; compensation failure |
+
+**Gap:** there are no automated tests yet (`tst/` is empty).
+
+---
+
+## 15. Capability Matrix
 
 | Capability | Status |
 |---|---|
-| Microservices / bounded contexts | **Present** |
-| Database per bounded context | **Present** |
-| Clean/layered architecture | **Present** |
-| Next.js MFEs | **Present** |
-| Shell composition application | **Present** |
-| Shell BFF | **Present** |
-| MFE/BFF security boundary | **Present** |
-| Duende IdentityServer 8 | **Present** |
-| OIDC | **Present** |
-| OAuth 2.x | **Present** |
-| Authorization Code + PKCE | **Present** |
-| Role-based authorization | **Present** |
-| ABAC model | **Planned / In Progress** |
-| ReBAC model | **Planned / In Progress** |
-| Separation of Duties | **Planned / In Progress** |
-| Workflow-state authorization | **Planned / In Progress** |
-| Application Workspace | **Present** |
-| Opaque MFE context exchange | **Present** |
-| Navigation/unsaved-data protocol | **Present** |
-| Transactional Outbox | **Present** |
-| `initiated_by` on CO outbox messages | **Present** |
-| Kafka event backbone | **Present** |
-| At-least-once delivery model | **Present** |
-| Inbox/idempotent consumer pattern | **In Progress** |
-| Customer KYC subscriber | **In Progress** |
-| M2M client-credentials workflow calls | **Planned / In Progress** |
-| Retry / timeout / circuit breaker | **In Progress** |
-| Saga/choreography | **Planned / In Progress** |
-| Compensation | **Planned / In Progress** |
-| Correlation ID | **In Progress** |
-| Causation ID | **In Progress** |
-| Workflow/Saga ID | **Planned / In Progress** |
-| Initiator propagation through Kafka | **In Progress** |
-| User-specific SignalR notifications | **Planned** |
-| Workflow notification authorization | **Planned** |
-| Centralized audit trail | **Planned** |
-| OpenTelemetry | **Planned** |
-| Distributed tracing | **Planned** |
-| Kafka DLQ/recovery strategy | **Planned** |
-| Event schema governance | **Target** |
-| Direct/pre-signed document upload | **Planned** |
-| Malware scanning | **Target** |
-| Secrets management | **Target** |
-| Key rotation | **Target** |
-| SBOM | **Target** |
-| SAST/SCA/DAST | **Target** |
-| Artifact signing/provenance | **Target** |
-| WAF/API edge protection | **Production Concern** |
-| DDoS protection | **Production Concern** |
-| SIEM/SOC integration | **Production Concern** |
-| Fraud/risk engine integration | **Target** |
-| High availability | **Production Concern** |
-| Disaster recovery | **Production Concern** |
-| Multi-region resilience | **Production Concern** |
-| Regulatory compliance evidence | **Production Concern** |
+| Bounded contexts, database per context | Present |
+| DDD tactical model | Partial (CO full; DM partial; KYC anemic) |
+| Independent deployability | Partial (secrets now per deployable; service URLs still compiled into `Common.Landscape`) |
+| Next.js MFEs, Shell composition, Shell BFF, MFE BFFs (.NET and NestJS) | Present |
+| Application Workspace, opaque context exchange, navigation protocol | Present |
+| Duende IdentityServer 8, OIDC, Authorization Code + PKCE | Present |
+| M2M Client Credentials (pinned clients) | Present |
+| RBAC | Present |
+| ABAC | Partial (KYC decisions: department and clearance; CO and DM: branch scope) |
+| ReBAC | Planned (data seeded in IDP; not enforced) |
+| Separation of Duties | Partial (KYC initiator rule; does not yet fail closed) |
+| Workflow-state authorization | Partial (CO aggregate transitions; KYC stages) |
+| Object-level authorization | Present (CO and DM: branch scope); Planned (KYC) |
+| Transactional Outbox with `initiated_by` | Present (CO and KYC) |
+| Standard event envelope; Workflow / Correlation / Causation IDs | Present (CO); Partial (KYC flat messages) |
+| Kafka backbone, at-least-once model | Present |
+| KYC subscriber (M2M, bounded retry) | Present |
+| Inbox / idempotent consumer | Planned |
+| Timeouts | Partial |
+| Circuit breakers | Planned |
+| Dead-letter / poison-message handling | Planned |
+| Saga choreography | Partial (first hop: CO → KYC) |
+| Compensation | Planned |
+| Saga orchestration (Payments) | Planned |
+| User-specific SignalR notifications | Planned |
+| Centralized audit trail | Planned |
+| OpenTelemetry / distributed tracing | Planned |
+| Security headers / CSP (`frame-ancestors`, `nosniff`) | Present (IDP, Shell, CO BFF, KYC BFF) |
+| Rate limiting | Partial (IDP login only) |
+| Health checks | Planned |
+| IDP hardening (lockout, no enumeration, POST logout, front-channel logout, refresh-token rotation) | Present |
+| Server-side BFF sessions | Partial (.NET BFFs; in-memory stores) |
+| Automated tests | Planned (none yet) |
+| Document content verification (allow-list + magic bytes) | Present |
+| Direct / pre-signed document upload, malware scanning | Planned / Target |
+| Secrets per deployable, fail closed when missing | Present |
+| Secret store, key rotation | Target |
+| SBOM, SAST / SCA / DAST, artifact signing | Target |
+| WAF, DDoS, SIEM / SOC, HA, DR, multi-region, regulatory evidence | Production Concern |
 
 ---
 
-# 56. What V3 Should Demonstrate as a Complete Reference Workflow
+## 16. Roadmap
 
-The principal demonstration should eventually look like this:
-
-```text
-1. Human authenticates
-        |
-        v
-2. Shell establishes secure session
-        |
-        v
-3. Customer Service Agent selects Customer
-        |
-        v
-4. Shell hands opaque context to Customer Onboarding MFE
-        |
-        v
-5. Customer Onboarding creates/submits application
-        |
-        +--> business transaction
-        |
-        +--> outbox record
-              initiated_by = human user
-              workflow_id
-              correlation_id
-              causation_id
-        |
-        v
-6. Outbox Publisher
-        |
-        v
-7. Kafka
-        |
-        v
-8. KYC Subscriber
-        |
-        +--> Inbox/idempotency
-        |
-        +--> M2M token
-        |
-        +--> KYC API
-        |
-        +--> business transaction
-        |
-        +--> next outbox event
-        |
-        v
-9. Kafka
-        |
-        v
-10. Compliance / Accounts workflow
-        |
-        v
-11. Final workflow event
-        |
-        v
-12. Notification Subscriber
-        |
-        +--> identifies InitiatedByUserId
-        |
-        v
-13. SignalR
-        |
-        v
-14. Only the originating human sees the notification
-```
-
-This workflow demonstrates far more than microservice communication. It demonstrates **identity propagation, asynchronous consistency, idempotency, workflow state, machine authentication, human attribution, resilience and real-time user feedback**.
-
----
-
-# 57. Security Architecture Objectives
-
-The completed V3 architecture should be able to demonstrate the following security properties:
-
-### Authentication
-
-> Can the platform reliably establish who is acting?
-
-### Authorization
-
-> Is the authenticated principal allowed to perform this exact operation on this exact resource in this exact state?
-
-### Accountability
-
-> Can the institution prove who performed the operation?
-
-### Confidentiality
-
-> Can unauthorized parties obtain sensitive data?
-
-### Integrity
-
-> Can unauthorized parties modify business state?
-
-### Availability
-
-> Can failures be isolated without corrupting workflows?
-
-### Non-repudiation / auditability
-
-> Can important business actions be reconstructed after the fact?
-
-### Resilience
-
-> Can duplicate delivery, retries and partial failures occur without producing unsafe business outcomes?
-
----
-
-# 58. Enterprise Security Principles to Preserve
-
-The V3 implementation should continually apply:
-
-```text
-Zero Trust
-Least Privilege
-Defense in Depth
-Secure by Default
-Fail Securely
-Verify Explicitly
-Minimize Data
-Minimize Blast Radius
-Separate Duties
-Separate Identities
-Separate Ownership
-Assume Failure
-Assume Duplicate Delivery
-Audit Important Actions
-Never Trust the UI
-```
-
----
-
-# 59. Contemporary Security and Architecture Reference Baseline
-
-The following external standards and guidance are useful reference points for the V3 security roadmap.
-
-## OWASP ASVS
-
-The OWASP Application Security Verification Standard provides a structured basis for verifying web-application security controls. The current stable ASVS line is 5.0.0.
-
-https://owasp.org/www-project-application-security-verification-standard/
-
-## OAuth 2.0 Security BCP — RFC 9700
-
-RFC 9700, published by the IETF in January 2025, updates OAuth security guidance and deprecates weaker approaches.
-
-https://www.rfc-editor.org/rfc/rfc9700
-
-## OpenID FAPI 2.0
-
-FAPI 2.0 provides a high-security OAuth profile intended for demanding API ecosystems including financial and open-banking scenarios.
-
-https://openid.net/wg/fapi/specifications/
-
-## NIST Cybersecurity Framework 2.0
-
-NIST CSF 2.0 provides a broad framework for cybersecurity risk management and is useful as an organizational/security-control reference.
-
-https://www.nist.gov/cyberframework
-
-## NIST Secure Software Development Framework
-
-NIST SSDF provides a common framework for integrating secure software development practices into an SDLC.
-
-https://csrc.nist.gov/pubs/sp/800/218/final
-
-## Reserve Bank of India — IT Governance, Risk, Controls and Assurance
-
-For an India-based banking context, the RBI's Master Direction on Information Technology Governance, Risk, Controls and Assurance Practices is an important reference for governance, IT risk, controls, assurance, business continuity and information-systems audit.
-
-https://www.rbi.org.in/
-
-## RBI — Digital Payment Security Controls
-
-Where payment functionality is within scope, RBI's Digital Payment Security Controls are another important reference point for authentication, application security lifecycle, fraud-risk management and payment security controls.
-
-https://www.rbi.org.in/
-
-> These references are architectural/security baselines, not a statement that EWP V3 currently complies with them.
-
----
-
-# 60. What This PoC Deliberately Does Not Claim
-
-EWP V3 does **not** claim to be:
-
-- a complete core-banking system;
-- a production payment switch;
-- a production AML engine;
-- a production fraud-detection platform;
-- a certified banking application;
-- a complete RBI-compliant implementation;
-- a replacement for a bank's SOC/SIEM;
-- a complete disaster-recovery implementation;
-- a complete regulatory/audit implementation;
-- a production-grade cloud platform.
-
-Instead, it provides a technically realistic architecture in which these concerns can be demonstrated and evolved.
-
----
-
-# 61. Architectural Evolution Roadmap
-
-## Phase 1 — Foundation
-
-**Goal:** establish reliable event identity and workflow metadata.
-
+**Phase 1 — Foundation:** event identity and workflow metadata
 - [x] Transactional Outbox
-- [x] Persist human initiator
-- [ ] Standard event envelope
-- [ ] Correlation ID
-- [ ] Causation ID
-- [ ] Workflow/Saga ID
-- [ ] Initiator propagation through Kafka
+- [x] Persist the human initiator
+- [x] Standard event envelope (CO)
+- [x] Workflow, Correlation and Causation IDs
+- [x] Initiator propagation through Kafka
+- [ ] KYC adopts the standard envelope
+- [ ] TraceId in Kafka headers
 
----
-
-## Phase 2 — Reliable Subscribers
-
-**Goal:** build a production-style asynchronous worker.
-
-- [ ] Customer KYC subscriber
-- [ ] Inbox/idempotency
-- [ ] M2M client credentials
-- [ ] API authorization
-- [ ] Retry
-- [ ] Timeout
+**Phase 2 — Reliable subscribers:** a production-style worker
+- [x] Customer KYC subscriber
+- [x] M2M Client Credentials
+- [x] API authorization of the M2M caller
+- [x] Bounded retry
+- [x] Transactional business update + next Outbox event (KYC)
+- [ ] Inbox / idempotency
+- [ ] Timeout on every call
 - [ ] Circuit breaker
-- [ ] DLQ/recovery
+- [ ] Dead-letter / poison-message handling
 - [ ] Structured tracing
-- [ ] Transactional business update + next outbox event
 
----
-
-## Phase 3 — Distributed Workflow
-
-**Goal:** demonstrate a complete Saga.
-
-- [ ] Customer onboarding
-- [ ] KYC
+**Phase 3 — Distributed workflow:** a complete choreographed saga
+- [x] Customer Onboarding
+- [x] KYC human review
+- [ ] KYC triggered per application
+- [ ] CO reacts to KYC outcomes
 - [ ] Compliance
 - [ ] Account opening
-- [ ] Workflow state
 - [ ] Compensation
 - [ ] Failure recovery
 - [ ] Workflow audit history
 
----
-
-## Phase 4 — Human Workflow Feedback
-
-**Goal:** connect asynchronous backend progress to the correct human.
-
+**Phase 4 — Human workflow feedback**
+- [ ] Notifications component
 - [ ] SignalR hub
-- [ ] Authenticated user connection
-- [ ] Initiator-specific routing
-- [ ] Workflow completion notification
-- [ ] Failure/escalation notification
-- [ ] Notification authorization
+- [ ] Authenticated connections
+- [ ] Audience policy
+- [ ] Completion and failure notifications
 
----
-
-## Phase 5 — Enterprise Security
-
-**Goal:** demonstrate defense-in-depth.
-
-- [ ] ABAC
+**Phase 5 — Enterprise security**
+- [ ] ABAC across all contexts
 - [ ] ReBAC
-- [ ] SoD
-- [ ] Fine-grained API authorization
+- [ ] SoD that fails closed
+- [x] Object-level authorization (CO, DM)
 - [ ] Audit trail
-- [ ] Security event model
 - [ ] PII-aware logging
 - [ ] Secrets management
 - [ ] Key rotation
-- [ ] CSP/security headers
+- [x] CSP and security headers
 - [ ] Rate limiting
-- [ ] Advanced token protection where justified
+- [ ] Delegated user context
+- [ ] Sender-constrained tokens where justified
 
----
-
-## Phase 6 — Secure Delivery
-
-**Goal:** make security part of the SDLC.
-
-- [ ] SAST
-- [ ] SCA
-- [ ] Secret scanning
+**Phase 6 — Secure delivery**
+- [ ] Automated tests
+- [ ] SAST, SCA, secret scanning
 - [ ] SBOM
-- [ ] Container scanning
-- [ ] IaC scanning
-- [ ] DAST
-- [ ] API security testing
-- [ ] Artifact signing
-- [ ] Supply-chain provenance
+- [ ] Container and IaC scanning
+- [ ] DAST / API testing
+- [ ] Artifact signing and provenance
 
----
-
-## Phase 7 — Operational Resilience
-
-**Goal:** demonstrate enterprise-operational maturity.
-
+**Phase 7 — Operational resilience**
 - [ ] OpenTelemetry
-- [ ] Centralized logs
-- [ ] Metrics
-- [ ] Distributed tracing
+- [ ] Centralized logs and metrics
 - [ ] Kafka monitoring
 - [ ] Workflow dashboards
-- [ ] SIEM integration
 - [ ] Alerting
-- [ ] Disaster recovery
-- [ ] Backup/restore testing
-- [ ] Chaos/failure testing
-- [ ] Operational runbooks
+- [ ] Backup / restore testing
+- [ ] Chaos testing
+- [ ] Runbooks
+- [ ] Terraform / IaC for cloud environments
+
+**Phase 8 — Payments orchestration:** see the Saga plan.
 
 ---
 
-# 62. Definition of Architectural Success
+## 17. Definition of Architectural Success
 
-EWP V3 should be considered successful when a reviewer can trace a single business action from:
+A reviewer can trace a single business action:
 
 ```text
-Human
-  |
-  v
-Authentication
-  |
-  v
-Authorization
-  |
-  v
-MFE
-  |
-  v
-BFF
-  |
-  v
-Domain API
-  |
-  v
-Database Transaction
-  |
-  +--> Outbox
-          |
-          v
-        Kafka
-          |
-          v
-      Subscriber
-          |
-          +--> M2M identity
-          |
-          +--> Human initiator identity
-          |
-          v
-      Downstream API
-          |
-          v
-      New business state
-          |
-          +--> New Outbox event
-          |
-          v
-        Kafka
-          |
-          v
-      Notification
-          |
-          v
-   Correct human user
+Human → Authentication → MFE → BFF → Authorization → Domain API → DB transaction + Outbox
+      → Kafka → Subscriber (M2M identity + human initiator) → Downstream API → New state + Outbox
+      → Kafka → Notification → the correct human only
 ```
 
-while simultaneously demonstrating:
+while observing:
 
 - no cross-service database coupling;
-- no trust in browser-only authorization;
-- no loss of human workflow attribution;
-- safe duplicate message processing;
-- bounded failure/retry behavior;
-- auditable business decisions;
-- secure machine-to-machine communication;
-- appropriate separation of duties;
-- traceability across synchronous and asynchronous boundaries.
+- no trust in browser-side authorization;
+- no loss of human attribution;
+- safe duplicate processing;
+- bounded failure handling;
+- auditable decisions;
+- secure M2M communication;
+- enforced Separation of Duties;
+- end-to-end traceability;
+- independent deployability of every component.
 
-That is the central architectural purpose of **Enterprise Web Platform V3**.
+### Security objectives
+
+| Objective | Question |
+|---|---|
+| Authentication | Can the platform reliably establish who is acting? |
+| Authorization | Is this principal allowed to perform this exact operation, on this exact resource, in this exact state? |
+| Accountability | Can the institution prove who did it? |
+| Confidentiality | Can unauthorized parties obtain sensitive data? |
+| Integrity | Can unauthorized parties change business state? |
+| Availability | Can failures be isolated without corrupting workflows? |
+| Auditability | Can important actions be reconstructed afterwards? |
+| Resilience | Can duplicates, retries and partial failures occur without unsafe outcomes? |
+
+Principles to preserve:
+
+- Zero Trust
+- Least Privilege
+- Defense in Depth
+- Secure by Default
+- Fail Securely
+- Verify Explicitly
+- Minimize Data
+- Minimize Blast Radius
+- Separate Duties
+- Separate Identities
+- Separate Ownership
+- Assume Failure
+- Assume Duplicate Delivery
+- Audit Important Actions
+- Never Trust the UI
 
 ---
 
-# 63. Living-Document Rule
+## 18. Reference Baseline
 
-This document is intentionally a living architectural blueprint.
+| Reference | Use |
+|---|---|
+| [OWASP ASVS 5.0](https://owasp.org/www-project-application-security-verification-standard/) | Verification of web-application security controls |
+| [RFC 9700 — OAuth 2.0 Security BCP](https://www.rfc-editor.org/rfc/rfc9700) | Current OAuth security guidance |
+| [OpenID FAPI 2.0](https://openid.net/wg/fapi/specifications/) | High-security OAuth profile for financial APIs |
+| [NIST CSF 2.0](https://www.nist.gov/cyberframework) | Cybersecurity risk-management framework |
+| [NIST SSDF (SP 800-218)](https://csrc.nist.gov/pubs/sp/800/218/final) | Secure software development practices |
+| [RBI](https://www.rbi.org.in/) — IT Governance, Risk, Controls and Assurance; Digital Payment Security Controls | Indian banking governance and payment-security reference |
 
-When a major architectural capability is introduced:
+These are baselines, not claims of compliance.
 
-1. Update its status in the capability matrix.
-2. Add or update the relevant architectural section.
-3. Record significant decisions and trade-offs.
-4. Keep implementation details in the appropriate technical documentation.
-5. Keep this document focused on **architectural intent, capabilities, security posture and evolution**.
+---
 
-The codebase remains the implementation source of truth.
+## 19. Engineering Gaps Register
 
-The documentation explains **why the architecture exists, what it is intended to demonstrate, and where it is going**.
+Point-in-time findings, with their remediation status, are kept in [Fellow-architect-review-of-v3-ewp.md](Fellow-architect-review-of-v3-ewp.md). Context-specific gaps are listed in the "Implementation status" section of each requirements document.
+
+---
+
+## 20. What This PoC Does Not Claim
+
+EWP V3 is **not**:
+
+- a core-banking system;
+- a production payment switch;
+- a production AML or fraud engine;
+- a certified or RBI-compliant banking application;
+- a replacement for a SOC / SIEM;
+- a complete DR, regulatory or audit implementation;
+- a production-grade cloud platform.
+
+It is a technically realistic architecture in which these concerns can be demonstrated and evolved.
+
+---
+
+## 21. Living-Document Rule
+
+When a capability is introduced or changed:
+
+1. update its row in §15 and tick it in §16;
+2. update the owning document — and only that one — following the [documentation map](../README.md#documentation-map);
+3. record significant decisions and trade-offs;
+4. keep this document about intent, principles and cross-cutting posture.
+
+The codebase is the implementation source of truth.

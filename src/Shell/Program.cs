@@ -43,6 +43,12 @@ builder.Services.AddBff()
 	//              such as secure cookie-based user sessions, CSRF protection, and the lightweight API proxy helpers.
 	// 🡡__ IF NOT: You would miss out on built-in BFF features (session handling, secure cookie patterns, anti-CSRF)
 	//              and have to implement these aspects manually which increases security and implementation risk.
+    .AddServerSideSessions()
+		// 🡡__ WHY   : Keeps the authentication ticket (and its tokens) on the server; the browser cookie holds only a
+		//              session reference, and a session can be revoked server-side (e.g. on back-channel logout).
+		// 🡡__ IF NOT: The tokens travel inside the (encrypted) cookie on every request and cannot be revoked centrally.
+		//              NOTE: the default store is in-memory (sessions end when the BFF restarts); use a persistent store
+		//              (Duende EF store / distributed cache) when the BFF runs as more than one instance.
     .AddRemoteApis();
 		// 🡡__ WHY   : Enables the BFF's remote API integration (YARP-backed) allowing the BFF to expose proxied endpoints
 		//              that securely call backend microservices on behalf of the authenticated user.
@@ -69,6 +75,11 @@ builder.Services
     {
         options.Cookie.Name = CookieNames.BSS_SHELL_HOST_BFF;
 
+        // Same lifetime as the MFE BFF sessions (30 minutes, sliding) instead of
+        // the 14-day framework default.
+        options.ExpireTimeSpan = TimeSpan.FromMinutes(30);
+        options.SlidingExpiration = true;
+
         options.Cookie.Path = "/";
 			// 🡡__ WHY   : Ensures the cookie is sent for requests to all paths of the host, including the BFF proxy and SPA.
 			//              This is important when the app serves multiple endpoints under different routes.
@@ -92,7 +103,15 @@ builder.Services
     {
         options.Authority = IDP.AUTHORITY;
         options.ClientId = BSSShellBFF.CLIENT_ID_FOR_IDP;
-        options.ClientSecret = BSSShellBFF.CLIENT_SECRET_FOR_IDP;
+
+        // Front-channel logout (/signout-oidc, called by the IDP in a hidden iframe)
+        // must clear THIS BFF's session cookie. Without an explicit scheme it falls
+        // back to the default sign-out scheme ("oidc") and merely redirects to the
+        // IDP again, leaving the session alive.
+        options.SignOutScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+        // From this deployable's configuration / secret store; never compiled in.
+        options.ClientSecret = builder.Configuration["Oidc:ClientSecret"]
+            ?? throw new InvalidOperationException("Oidc:ClientSecret is not configured.");
 
         options.ResponseType = "code";
 			// 🡡__ WHY   : The authorization code response type enforces the Authorization Code flow where the server
@@ -186,10 +205,29 @@ app.UseHttpsRedirection();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
+// Browser security headers. The Shell is the top-level host and must never be
+// framed by another site (clickjacking); MFEs are framed BY the Shell.
+app.Use(async (context, next) =>
+{
+    context.Response.OnStarting(() =>
+    {
+        var headers = context.Response.Headers;
+        headers.TryAdd("Content-Security-Policy", "frame-ancestors 'none'; object-src 'none'; base-uri 'self'");
+        headers.TryAdd("X-Frame-Options", "DENY");
+        headers.TryAdd("X-Content-Type-Options", "nosniff");
+        headers.TryAdd("Referrer-Policy", "strict-origin-when-cross-origin");
+        return Task.CompletedTask;
+    });
+
+    await next();
+});
+
 app.UseRouting();
 app.UseAuthentication();
-app.UseAuthorization();
+// Duende BFF order: UseBff() after authentication and BEFORE authorization, so
+// the BFF anti-forgery and endpoint metadata are evaluated first.
 app.UseBff();
+app.UseAuthorization();
 	// 🡡__ WHY   : Enables BFF middleware which integrates authentication, anti-forgery, and proxy helpers into the pipeline.
     //               It wires up the route protection and the server-side token/session management used by remote API calls.
 	// 🡡__ IF NOT: BFF-specific features (secure API proxy, built-in CSRF protections, BFF session helpers) won't run and

@@ -202,6 +202,16 @@ public sealed class CustomProfileService : IProfileService
                     context,
                     "region",
                     employmentProfile.Branch.Region);
+
+                AddClaimIfRequested(
+                    context,
+                    "branch_city",
+                    employmentProfile.Branch.City);
+
+                AddClaimIfRequested(
+                    context,
+                    "branch_country_code",
+                    employmentProfile.Branch.CountryCode);
             }
         }
 

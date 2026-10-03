@@ -43,11 +43,16 @@ public sealed class AuthController : ControllerBase
             return Unauthorized();
         }
 
-        return Ok(User.Claims.Select(c => new
-        {
-            type = c.Type,
-            value = c.Value
-        }));
+        // Only what the UI needs for display; not every claim of the session.
+        var displayClaimTypes = new HashSet<string>(StringComparer.Ordinal) { "sub", "name", "role" };
+
+        return Ok(User.Claims
+            .Where(c => displayClaimTypes.Contains(c.Type))
+            .Select(c => new
+            {
+                type = c.Type,
+                value = c.Value
+            }));
     }
 
     [HttpGet("csrf")]
@@ -58,8 +63,12 @@ public sealed class AuthController : ControllerBase
         return Ok(new { token = tokens.RequestToken });
     }
 
-    [HttpGet("logout")]
+    // POST with anti-forgery: a GET logout could be triggered by any third-party page.
+    // (The user-facing logout is owned by the Shell; the IDP's front-channel logout
+    // ends this BFF's session through /signout-oidc.)
+    [HttpPost("logout")]
     [Authorize]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> Logout()
     {
         var refreshToken = await HttpContext.GetTokenAsync("refresh_token");
