@@ -73,6 +73,36 @@ export function publishWorkspaceContext(context: WorkspaceContext) {
   );
 }
 
+const sameTitle = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+
+/**
+ * Tell the Shell which record the user has picked.
+ *
+ * `root` identifies the business scope (the customer); `current` describes the
+ * picked record. If the root is the one already shown (every title the two
+ * have in common carries the same value), the existing root is kept and
+ * enriched, and retained context survives. A different root invalidates all
+ * subordinate context, so retained context is discarded.
+ */
+export function publishSelection(root: WorkspaceContextItem[], current: WorkspaceContextItem[]) {
+  const previous = latestWorkspaceContext;
+  const common = root.filter(item => previous.persistentContext.some(p => sameTitle(p.title, item.title)));
+  const sameRoot = common.length > 0 && common.every(item =>
+    previous.persistentContext.some(p => sameTitle(p.title, item.title) && String(p.value) === String(item.value)));
+
+  if (!sameRoot) {
+    publishWorkspaceContext({ persistentContext: root, currentContext: current, retainedContext: [] });
+    return;
+  }
+
+  const persistentContext = [
+    ...previous.persistentContext.filter(p => !root.some(item => sameTitle(item.title, p.title))),
+    ...root,
+  ];
+  const retainedContext = previous.retainedContext.filter(r => !current.some(item => sameTitle(item.title, r.title)));
+  publishWorkspaceContext({ persistentContext, currentContext: current, retainedContext });
+}
+
 /**
  * Change the persistent/root business scope. A root change invalidates all
  * subordinate context, so currentContext and retainedContext are reset.

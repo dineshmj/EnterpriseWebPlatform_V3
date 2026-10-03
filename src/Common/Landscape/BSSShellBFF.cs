@@ -9,9 +9,4 @@ public static class BSSShellBFF
 
 
 	public const string SHELL_BFF_CLIENT_BASE_URL = "https://shell.dev.localhost:44367";
-
-	// FIXME: Are these needed?
-
-	public const string SHELL_BFF_TOKEN_ISSUER = "BSS Shell BFF Client";
-
 }

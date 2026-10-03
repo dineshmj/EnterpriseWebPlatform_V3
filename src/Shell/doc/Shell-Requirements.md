@@ -50,6 +50,22 @@ retainedContext    — earlier context an MFE may reuse; not rendered by the She
 
 Each item is a `{ title, value }` pair. The context is **opaque** to the Shell: it stores, renders and hands it over, but only the MFE that owns the business meaning creates, updates or discards it. Workspace context is a human-context aid, never authoritative data. A receiving MFE re-reads anything it needs from its own BFF.
 
+**Picking a record.** Whenever the user picks a record, the MFE publishes it (`publishSelection` in each MFE's `MfeShell`):
+
+- `root` (the customer) becomes `persistentContext`, and the picked record becomes `currentContext`.
+- If the root is the customer already shown (the titles the two have in common carry the same values), the existing root is kept and enriched, and `retainedContext` survives.
+- A different customer replaces the root and discards all subordinate context.
+
+| MFE | Picked record | Root | Current |
+|---|---|---|---|
+| Customer Onboarding | Customer directory → Start onboarding | Customer ID, Customer Number | — |
+| | Application submitted, or picked in "Recent applications" | Customer ID, Customer Number | Application ID, Application Number, Status |
+| Customer KYC | Case details opened | Customer Number | Application Number, KYC Case, KYC Status |
+| | Case picked for review | Customer Number | Application Number, KYC Case, Reviewing (stage), Stage Status |
+| | Stage decision recorded | Customer Number | Application Number, KYC Case, the decided stage's status, KYC Status |
+
+**Reusing context.** A KYC review page opens on the case whose `Application Number` is in the handed-over current or retained context, when that case is in the queue. An explicit `?caseId=` link takes precedence.
+
 ---
 
 ## 4. Shell ↔ MFE Protocol (`postMessage`)

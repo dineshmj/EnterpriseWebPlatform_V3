@@ -34,6 +34,12 @@ export function Badge({
   );
 }
 
+/** "PENDING_REVIEW" → "Pending review". */
+export function statusLabel(status: string | null | undefined) {
+  const code = (status ?? '').toUpperCase();
+  return code ? code.toLowerCase().replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase()) : '—';
+}
+
 /** Workflow status codes (UPPER_SNAKE_CASE) shown as readable, colour-coded badges. */
 export function StatusBadge({ status }: { status: string | null | undefined }) {
   const code = (status ?? '').toUpperCase();
@@ -44,8 +50,7 @@ export function StatusBadge({ status }: { status: string | null | undefined }) {
           : code.endsWith('_IN_PROGRESS') || code === 'ONBOARDING' ? 'info'
             : 'neutral';
 
-  const label = code ? code.toLowerCase().replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase()) : '—';
-  return <Badge tone={tone} dot>{label}</Badge>;
+  return <Badge tone={tone} dot>{statusLabel(code)}</Badge>;
 }
 
 const alertVariants = cva('flex gap-3 rounded-control border px-4 py-3 text-sm leading-6', {

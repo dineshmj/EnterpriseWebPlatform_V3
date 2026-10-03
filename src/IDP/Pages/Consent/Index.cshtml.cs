@@ -150,7 +150,7 @@ public sealed class Index : PageModel
         }
         else
         {
-            // FIXME: Log that return URL about consent not matching. _logger.NoConsentMatchingRequest(returnUrl);
+            _logger.LogWarning("No consent request matches the return URL; the consent page cannot be shown.");
             return false;
         }
     }

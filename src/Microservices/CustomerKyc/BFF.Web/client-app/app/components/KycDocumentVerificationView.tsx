@@ -2,14 +2,14 @@
 
 import { ArrowLeft, ArrowRight, CheckCircle2, ExternalLink, FileText, Inbox, ThumbsDown, ThumbsUp, UserRound } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { MfeShell } from './MfeShell';
+import { useEffect, useRef, useState } from 'react';
+import { MfeShell, getWorkspaceContext, publishSelection, type WorkspaceContext } from './MfeShell';
 import { getJson, postJson } from '../lib/api';
 import { Button, buttonVariants } from './ui/button';
 import { Card, CardContent, CardHeader } from './ui/card';
 import { cn } from './ui/cn';
 import { DescriptionList, formatDateTime } from './ui/data';
-import { Alert, Badge, EmptyState, Skeleton, StatusBadge } from './ui/feedback';
+import { Alert, Badge, EmptyState, Skeleton, StatusBadge, statusLabel } from './ui/feedback';
 import { Textarea } from './ui/form';
 
 interface KycCase {
@@ -69,6 +69,17 @@ interface LastDecision {
 
 const caseDetailsHref = (caseId: number) => `/v1/kyc/cases/view-details?caseId=${caseId}`;
 
+/**
+ * The application the user was last working on, from the workspace context the
+ * Shell handed over (current first, then retained). A hint only: the case list
+ * itself comes from the KYC BFF.
+ */
+function contextApplicationNumber(context: WorkspaceContext): string | null {
+  const item = [...context.currentContext, ...context.retainedContext]
+    .find(x => x.title.toLowerCase() === 'application number');
+  return item ? String(item.value) : null;
+}
+
 function shortId(id: string | null | undefined) {
   return id ? `${id.slice(0, 8)}…` : '—';
 }
@@ -90,6 +101,8 @@ export function KycDocumentVerificationView({
   const [loading, setLoading] = useState(true);
   const [loadingDocument, setLoadingDocument] = useState(false);
   const [submittingDecision, setSubmittingDecision] = useState<'approve' | 'reject' | null>(null);
+  // How the current case was chosen; only a default choice may be replaced by a late context hand-over.
+  const selectionSource = useRef<'url' | 'context' | 'default' | 'user'>('default');
 
   const selectedCase = cases.find(item => item.kycCaseId === selectedCaseId) ?? null;
   const stageStatus = selectedCase
@@ -110,17 +123,56 @@ export function KycDocumentVerificationView({
       .then(result => {
         setCases(result.items);
         if (result.items.length > 0) {
-          const raw = new URLSearchParams(window.location.search).get('caseId');
-          const requested = Number(raw);
-          const selected = result.items.some(x => x.kycCaseId === requested)
-            ? requested
-            : result.items[0].kycCaseId;
-          setSelectedCaseId(selected);
+          const requested = Number(new URLSearchParams(window.location.search).get('caseId'));
+          const applicationNumber = contextApplicationNumber(getWorkspaceContext());
+          const fromContext = result.items.find(x => applicationNumber !== null && x.applicationNumber === applicationNumber);
+
+          if (result.items.some(x => x.kycCaseId === requested)) {
+            selectionSource.current = 'url';
+            setSelectedCaseId(requested);
+          } else if (fromContext) {
+            selectionSource.current = 'context';
+            setSelectedCaseId(fromContext.kycCaseId);
+          } else {
+            selectionSource.current = 'default';
+            setSelectedCaseId(result.items[0].kycCaseId);
+          }
         }
       })
       .catch(e => setError(e instanceof Error ? e.message : 'Unable to load KYC cases.'))
       .finally(() => setLoading(false));
   }, [verificationStage]);
+
+  // The Shell's hand-over normally arrives before the case list, but can arrive after it.
+  useEffect(() => {
+    const onHandoff = (event: Event) => {
+      if (selectionSource.current !== 'default') return;
+      const applicationNumber = contextApplicationNumber((event as CustomEvent<WorkspaceContext>).detail ?? getWorkspaceContext());
+      const match = cases.find(x => applicationNumber !== null && x.applicationNumber === applicationNumber);
+      if (match) {
+        selectionSource.current = 'context';
+        setSelectedCaseId(match.kycCaseId);
+      }
+    };
+    window.addEventListener('bss-context-handoff', onHandoff);
+    return () => window.removeEventListener('bss-context-handoff', onHandoff);
+  }, [cases]);
+
+  // Tell the Shell which case is being reviewed, so the Application Workspace shows it.
+  useEffect(() => {
+    if (!selectedCase) return;
+    publishSelection(
+      [{ title: 'Customer Number', value: selectedCase.customerNumber }],
+      [
+        { title: 'Application Number', value: selectedCase.applicationNumber ?? '—' },
+        { title: 'KYC Case', value: `#${selectedCase.kycCaseId}` },
+        { title: 'Reviewing', value: stageName },
+        { title: 'Stage Status', value: statusLabel(stageStatus) },
+      ],
+    );
+    // Only a change of case re-publishes; status changes are published with the decision.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCase?.kycCaseId]);
 
   useEffect(() => {
     if (selectedCaseId === null) {
@@ -167,6 +219,18 @@ export function KycDocumentVerificationView({
       const otherStageStatus = verificationStage === 'IdentityVerification'
         ? selectedCase?.documentVerificationStatus
         : selectedCase?.identityVerificationStatus;
+
+      if (selectedCase) {
+        publishSelection(
+          [{ title: 'Customer Number', value: selectedCase.customerNumber }],
+          [
+            { title: 'Application Number', value: selectedCase.applicationNumber ?? '—' },
+            { title: 'KYC Case', value: `#${selectedCase.kycCaseId}` },
+            { title: stageName, value: statusLabel(decidedStatus) },
+            { title: 'KYC Status', value: statusLabel(overallStatus) },
+          ],
+        );
+      }
 
       setCases(previous => previous.filter(item => item.kycCaseId !== selectedCaseId));
       setSelectedCaseId(null);
@@ -232,7 +296,7 @@ export function KycDocumentVerificationView({
                   <li key={item.kycCaseId} role="option" aria-selected={active}>
                     <button
                       type="button"
-                      onClick={() => setSelectedCaseId(item.kycCaseId)}
+                      onClick={() => { selectionSource.current = 'user'; setSelectedCaseId(item.kycCaseId); }}
                       className={cn(
                         'flex w-full flex-col gap-1 border-l-[3px] px-4 py-3 text-left transition-colors',
                         active ? 'border-accent-500 bg-accent-50/70' : 'border-transparent hover:bg-subtle',

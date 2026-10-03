@@ -50,6 +50,41 @@ export function publishWorkspaceContext(context: WorkspaceContext) {
   window.parent?.postMessage({ type: 'BSS_CONTEXT_UPDATE', context }, parentOrigin());
 }
 
+/** The latest workspace context: the Shell's hand-over, or what this MFE published since. */
+export function getWorkspaceContext(): WorkspaceContext {
+  return latestWorkspaceContext;
+}
+
+const sameTitle = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+
+/**
+ * Tell the Shell which record the user has picked.
+ *
+ * `root` identifies the business scope (the customer); `current` describes the
+ * picked record. If the root is the one already shown (every title the two
+ * have in common carries the same value), the existing root is kept and
+ * enriched, and retained context survives. A different root invalidates all
+ * subordinate context, so retained context is discarded.
+ */
+export function publishSelection(root: WorkspaceContextItem[], current: WorkspaceContextItem[]) {
+  const previous = latestWorkspaceContext;
+  const common = root.filter(item => previous.persistentContext.some(p => sameTitle(p.title, item.title)));
+  const sameRoot = common.length > 0 && common.every(item =>
+    previous.persistentContext.some(p => sameTitle(p.title, item.title) && String(p.value) === String(item.value)));
+
+  if (!sameRoot) {
+    publishWorkspaceContext({ persistentContext: root, currentContext: current, retainedContext: [] });
+    return;
+  }
+
+  const persistentContext = [
+    ...previous.persistentContext.filter(p => !root.some(item => sameTitle(item.title, p.title))),
+    ...root,
+  ];
+  const retainedContext = previous.retainedContext.filter(r => !current.some(item => sameTitle(item.title, r.title)));
+  publishWorkspaceContext({ persistentContext, currentContext: current, retainedContext });
+}
+
 function retainCurrentContext(): WorkspaceContext {
   const current = latestWorkspaceContext.currentContext;
   if (current.length === 0) return latestWorkspaceContext;
@@ -87,7 +122,6 @@ export function MfeShell({
   wide?: boolean;
   children: React.ReactNode;
 }) {
-  const [context, setContext] = useState<WorkspaceContext>(EMPTY);
   const [pendingNavigation, setPendingNavigation] =
     useState<PendingNavigationRequest | null>(null);
 
@@ -103,7 +137,6 @@ export function MfeShell({
         const nextContext =
           (event.data.context ?? EMPTY) as WorkspaceContext;
         latestWorkspaceContext = nextContext;
-        setContext(nextContext);
         window.dispatchEvent(
           new CustomEvent('bss-context-handoff', { detail: nextContext }),
         );
@@ -167,7 +200,7 @@ export function MfeShell({
 
   return (
     <>
-      <div className="min-h-screen bg-canvas" data-workspace-context={JSON.stringify(context)}>
+      <div className="min-h-screen bg-canvas">
         <header className="border-b border-line bg-surface">
           <div className={cn('mx-auto flex items-center justify-between gap-4 px-8 py-4', wide ? 'max-w-[1920px]' : 'max-w-[1440px]')}>
             <div className="flex min-w-0 items-center gap-3">

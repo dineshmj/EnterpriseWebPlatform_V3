@@ -3,12 +3,12 @@
 import { ArrowLeft, FileSearch, IdCard, Landmark } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { MfeShell } from '../../../../components/MfeShell';
+import { MfeShell, publishSelection } from '../../../../components/MfeShell';
 import { buttonVariants } from '../../../../components/ui/button';
 import { Card, CardContent, CardHeader } from '../../../../components/ui/card';
 import { cn } from '../../../../components/ui/cn';
 import { DescriptionList, formatDateTime } from '../../../../components/ui/data';
-import { Alert, Skeleton, StatusBadge } from '../../../../components/ui/feedback';
+import { Alert, Skeleton, StatusBadge, statusLabel } from '../../../../components/ui/feedback';
 import { getJson } from '../../../../lib/api';
 
 interface KycCaseDetail {
@@ -50,7 +50,17 @@ export default function KycCaseDetailsPage() {
 
     setCaseId(parsed);
     getJson<KycCaseDetail>(`/bff/api/kyc/cases/${parsed}`)
-      .then(setData)
+      .then(detail => {
+        setData(detail);
+        publishSelection(
+          [{ title: 'Customer Number', value: detail.customerNumber }],
+          [
+            { title: 'Application Number', value: detail.applicationNumber ?? '—' },
+            { title: 'KYC Case', value: `#${detail.kycCaseId}` },
+            { title: 'KYC Status', value: statusLabel(detail.status) },
+          ],
+        );
+      })
       .catch(error => setError(error instanceof Error ? error.message : 'Unable to load the KYC case.'));
   }, []);
 
