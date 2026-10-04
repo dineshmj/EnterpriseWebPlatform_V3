@@ -1,8 +1,8 @@
 # Compliance — Bounded Context Requirements
 
-**Bounded context:** Compliance  
+**Bounded context:** Compliance (CMP)  
 **Subdomain type:** Core  
-**Status:** Backend present (increment 2a: API, case-opening subscriber, screening provider simulator). Officer UI (BFF + MFE) planned for increment 2b.
+**Status:** Present: API, case-opening subscriber and screening provider simulator (increment 2a); officer UI, BFF + MFE (increment 2b).
 
 Platform-wide rules are not repeated here. See [doc/](../../../../doc/).
 
@@ -24,8 +24,8 @@ Compliance makes the **financial-crime and regulatory decision** on an onboardin
 
 | Component | Location | Technology | Status |
 |---|---|---|---|
-| Compliance MFE | `BFF.Web/client-app` | Next.js static export | Planned (2b) |
-| Compliance BFF | `BFF.Web` | ASP.NET Core 10 (Duende BFF) | Planned (2b) |
+| Compliance MFE | [BFF.Web/client-app](../BFF.Web/README.md) — work queue and case page | Next.js static export | Present |
+| Compliance BFF | [BFF.Web](../BFF.Web/README.md) — `https://compliance.dev.localhost:44399` | ASP.NET Core 10 (Duende BFF) | Present |
 | Compliance API | [API](../API/) — `https://compliance-api.dev.localhost:44306` | ASP.NET Core 10 REST, EF Core, PostgreSQL; in-process Outbox relay and screening worker | Present |
 | ComplianceCaseOpeningSubscriber | [Subscribers/Compliance](../../../AsyncWorkflows/Subscribers/Compliance/ComplianceCaseOpeningSubscriber/) | .NET worker on the shared reliable subscriber pipeline; consumes `kyc.case.approved` | Present |
 | Database | `EwpComplianceDb` — [EwpComplianceDb.sql](../API/ComplianceDb/EwpComplianceDb.sql) | PostgreSQL; service user `ewp_compliance_api` | Present |
@@ -107,5 +107,5 @@ Contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Event-Ca
 
 ## 8. Topology and Demo Data
 
-- Compliance BFF / MFE URL (reserved for 2b): `https://compliance.dev.localhost:44399`. The Shell menu seed registers a **Compliance** microservice there, owning the "Compliance Monitor" item (`/v1/compliance/view-all`).
+- Compliance BFF / MFE: `https://compliance.dev.localhost:44399`. The Shell menu seed registers a **Compliance** microservice there, owning the "Compliance Monitor" item (`/v1/compliance/view-all`, the work queue); the case page is `/v1/compliance/cases/view-details?caseId=…`.
 - Demo officer: `olivia.compliance` (SYD001, clearance 4) may approve LOW and MEDIUM cases. A HIGH case needs clearance 5; a senior officer arrives in 2c. Case assignment is held by Compliance itself, not by IDP seed data.

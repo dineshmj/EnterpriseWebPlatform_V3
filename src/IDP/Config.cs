@@ -74,6 +74,7 @@ public static class Config
             // Mfes Clients
             MfeCustomerOnboarding.Client,
             MfeCustomerKyc.Client,
+            MfeCompliance.Client,
             MfeAccounts.Client,
             MfePayments.Client,
 

@@ -73,13 +73,13 @@ What the platform is, how it is designed and what each component must do are doc
 		Customer KYC BFF (MFE)			https://kyc.dev.localhost:33800
 		Customer KYC API				https://kyc-api.dev.localhost:44305
 		Documents Management API		https://documents-management-api.dev.localhost:49486
+		Compliance BFF (MFE)			https://compliance.dev.localhost:44399
 		Compliance API					https://compliance-api.dev.localhost:44306
 		Screening Provider Simulator	https://localhost:44366   (stands in for an external AML / sanctions vendor)
 		Kafka UI						http://localhost:8080
 
 	Reserved (not implemented yet):
 
-		Compliance BFF (MFE)			https://compliance.dev.localhost:44399
 		Accounts BFF					https://accounts.dev.localhost:45456
 		Accounts API					https://accounts-api.dev.localhost:48486
 		Payments BFF					https://payments.dev.localhost:44388
@@ -168,11 +168,11 @@ What the platform is, how it is designed and what each component must do are doc
 
 	f2) Content-Security-Policy and dependency scanning.
 
-		The Shell, CO BFF and KYC BFF send a strict CSP: scripts only from the BFF itself plus the SHA-256 hashes of the
+		The Shell, CO BFF, KYC BFF and Compliance BFF send a strict CSP: scripts only from the BFF itself plus the SHA-256 hashes of the
 		exported pages' inline scripts, computed at startup from the files served. After re-exporting the MFEs
 		(CompileAndExportBFFClients_V3.ps1), restart the BFFs so the hashes are recomputed.
 		If a page is blocked by CSP, switch to report-only (violations appear in the browser console) while investigating:
-			Shell / CO BFF:  appsettings: "Security": { "CspReportOnly": true }
+			Shell / CO BFF / Compliance BFF:  appsettings: "Security": { "CspReportOnly": true }
 			KYC BFF:         environment variable KYC_BFF_CSP_REPORT_ONLY=true
 
 		Known-vulnerability scan of all .NET and npm dependencies (fails only on deployed dependencies):
@@ -200,14 +200,15 @@ What the platform is, how it is designed and what each component must do are doc
 
 			.\CompileAndExportBFFClients_V3.ps1
 
-		This builds the Shell SPA, the Customer Onboarding MFE, the Customer KYC MFE and the KYC NestJS BFF, and copies each static export to where its BFF serves it.
-		Restart the Shell, CO BFF and KYC BFF afterwards: their Content-Security-Policy hashes are computed at startup from the exported pages.
+		This builds the Shell SPA, the Customer Onboarding MFE, the Customer KYC MFE, the KYC NestJS BFF and the Compliance MFE, and copies each
+		static export to where its BFF serves it.
+		Restart the Shell, CO BFF, KYC BFF and Compliance BFF afterwards (the KYC BFF runs outside Visual Studio - easy to forget): their Content-Security-Policy hashes are computed at startup from the exported pages.
 
 	h) Configure the Customer KYC BFF: its environment variables and PFX certificate are described in src\Microservices\CustomerKyc\BFF.Web\README.md (runnow.bat sets them and starts the BFF).
 
 	NOTE - secrets:
 		Each component reads its own client secrets from its own configuration; nothing is compiled into Common.Landscape any more.
-		Development values: appsettings.Development.json of the IDP, Shell BFF, Customer Onboarding BFF, KycCaseOpeningSubscriber,
+		Development values: appsettings.Development.json of the IDP, Shell BFF, Customer Onboarding BFF, Compliance BFF, KycCaseOpeningSubscriber,
 		ComplianceCaseOpeningSubscriber, Compliance API (screening API key) and Screening Provider Simulator, and runnow.bat of the KYC BFF.
 		A component refuses to start when a secret is missing. Outside Development, supply them as environment variables or from a secret store.
 
@@ -219,8 +220,8 @@ What the platform is, how it is designed and what each component must do are doc
 	a) Visual Studio: use the multi-project launch profile in EnterpriseWebPlatform.BSS.slnLaunch. It starts:
 
 		IDP, Documents Management API, Customer Onboarding API, Customer KYC API, CustomerOutboxPublisher, KycCaseOpeningSubscriber,
-		OnboardingOutcomeSubscriber, Compliance API, ComplianceCaseOpeningSubscriber, Screening Provider Simulator, Shell BFF and
-		Customer Onboarding BFF.
+		OnboardingOutcomeSubscriber, Compliance API, ComplianceCaseOpeningSubscriber, Screening Provider Simulator, Shell BFF,
+		Customer Onboarding BFF and Compliance BFF.
 
 		Every publisher and subscriber is a console (generic host) application. Several instances of each may run in parallel:
 		publishers claim Outbox rows with FOR UPDATE SKIP LOCKED, subscribers share one Kafka consumer group per subscriber (one
@@ -246,9 +247,10 @@ What the platform is, how it is designed and what each component must do are doc
 		- KYC approval opens a Compliance case (ComplianceCaseOpeningSubscriber): the application moves to COMPLIANCE_IN_PROGRESS and
 		  EwpComplianceDb.compliance_cases has a row that the Compliance API screens within seconds (status SCREENING -> UNDER_REVIEW,
 		  risk LOW / MEDIUM / HIGH by the customer number's last digit: 9 = MATCH/HIGH, 7-8 = POTENTIAL_MATCH/MEDIUM, else CLEAR/LOW).
-		  The Compliance officer UI arrives in 2b; until then decide a case through the API with Bruno (section 6) as a
-		  compliance officer who is neither the onboarding initiator nor a KYC decider (separation of duties). A HIGH-risk case
-		  needs clearance 5 to approve. The decision moves the application to COMPLIANCE_COMPLETED or COMPLIANCE_REJECTED.
+		- Sign in as olivia.compliance (SYD001, clearance 4), open Compliance Monitor, open the case and approve, reject or put it on
+		  hold. She is neither the onboarding initiator nor a KYC decider (separation of duties); a HIGH-risk case needs clearance 5
+		  to approve, so she can only reject or hold one. The decision moves the application to COMPLIANCE_COMPLETED or
+		  COMPLIANCE_REJECTED. (The same actions are available through the API with Bruno, section 6.)
 
 	g2) Demonstrating an unreliable external provider (Screening Provider Simulator, localhost only):
 

@@ -42,7 +42,7 @@ There is no central coordinator. Each participating context:
 | 3 | Application moves to KYC_IN_PROGRESS | `kyc.case.created` | CO → `OnboardingApplicationStatusChanged` | Present |
 | 4 | Human KYC review of two stages (may take days) | KYC officers | KYC → stage events, then `KycCaseApproved` / `KycCaseRejected` | Present |
 | 5 | CO records the KYC outcome (KYC_COMPLETED or REJECTED) | `kyc.case.approved` / `rejected` | CO → status changed | Present |
-| 6 | Compliance case opened, external screening (asynchronous, retried), human decision | `kyc.case.approved` | Compliance → `ComplianceCaseCreated`, then `ComplianceCaseApproved` / `Rejected`; CO → COMPLIANCE_IN_PROGRESS / COMPLETED / REJECTED | Present (officer UI in 2b) |
+| 6 | Compliance case opened, external screening (asynchronous, retried), human decision | `kyc.case.approved` | Compliance → `ComplianceCaseCreated`, then `ComplianceCaseApproved` / `Rejected`; CO → COMPLIANCE_IN_PROGRESS / COMPLETED / REJECTED | Present |
 | 7 | Account application, human approval, account opened | `compliance.case.approved` | Accounts → `AccountOpened` / `AccountOpeningFailed` | Planned |
 | 8 | Onboarding completes or compensates | Accounts outcome | CO → status changed | Planned |
 | 9 | Initiator and other entitled users notified | status-change events | Notifications → SignalR | Planned |

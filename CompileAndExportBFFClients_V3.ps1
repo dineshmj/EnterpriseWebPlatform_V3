@@ -161,7 +161,11 @@ $codeRootFolder = $PSScriptRoot
 #       client-app
 #       (NestJS BFF itself is the BFF.Web folder)
 #
-# If your checked-in V3 folder names differ, update only these three variables.
+# Compliance
+#   src\Microservices\Compliance\BFF.Web
+#       client-app
+#
+# If your checked-in V3 folder names differ, update only these path variables.
 # ----------------------------------------------------------------------------------------------------------------------
 
 $shellSpaAppFolder = Join-Path $codeRootFolder "src\Shell\client-app"
@@ -176,6 +180,11 @@ $kycBffFolder =
 $kycSpaAppFolder =
     Join-Path $kycBffFolder "client-app"
 
+$complianceBffFolder =
+    Join-Path $codeRootFolder "src\Microservices\Compliance\BFF.Web"
+$complianceSpaAppFolder =
+    Join-Path $complianceBffFolder "client-app"
+
 # ----------------------------------------------------------------------------------------------------------------------
 # Validate all expected folders before changing/building anything.
 # ----------------------------------------------------------------------------------------------------------------------
@@ -185,7 +194,9 @@ $requiredFolders = @(
     $customerOnboardingBffFolder,
     $customerOnboardingSpaAppFolder,
     $kycBffFolder,
-    $kycSpaAppFolder
+    $kycSpaAppFolder,
+    $complianceBffFolder,
+    $complianceSpaAppFolder
 )
 
 foreach ($folder in $requiredFolders) {
@@ -238,6 +249,16 @@ Write-Host "====================================================================
 Build-NestJS-BFF -Directory $kycBffFolder
 
 # ----------------------------------------------------------------------------------------------------------------------
+# Step 5 - Compliance Next.js SPA (served by the ASP.NET Core Compliance BFF)
+# ----------------------------------------------------------------------------------------------------------------------
+
+Write-Host "`r`n==================================================================================================================" -ForegroundColor Yellow
+Write-Host "==  Step #5: Compliance Next.js client - PNPM install, build and export                                         ==" -ForegroundColor Yellow
+Write-Host "==================================================================================================================" -ForegroundColor Yellow
+
+Build-NextJS-Client -Directory $complianceSpaAppFolder
+
+# ----------------------------------------------------------------------------------------------------------------------
 # Done
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -249,4 +270,6 @@ Write-Host "  1. Shell Next.js client"
 Write-Host "  2. Customer Onboarding Next.js client"
 Write-Host "  3. KYC Next.js client"
 Write-Host "  4. KYC NestJS BFF"
+Write-Host "  5. Compliance Next.js client"
+Write-Host "`r`nRestart the Shell, Customer Onboarding, KYC and Compliance BFFs: their Content-Security-Policy hashes are computed at start-up." -ForegroundColor Yellow
 Write-Host "`r`n"

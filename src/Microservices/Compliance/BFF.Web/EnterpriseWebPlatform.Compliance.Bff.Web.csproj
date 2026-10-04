@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>EnterpriseWebPlatform.Compliance.Bff.Web</RootNamespace>
+    <AssemblyName>EnterpriseWebPlatform.Compliance.Bff.Web</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Duende.AccessTokenManagement.OpenIdConnect" Version="4.2.0" />
+    <PackageReference Include="Duende.BFF" Version="4.3.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.10.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.19.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Common\Landscape\EnterpriseWebPlatform.Common.Landscape.csproj" />
+    <ProjectReference Include="..\..\..\Common\WebUtilities\EnterpriseWebPlatform.Common.WebUtilties.csproj" />
+    <ProjectReference Include="..\..\..\Common\Observability\EnterpriseWebPlatform.Common.Observability.csproj" />
+  </ItemGroup>
+</Project>

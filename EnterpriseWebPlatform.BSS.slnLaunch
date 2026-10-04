@@ -61,6 +61,11 @@
         "Path": "src\\Microservices\\CustomerOnboarding\\BFF.Web\\EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.csproj",
         "Action": "Start",
         "DebugTarget": "https"
+      },
+      {
+        "Path": "src\\Microservices\\Compliance\\BFF.Web\\EnterpriseWebPlatform.Compliance.Bff.Web.csproj",
+        "Action": "Start",
+        "DebugTarget": "https"
       }
     ]
   }

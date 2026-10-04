@@ -2,7 +2,7 @@
 
 Enterprise Web Platform V3 (EWP V3) is a demonstration banking-services platform. It is built as an **architectural reference**: a working example of how enterprise concerns compose without sliding into a distributed monolith.
 
-- **Bounded contexts.** Customer Onboarding, Customer KYC, Compliance (backend) and Documents Management are implemented; Accounts and Payments are planned. Each is governed by **Domain-Driven Design**, owns its own database, and is independently deployable.
+- **Bounded contexts.** Customer Onboarding, Customer KYC, Compliance and Documents Management are implemented; Accounts and Payments are planned. Each is governed by **Domain-Driven Design**, owns its own database, and is independently deployable.
 - **Micro-frontends.** Each business context has its own MFE, hosted in iframes by a business-neutral **Shell** that provides branding, navigation and the Application Workspace.
 - **Security boundaries.** Each MFE sits behind its own **BFF**. A BFF calls its own domain API with the **user's access token**, and other contexts' APIs with **M2M tokens**, keeping human identity and service identity separate.
 - **Identity.** **Duende IdentityServer 8** provides OpenID Connect and OAuth 2.1 (Authorization Code + PKCE, Client Credentials).
@@ -24,7 +24,7 @@ Enterprise Web Platform V3 (EWP V3) is a demonstration banking-services platform
 | Customer Onboarding (MFE/BFF, API, Outbox relay, Onboarding Outcome Subscriber) | `src/Microservices/CustomerOnboarding`, `src/AsyncWorkflows/Publishers/CustomerOnboarding`, `src/AsyncWorkflows/Subscribers/CustomerOnboarding` | Next.js, ASP.NET Core 10, .NET workers | Present |
 | Customer KYC (MFE/BFF, API, KYC Case Opening Subscriber) | `src/Microservices/CustomerKyc`, `src/AsyncWorkflows/Subscribers/CustomerKyc` | Next.js, NestJS, ASP.NET Core 10, .NET worker | Present |
 | Documents Management (API) | `src/Microservices/DocumentsManagement` | ASP.NET Core 10 | Present |
-| Compliance (API, Compliance Case Opening Subscriber; MFE/BFF planned) | `src/Microservices/Compliance`, `src/AsyncWorkflows/Subscribers/Compliance` | ASP.NET Core 10, .NET worker | Present (backend) |
+| Compliance (MFE/BFF, API, Compliance Case Opening Subscriber) | `src/Microservices/Compliance`, `src/AsyncWorkflows/Subscribers/Compliance` | Next.js, ASP.NET Core 10, .NET worker | Present |
 | Screening Provider Simulator (stand-in for an external AML vendor) | `src/Simulators/ScreeningProviderSimulator` | ASP.NET Core 10 | Present |
 | Accounts, Payments | `src/Microservices/…` | — | Planned |
 | Infrastructure | PostgreSQL 18 and Kafka 4 (KRaft) installed natively; Kafka secured with [kafka/Setup-KafkaSecurity.ps1](kafka/README.md) | SCRAM-SHA-512 users, per-topic ACLs, Kafka UI (read-only) | Present |

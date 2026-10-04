@@ -230,6 +230,7 @@ var shellCsp = ContentSecurityPolicy.Build(
     [
         ContentSecurityPolicy.Origin(EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo.CustomerOnboardingMicroservice.BFF_CLIENT_BASE_URL),
         ContentSecurityPolicy.Origin(EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo.CustomerKycMicroservice.BFF_CLIENT_BASE_URL),
+        ContentSecurityPolicy.Origin(EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo.ComplianceMicroservice.BFF_CLIENT_BASE_URL),
         ContentSecurityPolicy.Origin(EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo.AccountsMicroservice.BFF_CLIENT_BASE_URL),
         ContentSecurityPolicy.Origin(EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo.PaymentsMicroservice.BFF_CLIENT_BASE_URL),
         ContentSecurityPolicy.Origin(IDP.AUTHORITY)

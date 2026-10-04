@@ -212,7 +212,7 @@ Compliance screening worker (every 5 s, one due case at a time, FOR UPDATE SKIP 
      ok      → RecordScreeningResult: risk LOW / MEDIUM / HIGH, required clearance 3 / 4 / 5 → UNDER_REVIEW
      failure → RecordScreeningFailure: stays SCREENING, retried with back-off (never a pass)
 
-Compliance officer (2a: through the API; 2b: MFE) → claim / hold / approve / reject
+Compliance officer (Compliance MFE → Compliance BFF → Compliance API) → claim / hold / approve / reject
   → aggregate: branch, assignment (ReBAC), SoD (not the initiator, not a KYC decider), clearance ≥ risk (ABAC)
   → outbox "ComplianceCaseApproved" / "Rejected" → OnboardingOutcomeSubscriber → CO: COMPLIANCE_COMPLETED / COMPLIANCE_REJECTED
 ```

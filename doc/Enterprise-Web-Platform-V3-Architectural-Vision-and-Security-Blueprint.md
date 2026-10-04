@@ -81,10 +81,10 @@ Used by every EWP V3 document:
 ┌─────────────────────────────────────────────▼──────────────────────────────────────────┐
 │ BSS Shell (Next.js SPA + ASP.NET Core BFF) — menu, workspace, logout, notification view │
 └───────┬──────────────────────────────┬─────────────────────────────┬───────────────────┘
-        │ iframe                       │ iframe                      │ iframe (planned)
+        │ iframe                       │ iframe                      │ iframe
 ┌───────▼──────────────┐      ┌────────▼─────────────┐      ┌────────▼────────────────────┐
-│ Customer Onboarding  │      │ Customer KYC         │      │ Compliance · Accounts ·     │
-│ MFE + BFF (.NET)     │      │ MFE + BFF (NestJS)   │      │ Payments (planned)          │
+│ Customer Onboarding  │      │ Customer KYC         │      │ Compliance MFE + BFF (.NET) │
+│ MFE + BFF (.NET)     │      │ MFE + BFF (NestJS)   │      │ Accounts · Payments (plan.) │
 │   │ user token       │      │   │ user token       │      └─────────────────────────────┘
 │ CO API ─ EwpCustomerDb      │ KYC API ─ EwpKycDb   │
 │   │ Outbox            │      │   │ Outbox (in-proc) │
@@ -115,7 +115,7 @@ CustomerOutboxPublisher ──► Kafka ◄── KYC Outbox relay
 |---|---|---|---|
 | Customer Onboarding | Core | Present | [CustomerOnboarding-Requirements.md](../src/Microservices/CustomerOnboarding/doc/CustomerOnboarding-Requirements.md) |
 | Customer KYC | Core | Present (first slice) | [CustomerKyc-Requirements.md](../src/Microservices/CustomerKyc/doc/CustomerKyc-Requirements.md) |
-| Compliance | Core | Present (backend; officer UI in 2b) | [Compliance-Requirements.md](../src/Microservices/Compliance/doc/Compliance-Requirements.md) |
+| Compliance | Core | Present | [Compliance-Requirements.md](../src/Microservices/Compliance/doc/Compliance-Requirements.md) |
 | Accounts | Core (simplified) | Planned | [Accounts-Requirements.md](../src/Microservices/Accounts/doc/Accounts-Requirements.md) |
 | Payments | Core | Planned | [Payments-Requirements.md](../src/Microservices/Payments/doc/Payments-Requirements.md) |
 | Documents Management | Generic / supporting | Present | [DocumentsManagement-Requirements.md](../src/Microservices/DocumentsManagement/doc/DocumentsManagement-Requirements.md) |
@@ -205,7 +205,7 @@ The domain layer has no knowledge of HTTP, EF Core, Kafka or the IDP.
 | DM API | Documents Management | ASP.NET Core 10 | `EwpDocumentsManagementDb` + object storage | Present |
 | Compliance API (+ in-process Outbox relay, screening worker) | Compliance | ASP.NET Core 10 | `EwpComplianceDb` | Present |
 | ComplianceCaseOpeningSubscriber | Compliance | .NET worker | — | Present |
-| Compliance BFF + MFE | Compliance | ASP.NET Core 10 + Next.js | — | Planned (2b) |
+| Compliance BFF + MFE | Compliance | ASP.NET Core 10 + Next.js | — | Present |
 | Screening Provider Simulator | (external system stand-in) | ASP.NET Core 10 minimal API | — | Present |
 | Accounts, Payments, Notifications | — | — | own databases | Planned |
 
@@ -460,7 +460,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [x] KYC human review
 - [x] KYC triggered per application
 - [x] CO reacts to KYC outcomes
-- [x] Compliance (backend; officer UI in 2b)
+- [x] Compliance (backend and officer UI)
 - [ ] Account opening
 - [ ] Compensation
 - [ ] Failure recovery

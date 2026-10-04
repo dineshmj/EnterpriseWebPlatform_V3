@@ -131,11 +131,11 @@ Each business capability (Customer Onboarding, Customer KYC, Compliance, Documen
 
 #### 1.1.2 Independently deployable components
 
-Every API, BFF, worker and front end is its own deployable with its own configuration and secrets. A micro-frontend and its BFF ship together: the Next.js app is exported as static files and served by its BFF, so the pair can be released and rolled back as one unit without touching the Shell or other contexts. Contexts can even use different stacks: the Customer Onboarding BFF is ASP.NET Core, the Customer KYC BFF is NestJS. Both sit behind the same Shell and the same protocol. (KYC remains the one NestJS reference; new BFFs and APIs are ASP.NET Core 10.)
+Every API, BFF, worker and front end is its own deployable with its own configuration and secrets. A micro-frontend and its BFF ship together: the Next.js app is exported as static files and served by its BFF, so the pair can be released and rolled back as one unit without touching the Shell or other contexts. Contexts can even use different stacks: the Customer Onboarding and Compliance BFFs are ASP.NET Core, the Customer KYC BFF is NestJS. All sit behind the same Shell and the same protocol. (KYC remains the one NestJS reference; new BFFs and APIs are ASP.NET Core 10.)
 
 **Where to look at:**
 
-- .NET BFF serving its exported MFE: [CustomerOnboarding/BFF.Web](../src/Microservices/CustomerOnboarding/BFF.Web)
+- .NET BFFs serving their exported MFEs: [CustomerOnboarding/BFF.Web](../src/Microservices/CustomerOnboarding/BFF.Web), [Compliance/BFF.Web](../src/Microservices/Compliance/BFF.Web/README.md)
 - NestJS BFF serving its exported MFE: [CustomerKyc/BFF.Web](../src/Microservices/CustomerKyc/BFF.Web)
 - Build and export of all front ends: [CompileAndExportBFFClients_V3.ps1](../CompileAndExportBFFClients_V3.ps1)
 - Rules and release checklist: [Blueprint §7](Enterprise-Web-Platform-V3-Architectural-Vision-and-Security-Blueprint.md#7-independent-deployability)
@@ -294,7 +294,7 @@ The Shell and the MFEs talk through an explicit `postMessage` protocol: ready, c
 
 **Where to look at:**
 
-- MFE side: [MfeShell.tsx (KYC)](../src/Microservices/CustomerKyc/BFF.Web/client-app/app/components/MfeShell.tsx), [MfeShell.tsx (CO)](../src/Microservices/CustomerOnboarding/BFF.Web/client-app/app/components/MfeShell.tsx)
+- MFE side: [MfeShell.tsx (KYC)](../src/Microservices/CustomerKyc/BFF.Web/client-app/app/components/MfeShell.tsx), [MfeShell.tsx (CO)](../src/Microservices/CustomerOnboarding/BFF.Web/client-app/app/components/MfeShell.tsx), [MfeShell.tsx (CMP)](../src/Microservices/Compliance/BFF.Web/client-app/app/components/MfeShell.tsx)
 - Shell side: [page.tsx](../src/Shell/client-app/app/page.tsx), [ApplicationWorkspace.tsx](../src/Shell/client-app/app/components/ApplicationWorkspace.tsx)
 - Protocol and selection rules: [Shell-Requirements.md §3–4](../src/Shell/doc/Shell-Requirements.md#3-application-workspace)
 
@@ -363,7 +363,9 @@ Every call from a worker to an API runs through a resilience pipeline: a 10-seco
 - Provider pipeline and anti-corruption mapping: [Compliance API Program.cs](../src/Microservices/Compliance/API/Program.cs), [ScreeningProviderClient.cs](../src/Microservices/Compliance/API/Infrastructure/Screening/ScreeningProviderClient.cs)
 - Demo: ReadMe.txt section 4, step g2
 
-**Not yet:** circuit breakers on the BFF-to-API calls.
+The Compliance BFF also puts its calls to the Compliance API behind timeouts and a circuit breaker, retrying GETs only; when the API is down, the officer sees "temporarily unavailable" at once instead of a hanging page ([Compliance BFF Program.cs](../src/Microservices/Compliance/BFF.Web/Program.cs)).
+
+**Not yet:** circuit breakers on the Customer Onboarding BFF's calls (it retries GETs only).
 
 #### 1.6.4 Concurrency control
 
@@ -598,7 +600,7 @@ An unexpected error returns a standard problem response with a `traceId` and not
 
 **Where to look at:**
 
-- [ApiExceptionHandler.cs (KYC)](../src/Microservices/CustomerKyc/API/Controllers/ApiExceptionHandler.cs), [ApiExceptionHandler.cs (CO)](../src/Microservices/CustomerOnboarding/API/API/ErrorHandling/ApiExceptionHandler.cs), [ApiExceptionHandler.cs (DM)](../src/Microservices/DocumentsManagement/API/API/ErrorHandling/ApiExceptionHandler.cs)
+- [ApiExceptionHandler.cs (KYC)](../src/Microservices/CustomerKyc/API/Controllers/ApiExceptionHandler.cs), [ApiExceptionHandler.cs (CO)](../src/Microservices/CustomerOnboarding/API/API/ErrorHandling/ApiExceptionHandler.cs), [ApiExceptionHandler.cs (DM)](../src/Microservices/DocumentsManagement/API/API/ErrorHandling/ApiExceptionHandler.cs), [ApiExceptionHandler.cs (CMP)](../src/Microservices/Compliance/API/Controllers/ApiExceptionHandler.cs)
 
 #### 2.4.2 Injection protection
 
@@ -699,7 +701,7 @@ One script checks every .NET and npm dependency of the solution against publishe
 
 **Where to look at:**
 
-- The MFEs' API helpers, which send cookies and a CSRF header but no `Authorization` header: [api.ts (KYC)](../src/Microservices/CustomerKyc/BFF.Web/client-app/app/lib/api.ts), [api.ts (CO)](../src/Microservices/CustomerOnboarding/BFF.Web/client-app/app/lib/api.ts)
+- The MFEs' API helpers, which send cookies and a CSRF header but no `Authorization` header: [api.ts (KYC)](../src/Microservices/CustomerKyc/BFF.Web/client-app/app/lib/api.ts), [api.ts (CO)](../src/Microservices/CustomerOnboarding/BFF.Web/client-app/app/lib/api.ts), [api.ts (CMP)](../src/Microservices/Compliance/BFF.Web/client-app/app/lib/api.ts)
 
 ### 3.4 The BFF as a saga coordinator or generic proxy
 
