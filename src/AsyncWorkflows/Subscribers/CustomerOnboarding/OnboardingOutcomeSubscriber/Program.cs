@@ -49,5 +49,9 @@ builder.Services
         options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(60);
     });
 
+// Health endpoints for the orchestrator's probes, served on Health:Urls:
+// live = the consume loop runs; ready = joined the consumer group (Degraded while retrying).
+builder.AddWorkerHealthEndpoints();
+
 var host = builder.Build();
 await host.RunAsync();

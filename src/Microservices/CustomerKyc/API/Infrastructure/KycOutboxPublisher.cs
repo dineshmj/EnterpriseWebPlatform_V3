@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 
 using Confluent.Kafka;
 
+using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 using EnterpriseWebPlatform.Common.Observability;
 
 namespace EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure;
@@ -14,14 +15,17 @@ public sealed class KycKafkaProducer : IDisposable
 {
     public KycKafkaProducer(IConfiguration config)
     {
-        Producer = new ProducerBuilder<string, string>(new ProducerConfig
+        // Authenticates as the KYC API's own Kafka user: ACLs allow it to write kyc.* only.
+        var kafka = config.GetSection(KafkaOptions.SectionName).Get<KafkaOptions>()
+            ?? throw new InvalidOperationException("The Kafka configuration section is missing.");
+
+        Producer = new ProducerBuilder<string, string>(KafkaClientSecurity.Apply(new ProducerConfig
         {
-            BootstrapServers = config["Kafka:BootstrapServers"] ?? "localhost:9092",
             Acks = Acks.All,
             EnableIdempotence = true,
             MaxInFlight = 5,
             MessageTimeoutMs = 30_000
-        }).Build();
+        }, kafka)).Build();
     }
 
     public IProducer<string, string> Producer { get; }
@@ -48,6 +52,21 @@ public sealed class KycOutboxPublisher(
 {
     private const int BatchSize = 50;
     private const int MaxCyclesPerPoll = 10;
+
+    /// <summary>Unpublished rows, for the readiness check (parked = given up after MaxAttempts).</summary>
+    public static async Task<OutboxBacklog> GetBacklogAsync(KycDbContext db, IConfiguration config, CancellationToken ct)
+    {
+        var maxAttempts = config.GetValue("KycOutbox:MaxAttempts", 10);
+        var rows = await db.Database.SqlQuery<OutboxBacklog>($"""
+                SELECT
+                    count(*) FILTER (WHERE attempt_count >= {maxAttempts}) AS "Parked",
+                    count(*) FILTER (WHERE attempt_count < {maxAttempts}) AS "Pending",
+                    EXTRACT(EPOCH FROM now() - min(occurred_at) FILTER (WHERE attempt_count < {maxAttempts}))::float8 AS "OldestPendingSeconds"
+                FROM outbox_messages
+                WHERE published_at IS NULL
+                """).ToListAsync(ct);
+        return rows.Single();
+    }
 
     public async Task PublishPendingAsync(CancellationToken ct)
     {
@@ -175,12 +194,18 @@ public sealed class KycOutboxPublisher(
     }
 }
 
-public sealed class KycOutboxPublisherHostedService(IServiceScopeFactory scopeFactory, ILogger<KycOutboxPublisherHostedService> logger) : BackgroundService
+public sealed class KycOutboxPublisherHostedService(
+    IServiceScopeFactory scopeFactory,
+    [FromKeyedServices(KycOutboxPublisherHostedService.HeartbeatKey)] LoopHeartbeat heartbeat,
+    ILogger<KycOutboxPublisherHostedService> logger) : BackgroundService
 {
+    public const string HeartbeatKey = "kyc-outbox-relay";
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
         {
+            heartbeat.Beat();
             try
             {
                 using var scope = scopeFactory.CreateScope();

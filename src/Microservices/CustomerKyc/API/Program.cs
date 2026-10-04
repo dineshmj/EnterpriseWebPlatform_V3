@@ -1,3 +1,5 @@
+using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using EnterpriseWebPlatform.Common.Observability;
 using OpenTelemetry.Trace;
 using Npgsql;
@@ -95,12 +97,37 @@ builder.Services.AddScoped<IKycCaseQueries, KycCaseQueries>();
 builder.Services.AddScoped<OpenKycCaseCommandHandler>();
 builder.Services.AddScoped<DecideVerificationStageCommandHandler>();
 builder.Services.AddScoped<AssignKycCaseCommandHandler>();
+// The in-process Outbox relay's Kafka settings, validated at start-up (no credentials, no start).
+builder.Services.AddKafkaOptions(builder.Configuration);
 builder.Services.AddSingleton<KycKafkaProducer>();
 builder.Services.AddScoped<KycOutboxPublisher>();
+builder.Services.AddKeyedSingleton<LoopHeartbeat>(KycOutboxPublisherHostedService.HeartbeatKey);
 builder.Services.AddHostedService<KycOutboxPublisherHostedService>();
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<EnterpriseWebPlatform.CustomerKyc.Api.Controllers.ApiExceptionHandler>();
+
+// Health endpoints for the orchestrator's probes: /health/live (process working)
+// and /health/ready (dependencies reachable). Anonymous; no internals in the body.
+builder.Services.AddHealthChecks()
+    .AddCheck("self", () => HealthCheckResult.Healthy(), tags: [HealthEndpoints.LiveTag])
+    .AddDbContextCheck<KycDbContext>("database", tags: [HealthEndpoints.ReadyTag])
+    // The in-process Outbox relay: stuck loop -> not live; parked / old rows -> Degraded.
+    .Add(new HealthCheckRegistration(
+        "outbox-relay",
+        sp => new LoopHeartbeatHealthCheck(
+            sp.GetRequiredKeyedService<LoopHeartbeat>(KycOutboxPublisherHostedService.HeartbeatKey),
+            "KYC Outbox relay",
+            TimeSpan.FromMinutes(3)),
+        failureStatus: HealthStatus.Unhealthy,
+        tags: [HealthEndpoints.LiveTag]))
+    .Add(new HealthCheckRegistration(
+        "outbox-backlog",
+        sp => new OutboxBacklogHealthCheck(
+            ct => KycOutboxPublisher.GetBacklogAsync(sp.GetRequiredService<KycDbContext>(), sp.GetRequiredService<IConfiguration>(), ct),
+            TimeSpan.FromMinutes(2)),
+        failureStatus: HealthStatus.Degraded,
+        tags: [HealthEndpoints.ReadyTag]));
 
 var app = builder.Build();
 
@@ -113,6 +140,8 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+
+app.MapEwpHealthEndpoints();
 
 await app.RunAsync();
 

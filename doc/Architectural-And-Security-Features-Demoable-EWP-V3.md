@@ -31,6 +31,8 @@ The document answers *how the platform is built and protected*, not *which busin
 | What stops a malicious file upload? | [2.4.4](#244-file-upload-security) |
 | What does an attacker learn from an error response? | [2.4.1](#241-error-responses-that-leak-nothing) |
 | If one service is compromised, what can it reach in the database? | [2.4.3](#243-least-privilege-database-users) |
+| Is Kafka secured? Could someone publish a fake event? | [2.4.6](#246-kafka-authentication-and-per-topic-acls) |
+| How does Kubernetes know a pod is healthy, or ready for traffic? | [1.7.2](#172-health-endpoints-for-liveness-and-readiness) |
 | How are vulnerable dependencies caught? | [2.5.1](#251-dependency-vulnerability-scanning) |
 
 ---
@@ -69,6 +71,7 @@ The document answers *how the platform is built and protected*, not *which busin
     - [1.6.5 Fail-closed configuration](#165-fail-closed-configuration)
   - [1.7 Observability](#17-observability)
     - [1.7.1 Distributed tracing across HTTP and Kafka](#171-distributed-tracing-across-http-and-kafka)
+    - [1.7.2 Health endpoints for liveness and readiness](#172-health-endpoints-for-liveness-and-readiness)
 - [2. Security features](#2-security-features)
   - [2.1 Identity](#21-identity)
     - [2.1.1 OIDC Authorization Code + PKCE through a BFF](#211-oidc-authorization-code--pkce-through-a-bff)
@@ -94,6 +97,7 @@ The document answers *how the platform is built and protected*, not *which busin
     - [2.4.3 Least-privilege database users](#243-least-privilege-database-users)
     - [2.4.4 File upload security](#244-file-upload-security)
     - [2.4.5 Secrets per deployable](#245-secrets-per-deployable)
+    - [2.4.6 Kafka authentication and per-topic ACLs](#246-kafka-authentication-and-per-topic-acls)
   - [2.5 Supply chain](#25-supply-chain)
     - [2.5.1 Dependency vulnerability scanning](#251-dependency-vulnerability-scanning)
 - [3. Anti-patterns avoided](#3-anti-patterns-avoided)
@@ -324,7 +328,9 @@ No step relies on in-memory state surviving a restart: workflow state lives in t
 - Commit after processing, clean group exit: [KafkaSubscriberHostedService.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/KafkaSubscriberHostedService.cs)
 - Flush on shutdown: [KafkaProducer.cs](../src/AsyncWorkflows/Infrastructure/Kafka/KafkaProducer.cs)
 
-**Not yet:** liveness and readiness endpoints for the orchestrator's probes. The BFFs keep server-side sessions in memory, so scaling a BFF beyond one instance needs a shared session store or sticky sessions.
+Every component also exposes liveness and readiness endpoints for the orchestrator's probes ([1.7.2](#172-health-endpoints-for-liveness-and-readiness)), so a stuck instance is restarted and a starting one receives no work until it is ready.
+
+**Not yet:** the BFFs keep server-side sessions in memory, so scaling a BFF beyond one instance needs a shared session store or sticky sessions.
 
 #### 1.6.2 Dead-letter handling
 
@@ -333,8 +339,10 @@ Two kinds of failure are told apart. **Transient** failures (a dependency is dow
 **Where to look at:**
 
 - Dead-letter step: `DeadLetterAsync` in [KafkaSubscriberHostedService.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/KafkaSubscriberHostedService.cs)
-- Topics `customer-kyc.case-opening-subscriber.dlq` and `customer-onboarding.kyc-subscriber.dlq`: [KafkaTopicNames.cs](../src/AsyncWorkflows/Infrastructure/Kafka/KafkaTopicNames.cs), [Integration-Event-Catalogue.md §4.3](Integration-Event-Catalogue.md#43-dead-letter-topics)
+- Topics `customer-kyc.case-opening-subscriber.dlq` and `customer-onboarding.outcome-subscriber.dlq`: [KafkaTopicNames.cs](../src/AsyncWorkflows/Infrastructure/Kafka/KafkaTopicNames.cs), [Integration-Event-Catalogue.md §4.3](Integration-Event-Catalogue.md#43-dead-letter-topics)
 - Parked Outbox rows: `MaxAttempts` in [CustomerOutboxPublisherOptions.cs](../src/AsyncWorkflows/Publishers/CustomerOnboarding/CustomerOutboxPublisher/Configuration/CustomerOutboxPublisherOptions.cs)
+
+Parked Outbox rows are not silent either: the relay's readiness check turns *Degraded* while any row is parked or has waited more than two minutes ([1.7.2](#172-health-endpoints-for-liveness-and-readiness)).
 
 **Not yet:** a replay tool for dead-lettered messages, and alerting on dead-letter topic growth.
 
@@ -380,9 +388,20 @@ Every .NET component uses OpenTelemetry with W3C trace context. A trace normally
 - Trace stored with the event: `trace_parent` in [EwpCustomerDb.sql](../src/Microservices/CustomerOnboarding/API/CustomerDB/EwpCustomerDb.sql) and [EwpKycDb.sql](../src/Microservices/CustomerKyc/API/KycDb/EwpKycDb.sql)
 - Publish span and headers: [CustomerOutboxPublisher.cs](../src/AsyncWorkflows/Publishers/CustomerOnboarding/CustomerOutboxPublisher/Publishing/CustomerOutboxPublisher.cs), [KycOutboxPublisher.cs](../src/Microservices/CustomerKyc/API/Infrastructure/KycOutboxPublisher.cs)
 - Process span: [KafkaSubscriberHostedService.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/KafkaSubscriberHostedService.cs)
-- How to view traces locally (Jaeger): [ReadMe.txt §4e](../ReadMe.txt)
+- How to view traces locally (Jaeger): [ReadMe.txt §4f](../ReadMe.txt)
 
-**Not yet:** the KYC BFF (NestJS) is not instrumented, so a KYC officer's decision starts a new trace at the KYC API. Metrics and health endpoints are still to come.
+**Not yet:** the KYC BFF (NestJS) is not instrumented, so a KYC officer's decision starts a new trace at the KYC API. Metrics are still to come.
+
+#### 1.7.2 Health endpoints for liveness and readiness
+
+Every component answers the two questions an orchestrator such as AKS or EKS asks. `/health/live` asks whether the process is working; if not, restart it. `/health/ready` asks whether it can do its job now; if not, send it no traffic yet. The two are deliberately different. A database outage makes an API *not ready* but still *live*, because restarting it would not help. A relay or consume loop that stops cycling fails *liveness*, so it is restarted. Workers have no web server of their own, so they serve the same endpoints from a minimal built-in listener. A third state, *Degraded*, reports "working, but look": a relay with parked or overdue Outbox messages, or a subscriber retrying a message while its downstream API is down. Responses list each check's status and nothing internal.
+
+**Where to look at:**
+
+- Shared endpoints and worker listener: [HealthEndpoints.cs](../src/Common/Observability/HealthEndpoints.cs)
+- Loop heartbeat and Outbox backlog checks: [LoopHeartbeat.cs](../src/Common/Observability/LoopHeartbeat.cs), [OutboxBacklogHealthCheck.cs](../src/Common/Observability/OutboxBacklogHealthCheck.cs)
+- Subscriber liveness and readiness: [SubscriberHealth.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/SubscriberHealth.cs)
+- Wiring: the `AddHealthChecks` calls in each `Program.cs`, e.g. [CustomerKyc API Program.cs](../src/Microservices/CustomerKyc/API/Program.cs); endpoint list: [ReadMe.txt §4e](../ReadMe.txt)
 
 ---
 
@@ -605,6 +624,18 @@ Each deployable receives only its own secrets, from its own configuration, and r
 - IDP client secrets from configuration: [ClientSecretStore.cs](../src/IDP/Security/ClientSecretStore.cs)
 
 **Not yet:** an actual secret store (e.g. Azure Key Vault / AWS Secrets Manager) and key rotation.
+
+#### 2.4.6 Kafka authentication and per-topic ACLs
+
+The message broker is secured like any other service. Each component connects to Kafka as its **own** user (SCRAM-SHA-512), and the broker denies everything that an ACL does not explicitly allow. A relay may write only its own context's topics. A subscriber may read only its topics, use only its consumer group, and write only its own dead-letter topic. Kafka UI gets a read-only user. Topic auto-creation is off, so a mistyped topic name fails instead of silently creating a topic. This closes a real gap: separation of duties trusts the initiator carried in `onboarding.application.submitted`, and only the Customer Onboarding relay can now publish to that topic.
+
+**Where to look at:**
+
+- Users, ACLs and broker settings: [Setup-KafkaSecurity.ps1](../kafka/Setup-KafkaSecurity.ps1), [kafka/README.md](../kafka/README.md)
+- Client side, failing closed without credentials: [KafkaClientSecurity.cs](../src/AsyncWorkflows/Infrastructure/Kafka/KafkaClientSecurity.cs)
+- Per-component Kafka user: `Kafka:SaslUsername` in each component's `appsettings.json`
+
+**Not yet:** TLS on the broker (`SASL_SSL`). Local development uses `SASL_PLAINTEXT` on localhost.
 
 ### 2.5 Supply chain
 

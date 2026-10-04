@@ -135,7 +135,7 @@ OnboardingOutcomeSubscriber (console worker, CO's adapter)
         → load by ApplicationRef; ApplicationNumber must match (else 409 → dead-letter topic)
         → Domain: RecordKycCaseOpened(now): SUBMITTED → KYC_IN_PROGRESS (tolerant of order/repeats)
         → one transaction: inbox row + application + outbox "StatusChanged"
-  transient failure → retry in place (Seek); permanent → customer-onboarding.kyc-subscriber.dlq
+  transient failure → retry in place (Seek); permanent → customer-onboarding.outcome-subscriber.dlq
 ```
 
 ---

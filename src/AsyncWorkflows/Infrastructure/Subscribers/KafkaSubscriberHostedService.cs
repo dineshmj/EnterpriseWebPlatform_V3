@@ -32,6 +32,7 @@ public sealed class KafkaSubscriberHostedService<TProcessor, TSettings>(
     IKafkaProducer producer,
     IOptions<KafkaOptions> kafkaOptions,
     IOptions<TSettings> settings,
+    SubscriberHealth health,
     ILogger<KafkaSubscriberHostedService<TProcessor, TSettings>> logger)
     : BackgroundService
     where TProcessor : IMessageProcessor
@@ -45,18 +46,27 @@ public sealed class KafkaSubscriberHostedService<TProcessor, TSettings>(
 
     private async Task ConsumeLoopAsync(CancellationToken stoppingToken)
     {
-        var config = new ConsumerConfig
+        // Authenticates as this worker's own Kafka user (ACLs: its topics and group only).
+        var config = KafkaClientSecurity.Apply(new ConsumerConfig
         {
-            BootstrapServers = kafkaOptions.Value.BootstrapServers,
             GroupId = _settings.GroupId,
             AutoOffsetReset = AutoOffsetReset.Earliest,
             EnableAutoCommit = false,
             EnablePartitionEof = false
-        };
+        }, kafkaOptions.Value);
 
         using var consumer = new ConsumerBuilder<string, string>(config)
             .SetPartitionsAssignedHandler((_, partitions) =>
-                logger.LogInformation("Partitions assigned: {Partitions}", string.Join(", ", partitions)))
+            {
+                health.PartitionsAssigned(partitions.Count);
+                logger.LogInformation("Partitions assigned: {Partitions}", string.Join(", ", partitions));
+            })
+            .SetErrorHandler((_, error) =>
+            {
+                // e.g. authentication or authorization failures; the client keeps retrying.
+                health.KafkaError(error.Reason);
+                logger.LogWarning("Kafka client error: {Code} {Reason}", error.Code, error.Reason);
+            })
             .SetPartitionsRevokedHandler((_, partitions) =>
                 logger.LogInformation("Partitions revoked: {Partitions}", string.Join(", ", partitions)))
             .Build();
@@ -68,6 +78,7 @@ public sealed class KafkaSubscriberHostedService<TProcessor, TSettings>(
             string.Join(", ", _settings.Topics),
             _settings.GroupId,
             _settings.DeadLetterTopic);
+        health.Started(_settings.GroupId);
 
         var transientAttempts = 0;
         TopicPartitionOffset? retrying = null;
@@ -79,7 +90,10 @@ public sealed class KafkaSubscriberHostedService<TProcessor, TSettings>(
                 ConsumeResult<string, string>? result;
                 try
                 {
-                    result = consumer.Consume(stoppingToken);
+                    // Poll with a short timeout (instead of blocking until a message
+                    // arrives) so the liveness heartbeat also ticks on a quiet topic.
+                    health.Heartbeat();
+                    result = consumer.Consume(TimeSpan.FromSeconds(1));
                 }
                 catch (ConsumeException ex) when (!ex.Error.IsFatal)
                 {
@@ -113,6 +127,7 @@ public sealed class KafkaSubscriberHostedService<TProcessor, TSettings>(
 
                     consumer.Commit(result);
                     retrying = null;
+                    health.Processed(outcome.DeadLetter);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
@@ -122,6 +137,7 @@ public sealed class KafkaSubscriberHostedService<TProcessor, TSettings>(
                     // message. Rewind to it and try again after a back-off.
                     transientAttempts++;
                     retrying = result.TopicPartitionOffset;
+                    health.Retrying(result.TopicPartitionOffset.ToString(), transientAttempts, ex.Message);
 
                     var delay = TimeSpan.FromSeconds(Math.Min(
                         _settings.TransientRetryMaxDelaySeconds,

@@ -86,7 +86,7 @@ What the platform is, how it is designed and what each component must do are doc
 
 3) First-Time Setup:
 
-	a) Install: .NET 10 SDK, Node.js 18+, pnpm, Docker Desktop.
+	a) Install: .NET 10 SDK, Node.js 18+, pnpm, PostgreSQL 18, a Java runtime (21+) and Apache Kafka 4.x (KRaft) at C:\Kafka.
 
 	b) Configure the hosts file (section 1).
 
@@ -95,12 +95,20 @@ What the platform is, how it is designed and what each component must do are doc
 			dotnet dev-certs https --check
 			dotnet dev-certs https --trust
 
-	d) Start PostgreSQL, Kafka and Kafka UI:
+	d) Start PostgreSQL and Kafka:
 
-			docker compose up -d
+			PostgreSQL listens on localhost:5432 (user "postgres", password "admin").
+			Kafka: C:\Kafka\StartKafka.bat (single KRaft node; clients on localhost:9092).
 
-		PostgreSQL listens on localhost:5432 (user "postgres", password "admin").
-		Kafka listens on localhost:9092.
+		Secure Kafka once (SCRAM users, per-component ACLs, explicit topics) - see kafka\README.md:
+
+			.\kafka\Setup-KafkaSecurity.ps1 -Phase Prepare     (Kafka running)
+			... stop Kafka ...
+			.\kafka\Setup-KafkaSecurity.ps1 -Phase Secure      (Kafka stopped)
+			... start Kafka ...
+			.\kafka\Setup-KafkaSecurity.ps1 -Phase Acls        (Kafka running)
+
+		Optional: Kafka UI (read-only browser) - installation steps in kafka\README.md section 2.
 
 		IMPORTANT:
 			These are development-only credentials. Real environments must use a secret store.
@@ -163,28 +171,13 @@ What the platform is, how it is designed and what each component must do are doc
 
 			.\Scan-Dependencies.ps1            # or -FailOn critical
 
-	f) Create the Kafka topics.
+	f) Kafka topics.
 
-		docker-compose.yml disables automatic topic creation, so every topic must be created explicitly (PowerShell):
+		Topic auto-creation is disabled, so every topic is created explicitly: Setup-KafkaSecurity.ps1 -Phase Prepare creates
+		all of them (event topics and the two dead-letter topics). To create topics later, as the admin user:
 
-			$topics = @(
-				"customer.created",
-				"onboarding.application.submitted",
-				"onboarding.application.status.changed",
-				"kyc.case.created",
-				"kyc.case.approved",
-				"kyc.case.rejected",
-				"kyc.identity.verification.approved",
-				"kyc.identity.verification.rejected",
-				"kyc.document.verification.approved",
-				"kyc.document.verification.rejected",
-				"customer-onboarding.kyc-subscriber.dlq",
-				"customer-kyc.case-opening-subscriber.dlq"
-			)
-
-			foreach ($t in $topics) {
-				docker exec ewp-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --if-not-exists --topic $t --partitions 1 --replication-factor 1
-			}
+			C:\Kafka\bin\windows\kafka-topics.bat --bootstrap-server localhost:9092 --command-config C:\Kafka\config\admin.properties ^
+			    --create --if-not-exists --topic <name> --partitions 1 --replication-factor 1
 
 		The authoritative topic list is doc\Integration-Event-Catalogue.md.
 
@@ -192,7 +185,8 @@ What the platform is, how it is designed and what each component must do are doc
 			Database IDs restart at 1 when a database is recreated, but Kafka keeps the old messages, and consumer groups would replay
 			them against the new data (e.g. an old "application 1" event applied to a new application 1). Whenever you recreate the
 			Customer Onboarding or KYC database, delete and recreate the topics above (Kafka UI, or kafka-topics.sh --delete followed by the
-			creation loop above). Deleting a topic also discards the consumer groups' offsets for it.
+			creation above, or simply re-run Setup-KafkaSecurity.ps1 -Phase Prepare). Deleting a topic also discards the consumer
+		groups' offsets for it.
 
 	g) Build and export the front ends:
 
@@ -239,7 +233,18 @@ What the platform is, how it is designed and what each component must do are doc
 		- Back as sophie.cs, the application's status has moved SUBMITTED -> KYC_IN_PROGRESS (when the KYC case opened) -> KYC_COMPLETED
 		  (when KYC approved), recorded by OnboardingOutcomeSubscriber. EwpCustomerDb.inbox_messages holds one row per KYC event processed.
 
-	e) Optional - view distributed traces (OpenTelemetry):
+	e) Health endpoints (as used by Kubernetes liveness / readiness probes):
+
+			APIs, BFFs, IDP:              https://<host>/health/live   and   https://<host>/health/ready
+			CustomerOutboxPublisher:      http://localhost:5101/health/live | /health/ready
+			KycCaseOpeningSubscriber:     http://localhost:5102/health/live | /health/ready
+			OnboardingOutcomeSubscriber:  http://localhost:5103/health/live | /health/ready
+
+		live  = the process (and its background loop) is working; 503 means "restart it".
+		ready = its dependencies are reachable (database; for a subscriber, its Kafka consumer group). "Degraded" (still 200)
+		        means "working, but look": an Outbox relay with parked or old messages, or a subscriber retrying a message.
+
+	f) Optional - view distributed traces (OpenTelemetry):
 
 		Every .NET component creates W3C trace context and carries it across HTTP calls, the Outbox and Kafka ("traceparent" header),
 		so one onboarding is one trace: CO BFF -> CO API -> relay -> KycCaseOpeningSubscriber -> KYC API -> ... -> CO API.
@@ -293,7 +298,17 @@ What the platform is, how it is designed and what each component must do are doc
 		- Documents uploaded before branch scoping existed have no branch and are inaccessible; re-submit the onboarding.
 		- Sign out and in again after IDP changes, so the "organization" claims are issued.
 
-	h) Visual Studio uses a stale launch profile: close VS, delete the solution's ".vs" folder, reopen, and check the start-up profile.
+	h) A component logs "Kafka client error ... SASL authentication failed" or "Topic authorization failed", or its /health/ready
+	   says it is not connected to its consumer group:
+		- Run kafka\Setup-KafkaSecurity.ps1 (all three phases) - the users or ACLs are missing.
+		- Check that the component's appsettings.Development.json has Kafka:SaslPassword (it refuses to start without it
+		  when Kafka:SecurityProtocol is SaslPlaintext).
+		- A component that stops at start-up with "Kafka:SaslPassword is not configured" was started without
+		  DOTNET_ENVIRONMENT=Development, so appsettings.Development.json was not loaded: start it with its launch profile.
+
+	i) A Kafka CLI tool hangs or reports "Disconnected" after securing Kafka: add --command-config C:\Kafka\config\admin.properties.
+
+	j) Visual Studio uses a stale launch profile: close VS, delete the solution's ".vs" folder, reopen, and check the start-up profile.
 
 
 6) Bruno API Testing:

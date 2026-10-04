@@ -58,6 +58,7 @@ Business requirements of one component: boundary, persona rules within it, permi
 | Compliance | [Compliance-Requirements.md](src/Microservices/Compliance/doc/Compliance-Requirements.md) |
 | Accounts | [Accounts-Requirements.md](src/Microservices/Accounts/doc/Accounts-Requirements.md) |
 | Payments | [Payments-Requirements.md](src/Microservices/Payments/doc/Payments-Requirements.md) |
+| Local Kafka (security set-up, users and ACLs, Kafka UI) | [kafka/README.md](kafka/README.md) |
 | Identity Provider (clients, scopes, claims, **demo users**) | [IDP-Requirements.md](src/IDP/doc/IDP-Requirements.md) |
 | Shell (menu, workspace, MFE protocol, logout, notifications) | [Shell-Requirements.md](src/Shell/doc/Shell-Requirements.md) |
 

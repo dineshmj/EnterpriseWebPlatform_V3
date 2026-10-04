@@ -6,7 +6,7 @@ Kafka subscriber **owned by the Customer KYC bounded context**: it is deployed a
 
 ```text
 onboarding.application.submitted
-        │  (consumer group: customer-kyc-subscriber)
+        │  (consumer group: customer-kyc.case-opening-subscriber; Kafka user: ewp-kyc-case-opening-subscriber)
         ▼
 validate envelope ── invalid ──► customer-kyc.case-opening-subscriber.dlq  (+ headers), commit
         │
@@ -57,4 +57,8 @@ Part of the solution's multi-project launch profile. To run it alone:
 dotnet run --project .\KycCaseOpeningSubscriber.csproj --launch-profile KycCaseOpeningSubscriber
 ```
 
-The topic `customer-kyc.case-opening-subscriber.dlq` must exist (ReadMe.txt §3f).
+The topic `customer-kyc.case-opening-subscriber.dlq` must exist, and the worker's Kafka user needs its ACLs: both are set up by [Setup-KafkaSecurity.ps1](../../../../../kafka/README.md).
+
+## Health
+
+`http://localhost:5102/health/live` (the consume loop runs) and `/health/ready` (joined the consumer group; *Degraded* while a message is retried in place).

@@ -1,0 +1,35 @@
+# Kafka UI (kafbat/kafka-ui) for the local EWP V3 broker - DEVELOPMENT ONLY.
+# Run (see kafka/README.md):
+#   java --add-opens java.rmi/javax.rmi.ssl=ALL-UNNAMED -Dspring.config.additional-location=kafka-ui.yml -jar <kafka-ui jar>
+#
+# Hardened on purpose:
+#  - listens on 127.0.0.1 only, behind a login form;
+#  - connects as the read-only Kafka user "ewp-kafka-ui" (ACLs: Read/Describe only);
+#  - readOnly cluster and no dynamic configuration, so the UI cannot change Kafka.
+
+server:
+  address: 127.0.0.1
+  port: 8085
+
+auth:
+  type: LOGIN_FORM
+
+spring:
+  security:
+    user:
+      name: ewp
+      password: ewp-kafka-ui-login-dev
+
+dynamic:
+  config:
+    enabled: false
+
+kafka:
+  clusters:
+    - name: ewp-local
+      bootstrapServers: localhost:9092
+      readOnly: true
+      properties:
+        security.protocol: SASL_PLAINTEXT
+        sasl.mechanism: SCRAM-SHA-512
+        sasl.jaas.config: org.apache.kafka.common.security.scram.ScramLoginModule required username="ewp-kafka-ui" password="ewp-kafka-ui-dev";

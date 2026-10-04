@@ -18,7 +18,7 @@ public sealed class OnboardingOutcomeSubscriberOptions : ISubscriberSettings, IM
         KafkaTopicNames.KycCaseRejected
     ];
 
-    public string GroupId { get; init; } = "customer-onboarding-kyc-subscriber";
+    public string GroupId { get; init; } = "customer-onboarding.outcome-subscriber";
 
     public string DeadLetterTopic { get; init; } = KafkaTopicNames.OnboardingOutcomeSubscriberDeadLetter;
 

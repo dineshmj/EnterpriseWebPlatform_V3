@@ -21,10 +21,18 @@ public static class SubscriberServiceCollectionExtensions
         where TProcessor : class, IMessageProcessor
         where TSettings : class, ISubscriberSettings
     {
-        services.Configure<KafkaOptions>(configuration.GetSection(KafkaOptions.SectionName));
+        services.AddKafkaOptions(configuration);   // validated at start-up: no credentials, no start
         services.AddSingleton<IKafkaProducer, KafkaProducer>();
         services.AddSingleton<TProcessor>();
+        services.AddSingleton<SubscriberHealth>();
         services.AddHostedService<KafkaSubscriberHostedService<TProcessor, TSettings>>();
+
+        // Liveness: the consume loop is running. Readiness: it has joined its consumer
+        // group (Degraded while a message is retried in place). Served over HTTP by
+        // AddWorkerHealthEndpoints (Common.Observability).
+        services.AddHealthChecks()
+            .AddCheck<SubscriberLivenessCheck>("consume-loop", tags: ["live"])
+            .AddCheck<SubscriberReadinessCheck>("consumer-group", tags: ["ready"]);
 
         return services
             .AddOptions<TSettings>()

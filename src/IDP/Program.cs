@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using EnterpriseWebPlatform.Common.Observability;
 using OpenTelemetry.Trace;
 using Npgsql;
@@ -91,6 +92,12 @@ try
         .AddProfileService<CustomProfileService>()
         .AddSigningCredential(builder);
 
+    // Health endpoints for the orchestrator's probes: /health/live (process working)
+    // and /health/ready (dependencies reachable). Anonymous; no internals in the body.
+    builder.Services.AddHealthChecks()
+        .AddCheck("self", () => HealthCheckResult.Healthy(), tags: [HealthEndpoints.LiveTag])
+        .AddDbContextCheck<IdentityDbContext>("database", tags: [HealthEndpoints.ReadyTag]);
+
     var app = builder.Build();
 
     // Application logging and exception handling.
@@ -121,6 +128,8 @@ try
     // Endpoints.
     app.MapControllers();
     app.MapRazorPages();
+
+    app.MapEwpHealthEndpoints();
 
     app.Run();
 }

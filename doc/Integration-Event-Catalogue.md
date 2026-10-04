@@ -29,7 +29,8 @@ Status values (Present, In Progress, Planned, Target) are defined in the [Bluepr
 | Delivery | At-least-once. Every consumer must be idempotent on `MessageId`. |
 | Producer path | Business transaction → Outbox row (same DB transaction) → relay → Kafka. Producers never publish directly from a request. |
 | Payload content | Enough for the consumer's job without calling back. **No document binaries and no unnecessary PII**: send references (IDs, numbers), not data the consumer does not need. |
-| Topic creation | Explicit. Kafka auto-creation is disabled; see ReadMe.txt §3 for the creation commands. |
+| Topic creation | Explicit. Kafka auto-creation is disabled; `kafka/Setup-KafkaSecurity.ps1 -Phase Prepare` creates every topic. |
+| Access | Each producer and consumer authenticates as its own Kafka user (SCRAM-SHA-512) and may only write or read the topics (and consumer group) listed for it here; see [kafka/README.md](../kafka/README.md). |
 | Evolution | Additive changes only within a version. A breaking change needs a new event version, and consumers must tolerate unknown fields. |
 
 ---
@@ -116,7 +117,7 @@ Every KYC payload (under `Payload`) carries `KycCaseId`, `ApplicationRef`, `Appl
 | Topic | Owner | Contents |
 |---|---|---|
 | `customer-kyc.case-opening-subscriber.dlq` | `KycCaseOpeningSubscriber` | `onboarding.application.submitted` messages that can never open a case (malformed, wrong type, required fields missing, rejected with 4xx), with the same `dlq-*` headers. Transient failures are never dead-lettered. |
-| `customer-onboarding.kyc-subscriber.dlq` | `OnboardingOutcomeSubscriber` | Messages that can never be processed (malformed, unknown type, no application, rejected with 4xx), copied unchanged with headers `dlq-reason`, `dlq-original-topic`, `dlq-original-partition`, `dlq-original-offset`, `dlq-consumer-group`, `dlq-failed-at`. Transient failures are never dead-lettered. |
+| `customer-onboarding.outcome-subscriber.dlq` | `OnboardingOutcomeSubscriber` | Messages that can never be processed (malformed, unknown type, no application, rejected with 4xx), copied unchanged with headers `dlq-reason`, `dlq-original-topic`, `dlq-original-partition`, `dlq-original-offset`, `dlq-consumer-group`, `dlq-failed-at`. Transient failures are never dead-lettered. |
 
 ### 4.4 Planned events
 

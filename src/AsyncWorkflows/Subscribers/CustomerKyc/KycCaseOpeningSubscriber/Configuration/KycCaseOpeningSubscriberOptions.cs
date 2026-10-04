@@ -13,11 +13,8 @@ public sealed class KycCaseOpeningSubscriberOptions : ISubscriberSettings, IM2MC
     /// <summary>Fixed in code: the topic is part of this worker's contract, not configuration.</summary>
     public IReadOnlyList<string> Topics { get; } = [KafkaTopicNames.OnboardingApplicationSubmitted];
 
-    /// <summary>
-    /// Kept from before the rename, so committed offsets stay valid; revisited with
-    /// the per-topic Kafka ACLs.
-    /// </summary>
-    public string GroupId { get; init; } = "customer-kyc-subscriber";
+    /// <summary>The Kafka ACLs grant this worker's user READ on this group only.</summary>
+    public string GroupId { get; init; } = "customer-kyc.case-opening-subscriber";
 
     public string DeadLetterTopic { get; init; } = KafkaTopicNames.KycCaseOpeningSubscriberDeadLetter;
 

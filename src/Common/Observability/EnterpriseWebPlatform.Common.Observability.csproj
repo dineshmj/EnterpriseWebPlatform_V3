@@ -8,6 +8,12 @@
     <AssemblyName>EnterpriseWebPlatform.Common.Observability</AssemblyName>
   </PropertyGroup>
 
+  <!-- ASP.NET Core for the health endpoints: mapped on web hosts, and served by a
+       minimal Kestrel listener inside workers. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.12" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.19.1" />

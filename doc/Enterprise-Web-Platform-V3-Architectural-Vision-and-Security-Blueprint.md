@@ -412,7 +412,8 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Least-privilege database users | Present: one user per service, own database only, no DDL (`db/EwpServiceDbUsers.sql`) |
 | Dependency vulnerability scanning | Present: `Scan-Dependencies.ps1` (NuGet + pnpm); not yet wired into a CI pipeline |
 | Rate limiting | Partial (IDP login only) |
-| Health checks | Planned |
+| Health checks | Present: `/health/live` and `/health/ready` on every .NET component (workers via a built-in listener); relay heartbeat and Outbox backlog (Degraded) checks |
+| Kafka authentication and authorization | Present: SCRAM-SHA-512 user per deployable, deny-by-default ACLs (own topics and consumer group only), no topic auto-creation; TLS (`SASL_SSL`) is a Production Concern |
 | IDP hardening (lockout, no enumeration, POST logout, front-channel logout, refresh-token rotation) | Present |
 | Server-side BFF sessions | Partial (.NET BFFs; in-memory stores) |
 | Automated tests | Planned (none yet) |

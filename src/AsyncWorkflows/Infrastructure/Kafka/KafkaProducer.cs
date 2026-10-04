@@ -10,10 +10,8 @@ public sealed class KafkaProducer : IKafkaProducer, IDisposable
 
     public KafkaProducer(IOptions<KafkaOptions> options)
     {
-        var configuration = new ProducerConfig
+        var configuration = KafkaClientSecurity.Apply(new ProducerConfig
         {
-            BootstrapServers = options.Value.BootstrapServers,
-
             // A publish is acknowledged only when all in-sync replicas have it,
             // and broker-side de-duplication prevents duplicates and reordering
             // caused by the producer's own internal retries.
@@ -21,7 +19,7 @@ public sealed class KafkaProducer : IKafkaProducer, IDisposable
             EnableIdempotence = true,
             MaxInFlight = 5,
             MessageTimeoutMs = 30_000
-        };
+        }, options.Value);
 
         _producer = new ProducerBuilder<string, string>(configuration).Build();
     }

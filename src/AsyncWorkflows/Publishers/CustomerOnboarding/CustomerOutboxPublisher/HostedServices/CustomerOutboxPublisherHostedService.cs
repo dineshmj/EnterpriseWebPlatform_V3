@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Options;
 
+using EnterpriseWebPlatform.Common.Observability;
+
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Publishers.CustomerOnboarding.CustomerOutboxPublisher.Configuration;
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Publishers.CustomerOnboarding.CustomerOutboxPublisher.Publishing;
 
@@ -8,6 +10,7 @@ namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Publishers.CustomerOnboarding
 public sealed class CustomerOutboxPublisherHostedService(
     IServiceScopeFactory scopeFactory,
     IOptions<CustomerOutboxPublisherOptions> options,
+    LoopHeartbeat heartbeat,
     ILogger<CustomerOutboxPublisherHostedService> logger)
     : BackgroundService
 {
@@ -20,6 +23,7 @@ public sealed class CustomerOutboxPublisherHostedService(
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            heartbeat.Beat();
             try
             {
                 using var scope = scopeFactory.CreateScope();

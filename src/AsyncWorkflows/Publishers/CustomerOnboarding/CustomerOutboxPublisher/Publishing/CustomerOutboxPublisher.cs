@@ -54,6 +54,20 @@ public sealed class CustomerOutboxPublisher(
         }
     }
 
+    /// <summary>Unpublished rows, for the readiness check (parked = given up after MaxAttempts).</summary>
+    public static async Task<OutboxBacklog> GetBacklogAsync(CustomerOutboxDbContext db, int maxAttempts, CancellationToken ct)
+    {
+        var rows = await db.Database.SqlQuery<OutboxBacklog>($"""
+                SELECT
+                    count(*) FILTER (WHERE attempt_count >= {maxAttempts}) AS "Parked",
+                    count(*) FILTER (WHERE attempt_count < {maxAttempts}) AS "Pending",
+                    EXTRACT(EPOCH FROM now() - min(occurred_at) FILTER (WHERE attempt_count < {maxAttempts}))::float8 AS "OldestPendingSeconds"
+                FROM outbox_messages
+                WHERE published_at IS NULL
+                """).ToListAsync(ct);
+        return rows.Single();
+    }
+
     private async Task<int> PublishBatchAsync(CancellationToken cancellationToken)
     {
         await using var transaction =

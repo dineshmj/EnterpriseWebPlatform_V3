@@ -6,9 +6,9 @@ Kafka subscriber **owned by the Customer Onboarding bounded context**. It record
 
 ```text
 kyc.case.created / kyc.case.approved / kyc.case.rejected
-        │  (consumer group: customer-onboarding-kyc-subscriber)
+        │  (consumer group: customer-onboarding.outcome-subscriber; Kafka user: ewp-onboarding-outcome-subscriber)
         ▼
-validate message ── invalid ──► customer-onboarding.kyc-subscriber.dlq  (+ headers), commit
+validate message ── invalid ──► customer-onboarding.outcome-subscriber.dlq  (+ headers), commit
         │
         ▼
 M2M token (cached until expiry)
@@ -49,4 +49,8 @@ Part of the solution's multi-project launch profile. To run it alone:
 dotnet run --project .\OnboardingOutcomeSubscriber.csproj --launch-profile OnboardingOutcomeSubscriber
 ```
 
-The topic `customer-onboarding.kyc-subscriber.dlq` must exist (ReadMe.txt §3f).
+The topic `customer-onboarding.outcome-subscriber.dlq` must exist, and the worker's Kafka user needs its ACLs: both are set up by [Setup-KafkaSecurity.ps1](../../../../../kafka/README.md).
+
+## Health
+
+`http://localhost:5103/health/live` (the consume loop runs) and `/health/ready` (joined the consumer group; *Degraded* while a message is retried in place).

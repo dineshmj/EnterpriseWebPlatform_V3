@@ -1,4 +1,5 @@
-﻿using EnterpriseWebPlatform.Common.Observability;
+﻿using Microsoft.Extensions.Diagnostics.HealthChecks;
+using EnterpriseWebPlatform.Common.Observability;
 using OpenTelemetry.Trace;
 using Npgsql;
 using System.IdentityModel.Tokens.Jwt;
@@ -193,6 +194,12 @@ builder.Services.AddOpenIdConnectAccessTokenManagement ();
 builder.Services.AddAuthorization();
 builder.Services.AddControllers();
 
+// Health endpoints for the orchestrator's probes: /health/live (process working)
+// and /health/ready (dependencies reachable). Anonymous; no internals in the body.
+builder.Services.AddHealthChecks()
+    .AddCheck("self", () => HealthCheckResult.Healthy(), tags: [HealthEndpoints.LiveTag])
+    .AddDbContextCheck<MenuDbContext>("database", tags: [HealthEndpoints.ReadyTag]);
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment ())
@@ -279,5 +286,7 @@ app.MapBffManagementEndpoints();
     //               management, and health checks). These are useful for development and operational diagnostics.
 	// 🡡__ IF NOT: You will lack the BFF management endpoints which can make debugging and runtime diagnostics harder;
     //               however, consider restricting or disabling these in production if they expose sensitive operations.
+
+app.MapEwpHealthEndpoints();
 
 app.Run();

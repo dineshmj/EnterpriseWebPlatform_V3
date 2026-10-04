@@ -20,12 +20,9 @@ public static class KafkaTopicNames
     /// Dead-letter topic of the Onboarding Outcome Subscriber: messages it can
     /// never process (malformed, unknown, or permanently rejected) are parked here
     /// with diagnostic headers instead of blocking the partition.
-    /// The topic keeps its original name (and the worker its consumer group,
-    /// "customer-onboarding-kyc-subscriber") so existing messages and committed
-    /// offsets stay valid; Kafka names are revisited with the per-topic ACLs.
     /// </summary>
     public const string OnboardingOutcomeSubscriberDeadLetter =
-        "customer-onboarding.kyc-subscriber.dlq";
+        "customer-onboarding.outcome-subscriber.dlq";
 
     /// <summary>
     /// Dead-letter topic of the KYC Case Opening Subscriber (Customer KYC):
