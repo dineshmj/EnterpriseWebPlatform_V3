@@ -99,7 +99,7 @@ Used by every EWP V3 document:
 CustomerOutboxPublisher ──► Kafka ◄── KYC Outbox relay
                               │
                               ▼
-                     CustomerKycSubscriber ──M2M──► KYC API
+                     KycCaseOpeningSubscriber ──M2M──► KYC API
                               │
                               ▼ (planned)
               CO reactions · Compliance · Accounts · Notifications (SignalR)
@@ -196,10 +196,10 @@ The domain layer has no knowledge of HTTP, EF Core, Kafka or the IDP.
 | CO BFF + MFE | Customer Onboarding | ASP.NET Core 10 + Next.js | — | Present |
 | CO API | Customer Onboarding | ASP.NET Core 10 | `EwpCustomerDb` | Present |
 | CustomerOutboxPublisher | Customer Onboarding | .NET worker | `EwpCustomerDb` (Outbox table only) | Present |
-| CustomerOnboardingKycSubscriber | Customer Onboarding | .NET worker | — (records outcomes through the CO API) | Present |
+| OnboardingOutcomeSubscriber | Customer Onboarding | .NET worker | — (records outcomes through the CO API) | Present |
 | KYC BFF + MFE | Customer KYC | NestJS + Next.js | — | Present |
 | KYC API (+ in-process Outbox relay) | Customer KYC | ASP.NET Core 10 | `EwpKycDb` | Present |
-| CustomerKycSubscriber | Customer KYC | .NET worker | — | Present |
+| KycCaseOpeningSubscriber | Customer KYC | .NET worker | — | Present |
 | DM API | Documents Management | ASP.NET Core 10 | `EwpDocumentsManagementDb` + object storage | Present |
 | Compliance, Accounts, Payments, Notifications | — | — | own databases | Planned |
 
@@ -208,7 +208,7 @@ An MFE and its BFF are one deployable: the MFE is a static export served by its 
 ### 7.2 Rules
 
 1. **Workers belong to a context.** A relay or subscriber is deployed and versioned with the context whose database or API it uses. `src/AsyncWorkflows` is a folder, not a shared layer. EWP V3 deliberately shows two relay styles: a separate worker (Customer Onboarding) and an in-process hosted service (KYC).
-2. **Shared code is technical only.** Allowed: technical libraries (`AsyncWorkflows.Infrastructure.Kafka`, `Common.WebUtilities`) and versioned integration contracts. Forbidden: domain types, DbContexts, business rules. Consumers may keep their own tolerant-reader models instead of a shared contract package (as the KYC subscriber does).
+2. **Shared code is technical only.** Allowed: technical libraries (`AsyncWorkflows.Infrastructure.Kafka`, `Common.WebUtilities`) and versioned integration contracts. Forbidden: domain types, DbContexts, business rules. Consumers may keep their own tolerant-reader models instead of a shared contract package (as the KYC Case Opening Subscriber does).
 3. **Configuration and secrets are per deployable.** A deployable receives only its own URLs, client IDs and secrets, from its environment or a secret store.
    - **Done:** client secrets were removed from `Common.Landscape`; each deployable reads its own from configuration and refuses to start without them.
    - **Gap:** `Common.Landscape` still compiles every component's URLs and client IDs into every component, so changing one forces a rebuild of the others.
@@ -394,11 +394,11 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Transactional Outbox with `initiated_by` | Present (CO and KYC) |
 | Standard event envelope; Workflow / Correlation / Causation IDs | Present (CO); Partial (KYC flat messages) |
 | Kafka backbone, at-least-once model | Present |
-| KYC subscriber (M2M, bounded retry) | Present |
-| Inbox / idempotent consumer | Partial (Customer Onboarding; KYC relies on a business key) |
-| Timeouts | Partial (CO KYC subscriber: per attempt and total) |
-| Circuit breakers | Partial (CO KYC subscriber → CO API) |
-| Dead-letter / poison-message handling | Partial (CO KYC subscriber; not yet the KYC subscriber) |
+| KYC Case Opening Subscriber (M2M, bounded retry) | Present |
+| Inbox / idempotent consumer | Present (CO and KYC APIs: `inbox_messages`, written in the same transaction as the change) |
+| Timeouts | Partial (Onboarding Outcome Subscriber: per attempt and total) |
+| Circuit breakers | Present on both subscribers (→ CO API, → KYC API); Partial platform-wide (BFF → API calls not yet) |
+| Dead-letter / poison-message handling | Present (both subscribers, one shared consume loop: `AsyncWorkflows.Infrastructure.Subscribers`) |
 | Saga choreography | Partial (CO ⇄ KYC both directions; Compliance and Accounts planned) |
 | Compensation | Planned |
 | Saga orchestration (Payments) | Planned |
@@ -437,14 +437,14 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [ ] TraceId in Kafka headers
 
 **Phase 2 — Reliable subscribers:** a production-style worker
-- [x] Customer KYC subscriber
+- [x] KYC Case Opening Subscriber
 - [x] M2M Client Credentials
 - [x] API authorization of the M2M caller
 - [x] Bounded retry
 - [x] Transactional business update + next Outbox event (KYC)
 - [x] Inbox / idempotency (Customer Onboarding consumer)
 - [x] Timeout, circuit breaker, dead-letter handling (Customer Onboarding consumer)
-- [ ] The same for the KYC subscriber
+- [x] The same for the KYC Case Opening Subscriber (shared consume loop)
 - [ ] Timeout on every call
 - [ ] Structured tracing
 

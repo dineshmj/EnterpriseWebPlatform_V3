@@ -3,8 +3,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <RootNamespace>EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboarding.KycSubscriber</RootNamespace>
-    <AssemblyName>EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboarding.KycSubscriber</AssemblyName>
+    <RootNamespace>EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboarding.OnboardingOutcomeSubscriber</RootNamespace>
+    <AssemblyName>EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboarding.OnboardingOutcomeSubscriber</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\Infrastructure\Kafka\EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka.csproj" />
+    <ProjectReference Include="..\..\..\Infrastructure\Subscribers\EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Subscribers.csproj" />
     <ProjectReference Include="..\..\..\..\Common\Landscape\EnterpriseWebPlatform.Common.Landscape.csproj" />
   </ItemGroup>
 </Project>

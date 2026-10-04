@@ -1,64 +1,60 @@
-# CustomerKycSubscriber
+# KycCaseOpeningSubscriber
 
-Kafka subscriber **owned by the Customer KYC bounded context**: it is deployed and versioned with KYC, even though it lives under `src/AsyncWorkflows`. Business requirements: [CustomerKyc-Requirements.md](../../../Microservices/CustomerKyc/doc/CustomerKyc-Requirements.md). Topic contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Event-Catalogue.md).
+Kafka subscriber **owned by the Customer KYC bounded context**: it is deployed and versioned with KYC, even though it lives under `src/AsyncWorkflows`. It opens the KYC case for each submitted onboarding application. Business requirements: [CustomerKyc-Requirements.md](../../../../Microservices/CustomerKyc/doc/CustomerKyc-Requirements.md). Topic contracts: [Integration-Event-Catalogue.md](../../../../../doc/Integration-Event-Catalogue.md).
 
-## Current flow
+## Flow
 
 ```text
-Kafka onboarding.application.submitted
-        |
-        v
-Deserialize / validate event (ApplicationRef, ApplicationNumber, CustomerNumber, BranchCode)
-        |
-        v
-Acquire M2M access token
-        |
-        v
-POST /internal/v1/kyc/cases/from-application-submitted
-        |
-        v
-Customer KYC API
-        |
-        +--> idempotent KYC case creation (one case per application)
-        +--> KYC business state
-        +--> KYC Outbox event
-        |
-        v
-Kafka offset commit
+onboarding.application.submitted
+        │  (consumer group: customer-kyc-subscriber)
+        ▼
+validate envelope ── invalid ──► customer-kyc.case-opening-subscriber.dlq  (+ headers), commit
+        │
+        ▼
+M2M token (cached until expiry)
+        │
+        ▼
+POST /internal/v1/kyc/cases/from-application-submitted       ◄─ resilience pipeline:
+        │   body: ApplicationRef, ApplicationNumber,                timeout, retry + jitter,
+        │         CustomerNumber, BranchCode, InitiatedByUserId,    circuit breaker
+        │         WorkflowId, CorrelationId, CausationId (= this MessageId)
+        ▼
+Customer KYC API: case exists? ─► Inbox row + KycCase.Open + Outbox (KycCaseCreated)  ── one transaction
+        │
+        ▼
+commit Kafka offset
 ```
 
-The subscriber is a workflow adapter. It does not contain KYC business rules.
+The worker holds no KYC business rules: the `KycCase` aggregate does. It is a thin adapter on the shared reliable consume loop (`AsyncWorkflows.Infrastructure.Subscribers`), which the Onboarding Outcome Subscriber uses too. This worker supplies only `KycCaseOpeningProcessor` (parse, call, classify).
 
-## Authentication
+## Delivery guarantees
 
-The worker uses OAuth 2.0 Client Credentials against the IdentityServer authority and API/client settings defined centrally by the Landscape project.
+| Situation | Behaviour |
+|---|---|
+| Several instances running | They share one consumer group. Kafka assigns each partition to one instance, so no two process the same message at the same time. |
+| Redelivery (crash before commit, rebalance), or the same application published twice | Harmless. The KYC API records each `MessageId` in its Inbox (`inbox_messages`, unique `(message_id, consumer)`) in the same transaction as the new case. It also keeps one case per `ApplicationRef`, so it returns the existing case (200) instead of opening another. |
+| KYC API / IDP unavailable, 5xx, timeout, open circuit, 401 / 403 | **Transient.** The message is retried in place (the consumer seeks back to it) with back-off from 2 s up to 60 s. It is never skipped, and partition order is kept. A 401 first refreshes the cached token once. A 401 or 403 that persists means this worker's identity is not accepted: a configuration problem, so messages wait instead of being dead-lettered. |
+| Malformed JSON, wrong event type, no `MessageId`, missing `ApplicationRef` / `ApplicationNumber` / `CustomerNumber` / `BranchCode`, or 4xx (e.g. 400 for an invalid branch code) | **Permanent.** The message is copied to `customer-kyc.case-opening-subscriber.dlq` with `dlq-*` headers (reason, original topic/partition/offset, consumer group, time), then committed. The worker keeps running. |
 
-The defaults for the IDP authority, client ID, scope and KYC API URL come from `Common.Landscape`. They can be overridden in the `CustomerKycSubscriber` configuration section, as can the topic, consumer group, retry settings and timeout.
+A missing `InitiatedByUserId` is not rejected, but it is logged as a warning. Separation of duties fails closed, so every decision on such a case will be denied.
 
-The **client secret** is configuration only (`CustomerKycSubscriber:ClientSecret`); there is no compiled-in default, and the worker refuses to start without it. The Development value is in `appsettings.Development.json`, and the `CustomerKycSubscriber` launch profile sets `DOTNET_ENVIRONMENT=Development`. Elsewhere supply it from the environment or a secret store.
+## Configuration
+
+Section `KycCaseOpeningSubscriber` (see `Configuration/KycCaseOpeningSubscriberOptions.cs`): consumer group, dead-letter topic, transient back-off, IDP authority, client ID, scope and KYC API URL. The topic is fixed in code. The defaults come from `Common.Landscape`.
+
+The **client secret** comes from configuration only (`KycCaseOpeningSubscriber:ClientSecret`; elsewhere `KycCaseOpeningSubscriber__ClientSecret` from the environment or a secret store). There is no compiled-in default, and the worker refuses to start without it. The Development value is in `appsettings.Development.json`, and the `KycCaseOpeningSubscriber` launch profile sets `DOTNET_ENVIRONMENT=Development`.
 
 ## Debug points
 
-The implementation deliberately marks three useful debugging locations:
+1. `KycCaseOpeningProcessor.ProcessAsync`: the event has been received and validated.
+2. `KycCaseOpeningProcessor.SendAsync`: immediately before the authenticated call to the KYC API.
 
-1. `CustomerKycSubscriberHostedService.HandleMessageAsync` — Kafka event received and parsed.
-2. `M2MTokenClient.GetAccessTokenAsync` — immediately before the Client Credentials token request.
-3. `CustomerKycApiClient.CallAsync` — immediately before the authenticated KYC API request.
+## Run
 
-## Delivery behavior
+Part of the solution's multi-project launch profile. To run it alone:
 
-Kafka auto-commit is disabled. The consumer commits the Kafka offset only after the handler completes successfully.
+```powershell
+dotnet run --project .\KycCaseOpeningSubscriber.csproj --launch-profile KycCaseOpeningSubscriber
+```
 
-Transient KYC API failures (408, 429 and 5xx) receive bounded exponential retries (`MaxAttempts`, `InitialRetryDelayMilliseconds`). Non-transient HTTP failures are surfaced immediately.
-
-**Current failure behaviour.** A message that still fails after the retries is not committed. The exception escapes the hosted service, which **stops the worker process**. On restart, Kafka redelivers the same message, so one unprocessable ("poison") message blocks the topic until it is fixed or skipped by hand. A dead-letter topic is planned to replace this.
-
-Other current limitations:
-
-- The M2M token is requested for every message rather than cached until expiry.
-- There is no Inbox. Idempotency relies on the KYC API's unique `customer_number` constraint.
-- The `X-Workflow-Message-Id` header is sent, but the KYC API does not read it yet.
-
-## Event compatibility
-
-The subscriber reads the standard envelope (workflow metadata at the top level, the event under `Payload`) as a tolerant reader: unknown fields are ignored. `InitiatedByUserId` is forwarded to the KYC API; if it is absent the KYC API receives `null` and the subscriber logs a warning. Events published before `CustomerNumber` was added to `OnboardingApplicationSubmitted` are rejected as invalid. Recreate the topics when you recreate the databases (ReadMe.txt §3f).
+The topic `customer-kyc.case-opening-subscriber.dlq` must exist (ReadMe.txt §3f).

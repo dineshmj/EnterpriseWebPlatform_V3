@@ -26,7 +26,7 @@ Customer KYC verifies that a customer is who they claim to be and that their sub
 | KYC MFE | `BFF.Web/client-app` | Next.js static export, served by the KYC BFF |
 | KYC BFF | `BFF.Web/src` | **NestJS** (deliberately a different BFF technology from Customer Onboarding) |
 | KYC API | `API` | ASP.NET Core 10, EF Core, PostgreSQL. Hosts its own in-process Outbox relay. |
-| KYC subscriber | `src/AsyncWorkflows/Subscribers/CustomerKyc` | .NET worker. Part of **this** bounded context: it turns an onboarding event into a KYC command. |
+| KYC Case Opening Subscriber | `src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber` | .NET worker. Part of **this** bounded context: it turns an onboarding event into a KYC command. |
 | Database | `EwpKycDb` (`API/KycDb/EwpKycDb.sql`) | PostgreSQL |
 
 ---
@@ -136,7 +136,7 @@ Target additional states: `AWAITING_INFORMATION` (more evidence requested; retur
 |---|---|---|
 | In | `onboarding.application.submitted` → subscriber → `POST /internal/v1/kyc/cases/from-application-submitted` (M2M): one case per application | Present |
 | Out | `kyc.case.created`, `kyc.identity.verification.*`, `kyc.document.verification.*`, `kyc.case.approved`, `kyc.case.rejected`, each carrying `ApplicationRef` / `ApplicationNumber` | Present |
-| Consumed by | Customer Onboarding (`CustomerOnboardingKycSubscriber`) records `kyc.case.created` / `approved` / `rejected` on the application | Present |
+| Consumed by | Customer Onboarding (`OnboardingOutcomeSubscriber`) records `kyc.case.created` / `approved` / `rejected` on the application | Present |
 | Sync | KYC BFF → Documents Management (`documents-management.read`, M2M) for the identity proof and tax proof | Present |
 
 Contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Event-Catalogue.md).
@@ -151,7 +151,7 @@ Contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Event-Ca
 | Decide identity stage | `customer-kyc.write` + `kyc_officer` + `kyc.case.approve` or `kyc.case.reject` **and** `kyc.identity.verify` + department `KYC` + clearance ≥ 3 + own branch + **assigned to the officer, or unassigned (the decision assigns it)** + not the initiator + stage pending |
 | Decide document stage | As above, with `kyc.document.verify` |
 | Claim / release (`POST …/claim`, `…/release`) | `customer-kyc.write` + `kyc_officer` + `kyc.case.update` + department `KYC` + clearance ≥ 3 + own branch. Claim: case unassigned (409 if assigned to someone else), not the initiator. Release: only the assignee (403 otherwise). |
-| Create case (internal) | M2M only: pinned `client_id` of the KYC subscriber + `customer-kyc.write` |
+| Create case (internal) | M2M only: pinned `client_id` of the KYC Case Opening Subscriber + `customer-kyc.write` |
 | Assigned-case access | ReBAC `assigned_to`, stored on the case and checked in the aggregate. New cases start unassigned in the branch queue, so `ethan.kyc` and `noah.kyc` compete; the first to decide (or claim) owns the case from then on. |
 
 ---
@@ -180,8 +180,8 @@ Contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Event-Ca
 | Aggregate-based domain model (§4.1) | Present |
 | One case per application | Present (`uq_kyc_cases_application_ref`: a GUID, so a recreated Customer Onboarding database cannot collide with old cases) |
 | Standard event envelope | **Gap**: KYC events are flat |
-| Inbox in the subscriber | Planned (idempotency currently relies on the unique `application_id`) |
-| Poison-message handling / dead-letter topic in the subscriber | **Gap**: an unprocessable message stops the worker |
+| Inbox / idempotent consumer | Present: `inbox_messages` (unique `message_id` + `consumer`) is written in the same transaction as the new case and its Outbox event; one case per `ApplicationRef` as well |
+| Consumer resilience | Present: timeout, retry with jitter and circuit breaker on the API call; cached M2M token; transient failures retried in place; permanent failures to `customer-kyc.case-opening-subscriber.dlq` (shared consume loop) |
 | Document lookup | Present: by business reference and document type only (the filename fallback is removed). The officer's branch is passed to Documents Management, so an officer sees only evidence uploaded in their own branch. |
 | Safe evidence display | Present: only DM-verified PDF is shown inline (`nosniff`, framable only by the KYC MFE); other types are downloaded; content is streamed |
 | BFF session security | Present: session regenerated at sign-in; `SameSite=Lax` session cookie; logout revokes the refresh token and ends the IDP session; front-channel (`/signout-oidc`) and back-channel (`/backchannel-logout`, fully validated logout token) logout; timing-safe CSRF check; strict CSP with hashed inline scripts; secrets required from the environment (no fallbacks). Sessions are in memory (single instance). |

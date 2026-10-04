@@ -54,13 +54,15 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Infrastructure", "Infrastru
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka", "src\AsyncWorkflows\Infrastructure\Kafka\EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka.csproj", "{2BE5C5F1-AFBC-AF5A-6EF4-922BAAA23422}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Subscribers", "src\AsyncWorkflows\Infrastructure\Subscribers\EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Subscribers.csproj", "{7A50A568-1402-4AB5-91AC-F59922FB095E}"
+EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Publishers", "Publishers", "{EC64110B-2952-44FD-A90D-0B03620F0293}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Subscribers", "Subscribers", "{A84ACB35-7983-4BDD-B2B4-DE1DFED65694}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "CustomerKyc", "CustomerKyc", "{818FA715-B3F8-4253-98BA-503186008122}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CustomerKycSubscriber", "src\AsyncWorkflows\Subscribers\CustomerKyc\CustomerKycSubscriber.csproj", "{6639E79A-C4A1-31DC-906E-7F1A72B9A0C9}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KycCaseOpeningSubscriber", "src\AsyncWorkflows\Subscribers\CustomerKyc\KycCaseOpeningSubscriber\KycCaseOpeningSubscriber.csproj", "{6639E79A-C4A1-31DC-906E-7F1A72B9A0C9}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "DocumentsManagement", "DocumentsManagement", "{45309636-E889-4B66-AF22-13E34FA98ED6}"
 EndProject
@@ -72,7 +74,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EnterpriseWebPlatform.Custo
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "CustomerOnboarding", "CustomerOnboarding", "{3FA1BACC-1FD1-9587-C42D-0CE11AC9868B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CustomerOnboardingKycSubscriber", "src\AsyncWorkflows\Subscribers\CustomerOnboarding\CustomerOnboardingKycSubscriber\CustomerOnboardingKycSubscriber.csproj", "{1C987183-5037-406D-A5F6-9C8BCF7AA74D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnboardingOutcomeSubscriber", "src\AsyncWorkflows\Subscribers\CustomerOnboarding\OnboardingOutcomeSubscriber\OnboardingOutcomeSubscriber.csproj", "{1C987183-5037-406D-A5F6-9C8BCF7AA74D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -112,6 +114,10 @@ Global
 		{2BE5C5F1-AFBC-AF5A-6EF4-922BAAA23422}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2BE5C5F1-AFBC-AF5A-6EF4-922BAAA23422}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2BE5C5F1-AFBC-AF5A-6EF4-922BAAA23422}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7A50A568-1402-4AB5-91AC-F59922FB095E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7A50A568-1402-4AB5-91AC-F59922FB095E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7A50A568-1402-4AB5-91AC-F59922FB095E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7A50A568-1402-4AB5-91AC-F59922FB095E}.Release|Any CPU.Build.0 = Release|Any CPU
 		{6639E79A-C4A1-31DC-906E-7F1A72B9A0C9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{6639E79A-C4A1-31DC-906E-7F1A72B9A0C9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6639E79A-C4A1-31DC-906E-7F1A72B9A0C9}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -153,6 +159,7 @@ Global
 		{FBE627C5-AB99-F03E-D39B-1ADC888F75ED} = {EBB048D0-B089-4171-8D33-5CF3DFEF6B5D}
 		{1F8535F6-3405-4E8D-909F-7C3A8A2C0345} = {20825AFC-14BA-4D9D-B85E-9FD49FE1E65A}
 		{2BE5C5F1-AFBC-AF5A-6EF4-922BAAA23422} = {1F8535F6-3405-4E8D-909F-7C3A8A2C0345}
+		{7A50A568-1402-4AB5-91AC-F59922FB095E} = {1F8535F6-3405-4E8D-909F-7C3A8A2C0345}
 		{EC64110B-2952-44FD-A90D-0B03620F0293} = {20825AFC-14BA-4D9D-B85E-9FD49FE1E65A}
 		{A84ACB35-7983-4BDD-B2B4-DE1DFED65694} = {20825AFC-14BA-4D9D-B85E-9FD49FE1E65A}
 		{818FA715-B3F8-4253-98BA-503186008122} = {A84ACB35-7983-4BDD-B2B4-DE1DFED65694}

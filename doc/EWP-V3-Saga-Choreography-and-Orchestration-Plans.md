@@ -49,7 +49,7 @@ There is no central coordinator. Each participating context:
 
 **Why KYC is triggered by submission.** A customer may have more than one application over time. KYC belongs to an *application*, and only submission means the evidence is complete.
 
-**Steps 3 and 5 run in Customer Onboarding's own worker** (`CustomerOnboardingKycSubscriber`). It delivers each KYC fact to the CO API, where the `OnboardingApplication` aggregate decides the transition. Because the facts arrive on different topics, they can arrive out of order or more than once: the aggregate applies only the transitions still outstanding, and the Inbox makes each fact count once.
+**Steps 3 and 5 run in Customer Onboarding's own worker** (`OnboardingOutcomeSubscriber`). It delivers each KYC fact to the CO API, where the `OnboardingApplication` aggregate decides the transition. Because the facts arrive on different topics, they can arrive out of order or more than once: the aggregate applies only the transitions still outstanding, and the Inbox makes each fact count once.
 
 ## 1.3 The MFE / BFF boundary
 
@@ -154,13 +154,13 @@ Retry, timeout and circuit breaker protect **individual technical interactions**
 **Customer Onboarding — choreography**
 
 - [x] CO publishes business events through its Outbox, with workflow, correlation, causation and initiator data
-- [x] KYC subscriber consumes, authenticates with M2M and creates the KYC case
+- [x] KYC Case Opening Subscriber consumes, authenticates with M2M and creates the KYC case
 - [x] Human KYC approval / rejection as domain state plus Outbox events
 - [x] KYC triggered by `onboarding.application.submitted` (one case per application)
-- [x] CO consumes `kyc.*` outcomes (`CustomerOnboardingKycSubscriber`)
+- [x] CO consumes `kyc.*` outcomes (`OnboardingOutcomeSubscriber`)
 - [x] Inbox / idempotency in the CO consumer
 - [x] Timeout, retry, circuit breaker and dead-letter handling in the CO consumer
-- [ ] The same Inbox and dead-letter handling in `CustomerKycSubscriber`
+- [x] The same Inbox and dead-letter handling in `KycCaseOpeningSubscriber` (both workers share one consume loop: `AsyncWorkflows.Infrastructure.Subscribers`)
 - [ ] Compliance participant
 - [ ] Accounts participant
 - [ ] Compensation paths, including DM document invalidation

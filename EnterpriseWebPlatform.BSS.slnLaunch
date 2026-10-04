@@ -28,14 +28,14 @@
         "DebugTarget": "CustomerOutboxPublisher"
       },
       {
-        "Path": "src\\AsyncWorkflows\\Subscribers\\CustomerKyc\\CustomerKycSubscriber.csproj",
+        "Path": "src\\AsyncWorkflows\\Subscribers\\CustomerOnboarding\\OnboardingOutcomeSubscriber\\OnboardingOutcomeSubscriber.csproj",
         "Action": "Start",
-        "DebugTarget": "CustomerKycSubscriber"
+        "DebugTarget": "OnboardingOutcomeSubscriber"
       },
       {
-        "Path": "src\\AsyncWorkflows\\Subscribers\\CustomerOnboarding\\CustomerOnboardingKycSubscriber\\CustomerOnboardingKycSubscriber.csproj",
+        "Path": "src\\AsyncWorkflows\\Subscribers\\CustomerKyc\\KycCaseOpeningSubscriber\\KycCaseOpeningSubscriber.csproj",
         "Action": "Start",
-        "DebugTarget": "CustomerOnboardingKycSubscriber"
+        "DebugTarget": "KycCaseOpeningSubscriber"
       },
       {
         "Path": "src\\Shell\\EnterpriseWebPlatform.BSS.BFFWeb.csproj",

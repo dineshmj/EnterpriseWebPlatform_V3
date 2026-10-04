@@ -43,13 +43,13 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("KycSubscriberWrite", policy =>
+    options.AddPolicy("KycCaseOpeningSubscriberWrite", policy =>
     {
         policy.RequireAuthenticatedUser();
         policy.RequireClaim("scope", "customer-kyc.write");
         policy.RequireClaim(
             "client_id",
-            CustomerKycMicroservice.CLIENT_ID_FOR_IDP_FOR_CUST_KYC_SUBSCRIBER_TO_CUST_KYC_API_M2M);
+            CustomerKycMicroservice.CLIENT_ID_FOR_IDP_FOR_KYC_CASE_OPENING_SUBSCRIBER_TO_CUST_KYC_API_M2M);
     });
 
     options.AddPolicy("KycCaseView", policy =>
@@ -82,6 +82,7 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddSingleton<IAuthorizationHandler, KycCaseDecisionAuthorizationHandler>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IKycUnitOfWork>(sp => sp.GetRequiredService<KycDbContext>());
+builder.Services.AddScoped<IInboxStore>(sp => sp.GetRequiredService<KycDbContext>());
 builder.Services.AddScoped<IKycCaseRepository, KycCaseRepository>();
 builder.Services.AddScoped<IKycCaseQueries, KycCaseQueries>();
 builder.Services.AddScoped<OpenKycCaseCommandHandler>();

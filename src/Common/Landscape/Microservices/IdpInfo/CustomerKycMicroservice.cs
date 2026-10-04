@@ -8,10 +8,10 @@ public static class CustomerKycMicroservice
 
 
 
-    // Customer KYC Subscriber to Customer KYC API M2M
-    public const string CLIENT_NAME_FOR_IDP_FOR_CUST_KYC_SUBSCRIBER_TO_CUST_KYC_API_M2M = "Customer KYC Subscriber to Customer KYC API M2M Client";
+    // KYC Case Opening Subscriber to Customer KYC API M2M
+    public const string CLIENT_NAME_FOR_IDP_FOR_KYC_CASE_OPENING_SUBSCRIBER_TO_CUST_KYC_API_M2M = "KYC Case Opening Subscriber to Customer KYC API M2M Client";
 
-    public const string CLIENT_ID_FOR_IDP_FOR_CUST_KYC_SUBSCRIBER_TO_CUST_KYC_API_M2M = "CustomerKyc.Subscriber.To.CustomerKycApi.M2M.ClientID";
+    public const string CLIENT_ID_FOR_IDP_FOR_KYC_CASE_OPENING_SUBSCRIBER_TO_CUST_KYC_API_M2M = "CustomerKyc.CaseOpeningSubscriber.To.CustomerKycApi.M2M.ClientID";
 
 
 

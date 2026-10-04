@@ -112,11 +112,11 @@ CustomerOutboxPublisher (console worker)
   → Kafka "onboarding.application.submitted"  key = aggregate ID  (idempotent producer, acks=all)
         │
         ▼
-CustomerKycSubscriber (console worker, KYC's adapter)
+KycCaseOpeningSubscriber (console worker, KYC's adapter)
   validates the envelope: ApplicationRef, ApplicationNumber, CustomerNumber, BranchCode
   Client Credentials token (CustomerKyc.Subscriber client)
   → POST KYC API /internal/v1/kyc/cases/from-application-submitted
-        "KycSubscriberWrite": write scope + PINNED client_id [client pinning]
+        "KycCaseOpeningSubscriberWrite": write scope + PINNED client_id [client pinning]
         → OpenKycCaseCommandHandler: existing case for this ApplicationRef? → return it (idempotent)
         → Domain: KycCase.Open(ref, number, customer, BranchCode SYD001, initiator Sophie)
                   both stages PENDING_REVIEW, unassigned → raises KycCaseOpened
@@ -127,9 +127,9 @@ CustomerKycSubscriber (console worker, KYC's adapter)
 KYC API in-process outbox relay → Kafka "kyc.case.created"
         │
         ▼
-CustomerOnboardingKycSubscriber (console worker, CO's adapter)
+OnboardingOutcomeSubscriber (console worker, CO's adapter)
   → POST CO API /internal/v1/onboarding/applications/{ApplicationRef}/kyc-outcomes
-        "KycOutcomeSubscriberWrite": write scope + PINNED client_id
+        "OnboardingOutcomeSubscriberWrite": write scope + PINNED client_id
         X-Initiated-By-User-Id is trusted only from this client (attribution, not authorization)
         → Inbox: MessageId already processed? → Duplicate
         → load by ApplicationRef; ApplicationNumber must match (else 409 → dead-letter topic)
@@ -192,7 +192,7 @@ POST /v1/kyc/cases/{id}/identity-verification/approve
 
 ```text
 KYC relay → Kafka "kyc.case.approved"
-  → CustomerOnboardingKycSubscriber → CO API …/{ApplicationRef}/kyc-outcomes (pinned client)
+  → OnboardingOutcomeSubscriber → CO API …/{ApplicationRef}/kyc-outcomes (pinned client)
      → Inbox → number match → RecordKycApproved(now): KYC_IN_PROGRESS → KYC_COMPLETED
        (also handles "approved" arriving before "created")
      → inbox + application + outbox "StatusChanged" in one transaction
@@ -215,7 +215,7 @@ KYC relay → Kafka "kyc.case.approved"
 ## Known gaps on this path
 
 - **Kafka is unauthenticated** (no TLS/SASL, no topic ACLs), so a client that can reach the broker could publish a forged KYC outcome. Planned: authentication and per-topic ACLs.
-- **The KYC subscriber has no Inbox or dead-letter topic yet.** A message it cannot process stops the worker until fixed or skipped. Planned: the same pattern as the Customer Onboarding KYC subscriber.
+- **Both subscribers now share one reliable consume loop** (`AsyncWorkflows.Infrastructure.Subscribers`): transient failures are retried in place, permanent ones go to the worker's dead-letter topic (`customer-kyc.case-opening-subscriber.dlq` for the KYC Case Opening Subscriber), and the KYC API records each message in its Inbox.
 - **The KYC MFE has no claim / release buttons;** the first decision assigns the case.
 
 *Keep this walkthrough in step with the code: update it when a step, policy or rule on this path changes.*

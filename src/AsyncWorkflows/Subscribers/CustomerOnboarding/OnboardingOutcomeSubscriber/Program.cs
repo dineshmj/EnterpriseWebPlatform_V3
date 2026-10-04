@@ -1,36 +1,25 @@
-using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Options;
 
-using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
-using EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboarding.KycSubscriber.Authentication;
-using EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboarding.KycSubscriber.Configuration;
-using EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboarding.KycSubscriber.HostedServices;
-using EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboarding.KycSubscriber.Processing;
+using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Subscribers;
+using EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboarding.OnboardingOutcomeSubscriber.Configuration;
+using EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboarding.OnboardingOutcomeSubscriber.Processing;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-builder.Services.Configure<KafkaOptions>(
-    builder.Configuration.GetSection(KafkaOptions.SectionName));
+// The shared reliable consume loop (commit after processing, retry in place,
+// dead-letter) with this worker's processor.
+builder.Services.AddKafkaSubscriber<KycOutcomeProcessor, OnboardingOutcomeSubscriberOptions>(
+    builder.Configuration, OnboardingOutcomeSubscriberOptions.SectionName);
 
+// The worker's own machine identity; the token is cached until shortly before expiry.
 builder.Services
-    .AddOptions<KycSubscriberOptions>()
-    .Bind(builder.Configuration.GetSection(KycSubscriberOptions.SectionName))
-    .Validate(o => !string.IsNullOrWhiteSpace(o.ClientSecret), "CustomerOnboardingKycSubscriber:ClientSecret is not configured.")
-    .Validate(o => o.Topics.Length > 0, "CustomerOnboardingKycSubscriber:Topics is empty.")
-    .ValidateOnStart();
-
-builder.Services
-    .AddHttpClient("IdentityServer", (serviceProvider, client) =>
-    {
-        var options = serviceProvider.GetRequiredService<IOptions<KycSubscriberOptions>>().Value;
-        client.BaseAddress = new Uri(options.IdentityServerAuthority.TrimEnd('/'));
-    })
+    .AddCachedM2MTokenClient<OnboardingOutcomeSubscriberOptions>(OnboardingOutcomeSubscriberOptions.SectionName)
     .AddStandardResilienceHandler();
 
 builder.Services
-    .AddHttpClient("CustomerOnboardingApi", (serviceProvider, client) =>
+    .AddHttpClient(KycOutcomeProcessor.HttpClientName, (serviceProvider, client) =>
     {
-        var options = serviceProvider.GetRequiredService<IOptions<KycSubscriberOptions>>().Value;
+        var options = serviceProvider.GetRequiredService<IOptions<OnboardingOutcomeSubscriberOptions>>().Value;
         client.BaseAddress = new Uri(options.CustomerOnboardingApiBaseUrl.TrimEnd('/'));
     })
     // Resilience pipeline around every call to the Customer Onboarding API:
@@ -54,11 +43,6 @@ builder.Services
         options.CircuitBreaker.BreakDuration = TimeSpan.FromSeconds(30);
         options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(60);
     });
-
-builder.Services.AddSingleton<IKafkaProducer, KafkaProducer>();
-builder.Services.AddSingleton<CachedM2MTokenClient>();
-builder.Services.AddSingleton<KycOutcomeProcessor>();
-builder.Services.AddHostedService<KycOutcomeConsumerHostedService>();
 
 var host = builder.Build();
 await host.RunAsync();

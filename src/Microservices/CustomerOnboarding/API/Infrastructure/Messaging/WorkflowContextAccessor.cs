@@ -16,10 +16,10 @@ public sealed class WorkflowContextAccessor(IHttpContextAccessor httpContextAcce
 {
     /// <summary>
     /// The only M2M client that may state a human initiator (X-Initiated-By-User-Id):
-    /// the Customer Onboarding KYC subscriber, which copies it from the KYC event.
+    /// the Onboarding Outcome Subscriber, which copies it from the KYC event.
     /// </summary>
     private static readonly string TrustedInitiatorAssertingClient =
-        CustomerOnboardingMicroservice.CLIENT_ID_FOR_IDP_FOR_CUST_ONBOARDING_KYC_SUBSCRIBER_TO_CUST_ONBOARDING_API_M2M;
+        CustomerOnboardingMicroservice.CLIENT_ID_FOR_IDP_FOR_ONBOARDING_OUTCOME_SUBSCRIBER_TO_CUST_ONBOARDING_API_M2M;
 
     public WorkflowRequestContext GetRequestContext()
     {
@@ -41,7 +41,7 @@ public sealed class WorkflowContextAccessor(IHttpContextAccessor httpContextAcce
             return Guid.TryParse(subject, out var subjectId) ? subjectId : null;
         }
 
-        // An M2M caller has no human subject. Only the pinned KYC subscriber may
+        // An M2M caller has no human subject. Only the pinned Onboarding Outcome Subscriber may
         // carry the ORIGINAL human initiator forward (it copies it from the KYC
         // event), so the workflow's accountability survives the asynchronous hop.
         // It is attribution only - never an authorization grant.

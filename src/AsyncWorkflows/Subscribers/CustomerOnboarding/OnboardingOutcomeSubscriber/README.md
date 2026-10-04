@@ -1,4 +1,4 @@
-# CustomerOnboardingKycSubscriber
+# OnboardingOutcomeSubscriber
 
 Kafka subscriber **owned by the Customer Onboarding bounded context**. It records Customer KYC outcomes on the onboarding application, which is the return path of the onboarding choreography. Business requirements: [CustomerOnboarding-Requirements.md](../../../../Microservices/CustomerOnboarding/doc/CustomerOnboarding-Requirements.md). Topic contracts: [Integration-Event-Catalogue.md](../../../../../doc/Integration-Event-Catalogue.md).
 
@@ -24,7 +24,7 @@ Customer Onboarding API: Inbox check ─► aggregate transition ─► Outbox (
 commit Kafka offset
 ```
 
-The worker holds no business rules. Customer Onboarding's `OnboardingApplication` aggregate decides what each KYC fact means (`RecordKycCaseOpened` / `RecordKycApproved` / `RecordKycRejected`), and tolerates repeated or out-of-order facts.
+The worker is a thin adapter on the shared reliable consume loop (`AsyncWorkflows.Infrastructure.Subscribers`, also used by the KYC Case Opening Subscriber); it supplies only `KycOutcomeProcessor`. It holds no business rules. Customer Onboarding's `OnboardingApplication` aggregate decides what each KYC fact means (`RecordKycCaseOpened` / `RecordKycApproved` / `RecordKycRejected`), and tolerates repeated or out-of-order facts.
 
 ## Delivery guarantees
 
@@ -32,21 +32,21 @@ The worker holds no business rules. Customer Onboarding's `OnboardingApplication
 |---|---|
 | Several instances running | They share one consumer group. Kafka assigns each partition to one instance, so no two process the same message at the same time. Extra instances are hot standbys while topics have 1 partition. |
 | Redelivery (crash before commit, rebalance) | Harmless: the CO API's Inbox (`inbox_messages`, unique `(message_id, consumer)`) records each KYC `MessageId` in the same transaction as its effect. A repeat returns `Duplicate`. |
-| CO API / IDP unavailable, 5xx, timeout, open circuit | **Transient.** The message is retried in place (the consumer seeks back to it) with back-off of 2 s up to 60 s. It is never skipped, and partition order is kept. |
+| CO API / IDP unavailable, 5xx, timeout, open circuit, 401 / 403 (this worker's identity not accepted: a configuration problem, not a bad message) | **Transient.** The message is retried in place (the consumer seeks back to it) with back-off of 2 s up to 60 s. It is never skipped, and partition order is kept. |
 | Malformed JSON, unknown event type, no `ApplicationRef` / `ApplicationNumber`, 4xx (e.g. 404 unknown application — such as an event from before a database was recreated — or 409 when the referenced application has a different number) | **Permanent.** The message is copied to the dead-letter topic with `dlq-*` headers (reason, original topic/partition/offset, consumer group, time), then committed. The worker keeps running. |
 
 ## Configuration
 
-Section `CustomerOnboardingKycSubscriber` (see `Configuration/KycSubscriberOptions.cs`): consumer group, dead-letter topic, IDP authority, client ID, scope, CO API URL and transient back-off. The topics are fixed in code.
+Section `OnboardingOutcomeSubscriber` (see `Configuration/OnboardingOutcomeSubscriberOptions.cs`): consumer group, dead-letter topic, IDP authority, client ID, scope, CO API URL and transient back-off. The topics are fixed in code.
 
-The **client secret** comes from configuration only (`CustomerOnboardingKycSubscriber:ClientSecret`). The Development value is in `appsettings.Development.json`, and the `CustomerOnboardingKycSubscriber` launch profile sets `DOTNET_ENVIRONMENT=Development`. The worker refuses to start without it.
+The **client secret** comes from configuration only (`OnboardingOutcomeSubscriber:ClientSecret`). The Development value is in `appsettings.Development.json`, and the `OnboardingOutcomeSubscriber` launch profile sets `DOTNET_ENVIRONMENT=Development`. The worker refuses to start without it.
 
 ## Run
 
 Part of the solution's multi-project launch profile. To run it alone:
 
 ```powershell
-dotnet run --project .\CustomerOnboardingKycSubscriber.csproj --launch-profile CustomerOnboardingKycSubscriber
+dotnet run --project .\OnboardingOutcomeSubscriber.csproj --launch-profile OnboardingOutcomeSubscriber
 ```
 
 The topic `customer-onboarding.kyc-subscriber.dlq` must exist (ReadMe.txt §3f).

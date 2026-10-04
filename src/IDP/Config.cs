@@ -74,8 +74,8 @@ public static class Config
 
             // M2M Clients
             CustomerOnboardingBFFToDocumentsManagementM2M.Client,
-            CustomerKycSubscriberToCustomerKycApiM2M.Client,
-            CustomerOnboardingKycSubscriberToCustomerOnboardingApiM2M.Client,
+            KycCaseOpeningSubscriberToCustomerKycApiM2M.Client,
+            OnboardingOutcomeSubscriberToCustomerOnboardingApiM2M.Client,
             KycBFFToDocumentsManagementM2M.Client
         ];
 }

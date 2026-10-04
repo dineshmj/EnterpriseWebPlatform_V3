@@ -42,6 +42,19 @@ public interface IKycUnitOfWork
     Task SaveChangesAsync(WorkflowContext context, CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// Inbox (idempotent consumer). A recorded message is saved in the SAME
+/// transaction as the business change it caused, so a redelivered message is
+/// recognised and ignored - "processed exactly once" on top of at-least-once delivery.
+/// </summary>
+public interface IInboxStore
+{
+    Task<bool> HasProcessedAsync(Guid messageId, string consumer, CancellationToken cancellationToken);
+
+    /// <summary>Records the message; persisted by the next unit-of-work save.</summary>
+    void RecordProcessed(Guid messageId, string consumer);
+}
+
 /// <summary>Another transaction changed the aggregate first (optimistic concurrency).</summary>
 public sealed class ConcurrencyConflictException(string message, Exception inner) : Exception(message, inner);
 

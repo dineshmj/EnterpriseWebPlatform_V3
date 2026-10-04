@@ -1,6 +1,6 @@
 {
   "profiles": {
-    "CustomerOnboardingKycSubscriber": {
+    "OnboardingOutcomeSubscriber": {
       "commandName": "Project",
       "environmentVariables": {
         "DOTNET_ENVIRONMENT": "Development"

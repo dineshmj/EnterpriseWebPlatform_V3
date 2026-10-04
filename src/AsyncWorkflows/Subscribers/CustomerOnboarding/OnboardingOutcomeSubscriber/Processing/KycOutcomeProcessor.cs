@@ -4,25 +4,10 @@ using System.Text.Json;
 
 using Polly;
 
-using EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboarding.KycSubscriber.Authentication;
-using EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboarding.KycSubscriber.Messages;
+using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Subscribers;
+using EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboarding.OnboardingOutcomeSubscriber.Messages;
 
-namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboarding.KycSubscriber.Processing;
-
-/// <summary>The decision for one consumed message.</summary>
-public sealed record ProcessingOutcome(bool DeadLetter, string? Reason)
-{
-    public static ProcessingOutcome Processed { get; } = new(false, null);
-
-    public static ProcessingOutcome ToDeadLetter(string reason) => new(true, reason);
-}
-
-/// <summary>
-/// The dependency (IDP, Customer Onboarding API) is unavailable or failing; the
-/// message itself is fine. It must be retried - never skipped or dead-lettered.
-/// </summary>
-public sealed class TransientProcessingException(string message, Exception? inner = null)
-    : Exception(message, inner);
+namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboarding.OnboardingOutcomeSubscriber.Processing;
 
 /// <summary>
 /// Turns one KYC case event into a call to the Customer Onboarding API and
@@ -31,7 +16,8 @@ public sealed class TransientProcessingException(string message, Exception? inne
 ///  - Dead letter : the message can never succeed (malformed, unknown type,
 ///                  application unknown or number mismatch, request rejected as invalid).
 ///  - Transient   : thrown as TransientProcessingException (timeouts, 5xx, open
-///                  circuit, IDP unavailable) - retried in place by the consumer.
+///                  circuit, IDP unavailable, 401/403) - retried in place by the
+///                  shared consume loop (KafkaSubscriberHostedService).
 /// The HTTP call itself runs through a resilience pipeline (timeout, retry with
 /// jittered back-off, circuit breaker); the endpoint is idempotent per MessageId,
 /// so retrying the POST is safe.
@@ -40,7 +26,10 @@ public sealed class KycOutcomeProcessor(
     IHttpClientFactory httpClientFactory,
     CachedM2MTokenClient tokenClient,
     ILogger<KycOutcomeProcessor> logger)
+    : IMessageProcessor
 {
+    public const string HttpClientName = "CustomerOnboardingApi";
+
     private static readonly HashSet<string> SupportedEventTypes = new(StringComparer.Ordinal)
     {
         "KycCaseCreated",
@@ -50,12 +39,12 @@ public sealed class KycOutcomeProcessor(
 
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
-    public async Task<ProcessingOutcome> ProcessAsync(string payload, CancellationToken cancellationToken)
+    public async Task<ProcessingOutcome> ProcessAsync(ConsumedMessage consumed, CancellationToken cancellationToken)
     {
         KycOutcomeMessage? message;
         try
         {
-            message = JsonSerializer.Deserialize<KycOutcomeMessage>(payload, JsonOptions);
+            message = JsonSerializer.Deserialize<KycOutcomeMessage>(consumed.Value, JsonOptions);
         }
         catch (JsonException ex)
         {
@@ -120,13 +109,15 @@ public sealed class KycOutcomeProcessor(
                 return ProcessingOutcome.Processed;
             }
 
-            if (status is 408 or 429 || status >= 500 || response.StatusCode == HttpStatusCode.Unauthorized)
+            // 401 / 403 mean this worker's identity is not (yet) accepted - a configuration
+            // problem, not a bad message: retry until it is fixed rather than dead-letter everything.
+            if (status is 401 or 403 or 408 or 429 || status >= 500)
             {
                 throw new TransientProcessingException(
                     $"Customer Onboarding API returned HTTP {status} after the resilience pipeline: {body}");
             }
 
-            // 400 / 403 / 404 / 409 / 422 ...: this message can never succeed.
+            // 400 / 404 / 409 / 422 ...: this message can never succeed.
             return ProcessingOutcome.ToDeadLetter($"Customer Onboarding API rejected the message with HTTP {status}: {body}");
         }
     }
@@ -163,7 +154,7 @@ public sealed class KycOutcomeProcessor(
 
         // DEBUG POINT #2: the authenticated, resilient call to the Customer Onboarding API.
         return await httpClientFactory
-            .CreateClient("CustomerOnboardingApi")
+            .CreateClient(HttpClientName)
             .SendAsync(request, cancellationToken);
     }
 }

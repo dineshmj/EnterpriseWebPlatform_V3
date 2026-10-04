@@ -9,7 +9,7 @@ namespace EnterpriseWebPlatform.CustomerOnboarding.API.Controllers;
 /// <summary>
 /// Machine-only endpoints through which workflow facts from other bounded
 /// contexts reach the onboarding application (saga choreography). Called by
-/// the Customer Onboarding KYC subscriber with its pinned M2M identity.
+/// the Onboarding Outcome Subscriber with its pinned M2M identity.
 /// </summary>
 [ApiController]
 [Route("internal/v1/onboarding/applications")]
@@ -25,7 +25,7 @@ public sealed class InternalOnboardingApplicationsController(
     /// X-Causation-Id / X-Initiated-By-User-Id headers.
     /// </summary>
     [HttpPost("{applicationRef:guid}/kyc-outcomes")]
-    [Authorize(Policy = "KycOutcomeSubscriberWrite")]
+    [Authorize(Policy = "OnboardingOutcomeSubscriberWrite")]
     public async Task<IActionResult> RecordKycOutcome(
         Guid applicationRef,
         [FromBody] RecordKycOutcomeRequest request,

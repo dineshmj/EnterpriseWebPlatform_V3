@@ -12,12 +12,12 @@ public sealed class InternalKycCasesController(OpenKycCaseCommandHandler openKyc
 {
     /// <summary>
     /// Opens the KYC case for a submitted onboarding application. Called only by
-    /// the CustomerKycSubscriber (pinned M2M client) when it consumes
+    /// the KycCaseOpeningSubscriber (pinned M2M client) when it consumes
     /// onboarding.application.submitted. Idempotent: one case per application, so
     /// a redelivered event returns the existing case (200) instead of a new one (201).
     /// </summary>
     [HttpPost("from-application-submitted")]
-    [Authorize(Policy = "KycSubscriberWrite")]
+    [Authorize(Policy = "KycCaseOpeningSubscriberWrite")]
     public async Task<IActionResult> CreateFromApplicationSubmitted(
         [FromBody] OpenKycCaseRequest request,
         CancellationToken cancellationToken)

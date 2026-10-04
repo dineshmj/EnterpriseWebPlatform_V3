@@ -39,19 +39,36 @@ public sealed record OpenKycCaseResult(
 
 public sealed class OpenKycCaseCommandHandler(
     IKycCaseRepository repository,
+    IInboxStore inbox,
     IKycUnitOfWork unitOfWork,
     TimeProvider clock,
     ILogger<OpenKycCaseCommandHandler> logger)
 {
+    /// <summary>Inbox consumer name for onboarding.application.submitted.</summary>
+    public const string InboxConsumer = "customer-kyc.case-opening";
+
     /// <summary>
-    /// Idempotent: a redelivered trigger returns the existing case. Two concurrent
-    /// deliveries race on uq_kyc_cases_application_ref; the loser returns the winner's case.
+    /// Idempotent twice over:
+    ///  - per message (Inbox): the triggering message (CausationId) is recorded in the
+    ///    same transaction as the new case, so a redelivery is recognised as such;
+    ///  - per application (business key): one case per ApplicationRef, so even a
+    ///    re-published event with a new MessageId returns the existing case.
+    /// Two concurrent deliveries race on the unique keys; the loser returns the winner's case.
     /// </summary>
     public async Task<OpenKycCaseResult> HandleAsync(OpenKycCaseCommand command, CancellationToken cancellationToken)
     {
         var existing = await repository.GetByApplicationRefAsync(command.ApplicationRef, cancellationToken);
         if (existing is not null)
+        {
+            if (!await inbox.HasProcessedAsync(command.CausationId, InboxConsumer, cancellationToken))
+            {
+                logger.LogInformation(
+                    "Message {MessageId} asks again for the KYC case of application {ApplicationRef}; case {KycCaseId} already exists.",
+                    command.CausationId, command.ApplicationRef, existing.Id);
+            }
+
             return OpenKycCaseResult.From(existing, created: false);
+        }
 
         try
         {
@@ -66,6 +83,9 @@ public sealed class OpenKycCaseCommandHandler(
                 clock.GetUtcNow());
 
             repository.Add(kycCase);
+
+            // The Inbox row, the new case and its Outbox event commit together.
+            inbox.RecordProcessed(command.CausationId, InboxConsumer);
 
             await unitOfWork.SaveChangesAsync(
                 new WorkflowContext(command.WorkflowId, command.CorrelationId, command.CausationId),

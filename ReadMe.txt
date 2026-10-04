@@ -178,7 +178,8 @@ What the platform is, how it is designed and what each component must do are doc
 				"kyc.identity.verification.rejected",
 				"kyc.document.verification.approved",
 				"kyc.document.verification.rejected",
-				"customer-onboarding.kyc-subscriber.dlq"
+				"customer-onboarding.kyc-subscriber.dlq",
+				"customer-kyc.case-opening-subscriber.dlq"
 			)
 
 			foreach ($t in $topics) {
@@ -204,7 +205,7 @@ What the platform is, how it is designed and what each component must do are doc
 
 	NOTE - secrets:
 		Each component reads its own client secrets from its own configuration; nothing is compiled into Common.Landscape any more.
-		Development values: appsettings.Development.json of the IDP, Shell BFF, Customer Onboarding BFF and CustomerKycSubscriber, and runnow.bat of the KYC BFF.
+		Development values: appsettings.Development.json of the IDP, Shell BFF, Customer Onboarding BFF and KycCaseOpeningSubscriber, and runnow.bat of the KYC BFF.
 		A component refuses to start when a secret is missing. Outside Development, supply them as environment variables or from a secret store.
 
 	i) Open EnterpriseWebPlatform.BSS.sln in Visual Studio and restore the NuGet packages.
@@ -214,7 +215,7 @@ What the platform is, how it is designed and what each component must do are doc
 
 	a) Visual Studio: use the multi-project launch profile in EnterpriseWebPlatform.BSS.slnLaunch. It starts:
 
-		IDP, Documents Management API, Customer Onboarding API, Customer KYC API, CustomerOutboxPublisher, CustomerKycSubscriber, CustomerOnboardingKycSubscriber, Shell BFF and Customer Onboarding BFF.
+		IDP, Documents Management API, Customer Onboarding API, Customer KYC API, CustomerOutboxPublisher, KycCaseOpeningSubscriber, OnboardingOutcomeSubscriber, Shell BFF and Customer Onboarding BFF.
 
 		Every publisher and subscriber is a console (generic host) application. Several instances of each may run in parallel:
 		publishers claim Outbox rows with FOR UPDATE SKIP LOCKED, subscribers share one Kafka consumer group per subscriber (one
@@ -236,7 +237,7 @@ What the platform is, how it is designed and what each component must do are doc
 		- Sign out, sign in as ethan.kyc or noah.kyc, open KYC Cases, and decide the identity and document stages.
 		- In Kafka UI, check the kyc.* topics.
 		- Back as sophie.cs, the application's status has moved SUBMITTED -> KYC_IN_PROGRESS (when the KYC case opened) -> KYC_COMPLETED
-		  (when KYC approved), recorded by CustomerOnboardingKycSubscriber. EwpCustomerDb.inbox_messages holds one row per KYC event processed.
+		  (when KYC approved), recorded by OnboardingOutcomeSubscriber. EwpCustomerDb.inbox_messages holds one row per KYC event processed.
 
 
 5) Troubleshooting:
@@ -268,7 +269,7 @@ What the platform is, how it is designed and what each component must do are doc
 
 		- Check that the Kafka topics exist (3f); auto-creation is disabled.
 		- Check that CustomerOutboxPublisher is running, and look at outbox_messages.published_at and last_error in EwpCustomerDb.
-		- Check that CustomerKycSubscriber is running. A message it cannot process currently stops the worker; its console shows the cause.
+		- Check that KycCaseOpeningSubscriber is running. A message it cannot process currently stops the worker; its console shows the cause.
 
 	g) The KYC BFF shows "documents cannot be shown" or 403 for evidence:
 

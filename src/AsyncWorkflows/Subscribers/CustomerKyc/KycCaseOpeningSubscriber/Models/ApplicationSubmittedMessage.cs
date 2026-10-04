@@ -1,4 +1,4 @@
-namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerKyc.CustomerKycSubscriber.Models;
+namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerKyc.KycCaseOpeningSubscriber.Models;
 
 /// <summary>
 /// The subscriber's own (tolerant-reader) view of the

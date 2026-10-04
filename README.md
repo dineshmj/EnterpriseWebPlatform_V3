@@ -21,7 +21,7 @@ Enterprise Web Platform V3 (EWP V3) is a demonstration banking-services platform
 |---|---|---|---|
 | Identity Provider | `src/IDP` | Duende IdentityServer 8, ASP.NET Core 10 | Present |
 | Shell (BFF + SPA) | `src/Shell` | ASP.NET Core 10 + Next.js | Present |
-| Customer Onboarding (MFE/BFF, API, Outbox relay, KYC subscriber) | `src/Microservices/CustomerOnboarding`, `src/AsyncWorkflows/Publishers/CustomerOnboarding`, `src/AsyncWorkflows/Subscribers/CustomerOnboarding` | Next.js, ASP.NET Core 10, .NET workers | Present |
+| Customer Onboarding (MFE/BFF, API, Outbox relay, Onboarding Outcome Subscriber) | `src/Microservices/CustomerOnboarding`, `src/AsyncWorkflows/Publishers/CustomerOnboarding`, `src/AsyncWorkflows/Subscribers/CustomerOnboarding` | Next.js, ASP.NET Core 10, .NET workers | Present |
 | Customer KYC (MFE/BFF, API, subscriber) | `src/Microservices/CustomerKyc`, `src/AsyncWorkflows/Subscribers/CustomerKyc` | Next.js, NestJS, ASP.NET Core 10, .NET worker | Present |
 | Documents Management (API) | `src/Microservices/DocumentsManagement` | ASP.NET Core 10 | Present |
 | Compliance, Accounts, Payments | `src/Microservices/…` | — | Planned |
@@ -38,6 +38,7 @@ Each document has one purpose. A fact is written in exactly one place; other doc
 | Document | Owns |
 |---|---|
 | [Architectural Vision & Security Blueprint](doc/Enterprise-Web-Platform-V3-Architectural-Vision-and-Security-Blueprint.md) | Vision, principles, landscape, context map, DDD and deployability rules, cross-cutting security and operations targets, **capability matrix**, roadmap, status legend |
+| [Architectural & Security Features (demoable)](doc/Architectural-And-Security-Features-Demoable-EWP-V3.md) | What can be seen working today: patterns, security controls and avoided anti-patterns, each with where to look in the code; starts with a "common questions" index (DLQ handling, pod replacement, IDOR, tokens…) |
 | [Application Personas](doc/Application-Personas.md) | The persona catalogue, role codes, cross-persona principles |
 | [Authorization Model](doc/Authorization-Model.md) | How authorization decisions are made: pipeline, scopes vs permissions, ABAC / ReBAC / SoD mechanics, platform-level permissions |
 | [Saga Plans](doc/EWP-V3-Saga-Choreography-and-Orchestration-Plans.md) | Cross-context workflows: event chain, compensation, saga rules |
@@ -66,8 +67,8 @@ How to build, configure and run one deployable:
 
 - [CO BFF README](src/Microservices/CustomerOnboarding/BFF.Web/README.md)
 - [KYC BFF README](src/Microservices/CustomerKyc/BFF.Web/README.md)
-- [KYC Subscriber README](src/AsyncWorkflows/Subscribers/CustomerKyc/README.md)
-- [CO KYC Subscriber README](src/AsyncWorkflows/Subscribers/CustomerOnboarding/CustomerOnboardingKycSubscriber/README.md)
+- [KYC Case Opening Subscriber README](src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/README.md)
+- [Onboarding Outcome Subscriber README](src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/README.md)
 - [DM API README](src/Microservices/DocumentsManagement/API/README.md)
 
 ### Local development

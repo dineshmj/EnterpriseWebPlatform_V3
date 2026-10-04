@@ -11,10 +11,18 @@ using EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure.Messaging;
 
 namespace EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure;
 
-public sealed class KycDbContext(DbContextOptions<KycDbContext> options) : DbContext(options), IKycUnitOfWork
+public sealed class KycDbContext(DbContextOptions<KycDbContext> options, TimeProvider clock)
+    : DbContext(options), IKycUnitOfWork, IInboxStore
 {
     public DbSet<KycCase> KycCases => Set<KycCase>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
+
+    public Task<bool> HasProcessedAsync(Guid messageId, string consumer, CancellationToken cancellationToken) =>
+        InboxMessages.AsNoTracking().AnyAsync(x => x.MessageId == messageId && x.Consumer == consumer, cancellationToken);
+
+    public void RecordProcessed(Guid messageId, string consumer) =>
+        InboxMessages.Add(InboxMessage.Processed(messageId, consumer, clock.GetUtcNow()));
 
     public async Task<IUnitOfWorkTransaction> BeginTransactionAsync(CancellationToken cancellationToken) =>
         new EfUnitOfWorkTransaction(await Database.BeginTransactionAsync(cancellationToken));
@@ -168,6 +176,18 @@ public sealed class KycDbContext(DbContextOptions<KycDbContext> options) : DbCon
             e.HasIndex(x => x.WorkflowId).HasDatabaseName("ix_kyc_outbox_workflow_id");
             e.HasIndex(x => x.CorrelationId).HasDatabaseName("ix_kyc_outbox_correlation_id");
             e.HasIndex(x => x.CausationId).HasDatabaseName("ix_kyc_outbox_causation_id");
+        });
+
+        modelBuilder.Entity<InboxMessage>(e =>
+        {
+            e.ToTable("inbox_messages");
+            e.HasKey(x => x.Id).HasName("pk_kyc_inbox_messages");
+            e.Property(x => x.Id).HasColumnName("id").ValueGeneratedNever();
+            e.Property(x => x.MessageId).HasColumnName("message_id").IsRequired();
+            e.Property(x => x.Consumer).HasColumnName("consumer").HasMaxLength(200).IsRequired();
+            e.Property(x => x.ReceivedAt).HasColumnName("received_at").HasColumnType("timestamp with time zone").IsRequired();
+            e.Property(x => x.ProcessedAt).HasColumnName("processed_at").HasColumnType("timestamp with time zone");
+            e.HasIndex(x => new { x.MessageId, x.Consumer }).IsUnique().HasDatabaseName("uq_kyc_inbox_messages_message_consumer");
         });
     }
 

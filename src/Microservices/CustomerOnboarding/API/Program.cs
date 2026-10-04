@@ -166,13 +166,13 @@ builder.Services.AddAuthorization(options =>
 
     // Internal, machine-only endpoint: workflow facts from other bounded contexts.
     // Pinned to the one M2M client that exists to deliver them.
-    options.AddPolicy("KycOutcomeSubscriberWrite", policy =>
+    options.AddPolicy("OnboardingOutcomeSubscriberWrite", policy =>
     {
         policy.RequireAuthenticatedUser();
         policy.RequireClaim("scope", CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_WRITE);
         policy.RequireClaim(
             "client_id",
-            CustomerOnboardingMicroservice.CLIENT_ID_FOR_IDP_FOR_CUST_ONBOARDING_KYC_SUBSCRIBER_TO_CUST_ONBOARDING_API_M2M);
+            CustomerOnboardingMicroservice.CLIENT_ID_FOR_IDP_FOR_ONBOARDING_OUTCOME_SUBSCRIBER_TO_CUST_ONBOARDING_API_M2M);
     });
 });
 

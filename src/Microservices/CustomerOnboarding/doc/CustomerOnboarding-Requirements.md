@@ -27,7 +27,7 @@ Customer Onboarding owns the **customer** and the **onboarding application** —
 | CO BFF | `BFF.Web` | ASP.NET Core 10 + Duende BFF |
 | CO API | `API` | ASP.NET Core 10, EF Core, PostgreSQL |
 | CO Outbox relay | `src/AsyncWorkflows/Publishers/CustomerOnboarding/CustomerOutboxPublisher` | .NET worker service. Reads `EwpCustomerDb`, so it is **part of this bounded context**, not a shared component. |
-| CO KYC subscriber | `src/AsyncWorkflows/Subscribers/CustomerOnboarding/CustomerOnboardingKycSubscriber` | .NET worker service. Consumes `kyc.case.*` and records each outcome through the CO API (M2M). **Part of this bounded context.** |
+| Onboarding Outcome Subscriber | `src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber` | .NET worker service. Consumes `kyc.case.*` and records each outcome through the CO API (M2M). **Part of this bounded context.** |
 | Database | `EwpCustomerDb` (`API/CustomerDB/EwpCustomerDb.sql`) | PostgreSQL |
 
 ---
@@ -178,7 +178,7 @@ Event contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Ev
 | Create a customer | `customer_service_agent` + write scope + the residential address is within the agent's branch scope (otherwise 403). The creating agent becomes the managing agent. |
 | Submit | `customer.onboarding.submit` + application in DRAFT + version match |
 | Customer self-service | `_own` permissions + the customer `owns` the application |
-| Workflow-driven transitions (§5.3) | Only through `POST /internal/v1/onboarding/applications/{applicationRef}/kyc-outcomes` (the application addressed by its GUID; the application number must match), pinned to the `CustomerOnboarding.KycSubscriber.To.CustomerOnboardingApi.M2M.ClientID` client with `customer-onboarding.write`; never via user endpoints. That client alone may state the human initiator (`X-Initiated-By-User-Id`), so the resulting events keep the original initiator for attribution. |
+| Workflow-driven transitions (§5.3) | Only through `POST /internal/v1/onboarding/applications/{applicationRef}/kyc-outcomes` (the application addressed by its GUID; the application number must match), pinned to the `CustomerOnboarding.OutcomeSubscriber.To.CustomerOnboardingApi.M2M.ClientID` client with `customer-onboarding.write`; never via user endpoints. That client alone may state the human initiator (`X-Initiated-By-User-Id`), so the resulting events keep the original initiator for attribution. |
 
 ---
 
@@ -199,7 +199,7 @@ Event contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Ev
 | Aggregates, value objects, domain events, CQRS handlers | Present |
 | Transactional Outbox with workflow, correlation and causation IDs and `initiated_by` | Present |
 | Outbox relay publishing all three event types | Present: `SKIP LOCKED` claiming (multi-instance safe), per-aggregate ordering, bounded retries with exponential backoff, parking after `MaxAttempts`, idempotent `acks=all` producer |
-| Reactions to KYC events (§5.3) | Present (`CustomerOnboardingKycSubscriber`) |
+| Reactions to KYC events (§5.3) | Present (`OnboardingOutcomeSubscriber`) |
 | Reactions to Compliance / Accounts events | Planned |
 | Inbox / idempotent consumer | Present: `inbox_messages` (unique `message_id` + `consumer`) is written in the same transaction as the transition and its Outbox events; a redelivered KYC event returns `Duplicate` |
 | Consumer resilience | Present: timeout, retry with jitter and circuit breaker on the API call; transient failures retried in place; permanent failures to `customer-onboarding.kyc-subscriber.dlq` |

@@ -1,4 +1,4 @@
-namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboarding.KycSubscriber.Messages;
+namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboarding.OnboardingOutcomeSubscriber.Messages;
 
 /// <summary>
 /// Tolerant-reader view of the Customer KYC case events (kyc.case.created /
