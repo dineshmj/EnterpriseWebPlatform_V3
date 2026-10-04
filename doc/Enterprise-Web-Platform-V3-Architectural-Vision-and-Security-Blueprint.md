@@ -318,7 +318,7 @@ A separate Notifications component turns business events into neutral, addressed
 
 **Gaps:**
 
-- Every service connects as the PostgreSQL superuser.
+- Encrypted database connections (TLS) are not configured locally. (Each service already connects with its own least-privilege database user: `db/EwpServiceDbUsers.sql`.)
 - Schema scripts start with `DROP TABLE`, and there are no migrations yet.
 
 ---

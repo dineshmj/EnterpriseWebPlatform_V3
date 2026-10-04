@@ -22,10 +22,11 @@ Enterprise Web Platform V3 (EWP V3) is a demonstration banking-services platform
 | Identity Provider | `src/IDP` | Duende IdentityServer 8, ASP.NET Core 10 | Present |
 | Shell (BFF + SPA) | `src/Shell` | ASP.NET Core 10 + Next.js | Present |
 | Customer Onboarding (MFE/BFF, API, Outbox relay, Onboarding Outcome Subscriber) | `src/Microservices/CustomerOnboarding`, `src/AsyncWorkflows/Publishers/CustomerOnboarding`, `src/AsyncWorkflows/Subscribers/CustomerOnboarding` | Next.js, ASP.NET Core 10, .NET workers | Present |
-| Customer KYC (MFE/BFF, API, subscriber) | `src/Microservices/CustomerKyc`, `src/AsyncWorkflows/Subscribers/CustomerKyc` | Next.js, NestJS, ASP.NET Core 10, .NET worker | Present |
+| Customer KYC (MFE/BFF, API, KYC Case Opening Subscriber) | `src/Microservices/CustomerKyc`, `src/AsyncWorkflows/Subscribers/CustomerKyc` | Next.js, NestJS, ASP.NET Core 10, .NET worker | Present |
 | Documents Management (API) | `src/Microservices/DocumentsManagement` | ASP.NET Core 10 | Present |
 | Compliance, Accounts, Payments | `src/Microservices/…` | — | Planned |
-| Infrastructure | `docker-compose.yml` | PostgreSQL 18, Kafka 4 (KRaft), Kafka UI | Present |
+| Infrastructure | PostgreSQL 18 and Kafka 4 (KRaft) installed natively; Kafka secured with [kafka/Setup-KafkaSecurity.ps1](kafka/README.md) | SCRAM-SHA-512 users, per-topic ACLs, Kafka UI (read-only) | Present |
+| Observability | `src/Common/Observability` | OpenTelemetry traces across HTTP and Kafka (OTLP, e.g. Jaeger); `/health/live` and `/health/ready` on every component | Present |
 
 ---
 
@@ -82,7 +83,11 @@ How to build, configure and run one deployable:
 
 - .NET 10 SDK
 - Node.js 18+ and pnpm
-- Docker (PostgreSQL and Kafka)
+- PostgreSQL 18
+- Apache Kafka 4.x (KRaft) at `C:\Kafka` and a Java runtime 21+ (see [kafka/README.md](kafka/README.md))
+- Optional: Jaeger for viewing traces; Kafka UI for browsing topics
+
+`docker-compose.yml` is an older alternative for PostgreSQL and Kafka. Its Kafka runs **without authentication**, so it does not match the components' SASL settings; to use it, set `Kafka:SecurityProtocol` to `Plaintext` in each component.
 - Visual Studio 2026 and / or VS Code
 
 Start with [ReadMe.txt](ReadMe.txt).
