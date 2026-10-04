@@ -1,3 +1,5 @@
+using EnterpriseWebPlatform.Common.Observability;
+using Npgsql;
 using Microsoft.EntityFrameworkCore;
 
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
@@ -7,6 +9,10 @@ using EnterpriseWebPlatform.BSS.AsyncWorkflows.Publishers.CustomerOnboarding.Cus
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Publishers.CustomerOnboarding.CustomerOutboxPublisher.Publishing;
 
 var builder = Host.CreateApplicationBuilder(args);
+
+// Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
+// over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
+builder.AddEwpObservability("customer-outbox-publisher", tracing => tracing.AddNpgsql());
 
 builder.Services.Configure<KafkaOptions>(
     builder.Configuration.GetSection(KafkaOptions.SectionName));

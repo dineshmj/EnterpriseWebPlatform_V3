@@ -1,3 +1,6 @@
+using EnterpriseWebPlatform.Common.Observability;
+using OpenTelemetry.Trace;
+using Npgsql;
 using System.Threading.RateLimiting;
 
 using Microsoft.EntityFrameworkCore;
@@ -18,6 +21,10 @@ Log.Information("Starting up");
 try
 {
     var builder = WebApplication.CreateBuilder(args);
+
+    // Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
+    // over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
+    builder.AddEwpObservability("identity-server", tracing => tracing.AddAspNetCoreInstrumentation().AddNpgsql());
 
     builder.Host.UseSerilog((ctx, lc) => lc
         .WriteTo.Console(

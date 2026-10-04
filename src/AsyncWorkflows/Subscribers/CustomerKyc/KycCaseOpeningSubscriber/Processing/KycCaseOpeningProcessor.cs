@@ -170,7 +170,7 @@ public sealed class KycCaseOpeningProcessor(
 
         return (new ApplicationSubmittedMessage(
             envelope.MessageId,
-            envelope.EventType,
+            ExpectedEventType,
             envelope.OccurredAt,
             application.ApplicationRef,
             application.ApplicationNumber,

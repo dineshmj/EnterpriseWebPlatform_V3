@@ -26,6 +26,9 @@ public sealed class OutboxMessage
 
     public string? ActedByUserId { get; set; }
 
+    /// <summary>W3C trace context of the request that raised the event.</summary>
+    public string? TraceParent { get; set; }
+
     public DateTimeOffset? PublishedAt { get; set; }
 
     public int AttemptCount { get; set; }

@@ -14,7 +14,16 @@ public sealed class OutboxMessage
 
     public DateTimeOffset OccurredAt { get; set; }
 
+    public Guid? WorkflowId { get; set; }
+
+    public Guid? CorrelationId { get; set; }
+
+    public Guid? CausationId { get; set; }
+
     public Guid? InitiatedByUserId { get; set; }
+
+    /// <summary>W3C trace context of the request that raised the event.</summary>
+    public string? TraceParent { get; set; }
 
     public DateTimeOffset? PublishedAt { get; set; }
 

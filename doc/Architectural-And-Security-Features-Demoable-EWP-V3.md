@@ -17,7 +17,9 @@ The document answers *how the platform is built and protected*, not *which busin
 | What if a downstream API is down for an hour? | [1.6.3](#163-timeouts-retries-and-circuit-breakers), [1.3.3](#133-reliable-subscriber-pipeline) |
 | How do you avoid losing an event when the database commit succeeds but Kafka is down? | [1.3.1](#131-transactional-outbox) |
 | Are events processed in order? | [1.3.5](#135-ordering-guarantees) |
-| How do you trace one business transaction across services? | [1.3.4](#134-workflow-correlation-and-causation-identity) |
+| How do you trace one business transaction across services? | [1.3.4](#134-workflow-correlation-and-causation-identity), [1.7.1](#171-distributed-tracing-across-http-and-kafka) |
+| Can you follow one request through Kafka in a tracing tool? | [1.7.1](#171-distributed-tracing-across-http-and-kafka) |
+| How do you version event contracts? | [1.3.6](#136-tolerant-readers-and-contract-evolution) |
 | How do two people editing the same record at once not overwrite each other? | [1.6.4](#164-concurrency-control) |
 | Where are the access tokens kept? Can JavaScript read them? | [2.1.1](#211-oidc-authorization-code--pkce-through-a-bff), [3.3](#33-tokens-in-the-browser) |
 | How do you stop a user from opening someone else's record by changing an ID (IDOR / BOLA)? | [2.2.3](#223-object-level-authorization) |
@@ -65,6 +67,8 @@ The document answers *how the platform is built and protected*, not *which busin
     - [1.6.3 Timeouts, retries and circuit breakers](#163-timeouts-retries-and-circuit-breakers)
     - [1.6.4 Concurrency control](#164-concurrency-control)
     - [1.6.5 Fail-closed configuration](#165-fail-closed-configuration)
+  - [1.7 Observability](#17-observability)
+    - [1.7.1 Distributed tracing across HTTP and Kafka](#171-distributed-tracing-across-http-and-kafka)
 - [2. Security features](#2-security-features)
   - [2.1 Identity](#21-identity)
     - [2.1.1 OIDC Authorization Code + PKCE through a BFF](#211-oidc-authorization-code--pkce-through-a-bff)
@@ -233,7 +237,7 @@ Every event carries a `WorkflowId` (the business process), a `CorrelationId` (th
 - A fully traced run: [End-to-End-Processing-Walkthrough.md](End-to-End-Processing-Walkthrough.md)
 - Live evidence: the `workflow_id`, `correlation_id`, `causation_id` and `initiated_by` columns of both Outbox tables
 
-**Not yet:** W3C `traceparent` in Kafka headers and OpenTelemetry traces. KYC events still use a flat format rather than the standard envelope.
+Both contexts publish the same standard envelope, and the relays copy these identifiers into Kafka headers as well (`message-id`, `workflow-id`, `correlation-id`, `causation-id`), so tools can inspect messages without parsing bodies. The technical trace is covered in [1.7.1](#171-distributed-tracing-across-http-and-kafka).
 
 #### 1.3.5 Ordering guarantees
 
@@ -246,11 +250,11 @@ Ordering is guaranteed where it matters: per aggregate. Each event is published 
 
 #### 1.3.6 Tolerant readers and contract evolution
 
-Consumers read only the fields they need into their own message models and ignore everything else. A producer can therefore add fields without breaking anyone, and no shared contract package couples the producer's and consumer's release cycles. Event changes are additive within a version.
+Consumers read only the fields they need into their own message models and ignore everything else. A producer can therefore add fields without breaking anyone, and no shared contract package couples the producer's and consumer's release cycles. Event changes are additive within a version, and every envelope states its `SchemaVersion`. When KYC moved from a flat message to the standard envelope, its consumer was taught to read both shapes first, so the change needed no coordinated release and no topic reset.
 
 **Where to look at:**
 
-- [KycOutcomeMessage.cs](../src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/Messages/KycOutcomeMessage.cs), the private envelope records in [KycCaseOpeningProcessor.cs](../src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/Processing/KycCaseOpeningProcessor.cs)
+- [KycOutcomeMessage.cs](../src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/Messages/KycOutcomeMessage.cs) (reads the envelope and the older flat shape), the private envelope records in [KycCaseOpeningProcessor.cs](../src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/Processing/KycCaseOpeningProcessor.cs)
 - Conventions: [Integration-Event-Catalogue.md §2](Integration-Event-Catalogue.md#2-conventions)
 
 ### 1.4 Saga pattern
@@ -363,6 +367,22 @@ A component that is missing a required secret or setting refuses to start, rathe
 - `ValidateOnStart` with secret checks: [SubscriberServiceCollectionExtensions.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/SubscriberServiceCollectionExtensions.cs)
 - Required audience: [CustomerKyc API Program.cs](../src/Microservices/CustomerKyc/API/Program.cs)
 - Development-only signing key: [SigningCredentialExtensions.cs](../src/IDP/Security/SigningCredentialExtensions.cs)
+
+### 1.7 Observability
+
+#### 1.7.1 Distributed tracing across HTTP and Kafka
+
+Every .NET component uses OpenTelemetry with W3C trace context. A trace normally ends where a message is put on a queue. Here it does not. The request's trace context is stored on the Outbox row, so the relay, possibly seconds later, publishes in a span that continues that trace and sends it in the Kafka `traceparent` header. The subscriber processes the message in a child span, and its HTTP call carries the trace to the next API. One onboarding therefore appears as **one trace** in Jaeger, Grafana Tempo, Azure Monitor or AWS X-Ray: from the agent's click in the CO BFF, through the CO API, the relay, the KYC worker, the KYC API and back to the CO API, with database calls as child spans. Log lines carry the same TraceId. Spans are exported over OTLP only when an endpoint is configured; otherwise the context is still propagated.
+
+**Where to look at:**
+
+- Shared setup and messaging spans: [ObservabilityExtensions.cs](../src/Common/Observability/ObservabilityExtensions.cs), [MessagingTelemetry.cs](../src/Common/Observability/MessagingTelemetry.cs)
+- Trace stored with the event: `trace_parent` in [EwpCustomerDb.sql](../src/Microservices/CustomerOnboarding/API/CustomerDB/EwpCustomerDb.sql) and [EwpKycDb.sql](../src/Microservices/CustomerKyc/API/KycDb/EwpKycDb.sql)
+- Publish span and headers: [CustomerOutboxPublisher.cs](../src/AsyncWorkflows/Publishers/CustomerOnboarding/CustomerOutboxPublisher/Publishing/CustomerOutboxPublisher.cs), [KycOutboxPublisher.cs](../src/Microservices/CustomerKyc/API/Infrastructure/KycOutboxPublisher.cs)
+- Process span: [KafkaSubscriberHostedService.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/KafkaSubscriberHostedService.cs)
+- How to view traces locally (Jaeger): [ReadMe.txt §4e](../ReadMe.txt)
+
+**Not yet:** the KYC BFF (NestJS) is not instrumented, so a KYC officer's decision starts a new trace at the KYC API. Metrics and health endpoints are still to come.
 
 ---
 

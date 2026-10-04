@@ -2,6 +2,8 @@ using System.Text.Json;
 
 using Microsoft.EntityFrameworkCore;
 
+using EnterpriseWebPlatform.Common.Observability;
+
 using EnterpriseWebPlatform.CustomerKyc.Api.Domain.Aggregates;
 using EnterpriseWebPlatform.CustomerKyc.Api.Domain.Common;
 using EnterpriseWebPlatform.CustomerKyc.Api.Domain.Events;
@@ -18,6 +20,11 @@ internal static class KycIntegrationEventMapper
 {
     public const string AggregateType = "KycCase";
     public const string KycCaseCreated = "KycCaseCreated";
+
+    private const string Source = "customer-kyc";
+
+    /// <summary>Contract version of the published payloads (additive changes keep it).</summary>
+    private const int SchemaVersion = 1;
 
     private const string IdentityApproved = "KycIdentityVerificationApproved";
     private const string DocumentApproved = "KycDocumentVerificationApproved";
@@ -42,68 +49,50 @@ internal static class KycIntegrationEventMapper
         {
             case KycCaseOpenedDomainEvent:
                 eventType = KycCaseCreated;
-                payload = JsonSerializer.Serialize(new KycCaseCreatedEvent(
-                    messageId,
-                    eventType,
-                    domainEvent.OccurredAt,
-                    workflowId,
-                    correlationId,
-                    causationId,
-                    kycCase.Id,
-                    kycCase.ApplicationRef,
-                    kycCase.ApplicationNumber,
-                    kycCase.CustomerNumber,
-                    kycCase.BranchCode.Value,
-                    KycCaseStatus.PendingReview.ToCode(),
-                    kycCase.InitiatedByUserId));
+                payload = Envelope(messageId, eventType, domainEvent.OccurredAt, workflowId, correlationId, causationId, kycCase,
+                    new KycCaseCreatedPayload(
+                        kycCase.Id,
+                        kycCase.ApplicationRef,
+                        kycCase.ApplicationNumber,
+                        kycCase.CustomerNumber,
+                        kycCase.BranchCode.Value,
+                        KycCaseStatus.PendingReview.ToCode()));
                 break;
 
             case VerificationStageDecidedDomainEvent stage:
                 eventType = StageEventType(stage.Stage, stage.NewStatus);
                 actedByUserId = stage.DecidedByUserId;
-                payload = JsonSerializer.Serialize(new KycVerificationStageDecisionEvent(
-                    messageId,
-                    eventType,
-                    stage.OccurredAt,
-                    workflowId,
-                    correlationId,
-                    causationId,
-                    kycCase.Id,
-                    kycCase.ApplicationRef,
-                    kycCase.ApplicationNumber,
-                    kycCase.CustomerNumber,
-                    stage.Stage.ToCode(),
-                    stage.PreviousStatus.ToCode(),
-                    stage.NewStatus.ToCode(),
-                    kycCase.InitiatedByUserId,
-                    stage.DecidedByUserId,
-                    stage.OccurredAt,
-                    stage.Remarks,
-                    stage.OverallStatus.ToCode()));
+                payload = Envelope(messageId, eventType, stage.OccurredAt, workflowId, correlationId, causationId, kycCase,
+                    new KycVerificationStageDecisionPayload(
+                        kycCase.Id,
+                        kycCase.ApplicationRef,
+                        kycCase.ApplicationNumber,
+                        kycCase.CustomerNumber,
+                        stage.Stage.ToCode(),
+                        stage.PreviousStatus.ToCode(),
+                        stage.NewStatus.ToCode(),
+                        stage.DecidedByUserId,
+                        stage.OccurredAt,
+                        stage.Remarks,
+                        stage.OverallStatus.ToCode()));
                 break;
 
             case KycCaseDecidedDomainEvent decided:
                 eventType = decided.NewStatus == KycCaseStatus.Approved ? "KycCaseApproved" : "KycCaseRejected";
                 actedByUserId = decided.DecidedByUserId;
                 var causedBy = await CausedByMessageIdsAsync(db, kycCase, decided, previousMessageId, cancellationToken);
-                payload = JsonSerializer.Serialize(new KycCaseDecisionEvent(
-                    messageId,
-                    eventType,
-                    decided.OccurredAt,
-                    workflowId,
-                    correlationId,
-                    causationId,
-                    kycCase.Id,
-                    kycCase.ApplicationRef,
-                    kycCase.ApplicationNumber,
-                    kycCase.CustomerNumber,
-                    decided.PreviousStatus.ToCode(),
-                    decided.NewStatus.ToCode(),
-                    kycCase.InitiatedByUserId,
-                    decided.DecidedByUserId,
-                    decided.OccurredAt,
-                    decided.Remarks,
-                    causedBy));
+                payload = Envelope(messageId, eventType, decided.OccurredAt, workflowId, correlationId, causationId, kycCase,
+                    new KycCaseDecisionPayload(
+                        kycCase.Id,
+                        kycCase.ApplicationRef,
+                        kycCase.ApplicationNumber,
+                        kycCase.CustomerNumber,
+                        decided.PreviousStatus.ToCode(),
+                        decided.NewStatus.ToCode(),
+                        decided.DecidedByUserId,
+                        decided.OccurredAt,
+                        decided.Remarks,
+                        causedBy));
                 break;
 
             // Internal facts (ReBAC assignment) with no published contract. Listed
@@ -129,9 +118,32 @@ internal static class KycIntegrationEventMapper
             CorrelationId = correlationId,
             CausationId = causationId,
             InitiatedByUserId = kycCase.InitiatedByUserId,
-            ActedByUserId = actedByUserId
+            ActedByUserId = actedByUserId,
+            // The request's trace; the relay continues it and sends it as a Kafka header.
+            TraceParent = MessagingTelemetry.CurrentTraceParent()
         };
     }
+
+    private static string Envelope<TPayload>(
+        Guid messageId,
+        string eventType,
+        DateTimeOffset occurredAt,
+        Guid? workflowId,
+        Guid? correlationId,
+        Guid causationId,
+        KycCase kycCase,
+        TPayload payload) =>
+        JsonSerializer.Serialize(new KycIntegrationEventEnvelope<TPayload>(
+            messageId,
+            eventType,
+            SchemaVersion,
+            Source,
+            occurredAt,
+            workflowId,
+            correlationId,
+            causationId,
+            kycCase.InitiatedByUserId,
+            payload));
 
     private static string StageEventType(VerificationStageType stage, VerificationStatus newStatus) =>
         (stage, newStatus) switch

@@ -239,6 +239,22 @@ What the platform is, how it is designed and what each component must do are doc
 		- Back as sophie.cs, the application's status has moved SUBMITTED -> KYC_IN_PROGRESS (when the KYC case opened) -> KYC_COMPLETED
 		  (when KYC approved), recorded by OnboardingOutcomeSubscriber. EwpCustomerDb.inbox_messages holds one row per KYC event processed.
 
+	e) Optional - view distributed traces (OpenTelemetry):
+
+		Every .NET component creates W3C trace context and carries it across HTTP calls, the Outbox and Kafka ("traceparent" header),
+		so one onboarding is one trace: CO BFF -> CO API -> relay -> KycCaseOpeningSubscriber -> KYC API -> ... -> CO API.
+		Spans are exported only when an OTLP endpoint is configured. With Jaeger (single native binary, no Docker needed):
+
+			1. Download the Windows build from https://www.jaegertracing.io/download/ and run:  .\jaeger.exe
+			   (it accepts OTLP on localhost:4317 / 4318 and serves its UI on http://localhost:16686)
+			2. Point every component at it (once, as a user environment variable), then restart Visual Studio:
+			       setx OTEL_EXPORTER_OTLP_ENDPOINT http://localhost:4317
+			3. Run an onboarding, open http://localhost:16686, choose service "customer-onboarding-bff" and open the trace.
+
+		Alternative: the .NET Aspire dashboard (docker run -p 18888:18888 -p 4317:18889 mcr.microsoft.com/dotnet/aspire-dashboard).
+		Log lines carry the same TraceId, so a log entry can be matched to its trace.
+		The KYC BFF (NestJS) is not instrumented yet: a KYC officer's decision starts a new trace at the KYC API.
+
 
 5) Troubleshooting:
 

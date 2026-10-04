@@ -41,13 +41,13 @@ Target shape for every integration event:
 ```text
 MessageId          unique per message; the idempotency key for consumers
 EventType          e.g. CustomerCreated
-SchemaVersion      (target) contract version
+SchemaVersion      contract version of the payload (1); changes only for a breaking change
 Source             producing bounded context, e.g. customer-onboarding
 OccurredAt         business time of the fact
 WorkflowId         the long-running business process (saga) this belongs to
 CorrelationId      the business interaction that groups related messages
 CausationId        MessageId of the message (or request) that caused this one
-TraceId            (target) W3C trace context, carried in Kafka headers
+TraceId            W3C trace context, carried in the Kafka "traceparent" header (not in the body)
 InitiatedByUserId  the human who started the workflow (accountability only — never an authorization grant)
 Payload            the event-specific body
 ```
@@ -67,10 +67,21 @@ Meaning of the identifiers:
 
 | Producer | Conformance |
 |---|---|
-| Customer Onboarding | Uses the envelope: `MessageId`, `EventType`, `Source`, `OccurredAt`, `WorkflowId`, `CorrelationId`, `CausationId`, `InitiatedByUserId`, `Payload`. Missing: `SchemaVersion`, `TraceId`. |
-| Customer KYC | **Flat** message: the envelope fields sit beside the payload fields, and there is no `Source` and no `Payload` wrapper. Target: adopt the standard envelope. |
+| Customer Onboarding | Full envelope, `Source` = `customer-onboarding`, `SchemaVersion` 1; trace context in Kafka headers. |
+| Customer KYC | Full envelope, `Source` = `customer-kyc`, `SchemaVersion` 1; trace context in Kafka headers. (Before increment 1b KYC published a flat shape; its consumer still accepts both, so old messages remain readable.) |
 
-Workflow identifiers currently travel only in the message body, not in Kafka headers.
+### 3.2 Kafka headers
+
+Both relays add these headers to every message, so infrastructure (tracing, routing, inspection tools) can work without parsing the body:
+
+| Header | Value |
+|---|---|
+| `traceparent` | W3C trace context of the publish span, which continues the trace of the request that raised the event (stored on the Outbox row as `trace_parent`) |
+| `message-id` | The envelope's `MessageId` |
+| `event-type` | The envelope's `EventType` |
+| `workflow-id`, `correlation-id`, `causation-id` | The envelope's workflow identifiers, when present |
+
+The body remains the source of truth for consumers; headers are a copy for infrastructure.
 
 ---
 
@@ -96,7 +107,7 @@ Workflow identifiers currently travel only in the message body, not in Kafka hea
 | `KycCaseApproved` | `kyc.case.approved` | KYC case ID | `OnboardingOutcomeSubscriber` (application → KYC_COMPLETED); Compliance (planned) | Present |
 | `KycCaseRejected` | `kyc.case.rejected` | KYC case ID | `OnboardingOutcomeSubscriber` (application → REJECTED) | Present |
 
-All KYC payloads carry `KycCaseId`, `ApplicationRef`, `ApplicationNumber` and `CustomerNumber` (`KycCaseCreated` also carries `BranchCode`); Customer Onboarding routes the outcomes by `ApplicationRef`. They also carry the status fields (`Status`, or `PreviousStatus`/`NewStatus`, or the `Stage` with `PreviousStageStatus`/`NewStageStatus`) and the decision fields (`DecisionByUserId`, `DecisionAt`, remarks).
+Every KYC payload (under `Payload`) carries `KycCaseId`, `ApplicationRef`, `ApplicationNumber` and `CustomerNumber` (`KycCaseCreated` also carries `BranchCode`); Customer Onboarding routes the outcomes by `ApplicationRef`. They also carry the status fields (`Status`, or `PreviousStatus`/`NewStatus`, or the `Stage` with `PreviousStageStatus`/`NewStageStatus`) and the decision fields (`DecisionByUserId`, `DecisionAt`, remarks).
 
 **Cross-topic ordering.** Kafka orders messages only within one partition of one topic. `kyc.case.created` and `kyc.case.approved` are different topics, so a consumer may see the approval first. Consumers must tolerate this; Customer Onboarding's aggregate applies the outstanding transitions and ignores facts it is already beyond.
 
@@ -120,5 +131,4 @@ All KYC payloads carry `KycCaseId`, `ApplicationRef`, `ApplicationNumber` and `C
 ## 5. Known Deviations from the Target
 
 1. **Both consumers have an Inbox and a dead-letter topic.** The KYC API additionally keeps one case per `ApplicationRef`, so even a re-published submission (new `MessageId`) returns the existing case.
-2. **KYC events do not use the standard envelope** (see §3.1).
-3. **Workflow identifiers travel in the body**, not in Kafka headers.
+2. **The KYC BFF (NestJS) is not instrumented with OpenTelemetry**, so a KYC officer's decision starts a new trace at the KYC API; the workflow is still linked through `WorkflowId` / `CausationId`.

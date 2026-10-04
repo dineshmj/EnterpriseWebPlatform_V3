@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 
 using Confluent.Kafka;
 
+using EnterpriseWebPlatform.Common.Observability;
+
 namespace EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure;
 
 /// <summary>
@@ -112,14 +114,26 @@ public sealed class KycOutboxPublisher(
             var topic = topics[message.EventType];
             var attemptedAt = DateTimeOffset.UtcNow;
 
+            // The publish span continues the trace of the request that raised the event.
+            using var activity = MessagingTelemetry.StartPublish(topic, message.Id, message.EventType, message.TraceParent);
+
             try
             {
+                var headers = new Headers();
+                foreach (var (name, value) in MessagingTelemetry.PublishHeaders(
+                             activity, message.TraceParent, message.Id, message.EventType,
+                             message.WorkflowId, message.CorrelationId, message.CausationId))
+                {
+                    headers.Add(name, System.Text.Encoding.UTF8.GetBytes(value));
+                }
+
                 await kafka.Producer.ProduceAsync(
                     topic,
                     new Message<string, string>
                     {
                         Key = message.AggregateId,
-                        Value = message.Payload
+                        Value = message.Payload,
+                        Headers = headers
                     },
                     ct);
 
@@ -137,6 +151,7 @@ public sealed class KycOutboxPublisher(
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Error, ex.Message);
                 message.AttemptCount++;
                 message.LastAttemptAt = attemptedAt;
                 message.LastError = ex.Message.Length > 2000 ? ex.Message[..2000] : ex.Message;

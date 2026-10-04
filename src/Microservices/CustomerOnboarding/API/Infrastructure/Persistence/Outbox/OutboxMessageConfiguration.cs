@@ -64,6 +64,10 @@ public sealed class OutboxMessageConfiguration
             .HasColumnName("initiated_by")
             .HasColumnType("uuid");
 
+        builder.Property(x => x.TraceParent)
+            .HasColumnName("trace_parent")
+            .HasMaxLength(55);
+
         builder.Property(x => x.PublishedAt)
             .HasColumnName("published_at")
             .HasColumnType("timestamp with time zone");

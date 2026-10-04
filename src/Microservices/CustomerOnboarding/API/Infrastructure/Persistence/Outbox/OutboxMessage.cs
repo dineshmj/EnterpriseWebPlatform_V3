@@ -18,7 +18,8 @@ public sealed class OutboxMessage
         Guid? workflowId,
         Guid? correlationId,
         Guid? causationId,
-        Guid? initiatedByUserId)
+        Guid? initiatedByUserId,
+        string? traceParent)
     {
         Id = id;
         AggregateType = aggregateType;
@@ -30,6 +31,7 @@ public sealed class OutboxMessage
         CorrelationId = correlationId;
         CausationId = causationId;
         InitiatedByUserId = initiatedByUserId;
+        TraceParent = traceParent;
     }
 
     public Guid Id { get; private set; }
@@ -55,6 +57,12 @@ public sealed class OutboxMessage
 
     public Guid? InitiatedByUserId { get; private set; }
 
+    /// <summary>
+    /// W3C trace context of the request that raised the event; the relay continues
+    /// this trace and sends it as the Kafka "traceparent" header.
+    /// </summary>
+    public string? TraceParent { get; private set; }
+
     public DateTimeOffset? PublishedAt { get; private set; }
 
     public int AttemptCount { get; private set; }
@@ -77,7 +85,8 @@ public sealed class OutboxMessage
         Guid? workflowId,
         Guid? correlationId,
         Guid? causationId,
-        Guid? initiatedByUserId)
+        Guid? initiatedByUserId,
+        string? traceParent = null)
     {
         if (messageId == Guid.Empty)
             throw new ArgumentException("A message ID is required.", nameof(messageId));
@@ -96,7 +105,8 @@ public sealed class OutboxMessage
             workflowId,
             correlationId,
             causationId,
-            initiatedByUserId);
+            initiatedByUserId,
+            traceParent);
     }
 
     public void MarkPublished(DateTimeOffset publishedAt)

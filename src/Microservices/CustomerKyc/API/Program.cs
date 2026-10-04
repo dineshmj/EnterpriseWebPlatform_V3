@@ -1,3 +1,6 @@
+using EnterpriseWebPlatform.Common.Observability;
+using OpenTelemetry.Trace;
+using Npgsql;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +16,10 @@ using EnterpriseWebPlatform.CustomerKyc.Api.Authorization;
 using EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
+// over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
+builder.AddEwpObservability("customer-kyc-api", tracing => tracing.AddAspNetCoreInstrumentation().AddNpgsql());
 
 builder.Services.AddControllers();
 

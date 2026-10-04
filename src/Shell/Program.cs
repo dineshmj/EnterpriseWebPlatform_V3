@@ -1,4 +1,7 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+﻿using EnterpriseWebPlatform.Common.Observability;
+using OpenTelemetry.Trace;
+using Npgsql;
+using System.IdentityModel.Tokens.Jwt;
 
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -13,6 +16,10 @@ using EnterpriseWebPlatform.Common.Landscape;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
+// over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
+builder.AddEwpObservability("shell-bff", tracing => tracing.AddAspNetCoreInstrumentation().AddNpgsql());
 
 JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
 	// 🡡__ WHY   : Prevents the JwtSecurityTokenHandler from remapping standard JWT claim types

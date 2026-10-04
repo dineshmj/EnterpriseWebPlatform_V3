@@ -1,3 +1,6 @@
+using EnterpriseWebPlatform.Common.Observability;
+using OpenTelemetry.Trace;
+using Npgsql;
 using System.Text.Json;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -12,6 +15,10 @@ using EnterpriseWebPlatform.CustomerOnboarding.Application;
 using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
+// over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
+builder.AddEwpObservability("customer-onboarding-api", tracing => tracing.AddAspNetCoreInstrumentation().AddNpgsql());
 
 // WHY:
 // The V2 Products API already established a proven hosting model for this PoC:

@@ -1,3 +1,6 @@
+using EnterpriseWebPlatform.Common.Observability;
+using OpenTelemetry.Trace;
+using Npgsql;
 using System.Text.Json;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -13,6 +16,10 @@ using EnterpriseWebPlatform.DocumentsManagement.Application.Abstractions.Storage
 using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
+// over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
+builder.AddEwpObservability("documents-management-api", tracing => tracing.AddAspNetCoreInstrumentation().AddNpgsql());
 
 builder.Services
     .AddControllers()

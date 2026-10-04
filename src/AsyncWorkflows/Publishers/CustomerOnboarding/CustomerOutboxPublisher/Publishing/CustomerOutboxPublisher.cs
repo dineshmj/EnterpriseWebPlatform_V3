@@ -1,3 +1,4 @@
+using EnterpriseWebPlatform.Common.Observability;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -94,6 +95,9 @@ public sealed class CustomerOutboxPublisher(
             var topic = TopicByEventType[message.EventType];
             var attemptedAt = DateTimeOffset.UtcNow;
 
+            // The publish span continues the trace of the request that raised the event.
+            using var activity = MessagingTelemetry.StartPublish(topic, message.Id, message.EventType, message.TraceParent);
+
             try
             {
                 if (message.InitiatedByUserId is null)
@@ -109,6 +113,9 @@ public sealed class CustomerOutboxPublisher(
                     topic,
                     message.AggregateId,
                     message.Payload,
+                    MessagingTelemetry.PublishHeaders(
+                        activity, message.TraceParent, message.Id, message.EventType,
+                        message.WorkflowId, message.CorrelationId, message.CausationId),
                     cancellationToken);
 
                 message.PublishedAt = attemptedAt;
@@ -128,6 +135,7 @@ public sealed class CustomerOutboxPublisher(
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Error, ex.Message);
                 message.AttemptCount++;
                 message.LastAttemptAt = attemptedAt;
                 message.LastError = ex.Message.Length > 2000 ? ex.Message[..2000] : ex.Message;

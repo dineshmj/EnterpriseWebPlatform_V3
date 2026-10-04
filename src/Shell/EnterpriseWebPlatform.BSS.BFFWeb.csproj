@@ -11,11 +11,14 @@
     <PackageReference Include="Duende.BFF.Yarp" Version="4.3.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.12" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageReference Include="Npgsql.OpenTelemetry" Version="10.0.3" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.19.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Common\Landscape\EnterpriseWebPlatform.Common.Landscape.csproj" />
     <ProjectReference Include="..\Common\WebUtilities\EnterpriseWebPlatform.Common.WebUtilties.csproj" />
+    <ProjectReference Include="..\Common\Observability\EnterpriseWebPlatform.Common.Observability.csproj" />
   </ItemGroup>
 
 </Project>

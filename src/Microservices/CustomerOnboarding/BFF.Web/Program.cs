@@ -1,3 +1,5 @@
+using EnterpriseWebPlatform.Common.Observability;
+using OpenTelemetry.Trace;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -16,6 +18,10 @@ using EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.Service
 JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
+// over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
+builder.AddEwpObservability("customer-onboarding-bff", tracing => tracing.AddAspNetCoreInstrumentation());
 
 builder.Services.Configure<CustomerOnboardingBffOptions>(
     builder.Configuration.GetSection(CustomerOnboardingBffOptions.SectionName));

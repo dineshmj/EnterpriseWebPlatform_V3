@@ -319,6 +319,11 @@ CREATE TABLE outbox_messages
     -- Authenticated human user that initiated the workflow.
     initiated_by        UUID         NULL,
 
+    -- W3C trace context (traceparent) of the request that raised the event. The
+    -- relay continues this trace when publishing and sends it as a Kafka header,
+    -- so one trace spans every hop of the workflow.
+    trace_parent        VARCHAR(55)  NULL,
+
     published_at        TIMESTAMPTZ  NULL,
 
     attempt_count       INTEGER      NOT NULL DEFAULT 0,

@@ -168,6 +168,7 @@ public sealed class KycDbContext(DbContextOptions<KycDbContext> options, TimePro
             e.Property(x => x.CausationId).HasColumnName("causation_id").HasColumnType("uuid");
             e.Property(x => x.InitiatedByUserId).HasColumnName("initiated_by_user_id").HasMaxLength(200);
             e.Property(x => x.ActedByUserId).HasColumnName("acted_by_user_id").HasMaxLength(200);
+            e.Property(x => x.TraceParent).HasColumnName("trace_parent").HasMaxLength(55);
             e.Property(x => x.PublishedAt).HasColumnName("published_at").HasColumnType("timestamp with time zone");
             e.Property(x => x.AttemptCount).HasColumnName("attempt_count").HasDefaultValue(0).IsRequired();
             e.Property(x => x.LastAttemptAt).HasColumnName("last_attempt_at").HasColumnType("timestamp with time zone");

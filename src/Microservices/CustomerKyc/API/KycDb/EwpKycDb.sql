@@ -186,6 +186,10 @@ CREATE TABLE IF NOT EXISTS outbox_messages (
     -- Human who actually performed the KYC decision, when applicable.
     acted_by_user_id VARCHAR(200) NULL,
 
+    -- W3C trace context (traceparent) of the request that raised the event; the
+    -- relay continues this trace and sends it as a Kafka header.
+    trace_parent VARCHAR(55) NULL,
+
     published_at TIMESTAMPTZ NULL,
     attempt_count INTEGER NOT NULL DEFAULT 0,
     last_attempt_at TIMESTAMPTZ NULL,

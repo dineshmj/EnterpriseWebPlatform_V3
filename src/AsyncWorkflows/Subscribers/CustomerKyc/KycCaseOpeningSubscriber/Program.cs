@@ -1,10 +1,15 @@
 using Microsoft.Extensions.Options;
 
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Subscribers;
+using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerKyc.KycCaseOpeningSubscriber.Configuration;
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerKyc.KycCaseOpeningSubscriber.Processing;
 
 var builder = Host.CreateApplicationBuilder(args);
+
+// Distributed tracing: each message is processed in a span that continues the
+// producer's trace (Kafka "traceparent" header) and carries it to the API call.
+builder.AddEwpObservability("kyc-case-opening-subscriber");
 
 // The shared reliable consume loop (commit after processing, retry in place,
 // dead-letter) with this worker's processor.

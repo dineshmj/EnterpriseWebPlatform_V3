@@ -2,6 +2,8 @@ using System.Text.Json;
 
 using Microsoft.EntityFrameworkCore;
 
+using EnterpriseWebPlatform.Common.Observability;
+
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Aggregates;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Common;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Enums;
@@ -19,6 +21,9 @@ namespace EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Messaging;
 internal sealed class CustomerIntegrationEventMapper(CustomerDbContext db)
 {
     private const string Source = "customer-onboarding";
+
+    /// <summary>Contract version of the published payloads (additive changes keep it).</summary>
+    private const int SchemaVersion = 1;
 
     public async Task<List<OutboxMessage>> ToOutboxMessagesAsync(
         IEnumerable<(AggregateRoot Aggregate, IDomainEvent Event)> domainEvents,
@@ -143,6 +148,7 @@ internal sealed class CustomerIntegrationEventMapper(CustomerDbContext db)
         var envelope = new IntegrationEventEnvelope<TEvent>(
             messageId,
             eventType,
+            SchemaVersion,
             Source,
             occurredAt,
             workflowId,
@@ -161,7 +167,8 @@ internal sealed class CustomerIntegrationEventMapper(CustomerDbContext db)
             workflowId,
             correlationId,
             causationId,
-            initiatedByUserId);
+            initiatedByUserId,
+            MessagingTelemetry.CurrentTraceParent());
     }
 
     private async Task<WorkflowRequestContext> ResolveApplicationWorkflowContextAsync(

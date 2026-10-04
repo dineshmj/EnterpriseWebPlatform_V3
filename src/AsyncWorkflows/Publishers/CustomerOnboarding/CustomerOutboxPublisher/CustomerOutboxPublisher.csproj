@@ -13,11 +13,13 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.12" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageReference Include="Npgsql.OpenTelemetry" Version="10.0.3" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\Contracts\EnterpriseWebPlatform.BSS.AsyncWorkflows.Contracts.csproj" />
     <ProjectReference Include="..\..\..\Infrastructure\Kafka\EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka.csproj" />
+    <ProjectReference Include="..\..\..\..\Common\Observability\EnterpriseWebPlatform.Common.Observability.csproj" />
   </ItemGroup>
 
 </Project>

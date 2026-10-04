@@ -44,7 +44,7 @@ public sealed class KycOutcomeProcessor(
         KycOutcomeMessage? message;
         try
         {
-            message = JsonSerializer.Deserialize<KycOutcomeMessage>(consumed.Value, JsonOptions);
+            message = KycOutcomeMessage.Parse(consumed.Value, JsonOptions);
         }
         catch (JsonException ex)
         {

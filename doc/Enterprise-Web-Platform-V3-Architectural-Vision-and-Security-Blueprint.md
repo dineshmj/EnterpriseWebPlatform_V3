@@ -181,7 +181,7 @@ The domain layer has no knowledge of HTTP, EF Core, Kafka or the IDP.
 |---|---|---|
 | Customer Onboarding | Full tactical DDD: `Customer` and `OnboardingApplication` aggregates (reference by ID only), value objects (`PersonName`, `EmailAddress`, `PostalAddress`…), domain events, explicit status codes, injected clock; event translation in a dedicated mapper | Cross-context references use database IDs (Session B: GUID references) |
 | Documents Management | `Document` aggregate root with value objects (`BranchCode`, `FileName`, `ContentHash`), the content-type policy in the domain, a `DocumentUploaded` domain event | Events are not published (no consumer yet); the document is immutable by design |
-| Customer KYC | Full tactical DDD: `KycCase` aggregate (`DecideStage`), `VerificationStage` value object (EF complex type), typed statuses, domain events, SoD in the aggregate (fails closed), optimistic `version` + row lock; Application layer (commands, queries) and a dedicated integration-event mapper | Published events still use the flat format, not the standard envelope |
+| Customer KYC | Full tactical DDD: `KycCase` aggregate (`DecideStage`), `VerificationStage` value object (EF complex type), typed statuses, domain events, SoD in the aggregate (fails closed), optimistic `version` + row lock; Application layer (commands, queries) and a dedicated integration-event mapper | — |
 
 ---
 
@@ -392,7 +392,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Workflow-state authorization | Partial (CO aggregate transitions; KYC stages) |
 | Object-level authorization | Present (CO and DM: branch scope); Planned (KYC) |
 | Transactional Outbox with `initiated_by` | Present (CO and KYC) |
-| Standard event envelope; Workflow / Correlation / Causation IDs | Present (CO); Partial (KYC flat messages) |
+| Standard event envelope; Workflow / Correlation / Causation IDs | Present (CO and KYC, `SchemaVersion` 1; copies in Kafka headers) |
 | Kafka backbone, at-least-once model | Present |
 | KYC Case Opening Subscriber (M2M, bounded retry) | Present |
 | Inbox / idempotent consumer | Present (CO and KYC APIs: `inbox_messages`, written in the same transaction as the change) |
@@ -404,7 +404,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Saga orchestration (Payments) | Planned |
 | User-specific SignalR notifications | Planned |
 | Centralized audit trail | Planned |
-| OpenTelemetry / distributed tracing | Planned |
+| OpenTelemetry / distributed tracing | Present (.NET components: one trace across HTTP, the Outbox and Kafka via `traceparent`; OTLP export when configured); Partial (KYC NestJS BFF not instrumented; no metrics yet) |
 | Security headers / CSP | Present: strict CSP on the Shell, CO BFF and KYC BFF (hashed inline scripts, `frame-ancestors` / `frame-src`, `object-src 'none'`); IDP CSP on its pages; `nosniff`; Referrer-Policy |
 | Cookie hardening | Present: session and anti-forgery cookies HttpOnly (session), Secure, `SameSite=Lax`; OIDC correlation / nonce cookies `None` for the login round trip only |
 | Logout propagation | Present: front-channel and back-channel logout on all three BFFs |
@@ -433,8 +433,8 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [x] Standard event envelope (CO)
 - [x] Workflow, Correlation and Causation IDs
 - [x] Initiator propagation through Kafka
-- [ ] KYC adopts the standard envelope
-- [ ] TraceId in Kafka headers
+- [x] KYC adopts the standard envelope
+- [x] TraceId in Kafka headers (`traceparent`)
 
 **Phase 2 — Reliable subscribers:** a production-style worker
 - [x] KYC Case Opening Subscriber
@@ -446,7 +446,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [x] Timeout, circuit breaker, dead-letter handling (Customer Onboarding consumer)
 - [x] The same for the KYC Case Opening Subscriber (shared consume loop)
 - [ ] Timeout on every call
-- [ ] Structured tracing
+- [x] Structured tracing (OpenTelemetry spans per message)
 
 **Phase 3 — Distributed workflow:** a complete choreographed saga
 - [x] Customer Onboarding
@@ -489,7 +489,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [ ] Artifact signing and provenance
 
 **Phase 7 — Operational resilience**
-- [ ] OpenTelemetry
+- [x] OpenTelemetry (traces; metrics pending)
 - [ ] Centralized logs and metrics
 - [ ] Kafka monitoring
 - [ ] Workflow dashboards

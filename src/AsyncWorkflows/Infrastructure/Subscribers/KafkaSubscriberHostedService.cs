@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 
 using Confluent.Kafka;
@@ -6,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
+using EnterpriseWebPlatform.Common.Observability;
 
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Subscribers;
 
@@ -93,18 +95,29 @@ public sealed class KafkaSubscriberHostedService<TProcessor, TSettings>(
                 if (retrying is null || !retrying.Equals(result.TopicPartitionOffset))
                     transientAttempts = 0;
 
+                var consumed = ToConsumedMessage(result);
+
+                // The process span continues the producer's trace (Kafka "traceparent"
+                // header); the processor's HttpClient call carries it to the next API.
+                using var activity = MessagingTelemetry.StartProcess(result.Topic, result.Partition.Value, result.Offset.Value, consumed.Headers);
+
                 try
                 {
-                    var outcome = await processor.ProcessAsync(ToConsumedMessage(result), stoppingToken);
+                    var outcome = await processor.ProcessAsync(consumed, stoppingToken);
 
                     if (outcome.DeadLetter)
+                    {
+                        activity?.SetStatus(ActivityStatusCode.Error, "dead-lettered");
                         await DeadLetterAsync(result, outcome.Reason ?? "Unprocessable message.", stoppingToken);
+                    }
 
                     consumer.Commit(result);
                     retrying = null;
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
+                    activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+
                     // Transient (dependency down) or unexpected: never lose the
                     // message. Rewind to it and try again after a back-off.
                     transientAttempts++;

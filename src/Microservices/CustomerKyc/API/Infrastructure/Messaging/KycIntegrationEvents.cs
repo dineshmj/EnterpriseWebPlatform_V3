@@ -2,29 +2,34 @@ namespace EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure.Messaging;
 
 // Published contracts (topics kyc.*). These shapes are what consumers read; the
 // domain events are internal and translated to these by KycIntegrationEventMapper.
+// Every event uses the platform's standard envelope (doc/Integration-Event-Catalogue.md §3):
+// workflow metadata at the top level, the event-specific body under Payload.
 
-public sealed record KycCaseCreatedEvent(
+/// <summary>
+/// The standard envelope. SchemaVersion is the contract version of the payload; it
+/// changes only for a breaking change (additive fields keep it).
+/// </summary>
+public sealed record KycIntegrationEventEnvelope<TPayload>(
     Guid MessageId,
     string EventType,
+    int SchemaVersion,
+    string Source,
     DateTimeOffset OccurredAt,
     Guid? WorkflowId,
     Guid? CorrelationId,
-    Guid CausationId,
+    Guid? CausationId,
+    string? InitiatedByUserId,
+    TPayload Payload);
+
+public sealed record KycCaseCreatedPayload(
     long KycCaseId,
     Guid ApplicationRef,
     string ApplicationNumber,
     string CustomerNumber,
     string BranchCode,
-    string Status,
-    string? InitiatedByUserId);
+    string Status);
 
-public sealed record KycVerificationStageDecisionEvent(
-    Guid MessageId,
-    string EventType,
-    DateTimeOffset OccurredAt,
-    Guid? WorkflowId,
-    Guid? CorrelationId,
-    Guid CausationId,
+public sealed record KycVerificationStageDecisionPayload(
     long KycCaseId,
     Guid ApplicationRef,
     string ApplicationNumber,
@@ -32,26 +37,18 @@ public sealed record KycVerificationStageDecisionEvent(
     string Stage,   // "IDENTITY_VERIFICATION" / "DOCUMENT_VERIFICATION" - a stable code, not an enum ordinal
     string PreviousStageStatus,
     string NewStageStatus,
-    string? InitiatedByUserId,
     string DecisionByUserId,
     DateTimeOffset DecisionAt,
     string? DecisionRemarks,
     string OverallStatus);
 
-public sealed record KycCaseDecisionEvent(
-    Guid MessageId,
-    string EventType,
-    DateTimeOffset OccurredAt,
-    Guid? WorkflowId,
-    Guid? CorrelationId,
-    Guid CausationId,
+public sealed record KycCaseDecisionPayload(
     long KycCaseId,
     Guid ApplicationRef,
     string ApplicationNumber,
     string CustomerNumber,
     string PreviousStatus,
     string NewStatus,
-    string? InitiatedByUserId,
     string DecisionByUserId,
     DateTimeOffset DecisionAt,
     string? DecisionRemarks,
