@@ -1,14 +1,15 @@
-using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
-using EnterpriseWebPlatform.Common.Observability;
-using OpenTelemetry.Trace;
-using Npgsql;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 
+using Npgsql;
+using OpenTelemetry.Trace;
+
+using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.CustomerKyc.Api.Application.Abstractions;
 using EnterpriseWebPlatform.CustomerKyc.Api.Application.Commands.AssignKycCase;
 using EnterpriseWebPlatform.CustomerKyc.Api.Application.Commands.DecideVerificationStage;

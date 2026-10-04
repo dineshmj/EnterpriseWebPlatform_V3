@@ -1,10 +1,11 @@
 using System.Diagnostics;
 using System.Text;
 
-using Confluent.Kafka;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+
+using Confluent.Kafka;
 
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 using EnterpriseWebPlatform.Common.Observability;

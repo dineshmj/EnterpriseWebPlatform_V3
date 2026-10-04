@@ -39,9 +39,11 @@ What the platform is, how it is designed and what each component must do are doc
 		127.0.0.1    documents-management-api.dev.localhost
 
 		127.0.0.1    compliance.dev.localhost
+		127.0.0.1    compliance-api.dev.localhost
 
 		127.0.0.1    accounts.dev.localhost
 		127.0.0.1    accounts-api.dev.localhost
+
 		127.0.0.1    payments.dev.localhost
 		127.0.0.1    payments-api.dev.localhost
 
@@ -71,6 +73,8 @@ What the platform is, how it is designed and what each component must do are doc
 		Customer KYC BFF (MFE)			https://kyc.dev.localhost:33800
 		Customer KYC API				https://kyc-api.dev.localhost:44305
 		Documents Management API		https://documents-management-api.dev.localhost:49486
+		Compliance API					https://compliance-api.dev.localhost:44306
+		Screening Provider Simulator	https://localhost:44366   (stands in for an external AML / sanctions vendor)
 		Kafka UI						http://localhost:8080
 
 	Reserved (not implemented yet):
@@ -122,6 +126,7 @@ What the platform is, how it is designed and what each component must do are doc
 			EwpCustomerDb				src\Microservices\CustomerOnboarding\API\CustomerDB\EwpCustomerDb.sql
 			EwpKycDb					src\Microservices\CustomerKyc\API\KycDb\EwpKycDb.sql
 			EwpDocumentsManagementDb	src\Microservices\DocumentsManagement\API\DocumentMgmtDB\EwpDocumentsManagementDb.sql
+			EwpComplianceDb				src\Microservices\Compliance\API\ComplianceDb\EwpComplianceDb.sql
 
 		WARNING:
 			Running a script erases that database's data. Each script must run while connected to ITS OWN database.
@@ -147,10 +152,13 @@ What the platform is, how it is designed and what each component must do are doc
 
 		Service database users (least privilege) - run ONCE after the databases exist (and again only if you drop a database itself):
 
-			& $psql -h localhost -U postgres -d postgres -f .\db\EwpServiceDbUsers.sql
+			.\db\Apply-EwpServiceDbUsers.ps1
+
+		(It checks that every database exists and runs db\EwpServiceDbUsers.sql with psql. The SQL file cannot run in
+		pgAdmin's Query Tool - it uses psql's \connect; pgAdmin's Tools > PSQL Tool with \i <path> works too.)
 
 		Each service connects with its own user (ewp_idp, ewp_shell, ewp_customer_onboarding_api, ewp_customer_outbox_relay,
-		ewp_kyc_api, ewp_documents_api) that may read and write ITS OWN database only: no DDL and no access to other
+		ewp_kyc_api, ewp_documents_api, ewp_compliance_api) that may read and write ITS OWN database only: no DDL and no access to other
 		services' databases; the CO outbox relay may only read and update outbox_messages. The database scripts above
 		still run as postgres; the grants survive re-running them. Without this step the services cannot connect.
 
@@ -174,7 +182,7 @@ What the platform is, how it is designed and what each component must do are doc
 	f) Kafka topics.
 
 		Topic auto-creation is disabled, so every topic is created explicitly: Setup-KafkaSecurity.ps1 -Phase Prepare creates
-		all of them (event topics and the two dead-letter topics). To create topics later, as the admin user:
+		all of them (event topics and the dead-letter topics). To create topics later, as the admin user:
 
 			C:\Kafka\bin\windows\kafka-topics.bat --bootstrap-server localhost:9092 --command-config C:\Kafka\config\admin.properties ^
 			    --create --if-not-exists --topic <name> --partitions 1 --replication-factor 1
@@ -184,7 +192,7 @@ What the platform is, how it is designed and what each component must do are doc
 		IMPORTANT - recreating databases means recreating topics:
 			Database IDs restart at 1 when a database is recreated, but Kafka keeps the old messages, and consumer groups would replay
 			them against the new data (e.g. an old "application 1" event applied to a new application 1). Whenever you recreate the
-			Customer Onboarding or KYC database, delete and recreate the topics above (Kafka UI, or kafka-topics.sh --delete followed by the
+			Customer Onboarding, KYC or Compliance database, delete and recreate the topics above (Kafka UI, or kafka-topics.sh --delete followed by the
 			creation above, or simply re-run Setup-KafkaSecurity.ps1 -Phase Prepare). Deleting a topic also discards the consumer
 		groups' offsets for it.
 
@@ -199,7 +207,8 @@ What the platform is, how it is designed and what each component must do are doc
 
 	NOTE - secrets:
 		Each component reads its own client secrets from its own configuration; nothing is compiled into Common.Landscape any more.
-		Development values: appsettings.Development.json of the IDP, Shell BFF, Customer Onboarding BFF and KycCaseOpeningSubscriber, and runnow.bat of the KYC BFF.
+		Development values: appsettings.Development.json of the IDP, Shell BFF, Customer Onboarding BFF, KycCaseOpeningSubscriber,
+		ComplianceCaseOpeningSubscriber, Compliance API (screening API key) and Screening Provider Simulator, and runnow.bat of the KYC BFF.
 		A component refuses to start when a secret is missing. Outside Development, supply them as environment variables or from a secret store.
 
 	i) Open EnterpriseWebPlatform.BSS.sln in Visual Studio and restore the NuGet packages.
@@ -209,7 +218,9 @@ What the platform is, how it is designed and what each component must do are doc
 
 	a) Visual Studio: use the multi-project launch profile in EnterpriseWebPlatform.BSS.slnLaunch. It starts:
 
-		IDP, Documents Management API, Customer Onboarding API, Customer KYC API, CustomerOutboxPublisher, KycCaseOpeningSubscriber, OnboardingOutcomeSubscriber, Shell BFF and Customer Onboarding BFF.
+		IDP, Documents Management API, Customer Onboarding API, Customer KYC API, CustomerOutboxPublisher, KycCaseOpeningSubscriber,
+		OnboardingOutcomeSubscriber, Compliance API, ComplianceCaseOpeningSubscriber, Screening Provider Simulator, Shell BFF and
+		Customer Onboarding BFF.
 
 		Every publisher and subscriber is a console (generic host) application. Several instances of each may run in parallel:
 		publishers claim Outbox rows with FOR UPDATE SKIP LOCKED, subscribers share one Kafka consumer group per subscriber (one
@@ -232,6 +243,24 @@ What the platform is, how it is designed and what each component must do are doc
 		- In Kafka UI, check the kyc.* topics.
 		- Back as sophie.cs, the application's status has moved SUBMITTED -> KYC_IN_PROGRESS (when the KYC case opened) -> KYC_COMPLETED
 		  (when KYC approved), recorded by OnboardingOutcomeSubscriber. EwpCustomerDb.inbox_messages holds one row per KYC event processed.
+		- KYC approval opens a Compliance case (ComplianceCaseOpeningSubscriber): the application moves to COMPLIANCE_IN_PROGRESS and
+		  EwpComplianceDb.compliance_cases has a row that the Compliance API screens within seconds (status SCREENING -> UNDER_REVIEW,
+		  risk LOW / MEDIUM / HIGH by the customer number's last digit: 9 = MATCH/HIGH, 7-8 = POTENTIAL_MATCH/MEDIUM, else CLEAR/LOW).
+		  The Compliance officer UI arrives in 2b; until then decide a case through the API with Bruno (section 6) as a
+		  compliance officer who is neither the onboarding initiator nor a KYC decider (separation of duties). A HIGH-risk case
+		  needs clearance 5 to approve. The decision moves the application to COMPLIANCE_COMPLETED or COMPLIANCE_REJECTED.
+
+	g2) Demonstrating an unreliable external provider (Screening Provider Simulator, localhost only):
+
+			$sim = 'https://localhost:44366/admin/behaviour'
+			Invoke-RestMethod $sim -Method Put -ContentType 'application/json' -Body '{"behaviour":"Down"}'      # or Failing / Slow / Healthy
+			Invoke-RestMethod $sim -Method Put -ContentType 'application/json' -Body '{"behaviour":"Healthy","forcedOutcome":"MATCH"}'
+			Invoke-RestMethod $sim                                                                              # current behaviour
+
+		While the provider is Down / Failing / Slow, new Compliance cases stay in SCREENING (a provider failure is never a pass),
+		are retried with back-off (15 s doubling to 5 min), the circuit breaker opens after repeated failures (Compliance API log:
+		"circuit open"), and /health/ready of the Compliance API reports Degraded once a case waits more than 2 minutes.
+		Set it back to Healthy and the waiting cases are screened automatically.
 
 	e) Health endpoints (as used by Kubernetes liveness / readiness probes):
 
@@ -239,6 +268,7 @@ What the platform is, how it is designed and what each component must do are doc
 			CustomerOutboxPublisher:      http://localhost:5101/health/live | /health/ready
 			KycCaseOpeningSubscriber:     http://localhost:5102/health/live | /health/ready
 			OnboardingOutcomeSubscriber:  http://localhost:5103/health/live | /health/ready
+			ComplianceCaseOpeningSubscriber: http://localhost:5104/health/live | /health/ready
 
 		live  = the process (and its background loop) is working; 503 means "restart it".
 		ready = its dependencies are reachable (database; for a subscriber, its Kafka consumer group). "Degraded" (still 200)
@@ -320,7 +350,7 @@ What the platform is, how it is designed and what each component must do are doc
 		Client ID:			BSS.ApiTesting.Bruno.ClientID
 		Grant:				Authorization Code, PKCE required, no client secret (public client)
 		Identity scopes:	openid profile email roles
-		API scopes:			customer-onboarding.read/.write, customer-kyc.read/.write, documents-management.read/.write, accounts.*, payments.*
+		API scopes:			customer-onboarding.read/.write, customer-kyc.read/.write, documents-management.read/.write, compliance.read/.write, accounts.*, payments.*
 
 		Redirect URIs:		http://127.0.0.1:3000/callback (local callback server, recommended - see c)
 							https://oauth.usebruno.com/callback

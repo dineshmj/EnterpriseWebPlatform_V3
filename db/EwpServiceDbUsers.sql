@@ -5,7 +5,10 @@
 -- to ITS OWN database only: no DDL, no superuser, no access to other services'
 -- databases. A compromised service can no longer read or change every database.
 --
--- Run ONCE as postgres with psql (it uses \connect), after the databases exist:
+-- Run as postgres with psql (it uses \connect - pgAdmin's Query Tool cannot run it),
+-- after the databases exist. Easiest, from the repository root:
+--   .\db\Apply-EwpServiceDbUsers.ps1
+-- or directly:
 --   psql -h localhost -U postgres -d postgres -f db\EwpServiceDbUsers.sql
 -- It is idempotent: safe to re-run. ALTER DEFAULT PRIVILEGES makes the grants
 -- survive recreating a database's tables with its consolidated script (run as
@@ -30,7 +33,8 @@ BEGIN
         ('ewp_customer_onboarding_api', 'ewp-co-api-dev'),
         ('ewp_customer_outbox_relay',   'ewp-co-relay-dev'),
         ('ewp_kyc_api',                 'ewp-kyc-api-dev'),
-        ('ewp_documents_api',           'ewp-dm-api-dev')
+        ('ewp_documents_api',           'ewp-dm-api-dev'),
+        ('ewp_compliance_api',          'ewp-compliance-api-dev')
     ) AS t(role_name, role_password)
     LOOP
         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r.role_name) THEN
@@ -50,12 +54,14 @@ REVOKE CONNECT ON DATABASE "EwpBssShellDb"            FROM PUBLIC;
 REVOKE CONNECT ON DATABASE "EwpCustomerDb"            FROM PUBLIC;
 REVOKE CONNECT ON DATABASE "EwpKycDb"                 FROM PUBLIC;
 REVOKE CONNECT ON DATABASE "EwpDocumentsManagementDb" FROM PUBLIC;
+REVOKE CONNECT ON DATABASE "EwpComplianceDb"          FROM PUBLIC;
 
 GRANT CONNECT ON DATABASE "EwpIdentityAccessDb"      TO ewp_idp;
 GRANT CONNECT ON DATABASE "EwpBssShellDb"            TO ewp_shell;
 GRANT CONNECT ON DATABASE "EwpCustomerDb"            TO ewp_customer_onboarding_api, ewp_customer_outbox_relay;
 GRANT CONNECT ON DATABASE "EwpKycDb"                 TO ewp_kyc_api;
 GRANT CONNECT ON DATABASE "EwpDocumentsManagementDb" TO ewp_documents_api;
+GRANT CONNECT ON DATABASE "EwpComplianceDb"          TO ewp_compliance_api;
 
 -- -----------------------------------------------------------------------------
 -- 3. Per database: data access for the owning service role
@@ -103,3 +109,11 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ewp_docum
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_documents_api;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ewp_documents_api;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ewp_documents_api;
+
+\connect EwpComplianceDb
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+GRANT USAGE ON SCHEMA public TO ewp_compliance_api;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ewp_compliance_api;
+GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_compliance_api;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ewp_compliance_api;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ewp_compliance_api;

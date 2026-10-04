@@ -1,9 +1,9 @@
-﻿using EnterpriseWebPlatform.IdentityServer.Security;
-using Duende.IdentityServer;
+﻿using Duende.IdentityServer;
 using Duende.IdentityServer.Models;
 
 using EnterpriseWebPlatform.Common.Landscape.Microservices;
 using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.IdentityServer.Security;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.MFEs;
 

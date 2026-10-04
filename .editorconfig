@@ -1,0 +1,13 @@
+# EWP V3 house style.
+#  - Files end at their last visible character: no final newline.
+#  - C#: file-scoped namespaces ("namespace X.Y;").
+#  - C# usings in four groups, one blank line between them, alphabetical within each:
+#      System.*   /   Microsoft.*   /   third-party (Duende, Confluent, Npgsql, ...)   /   EnterpriseWebPlatform.*
+#    (Visual Studio "Sort Usings" cannot produce this order, so do not run it on these files.)
+root = true
+
+[*]
+insert_final_newline = false
+
+[*.cs]
+csharp_style_namespace_declarations = file_scoped:suggestion

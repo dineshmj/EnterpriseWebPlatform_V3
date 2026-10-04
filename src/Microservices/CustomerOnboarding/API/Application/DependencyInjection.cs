@@ -27,6 +27,8 @@ public static class DependencyInjection
             Onboarding.Commands.SubmitApplication.SubmitOnboardingApplicationCommandHandler>();
         services.AddScoped<
             Onboarding.Commands.RecordKycOutcome.RecordKycOutcomeCommandHandler>();
+        services.AddScoped<
+            Onboarding.Commands.RecordComplianceOutcome.RecordComplianceOutcomeCommandHandler>();
 
         services.AddScoped<
             Onboarding.Queries.GetApplication.GetOnboardingApplicationQueryHandler>();

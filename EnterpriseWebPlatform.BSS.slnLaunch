@@ -23,6 +23,11 @@
         "DebugTarget": "https"
       },
       {
+        "Path": "src\\Microservices\\Compliance\\API\\EnterpriseWebPlatform.Compliance.Api.csproj",
+        "Action": "Start",
+        "DebugTarget": "https"
+      },
+      {
         "Path": "src\\AsyncWorkflows\\Publishers\\CustomerOnboarding\\CustomerOutboxPublisher\\CustomerOutboxPublisher.csproj",
         "Action": "Start",
         "DebugTarget": "CustomerOutboxPublisher"
@@ -36,6 +41,16 @@
         "Path": "src\\AsyncWorkflows\\Subscribers\\CustomerKyc\\KycCaseOpeningSubscriber\\KycCaseOpeningSubscriber.csproj",
         "Action": "Start",
         "DebugTarget": "KycCaseOpeningSubscriber"
+      },
+      {
+        "Path": "src\\AsyncWorkflows\\Subscribers\\Compliance\\ComplianceCaseOpeningSubscriber\\ComplianceCaseOpeningSubscriber.csproj",
+        "Action": "Start",
+        "DebugTarget": "ComplianceCaseOpeningSubscriber"
+      },
+      {
+        "Path": "src\\Simulators\\ScreeningProviderSimulator\\EnterpriseWebPlatform.Simulators.ScreeningProvider.csproj",
+        "Action": "Start",
+        "DebugTarget": "https"
       },
       {
         "Path": "src\\Shell\\EnterpriseWebPlatform.BSS.BFFWeb.csproj",

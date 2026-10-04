@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 
-using EnterpriseWebPlatform.CustomerOnboarding.Domain.Aggregates;
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Persistence;
+using EnterpriseWebPlatform.CustomerOnboarding.Domain.Aggregates;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence.Repositories;
 

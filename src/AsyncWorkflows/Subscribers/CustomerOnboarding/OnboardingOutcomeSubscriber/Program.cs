@@ -1,9 +1,9 @@
 using Microsoft.Extensions.Options;
 
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Subscribers;
-using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboarding.OnboardingOutcomeSubscriber.Configuration;
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboarding.OnboardingOutcomeSubscriber.Processing;
+using EnterpriseWebPlatform.Common.Observability;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -13,7 +13,7 @@ builder.AddEwpObservability("onboarding-outcome-subscriber");
 
 // The shared reliable consume loop (commit after processing, retry in place,
 // dead-letter) with this worker's processor.
-builder.Services.AddKafkaSubscriber<KycOutcomeProcessor, OnboardingOutcomeSubscriberOptions>(
+builder.Services.AddKafkaSubscriber<OnboardingOutcomeProcessor, OnboardingOutcomeSubscriberOptions>(
     builder.Configuration, OnboardingOutcomeSubscriberOptions.SectionName);
 
 // The worker's own machine identity; the token is cached until shortly before expiry.
@@ -22,7 +22,7 @@ builder.Services
     .AddStandardResilienceHandler();
 
 builder.Services
-    .AddHttpClient(KycOutcomeProcessor.HttpClientName, (serviceProvider, client) =>
+    .AddHttpClient(OnboardingOutcomeProcessor.HttpClientName, (serviceProvider, client) =>
     {
         var options = serviceProvider.GetRequiredService<IOptions<OnboardingOutcomeSubscriberOptions>>().Value;
         client.BaseAddress = new Uri(options.CustomerOnboardingApiBaseUrl.TrimEnd('/'));

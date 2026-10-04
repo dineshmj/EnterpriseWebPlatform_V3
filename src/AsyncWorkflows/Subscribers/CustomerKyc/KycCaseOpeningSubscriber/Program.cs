@@ -1,9 +1,9 @@
 using Microsoft.Extensions.Options;
 
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Subscribers;
-using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerKyc.KycCaseOpeningSubscriber.Configuration;
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerKyc.KycCaseOpeningSubscriber.Processing;
+using EnterpriseWebPlatform.Common.Observability;
 
 var builder = Host.CreateApplicationBuilder(args);
 

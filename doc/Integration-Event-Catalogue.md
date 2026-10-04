@@ -70,6 +70,7 @@ Meaning of the identifiers:
 |---|---|
 | Customer Onboarding | Full envelope, `Source` = `customer-onboarding`, `SchemaVersion` 1; trace context in Kafka headers. |
 | Customer KYC | Full envelope, `Source` = `customer-kyc`, `SchemaVersion` 1; trace context in Kafka headers. (Before increment 1b KYC published a flat shape; its consumer still accepts both, so old messages remain readable.) |
+| Compliance | Full envelope, `Source` = `compliance`, `SchemaVersion` 1; trace context in Kafka headers. |
 
 ### 3.2 Kafka headers
 
@@ -105,25 +106,37 @@ The body remains the source of truth for consumers; headers are a copy for infra
 | `KycIdentityVerificationRejected` | `kyc.identity.verification.rejected` | KYC case ID | — | Published; no consumer |
 | `KycDocumentVerificationApproved` | `kyc.document.verification.approved` | KYC case ID | — | Published; no consumer |
 | `KycDocumentVerificationRejected` | `kyc.document.verification.rejected` | KYC case ID | — | Published; no consumer |
-| `KycCaseApproved` | `kyc.case.approved` | KYC case ID | `OnboardingOutcomeSubscriber` (application → KYC_COMPLETED); Compliance (planned) | Present |
+| `KycCaseApproved` | `kyc.case.approved` | KYC case ID | `OnboardingOutcomeSubscriber` (application → KYC_COMPLETED); `ComplianceCaseOpeningSubscriber` → Compliance opens one case per `ApplicationRef` | Present |
 | `KycCaseRejected` | `kyc.case.rejected` | KYC case ID | `OnboardingOutcomeSubscriber` (application → REJECTED) | Present |
 
 Every KYC payload (under `Payload`) carries `KycCaseId`, `ApplicationRef`, `ApplicationNumber` and `CustomerNumber` (`KycCaseCreated` also carries `BranchCode`); Customer Onboarding routes the outcomes by `ApplicationRef`. They also carry the status fields (`Status`, or `PreviousStatus`/`NewStatus`, or the `Stage` with `PreviousStageStatus`/`NewStageStatus`) and the decision fields (`DecisionByUserId`, `DecisionAt`, remarks).
 
+`KycCaseApproved` / `KycCaseRejected` also carry (added in increment 2a, additively) `BranchCode`, `IdentityVerificationByUserId` and `DocumentVerificationByUserId` — the officers who decided each KYC stage. Compliance needs them to keep its case in the same branch and to enforce separation of duties across contexts (a KYC decider may not also clear Compliance for the same customer). Earlier `kyc.case.approved` messages lack them and are dead-lettered by `ComplianceCaseOpeningSubscriber`.
+
 **Cross-topic ordering.** Kafka orders messages only within one partition of one topic. `kyc.case.created` and `kyc.case.approved` are different topics, so a consumer may see the approval first. Consumers must tolerate this; Customer Onboarding's aggregate applies the outstanding transitions and ignores facts it is already beyond.
 
-### 4.3 Dead-letter topics
+### 4.3 Compliance (producer: Compliance API, in-process Outbox relay)
+
+| Event type | Topic | Key | Consumers | Status |
+|---|---|---|---|---|
+| `ComplianceCaseCreated` | `compliance.case.created` | Compliance case ID | `OnboardingOutcomeSubscriber` (application → COMPLIANCE_IN_PROGRESS) | Present |
+| `ComplianceCaseApproved` | `compliance.case.approved` | Compliance case ID | `OnboardingOutcomeSubscriber` (application → COMPLIANCE_COMPLETED); Accounts (planned) | Present |
+| `ComplianceCaseRejected` | `compliance.case.rejected` | Compliance case ID | `OnboardingOutcomeSubscriber` (application → COMPLIANCE_REJECTED) | Present |
+
+Every Compliance payload carries `ComplianceCaseId`, `ApplicationRef`, `ApplicationNumber`, `CustomerNumber` and `BranchCode`. `ComplianceCaseCreated` adds `KycCaseId` and `Status`; the decision events add `PreviousStatus` / `NewStatus`, `ScreeningOutcome`, `RiskRating`, `DecisionByUserId`, `DecisionAt` and `DecisionRemarks`. Screening progress (provider attempts, retries, assignment, holds) stays inside Compliance and is not published.
+
+### 4.4 Dead-letter topics
 
 | Topic | Owner | Contents |
 |---|---|---|
 | `customer-kyc.case-opening-subscriber.dlq` | `KycCaseOpeningSubscriber` | `onboarding.application.submitted` messages that can never open a case (malformed, wrong type, required fields missing, rejected with 4xx), with the same `dlq-*` headers. Transient failures are never dead-lettered. |
+| `compliance.case-opening-subscriber.dlq` | `ComplianceCaseOpeningSubscriber` | `kyc.case.approved` messages that can never open a Compliance case (malformed, wrong type, required fields such as `BranchCode` missing, rejected with 4xx), with the same `dlq-*` headers. Transient failures are never dead-lettered. |
 | `customer-onboarding.outcome-subscriber.dlq` | `OnboardingOutcomeSubscriber` | Messages that can never be processed (malformed, unknown type, no application, rejected with 4xx), copied unchanged with headers `dlq-reason`, `dlq-original-topic`, `dlq-original-partition`, `dlq-original-offset`, `dlq-consumer-group`, `dlq-failed-at`. Transient failures are never dead-lettered. |
 
-### 4.4 Planned events
+### 4.5 Planned events
 
 | Event type | Topic | Producer | Consumers | Status |
 |---|---|---|---|---|
-| `ComplianceCaseApproved` / `ComplianceCaseRejected` | `compliance.case.approved` / `.rejected` | Compliance | Customer Onboarding, Accounts | Planned |
 | `AccountOpened` / `AccountOpeningFailed` | `accounts.account.opened` / `accounts.account.opening.failed` | Accounts | Customer Onboarding | Planned |
 | Payment saga commands and events | `payments.*` | Payments orchestrator and participants | Payments, Accounts | Planned — defined in [Payments-Requirements.md](../src/Microservices/Payments/doc/Payments-Requirements.md) |
 
@@ -131,5 +144,5 @@ Every KYC payload (under `Payload`) carries `KycCaseId`, `ApplicationRef`, `Appl
 
 ## 5. Known Deviations from the Target
 
-1. **Both consumers have an Inbox and a dead-letter topic.** The KYC API additionally keeps one case per `ApplicationRef`, so even a re-published submission (new `MessageId`) returns the existing case.
+1. **Every consumer has an Inbox and a dead-letter topic.** The KYC API additionally keeps one case per `ApplicationRef`, so even a re-published submission (new `MessageId`) returns the existing case.
 2. **The KYC BFF (NestJS) is not instrumented with OpenTelemetry**, so a KYC officer's decision starts a new trace at the KYC API; the workflow is still linked through `WorkflowId` / `CausationId`.

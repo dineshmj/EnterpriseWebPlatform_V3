@@ -51,6 +51,8 @@ $Users = [ordered]@{
     'ewp-kyc-api'                       = 'ewp-kyc-api-kafka-dev'            # Customer KYC API (in-process relay)
     'ewp-kyc-case-opening-subscriber'   = 'ewp-kyc-case-opening-kafka-dev'   # KycCaseOpeningSubscriber
     'ewp-onboarding-outcome-subscriber' = 'ewp-onboarding-outcome-kafka-dev' # OnboardingOutcomeSubscriber
+    'ewp-compliance-api'                = 'ewp-compliance-api-kafka-dev'     # Compliance API (in-process relay)
+    'ewp-compliance-case-opening-subscriber' = 'ewp-compliance-case-opening-kafka-dev' # ComplianceCaseOpeningSubscriber
     'ewp-kafka-ui'                      = 'ewp-kafka-ui-dev'                 # Kafka UI (read-only)
 }
 
@@ -66,13 +68,18 @@ $Topics = @(
     'kyc.document.verification.approved',
     'kyc.document.verification.rejected',
     'customer-kyc.case-opening-subscriber.dlq',
-    'customer-onboarding.outcome-subscriber.dlq'
+    'customer-onboarding.outcome-subscriber.dlq',
+    'compliance.case.created',
+    'compliance.case.approved',
+    'compliance.case.rejected',
+    'compliance.case-opening-subscriber.dlq'
 )
 
 # Consumer groups introduced with these security settings, and the topics they read.
 $NewGroups = [ordered]@{
     'customer-kyc.case-opening-subscriber'  = @('onboarding.application.submitted')
     'customer-onboarding.outcome-subscriber' = @('kyc.case.created', 'kyc.case.approved', 'kyc.case.rejected')
+    'compliance.case-opening-subscriber'     = @('kyc.case.approved')
 }
 
 $Bootstrap   = 'localhost:9092'
@@ -133,26 +140,31 @@ switch ($Phase) {
 'Prepare' {
     if (-not (Test-KafkaPort)) { throw 'Kafka is not running on localhost:9092. Start it (StartKafka.bat) and re-run.' }
 
+    # First run: the broker is still PLAINTEXT. Later runs (e.g. a new context adding its
+    # users and topics): the broker is secured, so the tools authenticate as admin.
+    $auth = if (Test-Path $AdminProps) { "--command-config `"$AdminProps`"" } else { '' }
+    if ($auth) { Write-Host 'Broker already secured: authenticating as admin (config\admin.properties).' -ForegroundColor DarkGray }
+
     Write-Host '1/3  SCRAM-SHA-512 users' -ForegroundColor Cyan
     foreach ($user in $Users.Keys) {
-        Invoke-KafkaTool 'kafka-configs.bat' "--bootstrap-server $Bootstrap --alter --entity-type users --entity-name $user --add-config `"SCRAM-SHA-512=[iterations=8192,password=$($Users[$user])]`"" | Out-Null
+        Invoke-KafkaTool 'kafka-configs.bat' "--bootstrap-server $Bootstrap $auth --alter --entity-type users --entity-name $user --add-config `"SCRAM-SHA-512=[iterations=8192,password=$($Users[$user])]`"" | Out-Null
         Write-Host "     $user"
     }
 
     Write-Host '2/3  Topics (explicit; auto-creation will be disabled)' -ForegroundColor Cyan
     foreach ($topic in $Topics) {
-        Invoke-KafkaTool 'kafka-topics.bat' "--bootstrap-server $Bootstrap --create --if-not-exists --topic $topic --partitions 1 --replication-factor 1" | Out-Null
+        Invoke-KafkaTool 'kafka-topics.bat' "--bootstrap-server $Bootstrap $auth --create --if-not-exists --topic $topic --partitions 1 --replication-factor 1" | Out-Null
         Write-Host "     $topic"
     }
 
     Write-Host '3/3  New consumer groups start at the end of their topics' -ForegroundColor Cyan
     Write-Host '     (a brand-new group would otherwise replay every retained message)'
     foreach ($group in $NewGroups.Keys) {
-        $describe = Invoke-KafkaTool 'kafka-consumer-groups.bat' "--bootstrap-server $Bootstrap --describe --group $group" -AllowFailure
+        $describe = Invoke-KafkaTool 'kafka-consumer-groups.bat' "--bootstrap-server $Bootstrap $auth --describe --group $group" -AllowFailure
         # Older Kafka: "... does not exist"; Kafka 4.x: GroupIdNotFoundException "Group ... not found".
         if (($describe -join "`n") -match 'does not exist|GroupIdNotFound|not found') {
             foreach ($topic in $NewGroups[$group]) {
-                Invoke-KafkaTool 'kafka-consumer-groups.bat' "--bootstrap-server $Bootstrap --group $group --reset-offsets --to-latest --topic $topic --execute" | Out-Null
+                Invoke-KafkaTool 'kafka-consumer-groups.bat' "--bootstrap-server $Bootstrap $auth --group $group --reset-offsets --to-latest --topic $topic --execute" | Out-Null
             }
             Write-Host "     $group -> latest"
         } else {
@@ -160,7 +172,11 @@ switch ($Phase) {
         }
     }
 
-    Write-Host "`nNext: stop Kafka (Ctrl+C in its window), then run:  .\kafka\Setup-KafkaSecurity.ps1 -Phase Secure" -ForegroundColor Green
+    if ($auth) {
+        Write-Host "`nNext (broker already secured): run  .\kafka\Setup-KafkaSecurity.ps1 -Phase Acls" -ForegroundColor Green
+    } else {
+        Write-Host "`nNext: stop Kafka (Ctrl+C in its window), then run:  .\kafka\Setup-KafkaSecurity.ps1 -Phase Secure" -ForegroundColor Green
+    }
 }
 
 # ---------------------------------------------------------------------------------------
@@ -230,11 +246,19 @@ switch ($Phase) {
     Grant 'ewp-kyc-case-opening-subscriber' '--operation Write --operation Describe --topic customer-kyc.case-opening-subscriber.dlq'
 
     Write-Host 'OnboardingOutcomeSubscriber: read its topics and group; write its dead-letter topic' -ForegroundColor Cyan
-    foreach ($t in 'kyc.case.created', 'kyc.case.approved', 'kyc.case.rejected') {
+    foreach ($t in 'kyc.case.created', 'kyc.case.approved', 'kyc.case.rejected', 'compliance.case.created', 'compliance.case.approved', 'compliance.case.rejected') {
         Grant 'ewp-onboarding-outcome-subscriber' "--operation Read --operation Describe --topic $t"
     }
     Grant 'ewp-onboarding-outcome-subscriber' '--operation Read --group customer-onboarding.outcome-subscriber'
     Grant 'ewp-onboarding-outcome-subscriber' '--operation Write --operation Describe --topic customer-onboarding.outcome-subscriber.dlq'
+
+    Write-Host 'Compliance API (in-process relay): write compliance.* only' -ForegroundColor Cyan
+    Grant 'ewp-compliance-api' '--operation Write --operation Describe --resource-pattern-type prefixed --topic compliance.case.'
+
+    Write-Host 'ComplianceCaseOpeningSubscriber: read kyc.case.approved and its group; write its dead-letter topic' -ForegroundColor Cyan
+    Grant 'ewp-compliance-case-opening-subscriber' '--operation Read --operation Describe --topic kyc.case.approved'
+    Grant 'ewp-compliance-case-opening-subscriber' '--operation Read --group compliance.case-opening-subscriber'
+    Grant 'ewp-compliance-case-opening-subscriber' '--operation Write --operation Describe --topic compliance.case-opening-subscriber.dlq'
 
     # Clean-up of an earlier run where "*" was expanded to ".git" (see Invoke-KafkaTool).
     Invoke-KafkaTool 'kafka-acls.bat' "--bootstrap-server $Bootstrap --command-config `"$AdminProps`" --remove --force --topic .git" -AllowFailure | Out-Null

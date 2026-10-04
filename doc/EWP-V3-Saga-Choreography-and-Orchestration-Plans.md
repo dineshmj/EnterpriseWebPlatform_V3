@@ -1,6 +1,6 @@
 # Enterprise Web Platform V3 — Saga Plans
 
-**Status:** Living document. Customer Onboarding choreography is implemented from submission through the KYC decision and back (both directions between CO and KYC); Compliance and Accounts are planned; Payments orchestration is planned.
+**Status:** Living document. Customer Onboarding choreography is implemented from submission through the KYC and Compliance decisions and back to CO; Accounts is planned; Payments orchestration is planned.
 
 ---
 
@@ -42,7 +42,7 @@ There is no central coordinator. Each participating context:
 | 3 | Application moves to KYC_IN_PROGRESS | `kyc.case.created` | CO → `OnboardingApplicationStatusChanged` | Present |
 | 4 | Human KYC review of two stages (may take days) | KYC officers | KYC → stage events, then `KycCaseApproved` / `KycCaseRejected` | Present |
 | 5 | CO records the KYC outcome (KYC_COMPLETED or REJECTED) | `kyc.case.approved` / `rejected` | CO → status changed | Present |
-| 6 | Compliance case, screening, human decision | `kyc.case.approved` | Compliance → `ComplianceCaseApproved` / `Rejected` | Planned |
+| 6 | Compliance case opened, external screening (asynchronous, retried), human decision | `kyc.case.approved` | Compliance → `ComplianceCaseCreated`, then `ComplianceCaseApproved` / `Rejected`; CO → COMPLIANCE_IN_PROGRESS / COMPLETED / REJECTED | Present (officer UI in 2b) |
 | 7 | Account application, human approval, account opened | `compliance.case.approved` | Accounts → `AccountOpened` / `AccountOpeningFailed` | Planned |
 | 8 | Onboarding completes or compensates | Accounts outcome | CO → status changed | Planned |
 | 9 | Initiator and other entitled users notified | status-change events | Notifications → SignalR | Planned |
@@ -161,7 +161,7 @@ Retry, timeout and circuit breaker protect **individual technical interactions**
 - [x] Inbox / idempotency in the CO consumer
 - [x] Timeout, retry, circuit breaker and dead-letter handling in the CO consumer
 - [x] The same Inbox and dead-letter handling in `KycCaseOpeningSubscriber` (both workers share one consume loop: `AsyncWorkflows.Infrastructure.Subscribers`)
-- [ ] Compliance participant
+- [x] Compliance participant (`ComplianceCaseOpeningSubscriber`; outcomes via `OnboardingOutcomeSubscriber`)
 - [ ] Accounts participant
 - [ ] Compensation paths, including DM document invalidation
 - [ ] Notifications to the initiator and other entitled users

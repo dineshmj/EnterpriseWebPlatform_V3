@@ -1,10 +1,10 @@
-using EnterpriseWebPlatform.Common.Observability;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
+using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Publishers.CustomerOnboarding.CustomerOutboxPublisher.Configuration;
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Publishers.CustomerOnboarding.CustomerOutboxPublisher.Persistence;
-using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
+using EnterpriseWebPlatform.Common.Observability;
 
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Publishers.CustomerOnboarding.CustomerOutboxPublisher.Publishing;
 

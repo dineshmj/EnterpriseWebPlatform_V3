@@ -23,6 +23,8 @@ Run the phases in order from the repository root (PowerShell). Each phase checks
 .\kafka\Setup-KafkaSecurity.ps1 -Phase Acls
 ```
 
+**Adding a component to an already-secured broker** (e.g. a new bounded context): with Kafka running, run `-Phase Prepare` (it detects `config\admin.properties` and authenticates as admin) and then `-Phase Acls`. The Secure phase is not needed again.
+
 To undo: stop Kafka and run `.\kafka\Setup-KafkaSecurity.ps1 -Revert` (restores the backed-up `server.properties`), then set `Kafka:SecurityProtocol` back to `Plaintext` in the components.
 
 ### Who may do what
@@ -31,8 +33,10 @@ To undo: stop Kafka and run `.\kafka\Setup-KafkaSecurity.ps1 -Revert` (restores 
 |---|---|---|
 | `ewp-co-outbox-relay` | CustomerOutboxPublisher | Write `customer.created`, `onboarding.application.submitted`, `onboarding.application.status.changed` |
 | `ewp-kyc-api` | Customer KYC API (in-process relay) | Write `kyc.*` (prefixed) |
+| `ewp-compliance-api` | Compliance API (in-process relay) | Write `compliance.case.*` (prefixed) |
+| `ewp-compliance-case-opening-subscriber` | ComplianceCaseOpeningSubscriber | Read `kyc.case.approved` and group `compliance.case-opening-subscriber`; write `compliance.case-opening-subscriber.dlq` |
 | `ewp-kyc-case-opening-subscriber` | KycCaseOpeningSubscriber | Read `onboarding.application.submitted` and group `customer-kyc.case-opening-subscriber`; write `customer-kyc.case-opening-subscriber.dlq` |
-| `ewp-onboarding-outcome-subscriber` | OnboardingOutcomeSubscriber | Read `kyc.case.created/approved/rejected` and group `customer-onboarding.outcome-subscriber`; write `customer-onboarding.outcome-subscriber.dlq` |
+| `ewp-onboarding-outcome-subscriber` | OnboardingOutcomeSubscriber | Read `kyc.case.created/approved/rejected`, `compliance.case.created/approved/rejected` and group `customer-onboarding.outcome-subscriber`; write `customer-onboarding.outcome-subscriber.dlq` |
 | `ewp-kafka-ui` | Kafka UI | Read and describe everything; no writes |
 | `admin` | The broker itself and the CLI tools | Super user |
 

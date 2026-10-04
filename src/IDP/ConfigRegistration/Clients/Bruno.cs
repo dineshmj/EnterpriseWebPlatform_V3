@@ -57,6 +57,9 @@ public sealed class Bruno
                 DocumentsManagementApiScopesRequired.DOCUMENTS_MANAGEMENT_READ,
                 DocumentsManagementApiScopesRequired.DOCUMENTS_MANAGEMENT_WRITE,
 
+                ComplianceApiScopesRequired.COMPLIANCE_READ,
+                ComplianceApiScopesRequired.COMPLIANCE_WRITE,
+
                 AccountsApiScopesRequired.ACCOUNTS_READ,
                 AccountsApiScopesRequired.ACCOUNTS_WRITE,
 

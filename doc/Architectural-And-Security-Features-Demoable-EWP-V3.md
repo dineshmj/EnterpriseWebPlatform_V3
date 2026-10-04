@@ -15,6 +15,7 @@ The document answers *how the platform is built and protected*, not *which busin
 | How do you handle dead-letter queues? | [1.6.2](#162-dead-letter-handling) |
 | What if Kafka delivers the same message twice? | [1.3.2](#132-idempotent-consumers-inbox) |
 | What if a downstream API is down for an hour? | [1.6.3](#163-timeouts-retries-and-circuit-breakers), [1.3.3](#133-reliable-subscriber-pipeline) |
+| What if an external provider (e.g. sanctions screening) is slow or down? Does a case slip through? | [1.6.3](#163-timeouts-retries-and-circuit-breakers) |
 | How do you avoid losing an event when the database commit succeeds but Kafka is down? | [1.3.1](#131-transactional-outbox) |
 | Are events processed in order? | [1.3.5](#135-ordering-guarantees) |
 | How do you trace one business transaction across services? | [1.3.4](#134-workflow-correlation-and-causation-identity), [1.7.1](#171-distributed-tracing-across-http-and-kafka) |
@@ -25,6 +26,7 @@ The document answers *how the platform is built and protected*, not *which busin
 | How do you stop a user from opening someone else's record by changing an ID (IDOR / BOLA)? | [2.2.3](#223-object-level-authorization) |
 | Is authorization only role-based? | [2.2](#22-authorization-beyond-rbac) |
 | How do you stop one person from both initiating and approving? | [2.2.6](#226-separation-of-duties-makerchecker) |
+| Can a junior officer approve a high-risk customer? | [2.2.4](#224-abac-department-clearance-and-stage-permissions) |
 | How do services authenticate to each other? | [2.1.2](#212-separate-human-and-machine-identities) |
 | Does signing out of one application sign the user out everywhere? | [2.1.4](#214-single-sign-out) |
 | How are XSS, clickjacking and CSRF handled? | [2.3](#23-browser-and-session-security) |
@@ -58,7 +60,7 @@ The document answers *how the platform is built and protected*, not *which busin
     - [1.3.5 Ordering guarantees](#135-ordering-guarantees)
     - [1.3.6 Tolerant readers and contract evolution](#136-tolerant-readers-and-contract-evolution)
   - [1.4 Saga pattern](#14-saga-pattern)
-    - [1.4.1 Choreography between Customer Onboarding and KYC](#141-choreography-between-customer-onboarding-and-kyc)
+    - [1.4.1 Choreography across Customer Onboarding, KYC and Compliance](#141-choreography-across-customer-onboarding-kyc-and-compliance)
   - [1.5 Front-end composition](#15-front-end-composition)
     - [1.5.1 Micro-frontends hosted by a business-neutral Shell](#151-micro-frontends-hosted-by-a-business-neutral-shell)
     - [1.5.2 Shell–MFE protocol and the Application Workspace](#152-shellmfe-protocol-and-the-application-workspace)
@@ -119,17 +121,17 @@ The document answers *how the platform is built and protected*, not *which busin
 
 #### 1.1.1 Bounded contexts, each with its own database
 
-Each business capability (Customer Onboarding, Customer KYC, Documents Management) is a bounded context with its own model, language and PostgreSQL database. No context reads or writes another context's tables, and there are no cross-database foreign keys. Contexts refer to each other's records by business identifier only, for example an application's never-repeating `ApplicationRef` (UUID v7) and its `ApplicationNumber`, never by another context's database ID. Collaboration happens only through published events or explicit APIs, so each context can change its schema without coordinating with the others.
+Each business capability (Customer Onboarding, Customer KYC, Compliance, Documents Management) is a bounded context with its own model, language and PostgreSQL database. No context reads or writes another context's tables, and there are no cross-database foreign keys. Contexts refer to each other's records by business identifier only, for example an application's never-repeating `ApplicationRef` (UUID v7) and its `ApplicationNumber`, never by another context's database ID. Collaboration happens only through published events or explicit APIs, so each context can change its schema without coordinating with the others.
 
 **Where to look at:**
 
-- Database scripts, one per context: [EwpCustomerDb.sql](../src/Microservices/CustomerOnboarding/API/CustomerDB/EwpCustomerDb.sql), [EwpKycDb.sql](../src/Microservices/CustomerKyc/API/KycDb/EwpKycDb.sql), [EwpDocumentsManagementDb.sql](../src/Microservices/DocumentsManagement/API/DocumentMgmtDB/EwpDocumentsManagementDb.sql)
+- Database scripts, one per context: [EwpCustomerDb.sql](../src/Microservices/CustomerOnboarding/API/CustomerDB/EwpCustomerDb.sql), [EwpKycDb.sql](../src/Microservices/CustomerKyc/API/KycDb/EwpKycDb.sql), [EwpComplianceDb.sql](../src/Microservices/Compliance/API/ComplianceDb/EwpComplianceDb.sql), [EwpDocumentsManagementDb.sql](../src/Microservices/DocumentsManagement/API/DocumentMgmtDB/EwpDocumentsManagementDb.sql)
 - Cross-context reference by business identifier: `ApplicationRef` in the [`KycCase`](../src/Microservices/CustomerKyc/API/Domain/Aggregates/KycCase.cs) aggregate
 - Context map: [Blueprint §5](Enterprise-Web-Platform-V3-Architectural-Vision-and-Security-Blueprint.md#5-bounded-contexts-and-context-map)
 
 #### 1.1.2 Independently deployable components
 
-Every API, BFF, worker and front end is its own deployable with its own configuration and secrets. A micro-frontend and its BFF ship together: the Next.js app is exported as static files and served by its BFF, so the pair can be released and rolled back as one unit without touching the Shell or other contexts. Contexts can even use different stacks: the Customer Onboarding BFF is ASP.NET Core, the Customer KYC BFF is NestJS. Both sit behind the same Shell and the same protocol.
+Every API, BFF, worker and front end is its own deployable with its own configuration and secrets. A micro-frontend and its BFF ship together: the Next.js app is exported as static files and served by its BFF, so the pair can be released and rolled back as one unit without touching the Shell or other contexts. Contexts can even use different stacks: the Customer Onboarding BFF is ASP.NET Core, the Customer KYC BFF is NestJS. Both sit behind the same Shell and the same protocol. (KYC remains the one NestJS reference; new BFFs and APIs are ASP.NET Core 10.)
 
 **Where to look at:**
 
@@ -142,12 +144,12 @@ Every API, BFF, worker and front end is its own deployable with its own configur
 
 #### 1.1.3 Context-owned asynchronous workers
 
-Kafka relays and subscribers belong to the bounded context whose database or API they use, and are versioned and deployed with it. `src/AsyncWorkflows` is a folder, not a shared layer. Each worker is named after its owner and purpose: `KycCaseOpeningSubscriber` (Customer KYC) opens KYC cases from onboarding events, and `OnboardingOutcomeSubscriber` (Customer Onboarding) records KYC outcomes on applications. A worker never writes to a database directly. It calls its own context's API, so every business rule stays in one place.
+Kafka relays and subscribers belong to the bounded context whose database or API they use, and are versioned and deployed with it. `src/AsyncWorkflows` is a folder, not a shared layer. Each worker is named after its owner and purpose: `KycCaseOpeningSubscriber` (Customer KYC) opens KYC cases from onboarding events, `ComplianceCaseOpeningSubscriber` (Compliance) opens Compliance cases from KYC approvals, and `OnboardingOutcomeSubscriber` (Customer Onboarding) records KYC and Compliance outcomes on applications. A worker never writes to a database directly. It calls its own context's API, so every business rule stays in one place.
 
 **Where to look at:**
 
-- [KycCaseOpeningSubscriber](../src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/README.md), [OnboardingOutcomeSubscriber](../src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/README.md)
-- Internal, M2M-only endpoints the workers call: [InternalKycCasesController.cs](../src/Microservices/CustomerKyc/API/Controllers/InternalKycCasesController.cs), [InternalOnboardingApplicationsController.cs](../src/Microservices/CustomerOnboarding/API/API/Controllers/InternalOnboardingApplicationsController.cs)
+- [KycCaseOpeningSubscriber](../src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/README.md), [ComplianceCaseOpeningSubscriber](../src/AsyncWorkflows/Subscribers/Compliance/ComplianceCaseOpeningSubscriber/README.md), [OnboardingOutcomeSubscriber](../src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/README.md)
+- Internal, M2M-only endpoints the workers call: [InternalKycCasesController.cs](../src/Microservices/CustomerKyc/API/Controllers/InternalKycCasesController.cs), [InternalComplianceCasesController.cs](../src/Microservices/Compliance/API/Controllers/InternalComplianceCasesController.cs), [InternalOnboardingApplicationsController.cs](../src/Microservices/CustomerOnboarding/API/API/Controllers/InternalOnboardingApplicationsController.cs)
 
 ### 1.2 Domain-Driven Design
 
@@ -228,7 +230,7 @@ The worker's own M2M token is cached until shortly before it expires, with a sin
 **Where to look at:**
 
 - Shared library: [KafkaSubscriberHostedService.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/KafkaSubscriberHostedService.cs), [MessageProcessing.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/MessageProcessing.cs), [CachedM2MTokenClient.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/CachedM2MTokenClient.cs)
-- Worker processors: [KycCaseOpeningProcessor.cs](../src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/Processing/KycCaseOpeningProcessor.cs), [KycOutcomeProcessor.cs](../src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/Processing/KycOutcomeProcessor.cs)
+- Worker processors: [KycCaseOpeningProcessor.cs](../src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/Processing/KycCaseOpeningProcessor.cs), [OnboardingOutcomeProcessor.cs](../src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/Processing/OnboardingOutcomeProcessor.cs)
 
 #### 1.3.4 Workflow, correlation and causation identity
 
@@ -237,7 +239,7 @@ Every event carries a `WorkflowId` (the business process), a `CorrelationId` (th
 **Where to look at:**
 
 - Envelope: [IntegrationEventEnvelope.cs](../src/Microservices/CustomerOnboarding/API/Infrastructure/Messaging/IntegrationEventEnvelope.cs)
-- Propagation through a hop: `X-Workflow-Id` / `X-Correlation-Id` / `X-Causation-Id` in [KycOutcomeProcessor.cs](../src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/Processing/KycOutcomeProcessor.cs), read by [WorkflowContextAccessor.cs](../src/Microservices/CustomerOnboarding/API/Infrastructure/Messaging/WorkflowContextAccessor.cs)
+- Propagation through a hop: `X-Workflow-Id` / `X-Correlation-Id` / `X-Causation-Id` in [OnboardingOutcomeProcessor.cs](../src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/Processing/OnboardingOutcomeProcessor.cs), read by [WorkflowContextAccessor.cs](../src/Microservices/CustomerOnboarding/API/Infrastructure/Messaging/WorkflowContextAccessor.cs)
 - A fully traced run: [End-to-End-Processing-Walkthrough.md](End-to-End-Processing-Walkthrough.md)
 - Live evidence: the `workflow_id`, `correlation_id`, `causation_id` and `initiated_by` columns of both Outbox tables
 
@@ -258,22 +260,22 @@ Consumers read only the fields they need into their own message models and ignor
 
 **Where to look at:**
 
-- [KycOutcomeMessage.cs](../src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/Messages/KycOutcomeMessage.cs) (reads the envelope and the older flat shape), the private envelope records in [KycCaseOpeningProcessor.cs](../src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/Processing/KycCaseOpeningProcessor.cs)
+- [OutcomeMessage.cs](../src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/Messages/OutcomeMessage.cs) (reads the envelope and the older flat shape), the private envelope records in [KycCaseOpeningProcessor.cs](../src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/Processing/KycCaseOpeningProcessor.cs)
 - Conventions: [Integration-Event-Catalogue.md §2](Integration-Event-Catalogue.md#2-conventions)
 
 ### 1.4 Saga pattern
 
-#### 1.4.1 Choreography between Customer Onboarding and KYC
+#### 1.4.1 Choreography across Customer Onboarding, KYC and Compliance
 
-Customer onboarding is a long-running, choreographed saga with no central coordinator. Each context performs its own local transaction, publishes the fact through its Outbox and reacts to other contexts' facts. Submitting an application causes KYC to open a case. The case being opened moves the application to `KYC_IN_PROGRESS`. The KYC decision moves it to `KYC_COMPLETED` or `REJECTED`. Human review is a persisted state, not a waiting process: nothing stays in memory while an officer is away for days. The officer's decision is a new transaction that resumes the workflow. Each context changes only the state it owns.
+Customer onboarding is a long-running, choreographed saga with no central coordinator. Each context performs its own local transaction, publishes the fact through its Outbox and reacts to other contexts' facts. Submitting an application causes KYC to open a case. The case being opened moves the application to `KYC_IN_PROGRESS`. The KYC decision moves it to `KYC_COMPLETED` or `REJECTED`. A KYC approval opens a Compliance case, which moves the application to `COMPLIANCE_IN_PROGRESS`; the Compliance decision moves it to `COMPLIANCE_COMPLETED` or `COMPLIANCE_REJECTED`. Human review is a persisted state, not a waiting process: nothing stays in memory while an officer is away for days. The officer's decision is a new transaction that resumes the workflow. Each context changes only the state it owns.
 
 **Where to look at:**
 
 - Design and rules: [EWP-V3-Saga-Choreography-and-Orchestration-Plans.md](EWP-V3-Saga-Choreography-and-Orchestration-Plans.md)
-- Forward hop: [KycCaseOpeningSubscriber](../src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/README.md); return hop: [OnboardingOutcomeSubscriber](../src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/README.md)
-- Live evidence: the CO and KYC Outbox tables of one onboarding, linked by `causation_id`
+- Forward hops: [KycCaseOpeningSubscriber](../src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/README.md), [ComplianceCaseOpeningSubscriber](../src/AsyncWorkflows/Subscribers/Compliance/ComplianceCaseOpeningSubscriber/README.md); return hop for both: [OnboardingOutcomeSubscriber](../src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/README.md)
+- Live evidence: the CO, KYC and Compliance Outbox tables of one onboarding, linked by `causation_id`
 
-**Not yet:** the Compliance and Accounts participants, compensation (e.g. invalidating documents on rejection), and the orchestrated Payments saga.
+**Not yet:** the Accounts participant, compensation (e.g. invalidating documents on rejection), and the orchestrated Payments saga.
 
 ### 1.5 Front-end composition
 
@@ -354,6 +356,12 @@ Every call from a worker to an API runs through a resilience pipeline: a 10-seco
 
 - Pipelines (Microsoft.Extensions.Http.Resilience / Polly): `AddStandardResilienceHandler` in the [KycCaseOpeningSubscriber Program.cs](../src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/Program.cs) and [OnboardingOutcomeSubscriber Program.cs](../src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/Program.cs)
 - GET-only retries: [TransientGetRetryHandler.cs](../src/Microservices/CustomerOnboarding/BFF.Web/Services/TransientGetRetryHandler.cs)
+
+**An external provider that is slow or down.** Compliance screens every customer against a third-party AML / sanctions provider, simulated by the [Screening Provider Simulator](../src/Simulators/ScreeningProviderSimulator/README.md), which can be switched to Slow, Failing or Down while the platform runs. Screening is never done inside a user request or a Kafka handler: a background worker picks up due cases and calls the provider through its own pipeline (5-second attempt timeout, two retries, a circuit breaker that opens for 30 seconds when half of the recent calls fail, 20-second budget). A failure is **never a pass**: the case stays in `SCREENING` and is retried later with back-off (15 s doubling to 5 minutes), and while the circuit is open the worker does not call the provider at all. Readiness turns Degraded when a case has waited more than two minutes, so operations see the backlog. When the provider recovers, waiting cases are screened automatically and nothing is lost.
+
+- Worker and back-off: [ScreeningWorker.cs](../src/Microservices/Compliance/API/Infrastructure/Screening/ScreeningWorker.cs), [ScreenDueCase.cs](../src/Microservices/Compliance/API/Application/Commands/ScreenDueCase.cs); "failure is not a pass": `RecordScreeningFailure` in [ComplianceCase.cs](../src/Microservices/Compliance/API/Domain/Aggregates/ComplianceCase.cs)
+- Provider pipeline and anti-corruption mapping: [Compliance API Program.cs](../src/Microservices/Compliance/API/Program.cs), [ScreeningProviderClient.cs](../src/Microservices/Compliance/API/Infrastructure/Screening/ScreeningProviderClient.cs)
+- Demo: ReadMe.txt section 4, step g2
 
 **Not yet:** circuit breakers on the BFF-to-API calls.
 
@@ -494,20 +502,24 @@ Having the right role is not enough to open a *specific* record. Every read, lis
 
 Attributes of the user, not only their role, decide what they may do. To decide a KYC stage, an officer needs the `kyc_officer` role, the KYC department, clearance level 3 or above, the decision permission (approve or reject) **and** the permission for that stage (`kyc.identity.verify` or `kyc.document.verify`). Different officers can therefore be entitled to different steps of the same case.
 
+In Compliance the required clearance depends on the **case's risk**, not only on the user: a CLEAR screening (LOW risk) can be approved at clearance 3, a POTENTIAL_MATCH (MEDIUM) needs 4 and a MATCH (HIGH) needs 5. Any compliance officer may reject. The rule lives in the aggregate, so the API, a future UI and any other caller get the same answer.
+
 **Where to look at:**
 
 - Requirement and handler: [KycCaseDecisionAuthorization.cs](../src/Microservices/CustomerKyc/API/Authorization/KycCaseDecisionAuthorization.cs)
 - Stage policies `KycIdentityApprove`, `KycDocumentReject`, …: [CustomerKyc API Program.cs](../src/Microservices/CustomerKyc/API/Program.cs)
 - Claims issued by the IDP: [CustomProfileService.cs](../src/IDP/Services/CustomProfileService.cs)
+- Clearance by risk: `RiskPolicy` in [ComplianceCodes.cs](../src/Microservices/Compliance/API/Domain/ValueObjects/ComplianceCodes.cs), `Approve` in [ComplianceCase.cs](../src/Microservices/Compliance/API/Domain/Aggregates/ComplianceCase.cs); officer attributes: [ComplianceOfficerAuthorization.cs](../src/Microservices/Compliance/API/Authorization/ComplianceOfficerAuthorization.cs)
 
 #### 2.2.5 ReBAC: relationships owned by each context
 
-Some decisions depend on the relationship between a user and a specific record, not on the user's role alone. These relationships are stored and enforced by the context that owns the record, not by the IDP. In Customer Onboarding, each customer has a **managing agent**: only that agent may update the customer and open or submit applications for them. In Customer KYC, each case has an **assigned officer**. The first decision, or an explicit claim, assigns the case; only the assignee may decide it, and the assignee may release it. The rule is enforced in the API and the aggregate, so hiding a button in the UI is never what protects the record.
+Some decisions depend on the relationship between a user and a specific record, not on the user's role alone. These relationships are stored and enforced by the context that owns the record, not by the IDP. In Customer Onboarding, each customer has a **managing agent**: only that agent may update the customer and open or submit applications for them. In Customer KYC and in Compliance, each case has an **assigned officer**. The first decision, or an explicit claim, assigns the case; only the assignee may decide it, and the assignee may release it. The rule is enforced in the API and the aggregate, so hiding a button in the UI is never what protects the record.
 
 **Where to look at:**
 
 - CO managing agent: [Customer.cs](../src/Microservices/CustomerOnboarding/API/Domain/Aggregates/Customer.cs), [CustomerResourceAuthorization.cs](../src/Microservices/CustomerOnboarding/API/Authorization/CustomerResourceAuthorization.cs)
 - KYC assigned officer: [KycCase.cs](../src/Microservices/CustomerKyc/API/Domain/Aggregates/KycCase.cs), [AssignKycCaseCommandHandler.cs](../src/Microservices/CustomerKyc/API/Application/Commands/AssignKycCase/AssignKycCaseCommandHandler.cs)
+- Compliance assigned officer: `Claim` / `Release` in [ComplianceCase.cs](../src/Microservices/Compliance/API/Domain/Aggregates/ComplianceCase.cs), endpoints in [ComplianceCasesController.cs](../src/Microservices/Compliance/API/Controllers/ComplianceCasesController.cs)
 - Claim / release endpoints (policy `KycCaseAssign`): [KycCasesController.cs](../src/Microservices/CustomerKyc/API/Controllers/KycCasesController.cs)
 - Model and rules: [Authorization-Model.md](Authorization-Model.md)
 
@@ -515,9 +527,12 @@ Some decisions depend on the relationship between a user and a specific record, 
 
 The person who starts a workflow can never approve it. The agent who submits an onboarding application can neither take nor decide its KYC case. The rule lives inside the `KycCase` aggregate, so no code path can bypass it. It also fails closed: if the initiator is unknown, every decision is denied rather than allowed.
 
+The rule also spans contexts. A Compliance case may not be handled by the initiator **nor by either officer who decided the KYC stages** of the same application, so one person can never both verify a customer and clear them for financial crime. KYC publishes who decided each stage on `kyc.case.approved`; Compliance stores them on the case and checks them in the aggregate.
+
 **Where to look at:**
 
 - `EnsureSeparationOfDuties` in [KycCase.cs](../src/Microservices/CustomerKyc/API/Domain/Aggregates/KycCase.cs)
+- Cross-context SoD: `EnsureOfficerMayAct` in [ComplianceCase.cs](../src/Microservices/Compliance/API/Domain/Aggregates/ComplianceCase.cs); the stage deciders on the event: [KycIntegrationEvents.cs](../src/Microservices/CustomerKyc/API/Infrastructure/Messaging/KycIntegrationEvents.cs)
 - The initiator captured at the source and carried through Kafka: `initiated_by` in the Outbox tables, see [1.3.4](#134-workflow-correlation-and-causation-identity)
 
 **Not yet:** four-eyes per stage (a different officer for each stage).

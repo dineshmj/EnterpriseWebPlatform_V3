@@ -159,6 +159,48 @@ public sealed class OnboardingApplication : AggregateRoot
         return true;
     }
 
+    // ------------------------------------------------------------------
+    // Reactions to Compliance facts (saga choreography): as tolerant as the KYC
+    // ones. A compliance fact also implies that KYC approved, so a fact that
+    // overtakes "KYC approved" first applies the outstanding KYC transitions.
+    // ------------------------------------------------------------------
+
+    /// <summary>Compliance opened a case: (… →) KYC_COMPLETED → COMPLIANCE_IN_PROGRESS.</summary>
+    public bool RecordComplianceCaseOpened(DateTimeOffset now)
+    {
+        var changed = RecordKycApproved(now);
+
+        if (Status != OnboardingApplicationStatus.KycCompleted)
+            return changed;
+
+        StartCompliance(now);
+        return true;
+    }
+
+    /// <summary>Compliance approved: (… →) COMPLIANCE_IN_PROGRESS → COMPLIANCE_COMPLETED.</summary>
+    public bool RecordComplianceApproved(DateTimeOffset now)
+    {
+        var changed = RecordComplianceCaseOpened(now);
+
+        if (Status != OnboardingApplicationStatus.ComplianceInProgress)
+            return changed;
+
+        CompleteCompliance(now);
+        return true;
+    }
+
+    /// <summary>Compliance rejected: (… →) COMPLIANCE_IN_PROGRESS → REJECTED (terminal).</summary>
+    public bool RecordComplianceRejected(DateTimeOffset now)
+    {
+        var changed = RecordComplianceCaseOpened(now);
+
+        if (Status != OnboardingApplicationStatus.ComplianceInProgress)
+            return changed;
+
+        Reject(now);
+        return true;
+    }
+
     /// <summary>
     /// A verifying context rejected the application. Only possible while a decision
     /// is pending (submitted, in KYC or in compliance) - never from a draft.

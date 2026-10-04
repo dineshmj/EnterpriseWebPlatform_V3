@@ -3,7 +3,6 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 
 using EnterpriseWebPlatform.Common.Observability;
-
 using EnterpriseWebPlatform.CustomerKyc.Api.Domain.Aggregates;
 using EnterpriseWebPlatform.CustomerKyc.Api.Domain.Common;
 using EnterpriseWebPlatform.CustomerKyc.Api.Domain.Events;
@@ -92,7 +91,10 @@ internal static class KycIntegrationEventMapper
                         decided.DecidedByUserId,
                         decided.OccurredAt,
                         decided.Remarks,
-                        causedBy));
+                        causedBy,
+                        kycCase.BranchCode.Value,
+                        kycCase.IdentityVerification.DecidedByUserId,
+                        kycCase.DocumentVerification.DecidedByUserId));
                 break;
 
             // Internal facts (ReBAC assignment) with no published contract. Listed

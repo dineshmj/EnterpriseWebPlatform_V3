@@ -10,7 +10,8 @@ using EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboarding.On
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboarding.OnboardingOutcomeSubscriber.Processing;
 
 /// <summary>
-/// Turns one KYC case event into a call to the Customer Onboarding API and
+/// Turns one KYC or Compliance case event into a call to the Customer Onboarding API
+/// (kyc-outcomes / compliance-outcomes endpoint, by event type) and
 /// classifies the result:
 ///  - Processed   : the API recorded it (Applied / NoChange / Duplicate).
 ///  - Dead letter : the message can never succeed (malformed, unknown type,
@@ -22,29 +23,33 @@ namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboardin
 /// jittered back-off, circuit breaker); the endpoint is idempotent per MessageId,
 /// so retrying the POST is safe.
 /// </summary>
-public sealed class KycOutcomeProcessor(
+public sealed class OnboardingOutcomeProcessor(
     IHttpClientFactory httpClientFactory,
     CachedM2MTokenClient tokenClient,
-    ILogger<KycOutcomeProcessor> logger)
+    ILogger<OnboardingOutcomeProcessor> logger)
     : IMessageProcessor
 {
     public const string HttpClientName = "CustomerOnboardingApi";
 
-    private static readonly HashSet<string> SupportedEventTypes = new(StringComparer.Ordinal)
+    /// <summary>Supported event types and the CO endpoint that records each kind of fact.</summary>
+    private static readonly Dictionary<string, string> EndpointByEventType = new(StringComparer.Ordinal)
     {
-        "KycCaseCreated",
-        "KycCaseApproved",
-        "KycCaseRejected"
+        ["KycCaseCreated"] = "kyc-outcomes",
+        ["KycCaseApproved"] = "kyc-outcomes",
+        ["KycCaseRejected"] = "kyc-outcomes",
+        ["ComplianceCaseCreated"] = "compliance-outcomes",
+        ["ComplianceCaseApproved"] = "compliance-outcomes",
+        ["ComplianceCaseRejected"] = "compliance-outcomes"
     };
 
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     public async Task<ProcessingOutcome> ProcessAsync(ConsumedMessage consumed, CancellationToken cancellationToken)
     {
-        KycOutcomeMessage? message;
+        OutcomeMessage? message;
         try
         {
-            message = KycOutcomeMessage.Parse(consumed.Value, JsonOptions);
+            message = OutcomeMessage.Parse(consumed.Value, JsonOptions);
         }
         catch (JsonException ex)
         {
@@ -54,7 +59,7 @@ public sealed class KycOutcomeProcessor(
         if (message is null || message.MessageId == Guid.Empty)
             return ProcessingOutcome.ToDeadLetter("Message has no MessageId.");
 
-        if (!SupportedEventTypes.Contains(message.EventType ?? string.Empty))
+        if (!EndpointByEventType.ContainsKey(message.EventType ?? string.Empty))
             return ProcessingOutcome.ToDeadLetter($"Unsupported event type '{message.EventType}'.");
 
         if (message.ApplicationRef == Guid.Empty || string.IsNullOrWhiteSpace(message.ApplicationNumber))
@@ -65,7 +70,7 @@ public sealed class KycOutcomeProcessor(
 
         // DEBUG POINT #1: a valid KYC outcome, about to be recorded on the application.
         logger.LogInformation(
-            "Received {EventType} MessageId={MessageId} KycCaseId={KycCaseId} ApplicationRef={ApplicationRef} ({ApplicationNumber}) WorkflowId={WorkflowId}.",
+            "Received {EventType} MessageId={MessageId} CaseId={CaseId} ApplicationRef={ApplicationRef} ({ApplicationNumber}) WorkflowId={WorkflowId}.",
             message.EventType,
             message.MessageId,
             message.KycCaseId,
@@ -122,13 +127,13 @@ public sealed class KycOutcomeProcessor(
         }
     }
 
-    private async Task<HttpResponseMessage> SendAsync(KycOutcomeMessage message, CancellationToken cancellationToken)
+    private async Task<HttpResponseMessage> SendAsync(OutcomeMessage message, CancellationToken cancellationToken)
     {
         var accessToken = await tokenClient.GetAccessTokenAsync(cancellationToken);
 
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            $"/internal/v1/onboarding/applications/{message.ApplicationRef}/kyc-outcomes")
+            $"/internal/v1/onboarding/applications/{message.ApplicationRef}/{EndpointByEventType[message.EventType]}")
         {
             // ApplicationNumber lets the API reject a fact whose reference now
             // belongs to a different application (a consistency check).

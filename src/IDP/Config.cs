@@ -36,6 +36,10 @@ public static class Config
             DocumentsManagementApiScope.Read,
             DocumentsManagementApiScope.Write,
 
+            // Compliance API
+            ComplianceApiScope.Read,
+            ComplianceApiScope.Write,
+
             // Accounts API
             AccountsApiScope.Read,
             AccountsApiScope.Write,
@@ -50,6 +54,7 @@ public static class Config
             CustomerOnboardingApiResource.ApiResource,
             CustomerKycApiResource.ApiResource,
             DocumentsManagementApiResource.ApiResource,
+            ComplianceApiResource.ApiResource,
             AccountsApiResource.ApiResource,
             PaymentsApiResource.ApiResource
         ];
@@ -76,6 +81,7 @@ public static class Config
             CustomerOnboardingBFFToDocumentsManagementM2M.Client,
             KycCaseOpeningSubscriberToCustomerKycApiM2M.Client,
             OnboardingOutcomeSubscriberToCustomerOnboardingApiM2M.Client,
+            ComplianceCaseOpeningSubscriberToComplianceApiM2M.Client,
             KycBFFToDocumentsManagementM2M.Client
         ];
 }

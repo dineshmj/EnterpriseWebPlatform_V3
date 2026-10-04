@@ -1,7 +1,7 @@
-﻿using Duende.IdentityServer.Services;
-
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+
+using Duende.IdentityServer.Services;
 
 namespace EnterpriseWebPlatform.IdentityServer.Pages.Home;
 

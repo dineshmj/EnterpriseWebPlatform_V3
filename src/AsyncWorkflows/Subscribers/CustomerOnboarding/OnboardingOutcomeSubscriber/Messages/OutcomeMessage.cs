@@ -3,11 +3,12 @@ using System.Text.Json;
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboarding.OnboardingOutcomeSubscriber.Messages;
 
 /// <summary>
-/// Tolerant-reader view of the Customer KYC case events (kyc.case.created /
-/// approved / rejected): only the fields Customer Onboarding needs. Unknown
-/// fields are ignored, so KYC can add fields without breaking this consumer.
+/// Tolerant-reader view of the KYC and Compliance case events (kyc.case.* and
+/// compliance.case.*): only the fields Customer Onboarding needs. Unknown fields
+/// are ignored, so producers can add fields without breaking this consumer.
+/// KycCaseId carries the producing case's ID (KycCaseId or ComplianceCaseId), for logs.
 /// </summary>
-public sealed record KycOutcomeMessage(
+public sealed record OutcomeMessage(
     Guid MessageId,
     string EventType,
     long KycCaseId,
@@ -22,17 +23,17 @@ public sealed record KycOutcomeMessage(
     /// under "Payload"). Messages published before KYC adopted the envelope carried
     /// every field at the top level; they are still accepted, so no topic reset is needed.
     /// </summary>
-    public static KycOutcomeMessage? Parse(string json, JsonSerializerOptions options)
+    public static OutcomeMessage? Parse(string json, JsonSerializerOptions options)
     {
         var wire = JsonSerializer.Deserialize<Wire>(json, options);
         if (wire is null)
             return null;
 
         var body = wire.Payload;
-        return new KycOutcomeMessage(
+        return new OutcomeMessage(
             wire.MessageId,
             wire.EventType ?? string.Empty,
-            body?.KycCaseId ?? wire.KycCaseId ?? 0,
+            body?.KycCaseId ?? body?.ComplianceCaseId ?? wire.KycCaseId ?? 0,
             body?.ApplicationRef ?? wire.ApplicationRef ?? Guid.Empty,
             body?.ApplicationNumber ?? wire.ApplicationNumber,
             wire.WorkflowId,
@@ -54,6 +55,7 @@ public sealed record KycOutcomeMessage(
 
     private sealed record Body(
         long? KycCaseId,
+        long? ComplianceCaseId,
         Guid? ApplicationRef,
         string? ApplicationNumber);
 }

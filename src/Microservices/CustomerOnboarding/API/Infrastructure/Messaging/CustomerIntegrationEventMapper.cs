@@ -3,7 +3,6 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 
 using EnterpriseWebPlatform.Common.Observability;
-
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Aggregates;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Common;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Enums;

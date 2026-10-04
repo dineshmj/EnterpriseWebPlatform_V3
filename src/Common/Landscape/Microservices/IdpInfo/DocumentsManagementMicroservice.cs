@@ -21,7 +21,7 @@ public static class DocumentsManagementMicroservice
 
 
 
-    public const string BFF_CLIENT_BASE_URL = "https://documents-management.dev.localhost:46456";
-
+	// No BFF / MFE: Documents Management is an API-only supporting service, used by the
+	// Customer Onboarding and KYC BFFs over M2M.
 	public const string MICROSERVICE_API_BASE_URL = "https://documents-management-api.dev.localhost:49486";
 }

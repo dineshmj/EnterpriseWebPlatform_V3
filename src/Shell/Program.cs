@@ -1,19 +1,19 @@
-﻿using Microsoft.Extensions.Diagnostics.HealthChecks;
-using EnterpriseWebPlatform.Common.Observability;
-using OpenTelemetry.Trace;
-using Npgsql;
-using System.IdentityModel.Tokens.Jwt;
+﻿using System.IdentityModel.Tokens.Jwt;
 
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 using Duende.AccessTokenManagement.OpenIdConnect;
 using Duende.Bff;
 using Duende.Bff.Yarp;
+using Npgsql;
+using OpenTelemetry.Trace;
 
 using EnterpriseWebPlatform.BSS.BFFWeb.Data;
 using EnterpriseWebPlatform.Common.Landscape;
+using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 
 var builder = WebApplication.CreateBuilder(args);

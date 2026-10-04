@@ -196,7 +196,25 @@ KYC relay → Kafka "kyc.case.approved"
      → Inbox → number match → RecordKycApproved(now): KYC_IN_PROGRESS → KYC_COMPLETED
        (also handles "approved" arriving before "created")
      → inbox + application + outbox "StatusChanged" in one transaction
-  → CustomerOutboxPublisher → "onboarding.application.status.changed" (no consumer yet: Compliance is next)
+  → CustomerOutboxPublisher → "onboarding.application.status.changed" (no consumer yet: Notifications is planned)
+```
+
+## Phase 5: Compliance
+
+```text
+KYC relay → Kafka "kyc.case.approved" (now also carries BranchCode and both KYC stage deciders)
+  → ComplianceCaseOpeningSubscriber → Compliance API internal/v1/compliance/cases/from-kyc-approved (pinned client)
+     → Inbox + ComplianceCase.Open (SCREENING) + outbox "ComplianceCaseCreated" in one transaction
+  → OnboardingOutcomeSubscriber → CO API …/{ApplicationRef}/compliance-outcomes → KYC_COMPLETED → COMPLIANCE_IN_PROGRESS
+
+Compliance screening worker (every 5 s, one due case at a time, FOR UPDATE SKIP LOCKED)
+  → external screening provider (timeout, retry, circuit breaker)
+     ok      → RecordScreeningResult: risk LOW / MEDIUM / HIGH, required clearance 3 / 4 / 5 → UNDER_REVIEW
+     failure → RecordScreeningFailure: stays SCREENING, retried with back-off (never a pass)
+
+Compliance officer (2a: through the API; 2b: MFE) → claim / hold / approve / reject
+  → aggregate: branch, assignment (ReBAC), SoD (not the initiator, not a KYC decider), clearance ≥ risk (ABAC)
+  → outbox "ComplianceCaseApproved" / "Rejected" → OnboardingOutcomeSubscriber → CO: COMPLIANCE_COMPLETED / COMPLIANCE_REJECTED
 ```
 
 ---

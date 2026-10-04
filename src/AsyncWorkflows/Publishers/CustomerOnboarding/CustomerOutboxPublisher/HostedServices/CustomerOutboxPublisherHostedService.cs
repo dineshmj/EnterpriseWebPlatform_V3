@@ -1,9 +1,8 @@
 using Microsoft.Extensions.Options;
 
-using EnterpriseWebPlatform.Common.Observability;
-
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Publishers.CustomerOnboarding.CustomerOutboxPublisher.Configuration;
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Publishers.CustomerOnboarding.CustomerOutboxPublisher.Publishing;
+using EnterpriseWebPlatform.Common.Observability;
 
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Publishers.CustomerOnboarding.CustomerOutboxPublisher.HostedServices;
 

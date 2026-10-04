@@ -12,6 +12,9 @@ public static class MicroserviceApiResourceNames
     public const string DOCUMENTS_MANAGEMENT_API =
         "documents-management-api";
 
+    public const string COMPLIANCE_API =
+        "compliance-api";
+
     public const string ACCOUNTS_API =
         "accounts-api";
 

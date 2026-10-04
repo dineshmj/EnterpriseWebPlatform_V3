@@ -1,16 +1,17 @@
-using Microsoft.Extensions.Diagnostics.HealthChecks;
-using EnterpriseWebPlatform.Common.Observability;
-using OpenTelemetry.Trace;
-using Npgsql;
 using System.Text.Json;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
+
+using Npgsql;
+using OpenTelemetry.Trace;
 
 using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.CustomerOnboarding.API.Authorization;
 using EnterpriseWebPlatform.CustomerOnboarding.Application;
 using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence;

@@ -16,6 +16,19 @@ public static class KafkaTopicNames
 
     public const string KycCaseRejected = "kyc.case.rejected";
 
+    public const string ComplianceCaseCreated = "compliance.case.created";
+
+    public const string ComplianceCaseApproved = "compliance.case.approved";
+
+    public const string ComplianceCaseRejected = "compliance.case.rejected";
+
+    /// <summary>
+    /// Dead-letter topic of the Compliance Case Opening Subscriber (Compliance):
+    /// kyc.case.approved messages that can never open a compliance case.
+    /// </summary>
+    public const string ComplianceCaseOpeningSubscriberDeadLetter =
+        "compliance.case-opening-subscriber.dlq";
+
     /// <summary>
     /// Dead-letter topic of the Onboarding Outcome Subscriber: messages it can
     /// never process (malformed, unknown, or permanently rejected) are parked here

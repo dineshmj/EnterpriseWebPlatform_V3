@@ -1,8 +1,8 @@
-﻿using EnterpriseWebPlatform.IdentityServer.Security;
-using Duende.IdentityServer.Models;
+﻿using Duende.IdentityServer.Models;
 
 using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.IdentityServer.Security;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.M2M;
 

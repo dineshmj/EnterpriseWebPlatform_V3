@@ -1,13 +1,13 @@
-using Microsoft.Extensions.Diagnostics.HealthChecks;
-using EnterpriseWebPlatform.Common.Observability;
-using OpenTelemetry.Trace;
-using Npgsql;
 using System.Threading.RateLimiting;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
+using Npgsql;
+using OpenTelemetry.Trace;
 using Serilog;
 
+using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.IdentityServer.Data;
 using EnterpriseWebPlatform.IdentityServer.Repositories;
 using EnterpriseWebPlatform.IdentityServer.Security;

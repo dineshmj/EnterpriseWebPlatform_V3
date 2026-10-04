@@ -1,20 +1,23 @@
-using Microsoft.Extensions.Diagnostics.HealthChecks;
-using EnterpriseWebPlatform.Common.Observability;
-using OpenTelemetry.Trace;
 using System.IdentityModel.Tokens.Jwt;
+
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
-using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
+
 using Duende.AccessTokenManagement.OpenIdConnect;
 using Duende.Bff;
 using Duende.Bff.Yarp;
-using EnterpriseWebPlatform.Common.Landscape;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
-using EnterpriseWebPlatform.Common.WebUtilities.Security;
+using OpenTelemetry.Trace;
+
 using EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.Configuration;
 using EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.Services;
+using EnterpriseWebPlatform.Common.Landscape;
+using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.Common.Observability;
+using EnterpriseWebPlatform.Common.WebUtilities.Security;
 
 JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
 

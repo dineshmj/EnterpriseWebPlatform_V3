@@ -42,6 +42,11 @@ public sealed record KycVerificationStageDecisionPayload(
     string? DecisionRemarks,
     string OverallStatus);
 
+/// <remarks>
+/// BranchCode and the two stage deciders were added for Compliance (additive, same
+/// SchemaVersion): Compliance scopes its case to the branch, and Separation of Duties
+/// forbids EITHER KYC officer from approving the same application's compliance case.
+/// </remarks>
 public sealed record KycCaseDecisionPayload(
     long KycCaseId,
     Guid ApplicationRef,
@@ -52,4 +57,7 @@ public sealed record KycCaseDecisionPayload(
     string DecisionByUserId,
     DateTimeOffset DecisionAt,
     string? DecisionRemarks,
-    IReadOnlyList<Guid> CausedByMessageIds);
+    IReadOnlyList<Guid> CausedByMessageIds,
+    string BranchCode,
+    string? IdentityVerificationByUserId,
+    string? DocumentVerificationByUserId);
