@@ -18,7 +18,8 @@ public sealed record ApplicationSubmittedMessage(
     Guid? CausationId,
     string? Source,
     ApplicantInfo? Applicant,
-    IReadOnlyList<EvidenceDocumentInfo> EvidenceDocuments);
+    IReadOnlyList<EvidenceDocumentInfo> EvidenceDocuments,
+    string? InitiatedByLanId);
 
 /// <summary>The applicant as submitted (name and residential address); KYC verifies against it.</summary>
 public sealed record ApplicantInfo(string? FirstName, string? LastName, AddressInfo? ResidentialAddress);

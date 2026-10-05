@@ -39,7 +39,16 @@ public sealed record ComplianceCaseDetail(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     string CustomerName,
-    ApplicantAddress ResidentialAddress);
+    ApplicantAddress ResidentialAddress,
+    StaffLanIds Staff);
+
+/// <summary>The LAN IDs of the people on the case (null when not known to this context).</summary>
+public sealed record StaffLanIds(
+    string? InitiatedBy,
+    string? KycIdentityDecidedBy,
+    string? KycDocumentDecidedBy,
+    string? AssignedOfficer,
+    string? DecisionBy);
 
 /// <summary>The applicant's residential address as KYC verified it (snapshot).</summary>
 public sealed record ApplicantAddress(

@@ -168,7 +168,7 @@ Any non-terminal ──StartCompensation──► COMPENSATING ──► COMPENS
 | `AccountApplicationCreated` | (… →) COMPLIANCE_COMPLETED → ACCOUNT_OPENING_IN_PROGRESS | Present |
 | `AccountOpened` | (… →) ACCOUNT_OPENING_IN_PROGRESS → COMPLETED (the onboarding saga ends) | Present |
 | `AccountApplicationRejected` | ACCOUNT_OPENING_IN_PROGRESS → REJECTED (+ `OnboardingApplicationRejected`, stage `ACCOUNTS`) | Present |
-| `AccountOpeningFailed` | → COMPENSATING → REJECTED (reason: account opening failed) | Planned (3c) |
+| `AccountOpeningFailed` | → COMPENSATING → REJECTED (`RejectedBy: ACCOUNT_OPENING`); customer back to PROSPECT; evidence invalidated | Present |
 
 Event contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Event-Catalogue.md). Overall workflow: [Saga plan](../../../../doc/EWP-V3-Saga-Choreography-and-Orchestration-Plans.md).
 

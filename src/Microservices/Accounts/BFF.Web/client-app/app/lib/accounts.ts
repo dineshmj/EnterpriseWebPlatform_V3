@@ -7,6 +7,13 @@ export interface AccountApplication {
   customerNumber: string;
   /** The applicant's name as Compliance cleared it: the future account holder. */
   customerName: string;
+  /** LAN IDs of the people on the application, for display (rules use the subject IDs). */
+  staff?: {
+    initiatedBy?: string | null;
+    complianceApprovedBy?: string | null;
+    assignedOfficer?: string | null;
+    decisionBy?: string | null;
+  };
   complianceCaseId: number;
   branchCode: string;
   status: string;

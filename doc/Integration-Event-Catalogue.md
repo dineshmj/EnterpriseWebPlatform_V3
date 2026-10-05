@@ -50,6 +50,7 @@ CorrelationId      the business interaction that groups related messages
 CausationId        MessageId of the message (or request) that caused this one
 TraceId            W3C trace context, carried in the Kafka "traceparent" header (not in the body)
 InitiatedByUserId  the human who started the workflow (accountability only — never an authorization grant)
+InitiatedByLanId   that human's LAN ID, for display (added additively; the subject ID stays the identity)
 Payload            the event-specific body
 ```
 
@@ -62,7 +63,9 @@ Meaning of the identifiers:
 | CorrelationId | Which business interaction does it belong to? |
 | CausationId | What directly caused it? |
 | TraceId | Which technical execution trace? |
-| InitiatedByUserId | Which human is accountable for the workflow? |
+| InitiatedByUserId | Which human is accountable for the workflow? (`InitiatedByLanId`: how screens name them) |
+
+**People in payloads.** Wherever a payload names a staff member by subject ID (`DecisionByUserId`, `IdentityVerificationByUserId`, `DocumentVerificationByUserId`), it also carries the LAN ID (`DecisionByLanId`, …), added additively. Each consuming context keeps a small `staff_members` table (subject ID → LAN ID), filled from these fields and from the acting officer's token, so its screens show LAN IDs without calling the IDP. Rules always compare subject IDs.
 
 ### 3.1 Current conformance
 
@@ -96,7 +99,7 @@ The body remains the source of truth for consumers; headers are a copy for infra
 | `CustomerCreated` | `customer.created` | Customer ID | `CustomerId`, `CustomerNumber`, `SubjectId`, `CustomerType`, `Status` | — | Published; no consumer |
 | `OnboardingApplicationSubmitted` | `onboarding.application.submitted` | Application ID | `ApplicationRef`, `ApplicationNumber`, `CustomerNumber`, `BranchCode` (branch the application was opened in), `EvidenceDocuments` (`DocumentId`, `DocumentType`) and `Applicant` (`FirstName`, `LastName`, `ResidentialAddress`: the applicant as submitted; no contact details) — both added additively, schema version 1 — plus `ApplicationId` / `CustomerId` (information only) | `KycCaseOpeningSubscriber` → Customer KYC opens one case per `ApplicationRef`; `DocumentInvalidationSubscriber` → Documents Management **attaches** the evidence (ATTACHED: retained, no longer deletable) | Present |
 | `OnboardingApplicationStatusChanged` | `onboarding.application.status.changed` | Application ID | `ApplicationRef`, `PreviousStatus`, `NewStatus`, plus `ApplicationId` / `CustomerId` | Notifications (planned) | Published; no consumer yet |
-| `OnboardingApplicationRejected` | `onboarding.application.rejected` | Application ID | `ApplicationRef`, `ApplicationNumber`, `CustomerNumber`, `BranchCode`, `RejectedBy` (`KYC` / `COMPLIANCE` / `ACCOUNTS`), `PreviousStatus`, `EvidenceDocuments` (`DocumentId`, `DocumentType`: the evidence recorded at submission) | `DocumentInvalidationSubscriber` → Documents Management invalidates exactly those documents (saga compensation; retained, not deleted) | Present |
+| `OnboardingApplicationRejected` | `onboarding.application.rejected` | Application ID | `ApplicationRef`, `ApplicationNumber`, `CustomerNumber`, `BranchCode`, `RejectedBy` (`KYC` / `COMPLIANCE` / `ACCOUNTS` for an officer's decision; `ACCOUNT_OPENING` when the account could not be opened, with `PreviousStatus` `COMPENSATING`), `PreviousStatus`, `EvidenceDocuments` (`DocumentId`, `DocumentType`: the evidence recorded at submission) | `DocumentInvalidationSubscriber` → Documents Management invalidates exactly those documents (saga compensation; retained, not deleted) | Present |
 
 ### 4.2 Customer KYC (producer: Customer KYC API, in-process Outbox relay)
 
@@ -133,7 +136,7 @@ Every Compliance payload carries `ComplianceCaseId`, `ApplicationRef`, `Applicat
 | `AccountApplicationCreated` | `accounts.application.created` | Account application ID | `OnboardingOutcomeSubscriber` (application → ACCOUNT_OPENING_IN_PROGRESS) | Present |
 | `AccountOpened` | `accounts.account.opened` | Account application ID | `OnboardingOutcomeSubscriber` (application → **COMPLETED**: the onboarding saga ends) | Present |
 | `AccountApplicationRejected` | `accounts.application.rejected` | Account application ID | `OnboardingOutcomeSubscriber` (application → REJECTED, then `OnboardingApplicationRejected` → document invalidation) | Present |
-| `AccountOpeningFailed` | `accounts.account.opening.failed` | Account application ID | Compensation of the onboarding (increment 3c) | Published; consumer planned (3c) |
+| `AccountOpeningFailed` | `accounts.account.opening.failed` | Account application ID | `OnboardingOutcomeSubscriber` → CO: COMPENSATING → REJECTED, then `OnboardingApplicationRejected` (`RejectedBy: ACCOUNT_OPENING`) → DM invalidates the evidence | Present |
 
 Every Accounts payload carries `AccountApplicationId`, `ApplicationRef`, `ApplicationNumber`, `CustomerNumber` and `BranchCode`. `AccountApplicationCreated` adds `ComplianceCaseId` and `Status`; `AccountOpened` adds `AccountNumber`, `Bsb`, `Product`, `ApprovedByUserId` and `OpenedAt`; `AccountApplicationRejected` adds `PreviousStatus` / `NewStatus`, `DecisionByUserId`, `DecisionAt` and `DecisionRemarks`; `AccountOpeningFailed` adds `Reason`, `Attempts` and `FailedAt`. `AccountOpened`'s `CausationId` is the account officer's approval command, even though a background worker opened the account later. Assignment, holds and the approval itself stay internal.
 

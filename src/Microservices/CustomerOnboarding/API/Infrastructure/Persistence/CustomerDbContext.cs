@@ -41,6 +41,9 @@ public sealed class CustomerDbContext :
     public DbSet<InboxMessage> InboxMessages =>
         Set<InboxMessage>();
 
+    public DbSet<StaffMember> StaffMembers =>
+        Set<StaffMember>();
+
     IQueryable<Customer> ICustomerReadContext.Customers =>
         Customers;
 

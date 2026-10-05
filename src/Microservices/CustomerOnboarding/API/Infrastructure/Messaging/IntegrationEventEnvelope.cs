@@ -14,4 +14,5 @@ public sealed record IntegrationEventEnvelope<TPayload>(
     Guid? CorrelationId,
     Guid? CausationId,
     string? InitiatedByUserId,
-    TPayload Payload);
+    TPayload Payload,
+    string? InitiatedByLanId = null);

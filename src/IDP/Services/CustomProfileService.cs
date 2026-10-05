@@ -163,6 +163,13 @@ public sealed class CustomProfileService : IProfileService
                 "employee_id",
                 employmentProfile.EmployeeId);
 
+            // The staff member's LAN ID: what the APIs record next to the subject ID
+            // ("decided by etpar") and what the screens show.
+            AddClaimIfRequested(
+                context,
+                "lan_id",
+                employmentProfile.LanId);
+
             AddClaimIfRequested(
                 context,
                 "employment_type",

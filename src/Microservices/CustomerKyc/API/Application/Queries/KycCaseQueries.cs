@@ -43,7 +43,8 @@ public sealed record KycCaseListItem(
     string BranchCode,
     string? AssignedOfficerUserId,
     string CustomerName,
-    ApplicantAddress ResidentialAddress);
+    ApplicantAddress ResidentialAddress,
+    StaffLanIds Staff);
 
 public sealed record PagedKycCasesResponse(
     IReadOnlyList<KycCaseListItem> Items,
@@ -75,7 +76,16 @@ public sealed record KycCaseDetail(
     string CustomerName,
     ApplicantAddress ResidentialAddress,
     Guid IdentityProofDocumentId,
-    Guid TaxProofDocumentId);
+    Guid TaxProofDocumentId,
+    StaffLanIds Staff);
+
+/// <summary>The LAN IDs of the people on the case (null when not known to this context).</summary>
+public sealed record StaffLanIds(
+    string? InitiatedBy,
+    string? AssignedOfficer,
+    string? IdentityVerificationBy,
+    string? DocumentVerificationBy,
+    string? DecisionBy);
 
 /// <summary>The applicant's residential address as submitted (snapshot).</summary>
 public sealed record ApplicantAddress(

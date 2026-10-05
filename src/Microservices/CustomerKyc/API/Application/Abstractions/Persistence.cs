@@ -55,6 +55,16 @@ public interface IInboxStore
     void RecordProcessed(Guid messageId, string consumer);
 }
 
+/// <summary>
+/// The context's staff directory: remembers a staff member's LAN ID (from their token, or
+/// from an event that names them) so screens and events can show it. Identity and every
+/// rule stay on the subject ID.
+/// </summary>
+public interface IStaffDirectory
+{
+    Task RememberAsync(string? userId, string? lanId, CancellationToken cancellationToken);
+}
+
 /// <summary>Another transaction changed the aggregate first (optimistic concurrency).</summary>
 public sealed class ConcurrencyConflictException(string message, Exception inner) : Exception(message, inner);
 

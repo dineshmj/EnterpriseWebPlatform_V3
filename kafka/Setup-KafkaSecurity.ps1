@@ -259,7 +259,8 @@ switch ($Phase) {
 
     Write-Host 'OnboardingOutcomeSubscriber: read its topics and group; write its dead-letter topic' -ForegroundColor Cyan
     foreach ($t in 'kyc.case.created', 'kyc.case.approved', 'kyc.case.rejected', 'compliance.case.created', 'compliance.case.approved', 'compliance.case.rejected',
-                   'accounts.application.created', 'accounts.account.opened', 'accounts.application.rejected') {
+                   'accounts.application.created', 'accounts.account.opened', 'accounts.application.rejected',
+                   'accounts.account.opening.failed') {
         Grant 'ewp-onboarding-outcome-subscriber' "--operation Read --operation Describe --topic $t"
     }
     Grant 'ewp-onboarding-outcome-subscriber' '--operation Read --group customer-onboarding.outcome-subscriber'

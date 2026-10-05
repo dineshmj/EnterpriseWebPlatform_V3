@@ -2,7 +2,7 @@
 
 **Bounded context:** Accounts (ACC)  
 **Subdomain type:** Core (simplified — not a core-banking ledger)  
-**Status:** Present: API, account-application opening subscriber and core-banking simulator (3a); officer UI, BFF + MFE (3b). Compensation of a failed opening: 3c.
+**Status:** Present: API, account-application opening subscriber and core-banking simulator (3a); officer UI, BFF + MFE (3b); compensation of a failed opening (3c).
 
 Platform-wide rules are not repeated here. See [doc/](../../../../doc/).
 
@@ -79,7 +79,7 @@ hold ▼  │ release              OPENING ──refused, or still failing after
 2. **SoD across contexts:** the account officer must be neither the workflow initiator nor the Compliance officer who approved the application. If the initiator is unknown the rule fails closed.
 3. **ReBAC:** the first officer action (claim, or a decision) assigns the application; afterwards only the assigned officer may act until they release it.
 4. Reject needs remarks; hold needs a reason. A decision is final.
-5. **Only the core-banking system opens an account.** A technical failure keeps the application OPENING and is retried with exponential back-off (15 s doubling to 5 min). After `MaxOpeningAttempts` (6) failures, or a refusal (HTTP 422), the application is FAILED and `AccountOpeningFailed` is published — compensation follows (3c).
+5. **Only the core-banking system opens an account.** A technical failure keeps the application OPENING and is retried with exponential back-off (15 s doubling to 5 min). After `MaxOpeningAttempts` (6) failures, or a refusal (HTTP 422), the application is FAILED and `AccountOpeningFailed` is published; Customer Onboarding compensates the onboarding (COMPENSATING → REJECTED, documents invalidated). The background opening continues the trace of the officer's approval (stored as `opening_trace_parent`).
 6. **No duplicate accounts:** every core-banking request carries an `Idempotency-Key` (the `ApplicationRef`). A retried request after a lost answer returns the same account, which is why the POST may be retried at all.
 7. **The account holder's name** comes from `compliance.case.approved` (the applicant as Compliance cleared them) and is the name core banking opens the account in. Accounts stores no other personal data — no address or contact details.
 8. A funds reservation (Payments, planned) is idempotent per payment saga ID; releasing an unknown or already-released reservation is a no-op that succeeds.
@@ -106,7 +106,7 @@ hold ▼  │ release              OPENING ──refused, or still failing after
 | Direction | Contract |
 |---|---|
 | In | `compliance.case.approved` → `AccountApplicationOpeningSubscriber` → `POST internal/v1/accounts/applications/from-compliance-approved` (Inbox, plus one application per `ApplicationRef`) |
-| Out | `accounts.application.created` → CO: ACCOUNT_OPENING_IN_PROGRESS; `accounts.account.opened` → CO: COMPLETED; `accounts.application.rejected` → CO: REJECTED (+ document invalidation); `accounts.account.opening.failed` → compensation (3c). All via the Outbox and `OnboardingOutcomeSubscriber`. |
+| Out | `accounts.application.created` → CO: ACCOUNT_OPENING_IN_PROGRESS; `accounts.account.opened` → CO: COMPLETED; `accounts.application.rejected` → CO: REJECTED (+ document invalidation); `accounts.account.opening.failed` → CO: COMPENSATING → REJECTED (+ document invalidation). All via the Outbox and `OnboardingOutcomeSubscriber`. |
 | Out (synchronous) | `POST /v1/accounts` to the core-banking system (API key, `Idempotency-Key`; resilience pipeline) |
 | Payments saga (planned) | Reserve-funds and release-funds commands with their results. Defined in [Payments-Requirements.md](../../Payments/doc/Payments-Requirements.md) and the [Saga plan](../../../../doc/EWP-V3-Saga-Choreography-and-Orchestration-Plans.md). |
 

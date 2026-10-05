@@ -3,9 +3,9 @@ cls
 $ErrorActionPreference = "Stop"
 
 # In Windows PowerShell / PowerShell ISE, invoking `pnpm` can resolve to pnpm.ps1.
-# Use pnpm.cmd explicitly. PowerShell ISE may also surface native stderr as a
-# NativeCommandError even when the process is successful, so Invoke-Pnpm temporarily
-# uses Continue while invoking PNPM and determines success from $LASTEXITCODE.
+# Use pnpm.cmd explicitly. PowerShell ISE surfaces native stderr as NativeCommandError
+# even when the process succeeds, so Invoke-Pnpm runs pnpm through cmd.exe with stderr
+# merged into stdout, and determines success from $LASTEXITCODE.
 $PnpmCommand = "pnpm.cmd"
 
 function Invoke-Pnpm {
@@ -44,7 +44,13 @@ function Invoke-Pnpm {
         $ErrorActionPreference = "Continue"
 
         try {
-            & $PnpmCommand @Arguments
+            # Run through cmd.exe and merge stderr into stdout THERE ("2>&1" inside the
+            # cmd command line). pnpm echoes each script it runs ("$ nest build") to
+            # stderr; merged by cmd.exe, PowerShell receives plain output lines and ISE
+            # no longer shows them as red NativeCommandError records. cmd.exe returns
+            # pnpm's exit code, so $LASTEXITCODE still decides success.
+            $quotedArguments = $Arguments | ForEach-Object { if ($_ -match '\s') { "`"$_`"" } else { $_ } }
+            cmd.exe /d /c "$PnpmCommand $($quotedArguments -join ' ') 2>&1" | Out-Host
             $pnpmExitCode = $LASTEXITCODE
         }
         finally {

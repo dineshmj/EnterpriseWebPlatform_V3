@@ -19,7 +19,7 @@ public static class Config
             // scope so they know the acting user's branch, e.g. to pass it to
             // Documents Management for branch-scoped document access.
             new (name: "organization", displayName: "Organization", userClaims:
-                [ "employee_id", "department", "branch", "branch_city", "branch_country_code", "region", "clearance_level", "employment_type" ])
+                [ "employee_id", "lan_id", "department", "branch", "branch_city", "branch_country_code", "region", "clearance_level", "employment_type" ])
         ];
 
     public static IEnumerable<ApiScope> ApiScopes =>

@@ -378,6 +378,11 @@ public sealed class IdentityDbContext : DbContext
             .HasMaxLength(50)
             .IsRequired();
 
+        entity.Property(x => x.LanId)
+            .HasColumnName("lan_id")
+            .HasMaxLength(20)
+            .IsRequired();
+
         entity.Property(x => x.DepartmentId)
             .HasColumnName("department_id")
             .IsRequired();

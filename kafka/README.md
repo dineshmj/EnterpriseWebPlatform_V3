@@ -39,7 +39,7 @@ To undo: stop Kafka and run `.\kafka\Setup-KafkaSecurity.ps1 -Revert` (restores 
 | `ewp-accounts-application-opening-subscriber` | AccountApplicationOpeningSubscriber | Read `compliance.case.approved` and group `accounts.application-opening-subscriber`; write `accounts.application-opening-subscriber.dlq` |
 | `ewp-dm-invalidation-subscriber` | DocumentInvalidationSubscriber | Read `onboarding.application.submitted`, `onboarding.application.rejected` and group `documents-management.invalidation-subscriber`; write `documents-management.invalidation-subscriber.dlq` |
 | `ewp-kyc-case-opening-subscriber` | KycCaseOpeningSubscriber | Read `onboarding.application.submitted` and group `customer-kyc.case-opening-subscriber`; write `customer-kyc.case-opening-subscriber.dlq` |
-| `ewp-onboarding-outcome-subscriber` | OnboardingOutcomeSubscriber | Read `kyc.case.created/approved/rejected`, `compliance.case.created/approved/rejected`, `accounts.application.created/rejected`, `accounts.account.opened` and group `customer-onboarding.outcome-subscriber`; write `customer-onboarding.outcome-subscriber.dlq` |
+| `ewp-onboarding-outcome-subscriber` | OnboardingOutcomeSubscriber | Read `kyc.case.created/approved/rejected`, `compliance.case.created/approved/rejected`, `accounts.application.created/rejected`, `accounts.account.opened`, `accounts.account.opening.failed` and group `customer-onboarding.outcome-subscriber`; write `customer-onboarding.outcome-subscriber.dlq` |
 | `ewp-kafka-ui` | Kafka UI | Read and describe everything; no writes |
 | `admin` | The broker itself and the CLI tools | Super user |
 

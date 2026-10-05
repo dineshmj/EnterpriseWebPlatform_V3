@@ -8,6 +8,14 @@ export interface ComplianceCase {
   /** The applicant as KYC verified them (Compliance's snapshot). */
   customerName: string;
   residentialAddress: ApplicantAddress | null;
+  /** LAN IDs of the people on the case, for display (rules use the subject IDs). */
+  staff?: {
+    initiatedBy?: string | null;
+    kycIdentityDecidedBy?: string | null;
+    kycDocumentDecidedBy?: string | null;
+    assignedOfficer?: string | null;
+    decisionBy?: string | null;
+  };
   kycCaseId: number;
   branchCode: string;
   status: string;

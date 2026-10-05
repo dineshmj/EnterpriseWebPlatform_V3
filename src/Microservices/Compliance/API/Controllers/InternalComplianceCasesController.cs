@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+using EnterpriseWebPlatform.Compliance.Api.Application.Abstractions;
 using EnterpriseWebPlatform.Compliance.Api.Application.Commands;
 using EnterpriseWebPlatform.Compliance.Api.Domain.Exceptions;
 using EnterpriseWebPlatform.Compliance.Api.Domain.ValueObjects;
@@ -19,7 +20,10 @@ public sealed record OpenComplianceCaseRequest(
     Guid? WorkflowId,
     Guid? CorrelationId,
     Guid CausationId,
-    ApplicantContract? Applicant);
+    ApplicantContract? Applicant,
+    string? InitiatedByLanId,
+    string? KycIdentityDecidedByLanId,
+    string? KycDocumentDecidedByLanId);
 
 /// <summary>The applicant as KYC verified them (name and residential address).</summary>
 public sealed record ApplicantContract(string? FirstName, string? LastName, AddressContract? ResidentialAddress);
@@ -39,7 +43,9 @@ public sealed record AddressContract(
 /// </summary>
 [ApiController]
 [Route("internal/v1/compliance/cases")]
-public sealed class InternalComplianceCasesController(OpenComplianceCaseCommandHandler handler) : ControllerBase
+public sealed class InternalComplianceCasesController(
+    OpenComplianceCaseCommandHandler handler,
+    IStaffDirectory staffDirectory) : ControllerBase
 {
     [HttpPost("from-kyc-approved")]
     [Authorize(Policy = "ComplianceCaseOpeningSubscriberWrite")]
@@ -47,6 +53,11 @@ public sealed class InternalComplianceCasesController(OpenComplianceCaseCommandH
     {
         if (request.CausationId == Guid.Empty)
             return ValidationProblem("CausationId (the triggering MessageId) is required.");
+
+        // The event names the initiator and both KYC officers: remember their LAN IDs.
+        await staffDirectory.RememberAsync(request.InitiatedByUserId, request.InitiatedByLanId, cancellationToken);
+        await staffDirectory.RememberAsync(request.KycIdentityDecidedByUserId, request.KycIdentityDecidedByLanId, cancellationToken);
+        await staffDirectory.RememberAsync(request.KycDocumentDecidedByUserId, request.KycDocumentDecidedByLanId, cancellationToken);
 
         OpenComplianceCaseResult result;
         try

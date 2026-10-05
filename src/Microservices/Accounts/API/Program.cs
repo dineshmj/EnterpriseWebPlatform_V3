@@ -88,6 +88,8 @@ builder.Services.AddSingleton<IAuthorizationHandler, AccountOfficerAuthorization
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IAccountsUnitOfWork>(sp => sp.GetRequiredService<AccountsDbContext>());
 builder.Services.AddScoped<IInboxStore>(sp => sp.GetRequiredService<AccountsDbContext>());
+builder.Services.AddScoped<IStaffDirectory, StaffDirectory>();
+builder.Services.AddScoped<IOpeningTrace>(sp => sp.GetRequiredService<AccountsDbContext>());
 builder.Services.AddScoped<IAccountApplicationRepository, AccountApplicationRepository>();
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
 builder.Services.AddScoped<IAccountsQueries, AccountsQueries>();
@@ -176,6 +178,14 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseAuthentication();
+
+// Remember the acting officer's LAN ID (shown on screens and in events; rules use "sub").
+app.Use(async (context, next) =>
+{
+    await context.RequestServices.GetRequiredService<IStaffDirectory>().RememberAsync(
+        context.User.FindFirst("sub")?.Value, context.User.FindFirst("lan_id")?.Value, context.RequestAborted);
+    await next();
+});
 app.UseAuthorization();
 
 // Deny by default: every controller endpoint needs an authenticated caller, on top of its own policy.

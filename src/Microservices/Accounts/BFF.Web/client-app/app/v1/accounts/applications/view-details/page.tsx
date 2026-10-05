@@ -95,7 +95,8 @@ export default function AccountApplicationDetailsPage() {
   const assignedToMe = !!data && !!me && data.assignedOfficerUserId === me;
   const assignedToOther = !!data && !!data.assignedOfficerUserId && !assignedToMe;
   const mayAct = !!data && !sod && !assignedToOther && !isDecided(data.status);
-  const person = (id?: string | null) => (!id ? '—' : id === me ? 'You' : <span className="font-mono text-[13px]">{shortId(id)}</span>);
+  // People are shown by LAN ID (records and rules keep the subject ID); "You" for the signed-in officer.
+  const person = (id?: string | null, lanId?: string | null) => (!id ? '—' : id === me ? 'You' : <span className="font-mono text-[13px]">{lanId ?? shortId(id)}</span>);
 
   return (
     <MfeShell title={data ? `Account application · ${data.applicationNumber}` : `Account application ${applicationId ?? ''}`} subtitle="Accounts">
@@ -123,7 +124,7 @@ export default function AccountApplicationDetailsPage() {
                     { label: 'Branch', value: data.branchCode },
                     { label: 'Account application', value: `#${data.accountApplicationId}` },
                     { label: 'Compliance case', value: `#${data.complianceCaseId}` },
-                    { label: 'Assigned officer', value: data.assignedOfficerUserId ? person(data.assignedOfficerUserId) : 'Unassigned' },
+                    { label: 'Assigned officer', value: data.assignedOfficerUserId ? person(data.assignedOfficerUserId, data.staff?.assignedOfficer) : 'Unassigned' },
                     { label: 'Received', value: formatDateTime(data.createdAt) },
                     { label: 'Last updated', value: formatDateTime(data.updatedAt) },
                     { label: 'Decided', value: formatDateTime(data.decisionAt) },
@@ -162,8 +163,8 @@ export default function AccountApplicationDetailsPage() {
                 <DescriptionList
                   columns={2}
                   items={[
-                    { label: 'Onboarding initiated by', value: person(data.initiatedByUserId) },
-                    { label: 'Compliance approved by', value: person(data.complianceApprovedByUserId) },
+                    { label: 'Onboarding initiated by', value: person(data.initiatedByUserId, data.staff?.initiatedBy) },
+                    { label: 'Compliance approved by', value: person(data.complianceApprovedByUserId, data.staff?.complianceApprovedBy) },
                   ]}
                 />
               </CardContent>
@@ -179,7 +180,7 @@ export default function AccountApplicationDetailsPage() {
               {isDecided(data.status) && data.decisionByUserId && (
                 <div className="space-y-2">
                   <p className="text-sm text-ink">
-                    {data.status === 'REJECTED' ? 'Rejected' : `Approved (${productLabel(data.product)})`} by {person(data.decisionByUserId)} · {formatDateTime(data.decisionAt)}
+                    {data.status === 'REJECTED' ? 'Rejected' : `Approved (${productLabel(data.product)})`} by {person(data.decisionByUserId, data.staff?.decisionBy)} · {formatDateTime(data.decisionAt)}
                   </p>
                   {data.decisionRemarks && <p className="rounded-control bg-subtle px-3 py-2 text-[13px] text-ink">{data.decisionRemarks}</p>}
                 </div>
@@ -187,7 +188,7 @@ export default function AccountApplicationDetailsPage() {
 
               {!isDecided(data.status) && sod && <Alert tone="warning" title="Separation of duties">{sod}</Alert>}
               {!isDecided(data.status) && !sod && assignedToOther && (
-                <Alert tone="info">This application is assigned to another officer ({shortId(data.assignedOfficerUserId)}). Only they can act on it until they release it.</Alert>
+                <Alert tone="info">This application is assigned to another officer ({data.staff?.assignedOfficer ?? shortId(data.assignedOfficerUserId)}). Only they can act on it until they release it.</Alert>
               )}
 
               {data.status === 'ON_HOLD' && data.holdReason && (

@@ -82,7 +82,7 @@ public sealed class AccountsQueries(AccountsDbContext db) : IAccountsQueries
         ProjectAccounts(db.Accounts.AsNoTracking().Where(x => x.BranchCode == branch && x.Id == accountId))
             .SingleOrDefaultAsync(cancellationToken);
 
-    private static IQueryable<AccountApplicationDetail> ProjectApplications(IQueryable<AccountApplication> query) =>
+    private IQueryable<AccountApplicationDetail> ProjectApplications(IQueryable<AccountApplication> query) =>
         query.Select(x => new AccountApplicationDetail(
             x.Id,
             x.ApplicationNumber,
@@ -106,7 +106,12 @@ public sealed class AccountsQueries(AccountsDbContext db) : IAccountsQueries
             x.FailureReason,
             x.CreatedAt,
             x.UpdatedAt,
-            x.HolderName.FirstName + " " + x.HolderName.LastName));
+            x.HolderName.FirstName + " " + x.HolderName.LastName,
+            new StaffLanIds(
+                db.StaffMembers.Where(s => s.UserId == x.InitiatedByUserId).Select(s => s.LanId).FirstOrDefault(),
+                db.StaffMembers.Where(s => s.UserId == x.ComplianceApprovedByUserId).Select(s => s.LanId).FirstOrDefault(),
+                db.StaffMembers.Where(s => s.UserId == x.AssignedOfficerUserId).Select(s => s.LanId).FirstOrDefault(),
+                db.StaffMembers.Where(s => s.UserId == x.DecisionByUserId).Select(s => s.LanId).FirstOrDefault())));
 
     private static IQueryable<AccountDetail> ProjectAccounts(IQueryable<Account> query) =>
         query.Select(x => new AccountDetail(

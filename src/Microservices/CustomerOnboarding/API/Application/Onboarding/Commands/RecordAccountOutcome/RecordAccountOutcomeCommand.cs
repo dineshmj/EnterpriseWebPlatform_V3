@@ -5,7 +5,7 @@ namespace EnterpriseWebPlatform.CustomerOnboarding.Application.Onboarding.Comman
 
 /// <summary>
 /// Applies an Accounts fact (AccountApplicationCreated / AccountOpened /
-/// AccountApplicationRejected) to an onboarding application. MessageId is the Accounts
+/// AccountApplicationRejected / AccountOpeningFailed) to an onboarding application. MessageId is the Accounts
 /// event's MessageId (idempotency key); ApplicationNumber is a consistency check.
 /// </summary>
 public sealed record RecordAccountOutcomeCommand(
@@ -44,6 +44,7 @@ public sealed class RecordAccountOutcomeCommandHandler(
             case "AccountApplicationCreated": changed = application.RecordAccountApplicationCreated(now); break;
             case "AccountOpened": changed = application.RecordAccountOpened(now); break;
             case "AccountApplicationRejected": changed = application.RecordAccountApplicationRejected(now); break;
+            case "AccountOpeningFailed": changed = application.RecordAccountOpeningFailed(now); break;
             default: return RecordKycOutcomeResult.UnsupportedEventType;
         }
 

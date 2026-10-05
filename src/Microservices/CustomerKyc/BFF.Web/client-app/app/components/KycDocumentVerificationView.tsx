@@ -18,6 +18,14 @@ interface KycCase {
   customerNumber: string;
   customerName: string;
   residentialAddress?: ApplicantAddress | null;
+  /** LAN IDs of the people on the case, for display (rules use the subject IDs). */
+  staff?: {
+    initiatedBy?: string | null;
+    assignedOfficer?: string | null;
+    identityVerificationBy?: string | null;
+    documentVerificationBy?: string | null;
+    decisionBy?: string | null;
+  };
   applicationNumber?: string;
   branchCode?: string;
   assignedOfficerUserId?: string | null;
@@ -99,7 +107,7 @@ function decisionBlockedReason(item: KycCase, me: string | null): string | null 
   if (sameUser(item.initiatedByUserId, me))
     return 'You initiated this onboarding. Separation of duties requires another officer to decide it.';
   if (item.assignedOfficerUserId && !sameUser(item.assignedOfficerUserId, me))
-    return `This case is assigned to another officer (${shortId(item.assignedOfficerUserId)}). Only they can decide it until they release it.`;
+    return `This case is assigned to another officer (${item.staff?.assignedOfficer ?? shortId(item.assignedOfficerUserId)}). Only they can decide it until they release it.`;
   return null;
 }
 
@@ -349,7 +357,7 @@ export function KycDocumentVerificationView({
                       </span>
                       <span className="text-xs text-ink-muted">{item.customerName} · {item.customerNumber} · {formatDateTime(item.createdAt)}</span>
                       {item.assignedOfficerUserId && (
-                        <span className="text-xs text-info-700">Assigned · {shortId(item.assignedOfficerUserId)}</span>
+                        <span className="text-xs text-info-700">Assigned · {item.staff?.assignedOfficer ?? shortId(item.assignedOfficerUserId)}</span>
                       )}
                     </button>
                   </li>
@@ -418,7 +426,7 @@ export function KycDocumentVerificationView({
                   </div>
                   <p className="text-xs leading-5 text-ink-muted">
                     {selectedCase.assignedOfficerUserId
-                      ? <>Assigned to officer <span className="font-mono">{shortId(selectedCase.assignedOfficerUserId)}</span>. Only the assigned officer can decide this case.</>
+                      ? <>Assigned to officer <span className="font-mono">{selectedCase.staff?.assignedOfficer ?? shortId(selectedCase.assignedOfficerUserId)}</span>. Only the assigned officer can decide this case.</>
                       : <>Unassigned. Your first decision assigns this case to you.</>}
                   </p>
                   <Link

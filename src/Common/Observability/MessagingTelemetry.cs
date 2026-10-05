@@ -52,6 +52,18 @@ public static class MessagingTelemetry
     }
 
     /// <summary>
+    /// Starts a span for background work that continues an earlier request's trace
+    /// (<paramref name="storedTraceParent"/>, saved when the request asked for the work) -
+    /// e.g. a worker opening an account long after the officer approved it. Events the
+    /// work raises then record this trace, so the workflow stays one trace end to end.
+    /// </summary>
+    public static Activity? StartContinuation(string name, string? storedTraceParent)
+    {
+        ActivityContext.TryParse(storedTraceParent, null, out var parent);
+        return Source.StartActivity(name, ActivityKind.Internal, parent);
+    }
+
+    /// <summary>
     /// Kafka headers for a published message: the trace context (the publish span,
     /// or the stored context when no span is recorded) and the workflow identity,
     /// so infrastructure can route and inspect messages without parsing bodies.

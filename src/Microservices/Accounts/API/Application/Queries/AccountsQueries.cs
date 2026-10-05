@@ -40,7 +40,15 @@ public sealed record AccountApplicationDetail(
     string? FailureReason,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
-    string CustomerName);
+    string CustomerName,
+    StaffLanIds Staff);
+
+/// <summary>The LAN IDs of the people on the application (null when not known to this context).</summary>
+public sealed record StaffLanIds(
+    string? InitiatedBy,
+    string? ComplianceApprovedBy,
+    string? AssignedOfficer,
+    string? DecisionBy);
 
 public sealed record AccountDetail(
     long AccountId,

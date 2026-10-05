@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+using EnterpriseWebPlatform.Accounts.Api.Application.Abstractions;
 using EnterpriseWebPlatform.Accounts.Api.Application.Commands;
 using EnterpriseWebPlatform.Accounts.Api.Domain.Exceptions;
 using EnterpriseWebPlatform.Accounts.Api.Domain.ValueObjects;
@@ -18,7 +19,9 @@ public sealed record OpenAccountApplicationRequest(
     Guid? WorkflowId,
     Guid? CorrelationId,
     Guid CausationId,
-    ApplicantNameContract? Applicant);
+    ApplicantNameContract? Applicant,
+    string? InitiatedByLanId,
+    string? ComplianceApprovedByLanId);
 
 /// <summary>The applicant's name as Compliance cleared it: the account holder.</summary>
 public sealed record ApplicantNameContract(string? FirstName, string? LastName);
@@ -30,7 +33,9 @@ public sealed record ApplicantNameContract(string? FirstName, string? LastName);
 /// </summary>
 [ApiController]
 [Route("internal/v1/accounts/applications")]
-public sealed class InternalAccountApplicationsController(OpenAccountApplicationCommandHandler handler) : ControllerBase
+public sealed class InternalAccountApplicationsController(
+    OpenAccountApplicationCommandHandler handler,
+    IStaffDirectory staffDirectory) : ControllerBase
 {
     [HttpPost("from-compliance-approved")]
     [Authorize(Policy = "AccountApplicationOpeningSubscriberWrite")]
@@ -38,6 +43,10 @@ public sealed class InternalAccountApplicationsController(OpenAccountApplication
     {
         if (request.CausationId == Guid.Empty)
             return ValidationProblem("CausationId (the triggering MessageId) is required.");
+
+        // The event names the initiator and the Compliance approver: remember their LAN IDs.
+        await staffDirectory.RememberAsync(request.InitiatedByUserId, request.InitiatedByLanId, cancellationToken);
+        await staffDirectory.RememberAsync(request.ComplianceApprovedByUserId, request.ComplianceApprovedByLanId, cancellationToken);
 
         OpenAccountApplicationResult result;
         try

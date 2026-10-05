@@ -60,7 +60,13 @@ public sealed class KycCaseQueries(KycDbContext db) : IKycCaseQueries
                     x.Applicant.City,
                     x.Applicant.State,
                     x.Applicant.PostalCode,
-                    x.Applicant.CountryCode)))
+                    x.Applicant.CountryCode),
+                new StaffLanIds(
+                    db.StaffMembers.Where(s => s.UserId == x.InitiatedByUserId).Select(s => s.LanId).FirstOrDefault(),
+                    db.StaffMembers.Where(s => s.UserId == x.AssignedOfficerUserId).Select(s => s.LanId).FirstOrDefault(),
+                    db.StaffMembers.Where(s => s.UserId == x.IdentityVerification.DecidedByUserId).Select(s => s.LanId).FirstOrDefault(),
+                    db.StaffMembers.Where(s => s.UserId == x.DocumentVerification.DecidedByUserId).Select(s => s.LanId).FirstOrDefault(),
+                    db.StaffMembers.Where(s => s.UserId == x.DecisionByUserId).Select(s => s.LanId).FirstOrDefault())))
             .ToListAsync(cancellationToken);
 
         return new PagedKycCasesResponse(items, pageNumber, pageSize, totalCount);
@@ -99,7 +105,13 @@ public sealed class KycCaseQueries(KycDbContext db) : IKycCaseQueries
                     x.Applicant.PostalCode,
                     x.Applicant.CountryCode),
                 x.IdentityProofDocumentId,
-                x.TaxProofDocumentId))
+                x.TaxProofDocumentId,
+                new StaffLanIds(
+                    db.StaffMembers.Where(s => s.UserId == x.InitiatedByUserId).Select(s => s.LanId).FirstOrDefault(),
+                    db.StaffMembers.Where(s => s.UserId == x.AssignedOfficerUserId).Select(s => s.LanId).FirstOrDefault(),
+                    db.StaffMembers.Where(s => s.UserId == x.IdentityVerification.DecidedByUserId).Select(s => s.LanId).FirstOrDefault(),
+                    db.StaffMembers.Where(s => s.UserId == x.DocumentVerification.DecidedByUserId).Select(s => s.LanId).FirstOrDefault(),
+                    db.StaffMembers.Where(s => s.UserId == x.DecisionByUserId).Select(s => s.LanId).FirstOrDefault())))
             .SingleOrDefaultAsync(cancellationToken);
 
     // BranchCode is stored through a value converter, so the comparison is made

@@ -45,7 +45,9 @@ public sealed class InvalidateDocumentsCommandHandler(
             return new InvalidateDocumentsResult(InvalidateDocumentsOutcome.Duplicate, 0, 0, 0, 0);
 
         var now = clock.GetUtcNow();
-        var reason = $"Onboarding application {command.ApplicationNumber} ({command.ApplicationRef}) was rejected by {command.RejectedBy}.";
+        var reason = command.RejectedBy == "ACCOUNT_OPENING"
+            ? $"Onboarding application {command.ApplicationNumber} ({command.ApplicationRef}) ended: the account could not be opened."
+            : $"Onboarding application {command.ApplicationNumber} ({command.ApplicationRef}) was rejected by {command.RejectedBy}.";
 
         var ids = command.DocumentIds.Distinct().ToList();
         var documents = await repository.GetForUpdateAsync(ids, cancellationToken);

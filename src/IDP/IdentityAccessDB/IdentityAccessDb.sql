@@ -100,6 +100,11 @@ CREATE TABLE departments (
 CREATE TABLE user_employment_profiles (
     user_id BIGINT PRIMARY KEY,
     employee_id VARCHAR(50) NOT NULL,
+    -- The staff member's LAN ID ("filas": 2 letters of the first name + 3 of the last,
+    -- lowercase; a digit is appended on a collision). Issued as the "lan_id" claim and
+    -- shown on screens; records keep the subject ID as the identity. In production the
+    -- LAN ID is the directory sign-in name; the demo signs in with role-named user names.
+    lan_id VARCHAR(20) NOT NULL UNIQUE,
     department_id BIGINT NOT NULL REFERENCES departments(id),
     branch_id BIGINT NOT NULL REFERENCES branches(id),
     employment_type VARCHAR(50) NOT NULL,
@@ -354,48 +359,49 @@ INSERT INTO departments (code, name) VALUES
 INSERT INTO users
 (subject_id, first_name, last_name, email, user_name, hashed_password)
 VALUES
-('11111111-1111-4111-8111-111111111111','Liam','Taylor','customer.demo@ewp.local','customer.demo','AQAAAAIAAYagAAAAEIlPgp7TyCFnglFyGNtICXvPagDlh3e5iiHpgzdYDq13HNnTEz39YgoKfY30CtMX+A=='),
-('22222222-2222-4222-8222-222222222222','Sophie','Mitchell','sophie.cs@ewp.local','sophie.cs','AQAAAAIAAYagAAAAEPY4aOFXs5jKT6JQTz2NoI9lZ9PuueDVV+1Z8cjuBd3RD5C9mXsEdQZtyhRj2a7rmg=='),
-('33333333-3333-4333-8333-333333333333','Liam','Anderson','liam.kyc@ewp.local','liam.kyc','AQAAAAIAAYagAAAAEBopMgsJC9hmTnnn49trJ/0pix6arpfqTsyKEKhIZFFh3Abv/4g0X3M+GF5JLurbTA=='),
-('44444444-4444-4444-8444-444444444444','Olivia','Bennett','olivia.compliance@ewp.local','olivia.compliance','AQAAAAIAAYagAAAAEGpSs2A8wnMhWNxds3d82NWpglQ+Xn3TpFZa2s3apE/FzCVFaOhVzVjDJacN3KSk2Q=='),
-('55555555-5555-4555-8555-555555555555','Jack','Wilson','jack.accounts@ewp.local','jack.accounts','AQAAAAIAAYagAAAAEPLCTsqXUpWAbOKfsJqKp5SFc2QOzb/Ko1SH9VQXORu+r64z64jS1AjF5yX0DiqWDA=='),
-('66666666-6666-4666-8666-666666666666','Emily','Carter','emily.payments@ewp.local','emily.payments','AQAAAAIAAYagAAAAELIL6rQum0qOZEaRh2RC+4sHRWoSGJaOn8pmHW7TE7UB4nxI5FPfDvK0J8uzCB7wXQ=='),
-('77777777-7777-4777-8777-777777777777','Daniel','Cooper','daniel.ops@ewp.local','daniel.ops','AQAAAAIAAYagAAAAEKqRcAtU8ubQvN0M2kH1pVEFj7W+VEvTNO2zEQSD6ScH1y8kz4sM8HnOFWiMBL+CLA=='),
-('88888888-8888-4888-8888-888888888888','Sarah','Collins','sarah.audit@ewp.local','sarah.audit','AQAAAAIAAYagAAAAED8RxCLXVADbAjiHytlh6xfOD3F2J+l3DguFIe42jd677n9a4wH4+HwRdjoOzChhNw=='),
-('99999999-9999-4999-8999-999999999999','Michael','Turner','platform.admin@ewp.local','platform.admin','AQAAAAIAAYagAAAAECfATzS4UHKPpe6PWJ7voKLlapzMU22k1YdQpx7PayeDKBT/vSeYFJVI0O7nw7Pn1w=='),
-('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','Ethan','Parker','ethan.kyc@ewp.local','ethan.kyc','AQAAAAIAAYagAAAAEKRsMC96qN6pkuEwNtKRnAxFQ8dS6Da0/+RBkXoL8jNKVRM/3GcQqxKB27ClDVvqWg=='),
-('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','Noah','Hughes','noah.kyc@ewp.local','noah.kyc','AQAAAAIAAYagAAAAEKi316gXNJpixuDi0xLAI8oh6s/FIhmH+cqKU2ktAIB7AInf9Nb0Z6y130jVEAZyKA=='),
-('cccccccc-cccc-4ccc-8ccc-cccccccccccc','Mia','Robinson','mia.cs@ewp.local','mia.cs','AQAAAAIAAYagAAAAEGfsNE93UJWybUddYUydvOF9uHg/AjFhOcjxV3tAza3cKkMzRB71EZHAnCnDWeFaiw=='),
-('dddddddd-dddd-4ddd-8ddd-dddddddddddd','Grace','Walsh','grace.compliance@ewp.local','grace.compliance','AQAAAAIAAYagAAAAEGPpX+Mq624eR1rkU3B8Z0ryAM2JWOPMj+k/jCsPi0FoeaA/toS9m9854bxBhoQf0A==');
+('c7a8527b-6117-4ff0-a946-41c65775c43a','Liam','Taylor','customer.demo@ewp.local','customer.demo','AQAAAAIAAYagAAAAEIlPgp7TyCFnglFyGNtICXvPagDlh3e5iiHpgzdYDq13HNnTEz39YgoKfY30CtMX+A=='),
+('756a2ead-62e2-49fa-986f-7d5c90c4b897','Sophie','Mitchell','sophie.cs@ewp.local','sophie.cs','AQAAAAIAAYagAAAAEPY4aOFXs5jKT6JQTz2NoI9lZ9PuueDVV+1Z8cjuBd3RD5C9mXsEdQZtyhRj2a7rmg=='),
+('3e248f73-528a-460b-a052-ab56ccfa5e82','Liam','Anderson','liam.kyc@ewp.local','liam.kyc','AQAAAAIAAYagAAAAEBopMgsJC9hmTnnn49trJ/0pix6arpfqTsyKEKhIZFFh3Abv/4g0X3M+GF5JLurbTA=='),
+('17fdde42-f3e7-4b7d-b41a-9812f4d89c97','Olivia','Bennett','olivia.compliance@ewp.local','olivia.compliance','AQAAAAIAAYagAAAAEGpSs2A8wnMhWNxds3d82NWpglQ+Xn3TpFZa2s3apE/FzCVFaOhVzVjDJacN3KSk2Q=='),
+('12a2ce6b-2ff7-4f02-8c82-39001b2d98b3','Jack','Wilson','jack.accounts@ewp.local','jack.accounts','AQAAAAIAAYagAAAAEPLCTsqXUpWAbOKfsJqKp5SFc2QOzb/Ko1SH9VQXORu+r64z64jS1AjF5yX0DiqWDA=='),
+('2e486365-900b-4f46-ba7a-da64c0db5def','Emily','Carter','emily.payments@ewp.local','emily.payments','AQAAAAIAAYagAAAAELIL6rQum0qOZEaRh2RC+4sHRWoSGJaOn8pmHW7TE7UB4nxI5FPfDvK0J8uzCB7wXQ=='),
+('fe982b55-3396-4eaa-b1be-90e75a8111ba','Daniel','Cooper','daniel.ops@ewp.local','daniel.ops','AQAAAAIAAYagAAAAEKqRcAtU8ubQvN0M2kH1pVEFj7W+VEvTNO2zEQSD6ScH1y8kz4sM8HnOFWiMBL+CLA=='),
+('bbf5ec6a-1903-41eb-98c7-ca76b1d5a415','Sarah','Collins','sarah.audit@ewp.local','sarah.audit','AQAAAAIAAYagAAAAED8RxCLXVADbAjiHytlh6xfOD3F2J+l3DguFIe42jd677n9a4wH4+HwRdjoOzChhNw=='),
+('f77db41d-0eda-4291-a86e-7dd452254b1d','Michael','Turner','platform.admin@ewp.local','platform.admin','AQAAAAIAAYagAAAAECfATzS4UHKPpe6PWJ7voKLlapzMU22k1YdQpx7PayeDKBT/vSeYFJVI0O7nw7Pn1w=='),
+('7d7a42e5-8250-45c7-ba92-6b6d449007a3','Ethan','Parker','ethan.kyc@ewp.local','ethan.kyc','AQAAAAIAAYagAAAAEKRsMC96qN6pkuEwNtKRnAxFQ8dS6Da0/+RBkXoL8jNKVRM/3GcQqxKB27ClDVvqWg=='),
+('0b583994-3e74-4b4b-b807-efae632351ce','Noah','Hughes','noah.kyc@ewp.local','noah.kyc','AQAAAAIAAYagAAAAEKi316gXNJpixuDi0xLAI8oh6s/FIhmH+cqKU2ktAIB7AInf9Nb0Z6y130jVEAZyKA=='),
+('14ea7069-72fc-4dda-b70f-0580ce03e518','Mia','Robinson','mia.cs@ewp.local','mia.cs','AQAAAAIAAYagAAAAEGfsNE93UJWybUddYUydvOF9uHg/AjFhOcjxV3tAza3cKkMzRB71EZHAnCnDWeFaiw=='),
+('e41d2d3d-c803-4399-860a-3971342f1740','Grace','Walsh','grace.compliance@ewp.local','grace.compliance','AQAAAAIAAYagAAAAEGPpX+Mq624eR1rkU3B8Z0ryAM2JWOPMj+k/jCsPi0FoeaA/toS9m9854bxBhoQf0A==');
 
 -- =========================================================
 -- 15. EMPLOYMENT / ABAC PROFILES
 -- =========================================================
 
 INSERT INTO user_employment_profiles
-(user_id, employee_id, department_id, branch_id, employment_type, clearance_level)
+(user_id, employee_id, lan_id, department_id, branch_id, employment_type, clearance_level)
 SELECT
     u.id,
     x.employee_id,
+    x.lan_id,
     d.id,
     b.id,
     x.employment_type,
     x.clearance_level
 FROM (VALUES
-    ('sophie.cs','EMP-10042','CUSTOMER_SERVICE','SYD001','FULL_TIME',2),
-    ('liam.kyc','EMP-10043','KYC','SYD001','FULL_TIME',3),
-    ('olivia.compliance','EMP-10044','COMPLIANCE','SYD001','FULL_TIME',4),
-    ('jack.accounts','EMP-10045','ACCOUNTS','SYD001','FULL_TIME',3),
-    ('emily.payments','EMP-10046','PAYMENTS','SYD002','FULL_TIME',4),
-    ('daniel.ops','EMP-10047','OPERATIONS','BNE001','FULL_TIME',4),
-    ('sarah.audit','EMP-10048','AUDIT','ADL001','FULL_TIME',5),
-    ('platform.admin','EMP-10049','IT','PER001','FULL_TIME',5),
-    ('ethan.kyc','EMP-10050','KYC','SYD001','FULL_TIME',3),
-    ('noah.kyc','EMP-10051','KYC','SYD001','FULL_TIME',3),
-    ('mia.cs','EMP-10052','CUSTOMER_SERVICE','MEL001','FULL_TIME',2),
+    ('sophie.cs','EMP-10042','somit','CUSTOMER_SERVICE','SYD001','FULL_TIME',2),
+    ('liam.kyc','EMP-10043','liand','KYC','SYD001','FULL_TIME',3),
+    ('olivia.compliance','EMP-10044','olben','COMPLIANCE','SYD001','FULL_TIME',4),
+    ('jack.accounts','EMP-10045','jawil','ACCOUNTS','SYD001','FULL_TIME',3),
+    ('emily.payments','EMP-10046','emcar','PAYMENTS','SYD002','FULL_TIME',4),
+    ('daniel.ops','EMP-10047','dacoo','OPERATIONS','BNE001','FULL_TIME',4),
+    ('sarah.audit','EMP-10048','sacol','AUDIT','ADL001','FULL_TIME',5),
+    ('platform.admin','EMP-10049','mitur','IT','PER001','FULL_TIME',5),
+    ('ethan.kyc','EMP-10050','etpar','KYC','SYD001','FULL_TIME',3),
+    ('noah.kyc','EMP-10051','nohug','KYC','SYD001','FULL_TIME',3),
+    ('mia.cs','EMP-10052','mirob','CUSTOMER_SERVICE','MEL001','FULL_TIME',2),
     -- Senior compliance officer: clearance 5 may approve HIGH-risk (sanctions MATCH) cases.
-    ('grace.compliance','EMP-10053','COMPLIANCE','SYD001','FULL_TIME',5)
-) AS x(user_name,employee_id,department_code,branch_code,employment_type,clearance_level)
+    ('grace.compliance','EMP-10053','grwal','COMPLIANCE','SYD001','FULL_TIME',5)
+) AS x(user_name,employee_id,lan_id,department_code,branch_code,employment_type,clearance_level)
 JOIN users u ON u.user_name = x.user_name
 JOIN departments d ON d.code = x.department_code
 JOIN branches b ON b.code = x.branch_code;

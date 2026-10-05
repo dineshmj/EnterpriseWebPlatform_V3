@@ -1,6 +1,7 @@
 DROP TABLE IF EXISTS kyc_cases CASCADE;
 DROP TABLE IF EXISTS outbox_messages CASCADE;
 DROP TABLE IF EXISTS inbox_messages CASCADE;
+DROP TABLE IF EXISTS staff_members CASCADE;
 
 CREATE TABLE IF NOT EXISTS kyc_cases (
     id BIGSERIAL PRIMARY KEY,
@@ -230,6 +231,15 @@ CREATE INDEX IF NOT EXISTS ix_kyc_outbox_acted_by_user_id ON outbox_messages (ac
 -- in the SAME transaction as the business change the message caused. A redelivered
 -- message is recognised and not applied twice. Additive: safe to run on an existing
 -- database (CREATE ... IF NOT EXISTS).
+-- Staff directory: the LAN ID of each staff member this context has seen (from the
+-- officer's token, or from an event that names them). Screens and published events
+-- show the LAN ID; records and every rule keep the subject ID (user_id).
+CREATE TABLE IF NOT EXISTS staff_members (
+    user_id VARCHAR(200) PRIMARY KEY,
+    lan_id VARCHAR(20) NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS inbox_messages (
     id UUID NOT NULL,
     message_id UUID NOT NULL,

@@ -28,6 +28,7 @@ public sealed class CustomerKycApiResource : IDuendeApiResource
                     "branch",
                     "region",
                     "clearance_level",
+                    "lan_id",
                     "employment_type"
                 }
         };

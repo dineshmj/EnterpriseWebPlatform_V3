@@ -95,6 +95,7 @@ builder.Services.AddScoped<IKycUnitOfWork>(sp => sp.GetRequiredService<KycDbCont
 builder.Services.AddScoped<IInboxStore>(sp => sp.GetRequiredService<KycDbContext>());
 builder.Services.AddScoped<IKycCaseRepository, KycCaseRepository>();
 builder.Services.AddScoped<IKycCaseQueries, KycCaseQueries>();
+builder.Services.AddScoped<IStaffDirectory, StaffDirectory>();
 builder.Services.AddScoped<OpenKycCaseCommandHandler>();
 builder.Services.AddScoped<DecideVerificationStageCommandHandler>();
 builder.Services.AddScoped<AssignKycCaseCommandHandler>();
@@ -139,6 +140,15 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseAuthentication();
+
+// Remember the acting officer's LAN ID (shown on screens and in events; rules use "sub").
+app.Use(async (context, next) =>
+{
+    await context.RequestServices.GetRequiredService<IStaffDirectory>().RememberAsync(
+        context.User.FindFirst("sub")?.Value, context.User.FindFirst("lan_id")?.Value, context.RequestAborted);
+    await next();
+});
+
 app.UseAuthorization();
 app.MapControllers();
 

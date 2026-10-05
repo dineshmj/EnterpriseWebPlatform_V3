@@ -32,6 +32,7 @@
 -- DROP EXISTING OBJECTS (CLEANUP)
 -- ============================================================================
 
+DROP TABLE IF EXISTS staff_members CASCADE;
 DROP TABLE IF EXISTS inbox_messages CASCADE;
 DROP TABLE IF EXISTS outbox_messages CASCADE;
 DROP TABLE IF EXISTS onboarding_application_documents CASCADE;
@@ -385,6 +386,16 @@ CREATE TABLE outbox_messages
 -- already processed that message.
 --
 -- ============================================================================
+
+-- Staff directory: the LAN ID of each staff member this context has seen (from the
+-- agent's token). Published events name the initiator by it; records and every rule
+-- keep the subject ID (user_id).
+CREATE TABLE staff_members
+(
+    user_id     VARCHAR(200) PRIMARY KEY,
+    lan_id      VARCHAR(20)  NOT NULL,
+    updated_at  TIMESTAMPTZ  NOT NULL
+);
 
 CREATE TABLE inbox_messages
 (

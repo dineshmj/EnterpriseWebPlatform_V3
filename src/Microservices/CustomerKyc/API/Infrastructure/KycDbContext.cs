@@ -17,6 +17,7 @@ public sealed class KycDbContext(DbContextOptions<KycDbContext> options, TimePro
     public DbSet<KycCase> KycCases => Set<KycCase>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
+    public DbSet<StaffMember> StaffMembers => Set<StaffMember>();
 
     public Task<bool> HasProcessedAsync(Guid messageId, string consumer, CancellationToken cancellationToken) =>
         InboxMessages.AsNoTracking().AnyAsync(x => x.MessageId == messageId && x.Consumer == consumer, cancellationToken);
@@ -193,6 +194,15 @@ public sealed class KycDbContext(DbContextOptions<KycDbContext> options, TimePro
             e.HasIndex(x => x.WorkflowId).HasDatabaseName("ix_kyc_outbox_workflow_id");
             e.HasIndex(x => x.CorrelationId).HasDatabaseName("ix_kyc_outbox_correlation_id");
             e.HasIndex(x => x.CausationId).HasDatabaseName("ix_kyc_outbox_causation_id");
+        });
+
+        modelBuilder.Entity<StaffMember>(e =>
+        {
+            e.ToTable("staff_members");
+            e.HasKey(x => x.UserId);
+            e.Property(x => x.UserId).HasColumnName("user_id").HasMaxLength(200);
+            e.Property(x => x.LanId).HasColumnName("lan_id").HasMaxLength(20).IsRequired();
+            e.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone").IsRequired();
         });
 
         modelBuilder.Entity<InboxMessage>(e =>

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+using EnterpriseWebPlatform.CustomerKyc.Api.Application.Abstractions;
 using EnterpriseWebPlatform.CustomerKyc.Api.Application.Commands.OpenKycCase;
 using EnterpriseWebPlatform.CustomerKyc.Api.Domain.Exceptions;
 using EnterpriseWebPlatform.CustomerKyc.Api.Domain.ValueObjects;
@@ -9,7 +10,9 @@ namespace EnterpriseWebPlatform.CustomerKyc.Api.Controllers;
 
 [ApiController]
 [Route("internal/v1/kyc/cases")]
-public sealed class InternalKycCasesController(OpenKycCaseCommandHandler openKycCaseHandler) : ControllerBase
+public sealed class InternalKycCasesController(
+    OpenKycCaseCommandHandler openKycCaseHandler,
+    IStaffDirectory staffDirectory) : ControllerBase
 {
     /// <summary>
     /// Opens the KYC case for a submitted onboarding application. Called only by
@@ -23,6 +26,9 @@ public sealed class InternalKycCasesController(OpenKycCaseCommandHandler openKyc
         [FromBody] OpenKycCaseRequest request,
         CancellationToken cancellationToken)
     {
+        // The event names the initiator: remember their LAN ID for the screens.
+        await staffDirectory.RememberAsync(request.InitiatedByUserId, request.InitiatedByLanId, cancellationToken);
+
         OpenKycCaseResult result;
         try
         {

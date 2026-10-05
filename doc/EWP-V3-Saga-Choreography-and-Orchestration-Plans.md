@@ -1,6 +1,6 @@
 # Enterprise Web Platform V3 — Saga Plans
 
-**Status:** Living document. Customer Onboarding choreography is implemented end to end, from submission through the KYC, Compliance and Accounts decisions to a COMPLETED onboarding (compensation of a failed account opening: 3c); Payments orchestration is planned.
+**Status:** Living document. Customer Onboarding choreography is implemented end to end, from submission through the KYC, Compliance and Accounts decisions to a COMPLETED onboarding, including compensation of a failed account opening; Payments orchestration is planned.
 
 ---
 
@@ -44,7 +44,7 @@ There is no central coordinator. Each participating context:
 | 5 | CO records the KYC outcome (KYC_COMPLETED or REJECTED) | `kyc.case.approved` / `rejected` | CO → status changed | Present |
 | 6 | Compliance case opened, external screening (asynchronous, retried), human decision | `kyc.case.approved` | Compliance → `ComplianceCaseCreated`, then `ComplianceCaseApproved` / `Rejected`; CO → COMPLIANCE_IN_PROGRESS / COMPLETED / REJECTED | Present |
 | 7 | Account application, human approval, account opened by the core-banking system (asynchronous, retried, idempotent) | `compliance.case.approved` | Accounts → `AccountApplicationCreated`, then `AccountOpened` / `AccountApplicationRejected` / `AccountOpeningFailed`; CO → ACCOUNT_OPENING_IN_PROGRESS | Present |
-| 8 | Onboarding completes (or compensates after a failed opening) | Accounts outcome | CO → COMPLETED (present) / COMPENSATING → REJECTED (3c) | Partial |
+| 8 | Onboarding completes (or compensates after a failed opening) | Accounts outcome | CO → COMPLETED / COMPENSATING → REJECTED (`RejectedBy: ACCOUNT_OPENING`) | Present |
 | 9 | Initiator and other entitled users notified | status-change events | Notifications → SignalR | Planned |
 
 **Why KYC is triggered by submission.** A customer may have more than one application over time. KYC belongs to an *application*, and only submission means the evidence is complete.
@@ -166,7 +166,7 @@ Retry, timeout and circuit breaker protect **individual technical interactions**
 - [x] Compliance participant (`ComplianceCaseOpeningSubscriber`; outcomes via `OnboardingOutcomeSubscriber`)
 - [x] Accounts participant (`AccountApplicationOpeningSubscriber`; outcomes via `OnboardingOutcomeSubscriber`)
 - [x] Compensation on rejection: DM document invalidation (`DocumentInvalidationSubscriber`)
-- [ ] Compensation of later failures (account opening; COMPENSATING)
+- [x] Compensation of later failures (account opening; COMPENSATING)
 - [ ] Notifications to the initiator and other entitled users
 
 **Payments — orchestration** (after the choreography is stable)

@@ -29,6 +29,7 @@ public sealed class AccountsApiResource : IDuendeApiResource
                     "branch",
                     "region",
                     "clearance_level",
+                    "lan_id",
                     "employment_type"
                 }
         };

@@ -36,6 +36,7 @@ public sealed record OpenKycCaseRequest(
     Guid? CorrelationId,
     Guid CausationId,
     ApplicantContract? Applicant,
+    string? InitiatedByLanId,
     IReadOnlyList<EvidenceDocumentContract>? EvidenceDocuments);
 
 /// <summary>The applicant as submitted to Customer Onboarding (name and residential address).</summary>

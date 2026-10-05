@@ -54,6 +54,16 @@ public sealed class UniqueConstraintViolationException(string message, Exception
 // ---------------------------------------------------------------------------- Screening
 
 /// <summary>What the Compliance context sends to the external screening provider (minimal data).</summary>
+/// <summary>
+/// The context's staff directory: remembers a staff member's LAN ID (from their token, or
+/// from an event that names them) so screens and events can show it. Identity and every
+/// rule stay on the subject ID.
+/// </summary>
+public interface IStaffDirectory
+{
+    Task RememberAsync(string? userId, string? lanId, CancellationToken cancellationToken);
+}
+
 /// <summary>What is screened: the applicant's name and residential address (the lists match on these).</summary>
 public sealed record ScreeningRequest(
     string CustomerNumber,

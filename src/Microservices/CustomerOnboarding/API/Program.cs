@@ -14,6 +14,7 @@ using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.CustomerOnboarding.API.Authorization;
 using EnterpriseWebPlatform.CustomerOnboarding.Application;
+using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Persistence;
 using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -213,6 +214,15 @@ app.UseExceptionHandler();
 
 app.UseHttpsRedirection();
 app.UseAuthentication();
+
+// Remember the acting agent's LAN ID (named in published events; rules use "sub").
+app.Use(async (context, next) =>
+{
+    await context.RequestServices.GetRequiredService<IStaffDirectory>().RememberAsync(
+        context.User.FindFirst("sub")?.Value, context.User.FindFirst("lan_id")?.Value, context.RequestAborted);
+    await next();
+});
+
 app.UseAuthorization();
 
 app.MapControllers()

@@ -16,6 +16,7 @@ public sealed class ComplianceDbContext(DbContextOptions<ComplianceDbContext> op
     public DbSet<ComplianceCase> ComplianceCases => Set<ComplianceCase>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
+    public DbSet<StaffMember> StaffMembers => Set<StaffMember>();
 
     public async Task<IUnitOfWorkTransaction> BeginTransactionAsync(CancellationToken cancellationToken) =>
         new EfUnitOfWorkTransaction(await Database.BeginTransactionAsync(cancellationToken));
@@ -44,12 +45,18 @@ public sealed class ComplianceDbContext(DbContextOptions<ComplianceDbContext> op
             aggregate.ClearDomainEvents();
 
             var (workflowId, correlationId) = await ResolveWorkflowAsync(aggregate, context, cancellationToken);
+            // LAN IDs of everyone the events can name (this context's staff directory).
+            var people = new[] { aggregate.InitiatedByUserId, aggregate.DecisionByUserId }.Where(x => x is not null).Distinct().ToList();
+            var lanIds = await StaffMembers.AsNoTracking()
+                .Where(x => people.Contains(x.UserId))
+                .ToDictionaryAsync(x => x.UserId, x => x.LanId, cancellationToken);
+            string? LanOf(string? userId) => userId is not null && lanIds.TryGetValue(userId, out var lan) ? lan : null;
 
             Guid? previousMessageId = null;
             foreach (var domainEvent in events)
             {
                 var message = ComplianceIntegrationEventMapper.ToOutboxMessage(
-                    aggregate, domainEvent, workflowId, correlationId, previousMessageId ?? context.CausationId);
+                    aggregate, domainEvent, workflowId, correlationId, previousMessageId ?? context.CausationId, LanOf);
                 if (message is null)
                     continue;   // internal-only event
 
@@ -173,6 +180,15 @@ public sealed class ComplianceDbContext(DbContextOptions<ComplianceDbContext> op
             e.Property(x => x.AttemptCount).HasColumnName("attempt_count").IsRequired();
             e.Property(x => x.LastAttemptAt).HasColumnName("last_attempt_at");
             e.Property(x => x.LastError).HasColumnName("last_error");
+        });
+
+        modelBuilder.Entity<StaffMember>(e =>
+        {
+            e.ToTable("staff_members");
+            e.HasKey(x => x.UserId);
+            e.Property(x => x.UserId).HasColumnName("user_id").HasMaxLength(200);
+            e.Property(x => x.LanId).HasColumnName("lan_id").HasMaxLength(20).IsRequired();
+            e.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone").IsRequired();
         });
 
         modelBuilder.Entity<InboxMessage>(e =>

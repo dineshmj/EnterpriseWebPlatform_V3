@@ -235,7 +235,9 @@ Account-opening worker (every 5 s, one due application at a time, FOR UPDATE SKI
   → core-banking system POST /v1/accounts with Idempotency-Key = ApplicationRef (timeout, retry, circuit breaker)
      opened  → application OPENED + Account (BSB 062-000, account number) + outbox "AccountOpened"
                → OnboardingOutcomeSubscriber → CO: ACCOUNT_OPENING_IN_PROGRESS → COMPLETED (the saga ends)
-     failure → stays OPENING, retried with back-off; 6 failures or a refusal → FAILED + "AccountOpeningFailed" (compensation: 3c)
+     failure → stays OPENING, retried with back-off; 6 failures or a refusal → FAILED + "AccountOpeningFailed"
+               → OnboardingOutcomeSubscriber → CO: COMPENSATING → REJECTED (RejectedBy ACCOUNT_OPENING)
+               → "OnboardingApplicationRejected" → DM invalidates the evidence; the customer is a prospect again
 ```
 
 ---

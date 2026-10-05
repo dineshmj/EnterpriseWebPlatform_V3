@@ -20,6 +20,7 @@ export interface KycCase {
   identityVerificationStatus?: string;
   documentVerificationStatus?: string;
   initiatedByUserId?: string | null;
+  staff?: { assignedOfficer?: string | null };
   createdAt: string;
   updatedAt: string;
 }
@@ -87,7 +88,7 @@ export function KycCaseWorkQueue({ title, subtitle, description }: Props) {
                   </Td>
                   <Td><StatusBadge status={item.identityVerificationStatus} /></Td>
                   <Td><StatusBadge status={item.documentVerificationStatus} /></Td>
-                  <Td className="text-ink-muted">{item.assignedOfficerUserId ? `${item.assignedOfficerUserId.slice(0, 8)}…` : 'Unassigned'}</Td>
+                  <Td className="text-ink-muted">{item.assignedOfficerUserId ? (item.staff?.assignedOfficer ?? `${item.assignedOfficerUserId.slice(0, 8)}…`) : 'Unassigned'}</Td>
                   <Td className="text-ink-muted">{formatDateTime(item.createdAt)}</Td>
                   <Td className="text-right">
                     <Link aria-label={`Open case ${item.kycCaseId}`} href={`/v1/kyc/cases/view-details?caseId=${item.kycCaseId}`}

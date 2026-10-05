@@ -5,18 +5,27 @@ using Npgsql;
 
 using EnterpriseWebPlatform.Accounts.Api.Application.Abstractions;
 using EnterpriseWebPlatform.Accounts.Api.Domain.Aggregates;
+using EnterpriseWebPlatform.Accounts.Api.Domain.Events;
 using EnterpriseWebPlatform.Accounts.Api.Domain.ValueObjects;
 using EnterpriseWebPlatform.Accounts.Api.Infrastructure.Messaging;
+using EnterpriseWebPlatform.Common.Observability;
 
 namespace EnterpriseWebPlatform.Accounts.Api.Infrastructure.Persistence;
 
 public sealed class AccountsDbContext(DbContextOptions<AccountsDbContext> options, TimeProvider clock)
-    : DbContext(options), IAccountsUnitOfWork, IInboxStore
+    : DbContext(options), IAccountsUnitOfWork, IInboxStore, IOpeningTrace
 {
+    /// <summary>
+    /// Shadow property (column opening_trace_parent): the W3C traceparent of the officer's
+    /// approval, kept so the background opening continues that trace. Not part of the domain.
+    /// </summary>
+    private const string OpeningTraceParent = "OpeningTraceParent";
+
     public DbSet<AccountApplication> AccountApplications => Set<AccountApplication>();
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
+    public DbSet<StaffMember> StaffMembers => Set<StaffMember>();
 
     public async Task<IUnitOfWorkTransaction> BeginTransactionAsync(CancellationToken cancellationToken) =>
         new EfUnitOfWorkTransaction(await Database.BeginTransactionAsync(cancellationToken));
@@ -27,12 +36,21 @@ public sealed class AccountsDbContext(DbContextOptions<AccountsDbContext> option
     public void RecordProcessed(Guid messageId, string consumer) =>
         InboxMessages.Add(InboxMessage.Processed(messageId, consumer, clock.GetUtcNow()));
 
+    public IDisposable? Continue(AccountApplication application) =>
+        MessagingTelemetry.StartContinuation(
+            "account opening",
+            Entry(application).Property<string?>(OpeningTraceParent).CurrentValue);
+
     public async Task SaveChangesAsync(WorkflowContext context, CancellationToken cancellationToken)
     {
         var changed = ChangeTracker.Entries<AccountApplication>()
             .Select(e => e.Entity)
             .Where(a => a.DomainEvents.Count > 0)
             .ToList();
+
+        // An approval hands the account to the background opening: remember its trace.
+        foreach (var approved in changed.Where(a => a.DomainEvents.OfType<AccountApplicationApprovedDomainEvent>().Any()))
+            Entry(approved).Property<string?>(OpeningTraceParent).CurrentValue = MessagingTelemetry.CurrentTraceParent();
 
         // 1. The aggregates (a new application or account gets its database ID here).
         await SaveTranslatingErrorsAsync(cancellationToken);
@@ -45,12 +63,18 @@ public sealed class AccountsDbContext(DbContextOptions<AccountsDbContext> option
             aggregate.ClearDomainEvents();
 
             var (workflowId, correlationId) = await ResolveWorkflowAsync(aggregate, context, cancellationToken);
+            // LAN IDs of everyone the events can name (this context's staff directory).
+            var people = new[] { aggregate.InitiatedByUserId, aggregate.DecisionByUserId }.Where(x => x is not null).Distinct().ToList();
+            var lanIds = await StaffMembers.AsNoTracking()
+                .Where(x => people.Contains(x.UserId))
+                .ToDictionaryAsync(x => x.UserId, x => x.LanId, cancellationToken);
+            string? LanOf(string? userId) => userId is not null && lanIds.TryGetValue(userId, out var lan) ? lan : null;
 
             Guid? previousMessageId = null;
             foreach (var domainEvent in events)
             {
                 var message = AccountsIntegrationEventMapper.ToOutboxMessage(
-                    aggregate, domainEvent, workflowId, correlationId, previousMessageId ?? context.CausationId);
+                    aggregate, domainEvent, workflowId, correlationId, previousMessageId ?? context.CausationId, LanOf);
                 if (message is null)
                     continue;   // internal-only event
 
@@ -101,6 +125,7 @@ public sealed class AccountsDbContext(DbContextOptions<AccountsDbContext> option
             e.ToTable("account_applications");
             e.HasKey(x => x.Id);
             e.Ignore(x => x.DomainEvents);
+            e.Property<string?>(OpeningTraceParent).HasColumnName("opening_trace_parent").HasMaxLength(55);
             e.Ignore(x => x.IsDecided);
 
             e.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
@@ -194,6 +219,15 @@ public sealed class AccountsDbContext(DbContextOptions<AccountsDbContext> option
             e.Property(x => x.AttemptCount).HasColumnName("attempt_count").IsRequired();
             e.Property(x => x.LastAttemptAt).HasColumnName("last_attempt_at");
             e.Property(x => x.LastError).HasColumnName("last_error");
+        });
+
+        modelBuilder.Entity<StaffMember>(e =>
+        {
+            e.ToTable("staff_members");
+            e.HasKey(x => x.UserId);
+            e.Property(x => x.UserId).HasColumnName("user_id").HasMaxLength(200);
+            e.Property(x => x.LanId).HasColumnName("lan_id").HasMaxLength(20).IsRequired();
+            e.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone").IsRequired();
         });
 
         modelBuilder.Entity<InboxMessage>(e =>

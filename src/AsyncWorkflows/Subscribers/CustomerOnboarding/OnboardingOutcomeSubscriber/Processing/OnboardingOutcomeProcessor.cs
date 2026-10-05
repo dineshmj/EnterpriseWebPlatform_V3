@@ -42,7 +42,8 @@ public sealed class OnboardingOutcomeProcessor(
         ["ComplianceCaseRejected"] = "compliance-outcomes",
         ["AccountApplicationCreated"] = "account-outcomes",
         ["AccountOpened"] = "account-outcomes",
-        ["AccountApplicationRejected"] = "account-outcomes"
+        ["AccountApplicationRejected"] = "account-outcomes",
+        ["AccountOpeningFailed"] = "account-outcomes"
     };
 
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };

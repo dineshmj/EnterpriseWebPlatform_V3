@@ -38,8 +38,8 @@ export default function ComplianceWorkQueuePage() {
       .catch(e => setError(e instanceof Error ? e.message : 'Unable to load compliance cases.'));
   }, [filter]);
 
-  const assignee = (id?: string | null) =>
-    !id ? 'Unassigned' : id === officer?.sub ? 'You' : shortId(id);
+  const assignee = (id?: string | null, lanId?: string | null) =>
+    !id ? 'Unassigned' : id === officer?.sub ? 'You' : (lanId ?? shortId(id));
 
   return (
     <MfeShell title="Compliance work queue" subtitle="Compliance">
@@ -105,7 +105,7 @@ export default function ComplianceWorkQueuePage() {
                   </Td>
                     <Td><RiskBadge risk={item.riskRating} clearance={item.requiredClearance} /></Td>
                     <Td><StatusBadge status={item.status} /></Td>
-                    <Td className="text-ink-muted">{assignee(item.assignedOfficerUserId)}</Td>
+                    <Td className="text-ink-muted">{assignee(item.assignedOfficerUserId, item.staff?.assignedOfficer)}</Td>
                     <Td className="text-ink-muted">{formatDateTime(item.createdAt)}</Td>
                     <Td className="text-right">
                       <Link aria-label={`Open case ${item.complianceCaseId}`} href={href}

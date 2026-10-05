@@ -293,8 +293,8 @@ What the platform is, how it is designed and what each component must do are doc
 
 		While Down / Failing / Slow, approved account applications stay OPENING and are retried with back-off; every request
 		carries an Idempotency-Key (the ApplicationRef), so a retry after a lost answer never opens a second account. After 6
-		failures - or at once when Refusing (HTTP 422) - the application is FAILED and AccountOpeningFailed is published (its
-		compensation in Customer Onboarding arrives in 3c). Back to Healthy, waiting accounts are opened automatically.
+		failures - or at once when Refusing (HTTP 422) - the application is FAILED and AccountOpeningFailed is published;
+		Customer Onboarding compensates: COMPENSATING -> REJECTED (RejectedBy ACCOUNT_OPENING), evidence INVALIDATED, customer PROSPECT. Back to Healthy, waiting accounts are opened automatically.
 
 	e) Health endpoints (as used by Kubernetes liveness / readiness probes):
 

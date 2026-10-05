@@ -21,7 +21,8 @@ public sealed record AccountsIntegrationEventEnvelope<TPayload>(
     Guid? CorrelationId,
     Guid? CausationId,
     string? InitiatedByUserId,
-    TPayload Payload);
+    TPayload Payload,
+    string? InitiatedByLanId = null);
 
 public sealed record AccountApplicationCreatedPayload(
     long AccountApplicationId,
@@ -87,7 +88,8 @@ internal static class AccountsIntegrationEventMapper
         IDomainEvent domainEvent,
         Guid? workflowId,
         Guid? correlationId,
-        Guid causationId)
+        Guid causationId,
+        Func<string?, string?> lanOf)
     {
         var messageId = Guid.NewGuid();
         string eventType;
@@ -98,7 +100,7 @@ internal static class AccountsIntegrationEventMapper
         {
             case AccountApplicationCreatedDomainEvent created:
                 eventType = AccountApplicationCreated;
-                payload = Envelope(messageId, eventType, created.OccurredAt, workflowId, correlationId, causationId, application,
+                payload = Envelope(messageId, eventType, created.OccurredAt, workflowId, correlationId, causationId, application, lanOf,
                     new AccountApplicationCreatedPayload(
                         application.Id,
                         application.ApplicationRef,
@@ -112,7 +114,7 @@ internal static class AccountsIntegrationEventMapper
             case AccountApplicationRejectedDomainEvent rejected:
                 eventType = AccountApplicationRejected;
                 actedBy = rejected.DecidedByUserId;
-                payload = Envelope(messageId, eventType, rejected.OccurredAt, workflowId, correlationId, causationId, application,
+                payload = Envelope(messageId, eventType, rejected.OccurredAt, workflowId, correlationId, causationId, application, lanOf,
                     new AccountApplicationRejectedPayload(
                         application.Id,
                         application.ApplicationRef,
@@ -129,7 +131,7 @@ internal static class AccountsIntegrationEventMapper
             case AccountOpenedDomainEvent opened:
                 eventType = AccountOpened;
                 actedBy = application.DecisionByUserId;
-                payload = Envelope(messageId, eventType, opened.OccurredAt, workflowId, correlationId, causationId, application,
+                payload = Envelope(messageId, eventType, opened.OccurredAt, workflowId, correlationId, causationId, application, lanOf,
                     new AccountOpenedPayload(
                         application.Id,
                         application.ApplicationRef,
@@ -145,7 +147,7 @@ internal static class AccountsIntegrationEventMapper
 
             case AccountOpeningFailedDomainEvent failed:
                 eventType = AccountOpeningFailed;
-                payload = Envelope(messageId, eventType, failed.OccurredAt, workflowId, correlationId, causationId, application,
+                payload = Envelope(messageId, eventType, failed.OccurredAt, workflowId, correlationId, causationId, application, lanOf,
                     new AccountOpeningFailedPayload(
                         application.Id,
                         application.ApplicationRef,
@@ -187,8 +189,8 @@ internal static class AccountsIntegrationEventMapper
 
     private static string Envelope<TPayload>(
         Guid messageId, string eventType, DateTimeOffset occurredAt, Guid? workflowId, Guid? correlationId, Guid causationId,
-        AccountApplication application, TPayload payload) =>
+        AccountApplication application, Func<string?, string?> lanOf, TPayload payload) =>
         JsonSerializer.Serialize(new AccountsIntegrationEventEnvelope<TPayload>(
             messageId, eventType, SchemaVersion, Source, occurredAt, workflowId, correlationId, causationId,
-            application.InitiatedByUserId, payload));
+            application.InitiatedByUserId, payload, lanOf(application.InitiatedByUserId)));
 }

@@ -31,6 +31,7 @@ public sealed class OpenDueAccountCommandHandler(
     IAccountRepository accounts,
     IAccountsUnitOfWork unitOfWork,
     ICoreBankingSystem coreBanking,
+    IOpeningTrace openingTrace,
     OpeningRetryPolicy retryPolicy,
     TimeProvider clock,
     ILogger<OpenDueAccountCommandHandler> logger)
@@ -42,6 +43,9 @@ public sealed class OpenDueAccountCommandHandler(
         var application = await applications.GetNextDueForOpeningAsync(clock.GetUtcNow(), cancellationToken);
         if (application is null)
             return OpeningRunOutcome.NothingDue;
+
+        // The core-banking call and the resulting events join the approval's trace.
+        using var trace = openingTrace.Continue(application);
 
         OpeningRunOutcome outcome;
         try

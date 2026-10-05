@@ -281,7 +281,7 @@ Customer onboarding is a long-running, choreographed saga with no central coordi
 - Forward hops: [KycCaseOpeningSubscriber](../src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/README.md), [ComplianceCaseOpeningSubscriber](../src/AsyncWorkflows/Subscribers/Compliance/ComplianceCaseOpeningSubscriber/README.md), [AccountApplicationOpeningSubscriber](../src/AsyncWorkflows/Subscribers/Accounts/AccountApplicationOpeningSubscriber/README.md); return hop for all three: [OnboardingOutcomeSubscriber](../src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/README.md)
 - Live evidence: the CO, KYC, Compliance and Accounts Outbox tables of one onboarding, linked by `causation_id`
 
-**Not yet:** compensation after a failed account opening (3c) and the orchestrated Payments saga.
+**Not yet:** the orchestrated Payments saga.
 
 #### 1.4.2 Compensation on rejection: retain, don't delete
 
@@ -294,7 +294,9 @@ A saga cannot roll back a distributed transaction; it **compensates** instead. E
 - Retention in the aggregate: `Attach` / `Invalidate` / `CanBeRemoved` in [Document.cs](../src/Microservices/DocumentsManagement/API/Domain/Aggregates/Document.cs)
 - Design: [Saga plan §1.5](EWP-V3-Saga-Choreography-and-Orchestration-Plans.md#15-rejection-and-compensation)
 
-**Not yet:** compensation of later failures (e.g. account opening failing after approval, COMPENSATING status) and disposal after the retention period.
+**Later failures are compensated too.** When the account cannot be opened after every officer approved (core banking refuses, or fails six times), Accounts publishes `AccountOpeningFailed`. Customer Onboarding records COMPENSATING and then REJECTED (`RejectedBy: ACCOUNT_OPENING`), so the same `OnboardingApplicationRejected` invalidates the evidence and the customer becomes a prospect again. No approval is "rolled back": each context keeps its decision on record; only the onboarding ends.
+
+**Not yet:** disposal after the retention period.
 
 ### 1.5 Front-end composition
 
@@ -414,7 +416,7 @@ A component that is missing a required secret or setting refuses to start, rathe
 
 #### 1.7.1 Distributed tracing across HTTP and Kafka
 
-Every .NET component uses OpenTelemetry with W3C trace context. A trace normally ends where a message is put on a queue. Here it does not. The request's trace context is stored on the Outbox row, so the relay, possibly seconds later, publishes in a span that continues that trace and sends it in the Kafka `traceparent` header. The subscriber processes the message in a child span, and its HTTP call carries the trace to the next API. One onboarding therefore appears as **one trace** in Jaeger, Grafana Tempo, Azure Monitor or AWS X-Ray: from the agent's click in the CO BFF, through the CO API, the relay, the KYC worker, the KYC API and back to the CO API, with database calls as child spans. Log lines carry the same TraceId. Spans are exported over OTLP only when an endpoint is configured; otherwise the context is still propagated.
+Every .NET component uses OpenTelemetry with W3C trace context. A trace normally ends where a message is put on a queue. Here it does not. The request's trace context is stored on the Outbox row, so the relay, possibly seconds later, publishes in a span that continues that trace and sends it in the Kafka `traceparent` header. The subscriber processes the message in a child span, and its HTTP call carries the trace to the next API. One onboarding therefore appears as **one trace** in Jaeger, Grafana Tempo, Azure Monitor or AWS X-Ray: from the agent's click in the CO BFF, through the CO API, the relay, the KYC worker, the KYC API and back to the CO API, with database calls as child spans. Background work keeps the trace too: the Accounts API stores the officer's approval trace with the application, and the worker that later opens the account continues it, so the core-banking call and `AccountOpened` / `AccountOpeningFailed` belong to the approval's trace. Log lines carry the same TraceId. Spans are exported over OTLP only when an endpoint is configured; otherwise the context is still propagated.
 
 **Where to look at:**
 
@@ -560,6 +562,7 @@ The rule also spans contexts. A Compliance case may not be handled by the initia
 - `EnsureSeparationOfDuties` in [KycCase.cs](../src/Microservices/CustomerKyc/API/Domain/Aggregates/KycCase.cs)
 - Cross-context SoD: `EnsureOfficerMayAct` in [ComplianceCase.cs](../src/Microservices/Compliance/API/Domain/Aggregates/ComplianceCase.cs) and [AccountApplication.cs](../src/Microservices/Accounts/API/Domain/Aggregates/AccountApplication.cs); the stage deciders on the event: [KycIntegrationEvents.cs](../src/Microservices/CustomerKyc/API/Infrastructure/Messaging/KycIntegrationEvents.cs)
 - The initiator captured at the source and carried through Kafka: `initiated_by` in the Outbox tables, see [1.3.4](#134-workflow-correlation-and-causation-identity)
+- People on screen: officers appear by LAN ID (`etpar`, `olben`), never by subject ID, but every rule compares subject IDs: a LAN ID can change or be reused, a subject ID cannot. Each context keeps its own `staff_members` table (subject ID → LAN ID), filled from the officer's token and from the events that name people.
 
 **Not yet:** four-eyes per stage (a different officer for each stage).
 

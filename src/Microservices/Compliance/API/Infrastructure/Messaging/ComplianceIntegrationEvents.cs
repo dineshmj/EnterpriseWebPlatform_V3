@@ -21,7 +21,8 @@ public sealed record ComplianceIntegrationEventEnvelope<TPayload>(
     Guid? CorrelationId,
     Guid? CausationId,
     string? InitiatedByUserId,
-    TPayload Payload);
+    TPayload Payload,
+    string? InitiatedByLanId = null);
 
 public sealed record ComplianceCaseCreatedPayload(
     long ComplianceCaseId,
@@ -45,7 +46,8 @@ public sealed record ComplianceCaseDecisionPayload(
     string DecisionByUserId,
     DateTimeOffset DecisionAt,
     string? DecisionRemarks,
-    ApplicantNamePayload Applicant);
+    ApplicantNamePayload Applicant,
+    string? DecisionByLanId);
 
 /// <summary>
 /// The applicant's name (added additively, same SchemaVersion): Accounts opens the
@@ -73,7 +75,8 @@ internal static class ComplianceIntegrationEventMapper
         IDomainEvent domainEvent,
         Guid? workflowId,
         Guid? correlationId,
-        Guid causationId)
+        Guid causationId,
+        Func<string?, string?> lanOf)
     {
         var messageId = Guid.NewGuid();
         string eventType;
@@ -84,7 +87,7 @@ internal static class ComplianceIntegrationEventMapper
         {
             case ComplianceCaseOpenedDomainEvent:
                 eventType = ComplianceCaseCreated;
-                payload = Envelope(messageId, eventType, domainEvent.OccurredAt, workflowId, correlationId, causationId, complianceCase,
+                payload = Envelope(messageId, eventType, domainEvent.OccurredAt, workflowId, correlationId, causationId, complianceCase, lanOf,
                     new ComplianceCaseCreatedPayload(
                         complianceCase.Id,
                         complianceCase.ApplicationRef,
@@ -98,7 +101,7 @@ internal static class ComplianceIntegrationEventMapper
             case ComplianceCaseDecidedDomainEvent decided:
                 eventType = decided.NewStatus == ComplianceCaseStatus.Approved ? ComplianceCaseApproved : ComplianceCaseRejected;
                 actedBy = decided.DecidedByUserId;
-                payload = Envelope(messageId, eventType, decided.OccurredAt, workflowId, correlationId, causationId, complianceCase,
+                payload = Envelope(messageId, eventType, decided.OccurredAt, workflowId, correlationId, causationId, complianceCase, lanOf,
                     new ComplianceCaseDecisionPayload(
                         complianceCase.Id,
                         complianceCase.ApplicationRef,
@@ -112,7 +115,8 @@ internal static class ComplianceIntegrationEventMapper
                         decided.DecidedByUserId,
                         decided.OccurredAt,
                         decided.Remarks,
-                        new ApplicantNamePayload(complianceCase.Applicant.FirstName, complianceCase.Applicant.LastName)));
+                        new ApplicantNamePayload(complianceCase.Applicant.FirstName, complianceCase.Applicant.LastName),
+                        lanOf(decided.DecidedByUserId)));
                 break;
 
             // Internal facts. Listed explicitly so that a NEW, unmapped event still fails loudly.
@@ -145,8 +149,8 @@ internal static class ComplianceIntegrationEventMapper
 
     private static string Envelope<TPayload>(
         Guid messageId, string eventType, DateTimeOffset occurredAt, Guid? workflowId, Guid? correlationId, Guid causationId,
-        ComplianceCase complianceCase, TPayload payload) =>
+        ComplianceCase complianceCase, Func<string?, string?> lanOf, TPayload payload) =>
         JsonSerializer.Serialize(new ComplianceIntegrationEventEnvelope<TPayload>(
             messageId, eventType, SchemaVersion, Source, occurredAt, workflowId, correlationId, causationId,
-            complianceCase.InitiatedByUserId, payload));
+            complianceCase.InitiatedByUserId, payload, lanOf(complianceCase.InitiatedByUserId)));
 }

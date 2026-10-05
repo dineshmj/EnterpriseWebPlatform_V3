@@ -2,11 +2,14 @@ namespace EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Messaging;
 
 /// <summary>
 /// Published when a deciding context (KYC, Compliance or Accounts) rejects an onboarding
+/// application, or when its account could not be opened after every approval
 /// application: the business failure of the onboarding saga. Each interested
 /// context compensates its own state; Documents Management invalidates (retains,
 /// never deletes) exactly the evidence documents listed here.
 ///
-/// <c>RejectedBy</c> is <c>KYC</c>, <c>COMPLIANCE</c> or <c>ACCOUNTS</c>. <c>BranchCode</c> is the
+/// <c>RejectedBy</c> is <c>KYC</c>, <c>COMPLIANCE</c>, <c>ACCOUNTS</c> (an officer's decision)
+/// or <c>ACCOUNT_OPENING</c> (core banking refused or failed; <c>PreviousStatus</c> is then
+/// <c>COMPENSATING</c>). <c>BranchCode</c> is the
 /// application's branch: DM invalidates only documents of that branch.
 /// </summary>
 public sealed record OnboardingApplicationRejectedIntegrationEvent(

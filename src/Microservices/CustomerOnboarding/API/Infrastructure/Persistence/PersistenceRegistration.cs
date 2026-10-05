@@ -10,6 +10,7 @@ public static class PersistenceRegistration
     {
         services.AddScoped<Messaging.WorkflowContextAccessor>();
         services.AddScoped<ICustomerRepository, CustomerRepository>();
+        services.AddScoped<IStaffDirectory, StaffDirectory>();
         services.AddScoped<IOnboardingApplicationRepository, OnboardingApplicationRepository>();
         services.AddScoped<ICustomerNumberGenerator, CustomerNumberGenerator>();
         services.AddScoped<IApplicationNumberGenerator, ApplicationNumberGenerator>();

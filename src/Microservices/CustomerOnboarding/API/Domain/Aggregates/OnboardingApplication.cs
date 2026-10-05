@@ -260,8 +260,30 @@ public sealed class OnboardingApplication : AggregateRoot
     }
 
     /// <summary>
+    /// The account could not be opened although every officer approved (core banking
+    /// refused, or failed too often): (… →) ACCOUNT_OPENING_IN_PROGRESS → COMPENSATING →
+    /// REJECTED (terminal). COMPENSATING records that the saga failed after approvals and
+    /// is being undone; the rejection then announces the evidence, so Documents Management
+    /// invalidates it, and the customer becomes a prospect again. Both steps commit
+    /// together: every compensation is idempotent and asynchronous, so there is nothing
+    /// to wait for here.
+    /// </summary>
+    public bool RecordAccountOpeningFailed(DateTimeOffset now)
+    {
+        var changed = RecordAccountApplicationCreated(now);
+
+        if (Status != OnboardingApplicationStatus.AccountOpeningInProgress)
+            return changed;
+
+        StartCompensation(now);
+        Reject(OnboardingRejectionStage.AccountOpening, now);
+        return true;
+    }
+
+    /// <summary>
     /// A verifying context rejected the application. Only possible while a decision
-    /// is pending (submitted, in KYC, in compliance or in account opening) - never from a draft.
+    /// is pending (submitted, in KYC, in compliance or in account opening) or while a
+    /// failed saga is being compensated - never from a draft.
     /// The rejection is a business failure of the saga: it is announced with the
     /// evidence documents, so that Documents Management can invalidate them.
     /// </summary>
@@ -270,7 +292,8 @@ public sealed class OnboardingApplication : AggregateRoot
         if (Status is not (OnboardingApplicationStatus.Submitted or
                            OnboardingApplicationStatus.KycInProgress or
                            OnboardingApplicationStatus.ComplianceInProgress or
-                           OnboardingApplicationStatus.AccountOpeningInProgress))
+                           OnboardingApplicationStatus.AccountOpeningInProgress or
+                           OnboardingApplicationStatus.Compensating))
         {
             throw new DomainRuleViolationException(
                 $"An application can only be rejected while a decision is pending, not in status '{Status.ToCode()}'.");

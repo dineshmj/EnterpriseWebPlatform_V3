@@ -17,6 +17,14 @@ interface KycCaseDetail {
   customerNumber: string;
   customerName: string;
   residentialAddress?: ApplicantAddress | null;
+  /** LAN IDs of the people on the case, for display (rules use the subject IDs). */
+  staff?: {
+    initiatedBy?: string | null;
+    assignedOfficer?: string | null;
+    identityVerificationBy?: string | null;
+    documentVerificationBy?: string | null;
+    decisionBy?: string | null;
+  };
   applicationNumber?: string;
   branchCode?: string;
   assignedOfficerUserId?: string | null;
@@ -92,8 +100,8 @@ export default function KycCaseDetailsPage() {
                   { label: 'Residential address', value: formatAddress(data.residentialAddress) },
                   { label: 'Branch', value: data.branchCode ?? '—' },
                   { label: 'KYC case', value: `#${data.kycCaseId}` },
-                  { label: 'Assigned officer', value: data.assignedOfficerUserId ? <span className="font-mono text-[13px]">{shortId(data.assignedOfficerUserId)}</span> : 'Unassigned' },
-                  { label: 'Initiated by', value: <span className="font-mono text-[13px]">{shortId(data.initiatedByUserId)}</span> },
+                  { label: 'Assigned officer', value: data.assignedOfficerUserId ? <span className="font-mono text-[13px]">{data.staff?.assignedOfficer ?? shortId(data.assignedOfficerUserId)}</span> : 'Unassigned' },
+                  { label: 'Initiated by', value: <span className="font-mono text-[13px]">{data.staff?.initiatedBy ?? shortId(data.initiatedByUserId)}</span> },
                   { label: 'Opened', value: formatDateTime(data.createdAt) },
                   { label: 'Last updated', value: formatDateTime(data.updatedAt) },
                   { label: 'Decided', value: formatDateTime(data.decisionAt) },
@@ -107,7 +115,7 @@ export default function KycCaseDetailsPage() {
               icon={<IdCard />}
               title="Identity verification"
               status={data.identityVerificationStatus}
-              decidedBy={data.identityVerificationByUserId}
+              decidedBy={data.staff?.identityVerificationBy ?? data.identityVerificationByUserId}
               decidedAt={data.identityVerificationAt}
               remarks={data.identityVerificationRemarks}
               href={`/v1/kyc/identity-verification/view-all?caseId=${data.kycCaseId}`}
@@ -116,7 +124,7 @@ export default function KycCaseDetailsPage() {
               icon={<Landmark />}
               title="Document verification"
               status={data.documentVerificationStatus}
-              decidedBy={data.documentVerificationByUserId}
+              decidedBy={data.staff?.documentVerificationBy ?? data.documentVerificationByUserId}
               decidedAt={data.documentVerificationAt}
               remarks={data.documentVerificationRemarks}
               href={`/v1/kyc/documents/view-all?caseId=${data.kycCaseId}`}
@@ -149,7 +157,7 @@ function StageCard({
         ) : (
           <>
             <p className="text-xs text-ink-muted">
-              Decided by <span className="font-mono">{shortId(decidedBy)}</span> · {formatDateTime(decidedAt)}
+              Decided by <span className="font-mono">{decidedBy && decidedBy.length <= 20 ? decidedBy : shortId(decidedBy)}</span> · {formatDateTime(decidedAt)}
             </p>
             {remarks && <p className="rounded-control bg-subtle px-3 py-2 text-[13px] text-ink">{remarks}</p>}
           </>

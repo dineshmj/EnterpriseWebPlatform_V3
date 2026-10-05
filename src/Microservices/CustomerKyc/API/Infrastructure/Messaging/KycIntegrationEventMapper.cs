@@ -44,11 +44,23 @@ internal static class KycIntegrationEventMapper
         string payload;
         string? actedByUserId = null;
 
+        // LAN IDs of everyone this event can name (the staff directory of this context).
+        var people = new[]
+        {
+            kycCase.InitiatedByUserId, kycCase.DecisionByUserId,
+            kycCase.IdentityVerification.DecidedByUserId, kycCase.DocumentVerification.DecidedByUserId
+        }.Where(x => x is not null).Distinct().ToList();
+        var lanIds = await db.StaffMembers.AsNoTracking()
+            .Where(x => people.Contains(x.UserId))
+            .ToDictionaryAsync(x => x.UserId, x => x.LanId, cancellationToken);
+        string? LanOf(string? userId) => userId is not null && lanIds.TryGetValue(userId, out var lan) ? lan : null;
+        var initiatedByLanId = LanOf(kycCase.InitiatedByUserId);
+
         switch (domainEvent)
         {
             case KycCaseOpenedDomainEvent:
                 eventType = KycCaseCreated;
-                payload = Envelope(messageId, eventType, domainEvent.OccurredAt, workflowId, correlationId, causationId, kycCase,
+                payload = Envelope(messageId, eventType, domainEvent.OccurredAt, workflowId, correlationId, causationId, kycCase, initiatedByLanId,
                     new KycCaseCreatedPayload(
                         kycCase.Id,
                         kycCase.ApplicationRef,
@@ -61,7 +73,7 @@ internal static class KycIntegrationEventMapper
             case VerificationStageDecidedDomainEvent stage:
                 eventType = StageEventType(stage.Stage, stage.NewStatus);
                 actedByUserId = stage.DecidedByUserId;
-                payload = Envelope(messageId, eventType, stage.OccurredAt, workflowId, correlationId, causationId, kycCase,
+                payload = Envelope(messageId, eventType, stage.OccurredAt, workflowId, correlationId, causationId, kycCase, initiatedByLanId,
                     new KycVerificationStageDecisionPayload(
                         kycCase.Id,
                         kycCase.ApplicationRef,
@@ -73,14 +85,15 @@ internal static class KycIntegrationEventMapper
                         stage.DecidedByUserId,
                         stage.OccurredAt,
                         stage.Remarks,
-                        stage.OverallStatus.ToCode()));
+                        stage.OverallStatus.ToCode(),
+                        LanOf(stage.DecidedByUserId)));
                 break;
 
             case KycCaseDecidedDomainEvent decided:
                 eventType = decided.NewStatus == KycCaseStatus.Approved ? "KycCaseApproved" : "KycCaseRejected";
                 actedByUserId = decided.DecidedByUserId;
                 var causedBy = await CausedByMessageIdsAsync(db, kycCase, decided, previousMessageId, cancellationToken);
-                payload = Envelope(messageId, eventType, decided.OccurredAt, workflowId, correlationId, causationId, kycCase,
+                payload = Envelope(messageId, eventType, decided.OccurredAt, workflowId, correlationId, causationId, kycCase, initiatedByLanId,
                     new KycCaseDecisionPayload(
                         kycCase.Id,
                         kycCase.ApplicationRef,
@@ -104,7 +117,10 @@ internal static class KycIntegrationEventMapper
                                 kycCase.Applicant.City,
                                 kycCase.Applicant.State,
                                 kycCase.Applicant.PostalCode,
-                                kycCase.Applicant.CountryCode))));
+                                kycCase.Applicant.CountryCode)),
+                        LanOf(decided.DecidedByUserId),
+                        LanOf(kycCase.IdentityVerification.DecidedByUserId),
+                        LanOf(kycCase.DocumentVerification.DecidedByUserId)));
                 break;
 
             // Internal facts (ReBAC assignment) with no published contract. Listed
@@ -144,6 +160,7 @@ internal static class KycIntegrationEventMapper
         Guid? correlationId,
         Guid causationId,
         KycCase kycCase,
+        string? initiatedByLanId,
         TPayload payload) =>
         JsonSerializer.Serialize(new KycIntegrationEventEnvelope<TPayload>(
             messageId,
@@ -155,7 +172,8 @@ internal static class KycIntegrationEventMapper
             correlationId,
             causationId,
             kycCase.InitiatedByUserId,
-            payload));
+            payload,
+            initiatedByLanId));
 
     private static string StageEventType(VerificationStageType stage, VerificationStatus newStatus) =>
         (stage, newStatus) switch

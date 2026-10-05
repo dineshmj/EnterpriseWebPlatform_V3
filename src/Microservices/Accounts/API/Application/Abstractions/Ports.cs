@@ -66,6 +66,27 @@ public sealed class UniqueConstraintViolationException(string message, Exception
 /// </summary>
 public sealed record OpenAccountRequest(Guid IdempotencyKey, string CustomerNumber, string AccountName, string BranchCode, AccountProduct Product);
 
+/// <summary>
+/// The context's staff directory: remembers a staff member's LAN ID (from their token, or
+/// from an event that names them) so screens and events can show it. Identity and every
+/// rule stay on the subject ID.
+/// </summary>
+public interface IStaffDirectory
+{
+    Task RememberAsync(string? userId, string? lanId, CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// Continues the trace of the officer's approval while the account is opened in the
+/// background, so the opening (and AccountOpened / AccountOpeningFailed) belongs to the
+/// same distributed trace as the approval. Tracing is infrastructure: the domain never
+/// sees trace context.
+/// </summary>
+public interface IOpeningTrace
+{
+    IDisposable? Continue(AccountApplication application);
+}
+
 /// <summary>The account the core-banking system opened.</summary>
 public sealed record OpenAccountResponse(string AccountNumber, string Bsb, string CoreBankingReference);
 

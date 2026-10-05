@@ -33,6 +33,15 @@ internal sealed class CustomerIntegrationEventMapper(CustomerDbContext db)
         var messages = new List<OutboxMessage>();
         var lastMessageIdByAggregate = new Dictionary<string, Guid>();
 
+        // The initiator's LAN ID (from this context's staff directory), named in every envelope.
+        var initiator = initiatedByUserId?.ToString();
+        _initiatedByLanId = initiator is null
+            ? null
+            : await db.StaffMembers.AsNoTracking()
+                .Where(x => x.UserId == initiator)
+                .Select(x => x.LanId)
+                .FirstOrDefaultAsync(cancellationToken);
+
         foreach (var (aggregate, domainEvent) in domainEvents)
         {
             switch (domainEvent)
@@ -183,7 +192,9 @@ internal sealed class CustomerIntegrationEventMapper(CustomerDbContext db)
         return messages;
     }
 
-    private static OutboxMessage Envelope<TEvent>(
+    private string? _initiatedByLanId;
+
+    private OutboxMessage Envelope<TEvent>(
         Guid messageId,
         string aggregateType,
         long aggregateId,
@@ -205,7 +216,8 @@ internal sealed class CustomerIntegrationEventMapper(CustomerDbContext db)
             correlationId,
             causationId,
             initiatedByUserId?.ToString(),
-            integrationEvent);
+            integrationEvent,
+            _initiatedByLanId);
 
         return OutboxMessage.Create(
             messageId,

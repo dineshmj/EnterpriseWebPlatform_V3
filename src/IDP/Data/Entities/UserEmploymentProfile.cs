@@ -9,6 +9,9 @@ public sealed class UserEmploymentProfile
 
     public string EmployeeId { get; set; } = null!;
 
+    /// <summary>The staff member's LAN ID, e.g. "somit" (issued as the "lan_id" claim).</summary>
+    public string LanId { get; set; } = null!;
+
     public long DepartmentId { get; set; }
 
     public long BranchId { get; set; }

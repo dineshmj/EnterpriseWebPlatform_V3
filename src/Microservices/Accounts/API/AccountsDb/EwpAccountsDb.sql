@@ -10,6 +10,7 @@ DROP TABLE IF EXISTS accounts CASCADE;
 DROP TABLE IF EXISTS account_applications CASCADE;
 DROP TABLE IF EXISTS outbox_messages CASCADE;
 DROP TABLE IF EXISTS inbox_messages CASCADE;
+DROP TABLE IF EXISTS staff_members CASCADE;
 
 CREATE TABLE account_applications (
     id BIGSERIAL PRIMARY KEY,
@@ -25,6 +26,10 @@ CREATE TABLE account_applications (
     -- compliance.case.approved): the name core banking opens the account in.
     holder_first_name VARCHAR(100) NOT NULL,
     holder_last_name VARCHAR(100) NOT NULL,
+
+    -- W3C traceparent of the officer's approval: the background opening continues
+    -- this trace, so approval, core-banking call and AccountOpened are one trace.
+    opening_trace_parent VARCHAR(55) NULL,
 
     -- The Compliance case that approved the application (Compliance, by value).
     compliance_case_id BIGINT NOT NULL,
@@ -158,6 +163,15 @@ CREATE INDEX ix_accounts_outbox_workflow_id ON outbox_messages (workflow_id);
 CREATE INDEX ix_accounts_outbox_causation_id ON outbox_messages (causation_id);
 
 -- Inbox (idempotent consumer).
+-- Staff directory: the LAN ID of each staff member this context has seen (from the
+-- officer's token, or from an event that names them). Screens and published events
+-- show the LAN ID; records and every rule keep the subject ID (user_id).
+CREATE TABLE staff_members (
+    user_id VARCHAR(200) PRIMARY KEY,
+    lan_id VARCHAR(20) NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
+);
+
 CREATE TABLE inbox_messages (
     id UUID NOT NULL,
     message_id UUID NOT NULL,

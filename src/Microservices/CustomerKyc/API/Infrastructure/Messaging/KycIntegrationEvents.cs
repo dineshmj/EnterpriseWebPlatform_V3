@@ -19,7 +19,8 @@ public sealed record KycIntegrationEventEnvelope<TPayload>(
     Guid? CorrelationId,
     Guid? CausationId,
     string? InitiatedByUserId,
-    TPayload Payload);
+    TPayload Payload,
+    string? InitiatedByLanId = null);
 
 public sealed record KycCaseCreatedPayload(
     long KycCaseId,
@@ -40,7 +41,8 @@ public sealed record KycVerificationStageDecisionPayload(
     string DecisionByUserId,
     DateTimeOffset DecisionAt,
     string? DecisionRemarks,
-    string OverallStatus);
+    string OverallStatus,
+    string? DecisionByLanId);
 
 /// <remarks>
 /// BranchCode and the two stage deciders were added for Compliance (additive, same
@@ -61,7 +63,10 @@ public sealed record KycCaseDecisionPayload(
     string BranchCode,
     string? IdentityVerificationByUserId,
     string? DocumentVerificationByUserId,
-    ApplicantPayload Applicant);
+    ApplicantPayload Applicant,
+    string? DecisionByLanId,
+    string? IdentityVerificationByLanId,
+    string? DocumentVerificationByLanId);
 
 /// <summary>
 /// The applicant as submitted and verified by KYC (added additively, same SchemaVersion):

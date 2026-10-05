@@ -66,7 +66,7 @@ public sealed class ComplianceCaseQueries(ComplianceDbContext db) : IComplianceC
     private IQueryable<ComplianceCase> InBranch(BranchCode branch) =>
         db.ComplianceCases.AsNoTracking().Where(x => x.BranchCode == branch);
 
-    private static IQueryable<ComplianceCaseDetail> Project(IQueryable<ComplianceCase> query) =>
+    private IQueryable<ComplianceCaseDetail> Project(IQueryable<ComplianceCase> query) =>
         query.Select(x => new ComplianceCaseDetail(
             x.Id,
             x.ApplicationNumber,
@@ -100,5 +100,11 @@ public sealed class ComplianceCaseQueries(ComplianceDbContext db) : IComplianceC
                 x.Applicant.City,
                 x.Applicant.State,
                 x.Applicant.PostalCode,
-                x.Applicant.CountryCode)));
+                x.Applicant.CountryCode),
+            new StaffLanIds(
+                db.StaffMembers.Where(s => s.UserId == x.InitiatedByUserId).Select(s => s.LanId).FirstOrDefault(),
+                db.StaffMembers.Where(s => s.UserId == x.KycIdentityDecidedByUserId).Select(s => s.LanId).FirstOrDefault(),
+                db.StaffMembers.Where(s => s.UserId == x.KycDocumentDecidedByUserId).Select(s => s.LanId).FirstOrDefault(),
+                db.StaffMembers.Where(s => s.UserId == x.AssignedOfficerUserId).Select(s => s.LanId).FirstOrDefault(),
+                db.StaffMembers.Where(s => s.UserId == x.DecisionByUserId).Select(s => s.LanId).FirstOrDefault())));
 }

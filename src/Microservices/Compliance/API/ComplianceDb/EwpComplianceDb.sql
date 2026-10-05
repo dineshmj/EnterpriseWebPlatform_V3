@@ -9,6 +9,7 @@
 DROP TABLE IF EXISTS compliance_cases CASCADE;
 DROP TABLE IF EXISTS outbox_messages CASCADE;
 DROP TABLE IF EXISTS inbox_messages CASCADE;
+DROP TABLE IF EXISTS staff_members CASCADE;
 
 CREATE TABLE compliance_cases (
     id BIGSERIAL PRIMARY KEY,
@@ -138,6 +139,15 @@ CREATE INDEX ix_compliance_outbox_workflow_id ON outbox_messages (workflow_id);
 CREATE INDEX ix_compliance_outbox_causation_id ON outbox_messages (causation_id);
 
 -- Inbox (idempotent consumer).
+-- Staff directory: the LAN ID of each staff member this context has seen (from the
+-- officer's token, or from an event that names them). Screens and published events
+-- show the LAN ID; records and every rule keep the subject ID (user_id).
+CREATE TABLE staff_members (
+    user_id VARCHAR(200) PRIMARY KEY,
+    lan_id VARCHAR(20) NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
+);
+
 CREATE TABLE inbox_messages (
     id UUID NOT NULL,
     message_id UUID NOT NULL,

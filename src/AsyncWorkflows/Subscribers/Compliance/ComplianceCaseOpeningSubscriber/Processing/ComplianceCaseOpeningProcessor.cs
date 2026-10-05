@@ -115,7 +115,10 @@ public sealed class ComplianceCaseOpeningProcessor(
                 workflowId = envelope.WorkflowId,
                 correlationId = envelope.CorrelationId,
                 causationId = envelope.MessageId,
-                applicant = p.Applicant
+                applicant = p.Applicant,
+                initiatedByLanId = envelope.InitiatedByLanId,
+                kycIdentityDecidedByLanId = p.IdentityVerificationByLanId,
+                kycDocumentDecidedByLanId = p.DocumentVerificationByLanId
             })
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -129,7 +132,8 @@ public sealed class ComplianceCaseOpeningProcessor(
         Guid? WorkflowId,
         Guid? CorrelationId,
         string? InitiatedByUserId,
-        Payload? Payload);
+        Payload? Payload,
+        string? InitiatedByLanId);
 
     private sealed record Payload(
         long KycCaseId,
@@ -139,7 +143,9 @@ public sealed class ComplianceCaseOpeningProcessor(
         string? BranchCode,
         string? IdentityVerificationByUserId,
         string? DocumentVerificationByUserId,
-        Applicant? Applicant);
+        Applicant? Applicant,
+        string? IdentityVerificationByLanId,
+        string? DocumentVerificationByLanId);
 
     // The applicant as KYC verified them; forwarded as-is (Compliance validates it).
     private sealed record Applicant(string? FirstName, string? LastName, Address? ResidentialAddress);

@@ -88,7 +88,8 @@ export default function ComplianceCaseDetailsPage() {
   const assignedToOther = !!data && !!data.assignedOfficerUserId && !assignedToMe;
   const mayAct = !!data && !sod && !assignedToOther && !isDecided(data.status) && data.status !== 'SCREENING';
   const lacksClearance = !!data?.requiredClearance && !!officer?.clearance && officer.clearance < data.requiredClearance;
-  const person = (id?: string | null) => (!id ? '—' : id === me ? 'You' : <span className="font-mono text-[13px]">{shortId(id)}</span>);
+  // People are shown by LAN ID (records and rules keep the subject ID); "You" for the signed-in officer.
+  const person = (id?: string | null, lanId?: string | null) => (!id ? '—' : id === me ? 'You' : <span className="font-mono text-[13px]">{lanId ?? shortId(id)}</span>);
 
   return (
     <MfeShell title={data ? `Compliance case · ${data.applicationNumber}` : `Compliance case ${caseId ?? ''}`} subtitle="Compliance">
@@ -117,7 +118,7 @@ export default function ComplianceCaseDetailsPage() {
                     { label: 'Branch', value: data.branchCode },
                     { label: 'Compliance case', value: `#${data.complianceCaseId}` },
                     { label: 'KYC case', value: `#${data.kycCaseId}` },
-                    { label: 'Assigned officer', value: data.assignedOfficerUserId ? person(data.assignedOfficerUserId) : 'Unassigned' },
+                    { label: 'Assigned officer', value: data.assignedOfficerUserId ? person(data.assignedOfficerUserId, data.staff?.assignedOfficer) : 'Unassigned' },
                     { label: 'Opened', value: formatDateTime(data.createdAt) },
                     { label: 'Last updated', value: formatDateTime(data.updatedAt) },
                     { label: 'Decided', value: formatDateTime(data.decisionAt) },
@@ -156,9 +157,9 @@ export default function ComplianceCaseDetailsPage() {
                 <DescriptionList
                   columns={3}
                   items={[
-                    { label: 'Onboarding initiated by', value: person(data.initiatedByUserId) },
-                    { label: 'KYC identity decided by', value: person(data.kycIdentityDecidedByUserId) },
-                    { label: 'KYC documents decided by', value: person(data.kycDocumentDecidedByUserId) },
+                    { label: 'Onboarding initiated by', value: person(data.initiatedByUserId, data.staff?.initiatedBy) },
+                    { label: 'KYC identity decided by', value: person(data.kycIdentityDecidedByUserId, data.staff?.kycIdentityDecidedBy) },
+                    { label: 'KYC documents decided by', value: person(data.kycDocumentDecidedByUserId, data.staff?.kycDocumentDecidedBy) },
                   ]}
                 />
               </CardContent>
@@ -174,7 +175,7 @@ export default function ComplianceCaseDetailsPage() {
               {isDecided(data.status) && (
                 <div className="space-y-2">
                   <p className="text-sm text-ink">
-                    {statusLabel(data.status)} by {person(data.decisionByUserId)} · {formatDateTime(data.decisionAt)}
+                    {statusLabel(data.status)} by {person(data.decisionByUserId, data.staff?.decisionBy)} · {formatDateTime(data.decisionAt)}
                   </p>
                   {data.decisionRemarks && <p className="rounded-control bg-subtle px-3 py-2 text-[13px] text-ink">{data.decisionRemarks}</p>}
                 </div>
@@ -182,7 +183,7 @@ export default function ComplianceCaseDetailsPage() {
 
               {!isDecided(data.status) && sod && <Alert tone="warning" title="Separation of duties">{sod}</Alert>}
               {!isDecided(data.status) && !sod && assignedToOther && (
-                <Alert tone="info">This case is assigned to another officer ({shortId(data.assignedOfficerUserId)}). Only they can act on it until they release it.</Alert>
+                <Alert tone="info">This case is assigned to another officer ({data.staff?.assignedOfficer ?? shortId(data.assignedOfficerUserId)}). Only they can act on it until they release it.</Alert>
               )}
               {data.status === 'SCREENING' && <p className="text-sm text-ink-muted">The case can be decided once screening has completed.</p>}
 
