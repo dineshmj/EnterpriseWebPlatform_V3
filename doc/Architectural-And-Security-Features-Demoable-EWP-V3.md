@@ -69,6 +69,7 @@ The document answers *how the platform is built and protected*, not *which busin
     - [1.5.1 Micro-frontends hosted by a business-neutral Shell](#151-micro-frontends-hosted-by-a-business-neutral-shell)
     - [1.5.2 Shell–MFE protocol and the Application Workspace](#152-shellmfe-protocol-and-the-application-workspace)
     - [1.5.3 One design system across independent front ends](#153-one-design-system-across-independent-front-ends)
+    - [1.5.4 Real-time notifications over SignalR](#154-real-time-notifications-over-signalr)
   - [1.6 Resilience and scale-out](#16-resilience-and-scale-out)
     - [1.6.1 Pod replacement and horizontal scaling](#161-pod-replacement-and-horizontal-scaling)
     - [1.6.2 Dead-letter handling](#162-dead-letter-handling)
@@ -327,6 +328,18 @@ All front ends share one set of design tokens (colours, typography, radii, shado
 
 - Tokens and Tailwind mapping: [src/Common/DesignSystem](../src/Common/DesignSystem/README.md)
 - Copy at build time: the `CopyDesignSystemAssets` target in [EnterpriseWebPlatform.IdentityServer.csproj](../src/IDP/EnterpriseWebPlatform.IdentityServer.csproj)
+
+#### 1.5.4 Real-time notifications over SignalR
+
+When the workflow moves, the right people are told at once: the agent who started the onboarding hears about each decision ("etpar approved KYC for Camilla Parkers"), and the officers of the next team hear about new work in their branch ("New KYC case"). A separate Notifications context does this; the Shell stays business-neutral and never connects to Kafka. Each notification is **stored before it is pushed**, with an Inbox, so a dropped connection or an offline user loses nothing. **Who receives what is decided on the server from the token**: a connection joins only its own person and its role in its branch, and offers the browser no way to join anything else. The browser never holds a token: the Shell BFF proxies both the REST API and the SignalR hub and adds the access token, and because a browser cannot send the anti-forgery header on a WebSocket, the hub route checks the request's `Origin` instead (cross-site WebSocket hijacking).
+
+**Where to look at:**
+
+- Rules and audiences: [NotificationRules.cs](../src/Microservices/Notifications/API/Domain/NotificationRules.cs), [Notification.cs](../src/Microservices/Notifications/API/Domain/Notification.cs)
+- Hub and store-then-push: [NotificationsHub.cs](../src/Microservices/Notifications/API/Hubs/NotificationsHub.cs), [PublishFromEvent.cs](../src/Microservices/Notifications/API/Application/PublishFromEvent.cs)
+- The worker: [NotificationsSubscriber](../src/AsyncWorkflows/Subscribers/Notifications/NotificationsSubscriber/README.md); the proxy and Origin check: [Shell Program.cs](../src/Shell/Program.cs)
+
+**Not yet:** the bell and toasts in the Shell (4b), opening the record from a notification (4c), and a SignalR backplane for more than one API instance.
 
 ### 1.6 Resilience and scale-out
 

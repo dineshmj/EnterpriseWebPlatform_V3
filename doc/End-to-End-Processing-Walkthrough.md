@@ -196,7 +196,7 @@ KYC relay → Kafka "kyc.case.approved"
      → Inbox → number match → RecordKycApproved(now): KYC_IN_PROGRESS → KYC_COMPLETED
        (also handles "approved" arriving before "created")
      → inbox + application + outbox "StatusChanged" in one transaction
-  → CustomerOutboxPublisher → "onboarding.application.status.changed" (no consumer yet: Notifications is planned)
+  → CustomerOutboxPublisher → "onboarding.application.status.changed" (no consumer: Notifications reads the KYC, Compliance and Accounts events directly)
 ```
 
 ## Phase 5: Compliance
@@ -257,6 +257,17 @@ KYC (Ethan), Compliance (Olivia / Grace) or Accounts (Jack) rejects
 
 ---
 
+## Alongside every phase: notifications
+
+```text
+kyc.case.created / compliance.case.created / accounts.application.created
+  → NotificationsSubscriber → Notifications API: "New KYC case …" for staff:kyc_officer:SYD001 (and so on per team)
+kyc.case.approved|rejected, compliance.case.*, accounts.application.rejected, accounts.account.opened|opening.failed
+  → NotificationsSubscriber → Notifications API: "etpar approved KYC for Camilla Parkers …" for user:{initiator}
+  → Inbox + notifications rows (one transaction) → pushed over SignalR to the audience's connections
+  → Shell BFF proxies the hub and /bff/notifications with the person's token (display: increment 4b)
+```
+
 ## Where each authorization type is decided
 
 | Type | Where | Examples |
@@ -272,7 +283,7 @@ KYC (Ethan), Compliance (Olivia / Grace) or Accounts (Jack) rejects
 
 - **Kafka is authenticated but not encrypted locally.** Every component connects as its own SCRAM user with deny-by-default ACLs, so only the Customer Onboarding relay can publish a submission and only the KYC API can publish KYC outcomes ([kafka/README.md](../kafka/README.md)). Local development uses `SASL_PLAINTEXT`; production needs `SASL_SSL`.
 - **Every hop is traced and probed:** one OpenTelemetry trace follows the onboarding through the Outbox and Kafka (`traceparent` header), and every component exposes `/health/live` and `/health/ready`.
-- **Both subscribers now share one reliable consume loop** (`AsyncWorkflows.Infrastructure.Subscribers`): transient failures are retried in place, permanent ones go to the worker's dead-letter topic (`customer-kyc.case-opening-subscriber.dlq` for the KYC Case Opening Subscriber), and the KYC API records each message in its Inbox.
+- **Every subscriber shares one reliable consume loop** (`AsyncWorkflows.Infrastructure.Subscribers`): transient failures are retried in place, permanent ones go to the worker's own dead-letter topic, and each receiving API records each message in its Inbox.
 - **The KYC MFE has no claim / release buttons;** the first decision assigns the case.
 
 *Keep this walkthrough in step with the code: update it when a step, policy or rule on this path changes.*

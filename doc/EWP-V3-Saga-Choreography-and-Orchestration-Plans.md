@@ -45,7 +45,7 @@ There is no central coordinator. Each participating context:
 | 6 | Compliance case opened, external screening (asynchronous, retried), human decision | `kyc.case.approved` | Compliance → `ComplianceCaseCreated`, then `ComplianceCaseApproved` / `Rejected`; CO → COMPLIANCE_IN_PROGRESS / COMPLETED / REJECTED | Present |
 | 7 | Account application, human approval, account opened by the core-banking system (asynchronous, retried, idempotent) | `compliance.case.approved` | Accounts → `AccountApplicationCreated`, then `AccountOpened` / `AccountApplicationRejected` / `AccountOpeningFailed`; CO → ACCOUNT_OPENING_IN_PROGRESS | Present |
 | 8 | Onboarding completes (or compensates after a failed opening) | Accounts outcome | CO → COMPLETED / COMPENSATING → REJECTED (`RejectedBy: ACCOUNT_OPENING`) | Present |
-| 9 | Initiator and other entitled users notified | status-change events | Notifications → SignalR | Planned |
+| 9 | Initiator and the next team notified | the KYC, Compliance and Accounts events | NotificationsSubscriber → Notifications API → SignalR (stored and pushed; Shell display in 4b) | Partial |
 
 **Why KYC is triggered by submission.** A customer may have more than one application over time. KYC belongs to an *application*, and only submission means the evidence is complete.
 
@@ -167,7 +167,7 @@ Retry, timeout and circuit breaker protect **individual technical interactions**
 - [x] Accounts participant (`AccountApplicationOpeningSubscriber`; outcomes via `OnboardingOutcomeSubscriber`)
 - [x] Compensation on rejection: DM document invalidation (`DocumentInvalidationSubscriber`)
 - [x] Compensation of later failures (account opening; COMPENSATING)
-- [ ] Notifications to the initiator and other entitled users
+- [x] Notifications to the initiator and the next team (stored and pushed, 4a; Shell display in 4b)
 
 **Payments — orchestration** (after the choreography is stable)
 

@@ -121,7 +121,7 @@ CustomerOutboxPublisher ──► Kafka ◄── KYC Outbox relay
 | Documents Management | Generic / supporting | Present | [DocumentsManagement-Requirements.md](../src/Microservices/DocumentsManagement/doc/DocumentsManagement-Requirements.md) |
 | Identity and access | Generic | Present | [IDP-Requirements.md](../src/IDP/doc/IDP-Requirements.md) |
 | Composition (not a business context) | — | Present | [Shell-Requirements.md](../src/Shell/doc/Shell-Requirements.md) |
-| Notifications (technical) | Supporting | Planned | [Shell-Requirements.md §7](../src/Shell/doc/Shell-Requirements.md#7-workflow-notifications-planned) |
+| Notifications | Generic / supporting | Present (backend and live channel, 4a; Shell display in 4b) | [Notifications API README](../src/Microservices/Notifications/API/README.md), [Shell-Requirements.md §7](../src/Shell/doc/Shell-Requirements.md#7-workflow-notifications) |
 
 ### Context map
 
@@ -212,7 +212,9 @@ The domain layer has no knowledge of HTTP, EF Core, Kafka or the IDP.
 | AccountApplicationOpeningSubscriber | Accounts | .NET worker | — | Present |
 | Accounts BFF + MFE | Accounts | ASP.NET Core 10 + Next.js | — | Present |
 | Core Banking Simulator | (external system stand-in) | ASP.NET Core 10 minimal API | — | Present |
-| Payments, Notifications | — | — | own databases | Planned |
+| Notifications API (SignalR hub, REST) | Notifications | ASP.NET Core 10 | `EwpNotificationsDb` | Present |
+| NotificationsSubscriber | Notifications | .NET worker | — | Present |
+| Payments | — | — | own database | Planned |
 
 An MFE and its BFF are one deployable: the MFE is a static export served by its BFF.
 
@@ -305,7 +307,7 @@ Customer Onboarding uses **choreography**; Payments will use **orchestration**. 
 
 ### 10.6 Real-time notifications
 
-A separate Notifications component turns business events into neutral, addressed notifications and pushes them over SignalR to the right users only. The Shell renders them. See [Shell-Requirements §7](../src/Shell/doc/Shell-Requirements.md#7-workflow-notifications-planned) and [Authorization-Model §11](Authorization-Model.md#11-notification-authorization).
+A separate Notifications component turns business events into neutral, addressed notifications and pushes them over SignalR to the right users only. The Shell renders them. Present since 4a: [Notifications API README](../src/Microservices/Notifications/API/README.md). See [Shell-Requirements §7](../src/Shell/doc/Shell-Requirements.md#7-workflow-notifications) and [Authorization-Model §11](Authorization-Model.md#11-notification-authorization).
 
 ---
 
@@ -406,17 +408,17 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Standard event envelope; Workflow / Correlation / Causation IDs | Present (CO, KYC and Compliance, `SchemaVersion` 1; copies in Kafka headers) |
 | Kafka backbone, at-least-once model | Present |
 | KYC Case Opening Subscriber (M2M, bounded retry) | Present |
-| Inbox / idempotent consumer | Present (CO, KYC and Compliance APIs: `inbox_messages`, written in the same transaction as the change) |
+| Inbox / idempotent consumer | Present (CO, KYC, Compliance, Accounts, Documents Management and Notifications APIs: `inbox_messages`, written in the same transaction as the change) |
 | Timeouts | Partial (Onboarding Outcome Subscriber: per attempt and total) |
-| Circuit breakers | Present on every subscriber (→ CO, KYC and Compliance APIs) and on the Compliance API → external screening provider (failure is never a pass; cases wait in SCREENING with back-off); Partial platform-wide (BFF → API calls not yet) |
+| Circuit breakers | Present on every subscriber (→ CO, KYC and Compliance APIs) and on the Compliance API → external screening provider (failure is never a pass; cases wait in SCREENING with back-off); Accounts API → core banking (Idempotency-Key, so the POST is retried safely); Compliance and Accounts BFF → API calls (GET-only retries); Partial platform-wide (CO and KYC BFF → API calls not yet) |
 | Dead-letter / poison-message handling | Present (every subscriber, one shared consume loop: `AsyncWorkflows.Infrastructure.Subscribers`) |
 | Saga choreography | Present (CO ⇄ KYC ⇄ Compliance ⇄ Accounts: submission to a COMPLETED onboarding) |
-| Compensation | Partial (onboarding rejection: CO names the evidence, DM invalidates and retains it; later-failure compensation planned) |
+| Compensation | Present (a rejection at any stage, and a failed account opening after approval: CO COMPENSATING → REJECTED; DM invalidates and retains the evidence; the customer returns to PROSPECT) |
 | Saga orchestration (Payments) | Planned |
-| User-specific SignalR notifications | Planned |
+| User-specific SignalR notifications | Partial (4a: Notifications API stores and pushes to `user:{sub}` / `staff:{role}:{branch}` audiences derived from the token; the Shell proxies REST and the hub. Shell display (bell, toasts) in 4b) |
 | Centralized audit trail | Planned |
 | OpenTelemetry / distributed tracing | Present (.NET components: one trace across HTTP, the Outbox and Kafka via `traceparent`; OTLP export when configured); Partial (KYC NestJS BFF not instrumented; no metrics yet) |
-| Security headers / CSP | Present: strict CSP on the Shell, CO BFF and KYC BFF (hashed inline scripts, `frame-ancestors` / `frame-src`, `object-src 'none'`); IDP CSP on its pages; `nosniff`; Referrer-Policy |
+| Security headers / CSP | Present: strict CSP on the Shell and the CO, KYC, Compliance and Accounts BFFs (hashed inline scripts, `frame-ancestors` / `frame-src`, `object-src 'none'`); IDP CSP on its pages; `nosniff`; Referrer-Policy |
 | Cookie hardening | Present: session and anti-forgery cookies HttpOnly (session), Secure, `SameSite=Lax`; OIDC correlation / nonce cookies `None` for the login round trip only |
 | Logout propagation | Present: front-channel and back-channel logout on all three BFFs |
 | Error responses without internals | Present: problem details with `traceId` only; details logged |
@@ -472,15 +474,15 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [ ] Workflow audit history
 
 **Phase 4 — Human workflow feedback**
-- [ ] Notifications component
-- [ ] SignalR hub
-- [ ] Authenticated connections
-- [ ] Audience policy
-- [ ] Completion and failure notifications
+- [x] Notifications component (Notifications API + NotificationsSubscriber, stored with Inbox)
+- [x] SignalR hub
+- [x] Authenticated connections (through the Shell BFF; Origin check on the WebSocket)
+- [x] Audience policy (person and role-in-branch, from the token)
+- [x] Completion and failure notifications (stored and pushed; Shell display in 4b)
 
 **Phase 5 — Enterprise security**
-- [ ] ABAC across all contexts
-- [ ] ReBAC
+- [x] ABAC across all contexts (branch scope, department, clearance by risk)
+- [x] ReBAC (managing agent in CO; assigned officer in KYC, Compliance and Accounts)
 - [x] SoD that fails closed
 - [x] Object-level authorization (CO, DM)
 - [ ] Audit trail
