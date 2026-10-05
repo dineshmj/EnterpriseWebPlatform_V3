@@ -47,6 +47,7 @@
 -- DROP EXISTING OBJECTS (CLEANUP)
 -- ============================================================================
 
+DROP TABLE IF EXISTS inbox_messages CASCADE;
 DROP TABLE IF EXISTS documents CASCADE;
 
 -- ============================================================================
@@ -73,6 +74,12 @@ CREATE TABLE documents
 
     version             BIGINT        NOT NULL DEFAULT 1,
 
+    -- Lifecycle: AVAILABLE, or INVALIDATED by business compensation (e.g. the
+    -- onboarding application was rejected). Invalidated documents are retained.
+    status              VARCHAR(20)   NOT NULL DEFAULT 'AVAILABLE',
+    invalidated_at      TIMESTAMPTZ   NULL,
+    invalidation_reason VARCHAR(500)  NULL,
+
     CONSTRAINT pk_documents
         PRIMARY KEY (id),
 
@@ -80,7 +87,14 @@ CREATE TABLE documents
         CHECK (size >= 0),
 
     CONSTRAINT ck_documents_version
-        CHECK (version > 0)
+        CHECK (version > 0),
+
+    CONSTRAINT ck_documents_status
+        CHECK (status IN ('AVAILABLE', 'INVALIDATED')),
+
+    -- Invalidation metadata exists exactly when the document is invalidated.
+    CONSTRAINT ck_documents_invalidation
+        CHECK ((status = 'INVALIDATED') = (invalidated_at IS NOT NULL AND invalidation_reason IS NOT NULL))
 );
 
 CREATE INDEX ix_documents_content_hash
@@ -88,6 +102,32 @@ CREATE INDEX ix_documents_content_hash
 
 CREATE INDEX ix_documents_resource_branch_business_reference_document_type
     ON documents (resource_branch, business_reference, document_type);
+
+
+-- ============================================================================
+-- INBOX MESSAGES (idempotent consumer)
+-- ============================================================================
+--
+-- One row per Kafka message processed by a consumer (the Document Invalidation
+-- Subscriber, through the internal API), written in the same transaction as
+-- the change it caused. A redelivered message is recognised and changes nothing.
+--
+-- ============================================================================
+
+CREATE TABLE inbox_messages
+(
+    id                  UUID          NOT NULL,
+    message_id          UUID          NOT NULL,
+    consumer            VARCHAR(200)  NOT NULL,
+    received_at         TIMESTAMPTZ   NOT NULL,
+    processed_at        TIMESTAMPTZ   NULL,
+
+    CONSTRAINT pk_dm_inbox_messages
+        PRIMARY KEY (id),
+
+    CONSTRAINT uq_dm_inbox_messages_message_consumer
+        UNIQUE (message_id, consumer)
+);
 
 
 -- ============================================================================

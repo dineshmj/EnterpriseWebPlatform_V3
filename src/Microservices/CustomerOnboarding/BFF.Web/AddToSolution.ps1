@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 
-$solution = Join-Path $PSScriptRoot '..\..\..\..\EnterpriseWebPlatform.BSS.sln'
+$solution = Join-Path $PSScriptRoot '..\..\..\..\EnterpriseWebPlatform.BSS.slnx'
 $project = Join-Path $PSScriptRoot 'EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.csproj'
 
 dotnet sln $solution add $project

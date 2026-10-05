@@ -75,7 +75,8 @@ API scopes: `customer-onboarding.read`, `customer-onboarding.write`.
 - References its customer **by ID only** (`CustomerId`). The customer is not part of the application aggregate.
 - `BranchCode`: the branch the application was opened in (the acting agent's `branch` claim). Published so that KYC can scope its work queue.
 - Attributes: `OnboardingApplicationStatus`, `SubmittedAt`, `CompletedAt`, `Version` (optimistic concurrency).
-- Raises: `OnboardingApplicationSubmitted`, `OnboardingApplicationStatusChanged`.
+- `EvidenceDocuments`: the Documents Management documents submitted with the application (document ID + type, table `onboarding_application_documents`), by ID only.
+- Raises: `OnboardingApplicationSubmitted`, `OnboardingApplicationStatusChanged`, `OnboardingApplicationRejected` (names the evidence documents, so Documents Management can invalidate them).
 - Reacts to KYC facts through `RecordKycCaseOpened`, `RecordKycApproved` and `RecordKycRejected`. These are tolerant of repeated and out-of-order facts: they apply only the transitions still outstanding, and report whether anything changed.
 
 ### 4.2 Invariants
@@ -92,6 +93,8 @@ API scopes: `customer-onboarding.read`, `customer-onboarding.write`.
 | A closed customer cannot be suspended | `Customer.Suspend` |
 | An application needs a valid customer | `OnboardingApplication.Create` |
 | An application can be submitted only from Draft | `OnboardingApplication.Submit` |
+| An application is submitted together with its evidence (at least one document, each once) | `OnboardingApplication.Submit` |
+| A rejection names the evidence for compensation | `OnboardingApplication.Reject` |
 | A submission must carry the version the user last saw | `SubmitOnboardingApplicationCommandHandler` |
 | Status transitions follow §5.2; terminal states are final | `OnboardingApplication` |
 
@@ -151,7 +154,8 @@ Any non-terminal ──StartCompensation──► COMPENSATING ──► COMPENS
 | `KycCaseCreated` (for this application) | SUBMITTED → KYC_IN_PROGRESS | Present |
 | `KycCaseApproved` | (SUBMITTED →) KYC_IN_PROGRESS → KYC_COMPLETED; ignored when already beyond | Present |
 | `KycCaseRejected` | SUBMITTED / KYC_IN_PROGRESS → REJECTED; ignored after KYC_COMPLETED | Present |
-| `ComplianceCaseApproved` / `Rejected` | → COMPLIANCE_COMPLETED / REJECTED | Planned |
+| `ComplianceCaseCreated` | (… →) KYC_COMPLETED → COMPLIANCE_IN_PROGRESS | Present |
+| `ComplianceCaseApproved` / `Rejected` | → COMPLIANCE_COMPLETED / REJECTED | Present |
 | `AccountOpened` / `AccountOpeningFailed` | → COMPLETED / COMPENSATING | Planned |
 
 Event contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Event-Catalogue.md). Overall workflow: [Saga plan](../../../../doc/EWP-V3-Saga-Choreography-and-Orchestration-Plans.md).
@@ -166,6 +170,7 @@ Event contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Ev
 4. **The workflow starts at the human action.** The CO BFF creates `WorkflowId` and `CorrelationId` when the user submits. The CO API records the user's `sub` as `initiated_by` on every Outbox row of that workflow.
 5. **Business state and Outbox are atomic.** Customer or application changes and their Outbox rows commit in one database transaction.
 6. **Partial submission failure.** If the submission sequence fails after the customer or application was created, those records remain (the operation is not falsely reported as atomic). Documents already uploaded in the same request are removed. This is request-level cleanup of something never submitted, not saga compensation.
+7. **Compensation on rejection.** When KYC or Compliance rejects the application, CO publishes `OnboardingApplicationRejected` with the evidence document IDs recorded at submission. Documents Management invalidates exactly those documents (retained, not deleted). CO never changes another context's data.
 
 ---
 

@@ -129,7 +129,10 @@ public sealed class OnboardingApplicationsController : ControllerBase
 
         var command = new SubmitOnboardingApplicationCommand(
             id,
-            request.ExpectedVersion);
+            request.ExpectedVersion,
+            request.EvidenceDocuments
+                .Select(x => new SubmittedEvidenceDocument(x.DocumentId, x.DocumentType))
+                .ToList());
 
         await _submitApplicationHandler.HandleAsync(
             command,

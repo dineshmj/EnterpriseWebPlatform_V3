@@ -117,6 +117,40 @@ internal sealed class CustomerIntegrationEventMapper(CustomerDbContext db)
                     break;
                 }
 
+                case OnboardingApplicationRejectedDomainEvent rejected:
+                {
+                    var context = await ResolveApplicationWorkflowContextAsync(
+                        rejected.CustomerId, rejected.ApplicationId, requestContext,
+                        lastMessageIdByAggregate, cancellationToken);
+
+                    var messageId = Guid.NewGuid();
+                    var causationId = ResolveCausationId(
+                        rejected.ApplicationId, context.CausationId, lastMessageIdByAggregate);
+
+                    var customerNumber = await db.Customers
+                        .AsNoTracking()
+                        .Where(x => x.Id == rejected.CustomerId)
+                        .Select(x => x.CustomerNumber.Value)
+                        .SingleAsync(cancellationToken);
+
+                    var integrationEvent = new OnboardingApplicationRejectedIntegrationEvent(
+                        rejected.ApplicationRef,
+                        rejected.ApplicationNumber,
+                        customerNumber,
+                        rejected.BranchCode,
+                        rejected.Stage.ToCode(),
+                        rejected.PreviousStatus.ToCode(),
+                        [.. rejected.EvidenceDocuments.Select(x => new EvidenceDocumentReference(x.DocumentId, x.DocumentType))]);
+
+                    messages.Add(Envelope(
+                        messageId, "OnboardingApplication", rejected.ApplicationId,
+                        "OnboardingApplicationRejected", integrationEvent, rejected.OccurredAt,
+                        context.WorkflowId, context.CorrelationId, causationId, initiatedByUserId));
+
+                    lastMessageIdByAggregate[ApplicationKey(rejected.ApplicationId)] = messageId;
+                    break;
+                }
+
                 // Internal facts with no published contract yet (no topic, no consumer).
                 // Listed explicitly so that a NEW, unmapped domain event still fails loudly.
                 case CustomerStatusChangedDomainEvent:

@@ -175,9 +175,15 @@ public sealed class OnboardingController(
                 return applicationDetails.Result!;
             }
 
+            // The evidence travels with the submission, so Customer Onboarding knows exactly
+            // which documents belong to this application (and can name them on rejection).
             var submit = await SubmitApplicationAsync(
                 application.ApplicationId.Value,
                 applicationDetails.Version,
+                [
+                    new EvidenceDocument(uploadedDocumentIds[0], "KYCProof"),
+                    new EvidenceDocument(uploadedDocumentIds[1], "TaxProof")
+                ],
                 workflowId,
                 correlationId,
                 Guid.NewGuid(),
@@ -361,6 +367,7 @@ public sealed class OnboardingController(
     private async Task<(bool Success, IActionResult? Result)> SubmitApplicationAsync(
         long applicationId,
         long expectedVersion,
+        IReadOnlyList<EvidenceDocument> evidenceDocuments,
         Guid workflowId,
         Guid correlationId,
         Guid commandId,
@@ -371,7 +378,7 @@ public sealed class OnboardingController(
             HttpMethod.Post,
             $"/v1/onboarding/applications/{applicationId}/submit")
         {
-            Content = JsonContent.Create(new { expectedVersion })
+            Content = JsonContent.Create(new { expectedVersion, evidenceDocuments })
         };
         AddWorkflowHeaders(httpRequest, workflowId, correlationId, commandId);
         using var response = await client.SendAsync(httpRequest, cancellationToken);
@@ -506,3 +513,6 @@ public sealed class OnboardingController(
     private sealed record CreateApplicationResult(long ApplicationId, string ApplicationNumber);
     private sealed record UploadDocumentResult(Guid DocumentId, string FileName, string ContentType, long Size, string ContentHash, DateTimeOffset CreatedAt, long Version);
 }
+
+/// <summary>A document uploaded to Documents Management as evidence for the application.</summary>
+internal sealed record EvidenceDocument(Guid DocumentId, string DocumentType);

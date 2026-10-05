@@ -138,6 +138,13 @@ public sealed class DocumentsController(
         if (!resourceAuthorization.CanDelete(document, User, Request))
             return Forbid();
 
+        // Retention over deletion: an invalidated document is kept for audit.
+        if (!document.CanBeRemoved)
+            return Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Document is retained",
+                detail: "An invalidated document is retained for audit and cannot be deleted.");
+
         repository.Remove(document);
         await repository.SaveChangesAsync(cancellationToken);
 

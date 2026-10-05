@@ -214,7 +214,22 @@ Compliance screening worker (every 5 s, one due case at a time, FOR UPDATE SKIP 
 
 Compliance officer (Compliance MFE → Compliance BFF → Compliance API) → claim / hold / approve / reject
   → aggregate: branch, assignment (ReBAC), SoD (not the initiator, not a KYC decider), clearance ≥ risk (ABAC)
-  → outbox "ComplianceCaseApproved" / "Rejected" → OnboardingOutcomeSubscriber → CO: COMPLIANCE_COMPLETED / COMPLIANCE_REJECTED
+  → outbox "ComplianceCaseApproved" / "Rejected" → OnboardingOutcomeSubscriber → CO: COMPLIANCE_COMPLETED / REJECTED
+```
+
+---
+
+## Phase 6: a rejection is compensated
+
+```text
+KYC (Ethan) or Compliance (Olivia / Grace) rejects
+  → OnboardingOutcomeSubscriber → CO API: application → REJECTED
+     → outbox "OnboardingApplicationRejected" (RejectedBy, BranchCode, the evidence document IDs recorded at submission)
+       and "StatusChanged", in one transaction
+  → CustomerOutboxPublisher → Kafka "onboarding.application.rejected"
+  → DocumentInvalidationSubscriber → DM API internal/v1/documents/invalidations (pinned client)
+     → Inbox + Document.Invalidate for each named document of the same branch, in one transaction
+       (status INVALIDATED, reason "Onboarding application APP-… rejected by KYC"; retained, delete now refused)
 ```
 
 ---

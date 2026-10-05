@@ -23,7 +23,7 @@ Enterprise Web Platform V3 (EWP V3) is a demonstration banking-services platform
 | Shell (BFF + SPA) | `src/Shell` | ASP.NET Core 10 + Next.js | Present |
 | Customer Onboarding (MFE/BFF, API, Outbox relay, Onboarding Outcome Subscriber) | `src/Microservices/CustomerOnboarding`, `src/AsyncWorkflows/Publishers/CustomerOnboarding`, `src/AsyncWorkflows/Subscribers/CustomerOnboarding` | Next.js, ASP.NET Core 10, .NET workers | Present |
 | Customer KYC (MFE/BFF, API, KYC Case Opening Subscriber) | `src/Microservices/CustomerKyc`, `src/AsyncWorkflows/Subscribers/CustomerKyc` | Next.js, NestJS, ASP.NET Core 10, .NET worker | Present |
-| Documents Management (API) | `src/Microservices/DocumentsManagement` | ASP.NET Core 10 | Present |
+| Documents Management (API, Document Invalidation Subscriber) | `src/Microservices/DocumentsManagement`, `src/AsyncWorkflows/Subscribers/DocumentsManagement` | ASP.NET Core 10, .NET worker | Present |
 | Compliance (MFE/BFF, API, Compliance Case Opening Subscriber) | `src/Microservices/Compliance`, `src/AsyncWorkflows/Subscribers/Compliance` | Next.js, ASP.NET Core 10, .NET worker | Present |
 | Screening Provider Simulator (stand-in for an external AML vendor) | `src/Simulators/ScreeningProviderSimulator` | ASP.NET Core 10 | Present |
 | Accounts, Payments | `src/Microservices/…` | — | Planned |

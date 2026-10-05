@@ -71,6 +71,8 @@ A business rejection (KYC, compliance or account) is published as an event. Each
 
 No context rolls back another context's database.
 
+**Present (onboarding rejection):** CO records the evidence document IDs at submission. On a KYC or Compliance rejection it publishes `OnboardingApplicationRejected` (topic `onboarding.application.rejected`) naming them, and DM's `DocumentInvalidationSubscriber` invalidates exactly those documents of the application's branch (idempotent: Inbox, and invalidating twice is a no-op). The cases are already final in KYC and Compliance when they reject, so no further case compensation is needed there.
+
 ## 1.6 Technical vs business failure
 
 | | Technical failure | Business failure |
@@ -163,7 +165,8 @@ Retry, timeout and circuit breaker protect **individual technical interactions**
 - [x] The same Inbox and dead-letter handling in `KycCaseOpeningSubscriber` (both workers share one consume loop: `AsyncWorkflows.Infrastructure.Subscribers`)
 - [x] Compliance participant (`ComplianceCaseOpeningSubscriber`; outcomes via `OnboardingOutcomeSubscriber`)
 - [ ] Accounts participant
-- [ ] Compensation paths, including DM document invalidation
+- [x] Compensation on rejection: DM document invalidation (`DocumentInvalidationSubscriber`)
+- [ ] Compensation of later failures (account opening; COMPENSATING)
 - [ ] Notifications to the initiator and other entitled users
 
 **Payments — orchestration** (after the choreography is stable)

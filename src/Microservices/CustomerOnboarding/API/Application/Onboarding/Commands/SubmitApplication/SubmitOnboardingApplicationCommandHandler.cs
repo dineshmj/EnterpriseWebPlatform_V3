@@ -1,5 +1,6 @@
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions;
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Persistence;
+using EnterpriseWebPlatform.CustomerOnboarding.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Application.Onboarding.Commands.SubmitApplication;
 
@@ -41,7 +42,11 @@ public sealed class SubmitOnboardingApplicationCommandHandler
                 "The onboarding application was modified by another request.");
         }
 
-        application.Submit(_clock.GetUtcNow());
+        var evidence = command.EvidenceDocuments
+            .Select(x => EvidenceDocument.Create(x.DocumentId, x.DocumentType))
+            .ToList();
+
+        application.Submit(evidence, _clock.GetUtcNow());
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }

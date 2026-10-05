@@ -8,6 +8,7 @@ public static class PersistenceRegistration
         this IServiceCollection services)
     {
         services.AddScoped<IDocumentRepository, DocumentRepository>();
+        services.AddScoped<IInboxStore>(sp => sp.GetRequiredService<DocumentsManagementDbContext>());
         return services;
     }
 }

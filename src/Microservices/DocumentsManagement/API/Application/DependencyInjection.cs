@@ -1,3 +1,4 @@
+using EnterpriseWebPlatform.DocumentsManagement.Application.Documents.Commands.InvalidateDocuments;
 using EnterpriseWebPlatform.DocumentsManagement.Application.Documents.Commands.UploadDocument;
 using EnterpriseWebPlatform.DocumentsManagement.Application.Documents.Queries.GetDocument;
 using EnterpriseWebPlatform.DocumentsManagement.Application.Documents.Queries.GetDocuments;
@@ -13,6 +14,7 @@ public static class DependencyInjection
         services.AddSingleton(TimeProvider.System);
 
         services.AddScoped<UploadDocumentCommandHandler>();
+        services.AddScoped<InvalidateDocumentsCommandHandler>();
         services.AddScoped<GetDocumentQueryHandler>();
         services.AddScoped<GetDocumentsQueryHandler>();
 

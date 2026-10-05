@@ -37,7 +37,8 @@ public sealed class GetDocumentsQueryHandler(IDocumentRepository repository)
                 document.CreatedAt,
                 document.Version,
                 document.DocumentType,
-                document.BusinessReference))
+                document.BusinessReference,
+                document.Status.ToCode()))
             .ToList();
     }
 }
@@ -51,4 +52,5 @@ public sealed record DocumentListItemDto(
     DateTimeOffset CreatedAt,
     long Version,
     string? DocumentType,
-    string? BusinessReference);
+    string? BusinessReference,
+    string Status);

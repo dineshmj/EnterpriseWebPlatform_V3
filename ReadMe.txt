@@ -209,10 +209,13 @@ What the platform is, how it is designed and what each component must do are doc
 	NOTE - secrets:
 		Each component reads its own client secrets from its own configuration; nothing is compiled into Common.Landscape any more.
 		Development values: appsettings.Development.json of the IDP, Shell BFF, Customer Onboarding BFF, Compliance BFF, KycCaseOpeningSubscriber,
-		ComplianceCaseOpeningSubscriber, Compliance API (screening API key) and Screening Provider Simulator, and runnow.bat of the KYC BFF.
+		ComplianceCaseOpeningSubscriber, DocumentInvalidationSubscriber, Compliance API (screening API key) and Screening Provider
+		Simulator, and runnow.bat of the KYC BFF.
 		A component refuses to start when a secret is missing. Outside Development, supply them as environment variables or from a secret store.
 
-	i) Open EnterpriseWebPlatform.BSS.sln in Visual Studio and restore the NuGet packages.
+	i) Open EnterpriseWebPlatform.BSS.slnx in Visual Studio and restore the NuGet packages.
+	   (.slnx is the XML solution format: Visual Studio 2026, or Visual Studio 2022 17.14+; 17.10-17.13 need the preview
+	   feature "Use Solution File Persistence Model". The dotnet CLI needs SDK 9.0.200+.)
 
 
 4) Starting the Platform:
@@ -220,8 +223,8 @@ What the platform is, how it is designed and what each component must do are doc
 	a) Visual Studio: use the multi-project launch profile in EnterpriseWebPlatform.BSS.slnLaunch. It starts:
 
 		IDP, Documents Management API, Customer Onboarding API, Customer KYC API, CustomerOutboxPublisher, KycCaseOpeningSubscriber,
-		OnboardingOutcomeSubscriber, Compliance API, ComplianceCaseOpeningSubscriber, Screening Provider Simulator, Shell BFF,
-		Customer Onboarding BFF and Compliance BFF.
+		OnboardingOutcomeSubscriber, Compliance API, ComplianceCaseOpeningSubscriber, DocumentInvalidationSubscriber, Screening Provider
+		Simulator, Shell BFF, Customer Onboarding BFF and Compliance BFF.
 
 		Every publisher and subscriber is a console (generic host) application. Several instances of each may run in parallel:
 		publishers claim Outbox rows with FOR UPDATE SKIP LOCKED, subscribers share one Kafka consumer group per subscriber (one
@@ -249,8 +252,11 @@ What the platform is, how it is designed and what each component must do are doc
 		  risk LOW / MEDIUM / HIGH by the customer number's last digit: 9 = MATCH/HIGH, 7-8 = POTENTIAL_MATCH/MEDIUM, else CLEAR/LOW).
 		- Sign in as olivia.compliance (SYD001, clearance 4), open Compliance Monitor, open the case and approve, reject or put it on
 		  hold. She is neither the onboarding initiator nor a KYC decider (separation of duties); a HIGH-risk case needs clearance 5
-		  to approve, so she can only reject or hold one. The decision moves the application to COMPLIANCE_COMPLETED or
-		  COMPLIANCE_REJECTED. (The same actions are available through the API with Bruno, section 6.)
+		  to approve, so she can only reject or hold one; grace.compliance (clearance 5, senior) can approve it. The decision moves
+		  the application to COMPLIANCE_COMPLETED or REJECTED. (The same actions are available through the API with Bruno, section 6.)
+		- Compensation: when KYC or Compliance REJECTS an application, its two evidence documents become INVALIDATED in
+		  EwpDocumentsManagementDb.documents (status, invalidated_at, invalidation_reason) - retained, not deleted - via the
+		  onboarding.application.rejected topic and the DocumentInvalidationSubscriber.
 
 	g2) Demonstrating an unreliable external provider (Screening Provider Simulator, localhost only):
 
@@ -271,6 +277,7 @@ What the platform is, how it is designed and what each component must do are doc
 			KycCaseOpeningSubscriber:     http://localhost:5102/health/live | /health/ready
 			OnboardingOutcomeSubscriber:  http://localhost:5103/health/live | /health/ready
 			ComplianceCaseOpeningSubscriber: http://localhost:5104/health/live | /health/ready
+			DocumentInvalidationSubscriber:  http://localhost:5105/health/live | /health/ready
 
 		live  = the process (and its background loop) is working; 503 means "restart it".
 		ready = its dependencies are reachable (database; for a subscriber, its Kafka consumer group). "Degraded" (still 200)

@@ -48,6 +48,11 @@
         "DebugTarget": "ComplianceCaseOpeningSubscriber"
       },
       {
+        "Path": "src\\AsyncWorkflows\\Subscribers\\DocumentsManagement\\DocumentInvalidationSubscriber\\DocumentInvalidationSubscriber.csproj",
+        "Action": "Start",
+        "DebugTarget": "DocumentInvalidationSubscriber"
+      },
+      {
         "Path": "src\\Simulators\\ScreeningProviderSimulator\\EnterpriseWebPlatform.Simulators.ScreeningProvider.csproj",
         "Action": "Start",
         "DebugTarget": "https"

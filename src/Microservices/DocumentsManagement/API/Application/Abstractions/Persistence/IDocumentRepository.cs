@@ -21,6 +21,9 @@ public interface IDocumentRepository
         int pageSize,
         CancellationToken cancellationToken);
 
+    /// <summary>Loads the documents for change (tracked), skipping IDs that do not exist.</summary>
+    Task<IReadOnlyList<Document>> GetForUpdateAsync(IReadOnlyCollection<Guid> documentIds, CancellationToken cancellationToken);
+
     void Remove(Document document);
 
     Task SaveChangesAsync(CancellationToken cancellationToken);

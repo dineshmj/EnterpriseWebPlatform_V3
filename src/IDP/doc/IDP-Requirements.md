@@ -98,6 +98,7 @@ Demo identities are fictitious and for local development only. **Password conven
 | `ethan.kyc` | Ethan Parker | `kyc_officer` | KYC | SYD001 | 3 |
 | `noah.kyc` | Noah Hughes | `kyc_officer` | KYC | SYD001 | 3 |
 | `olivia.compliance` | Olivia Bennett | `compliance_officer` | COMPLIANCE | SYD001 | 4 |
+| `grace.compliance` | Grace Walsh | `compliance_officer` (senior) | COMPLIANCE | SYD001 | 5 |
 | `jack.accounts` | Jack Wilson | `account_officer` | ACCOUNTS | SYD002 | 3 |
 | `emily.payments` | Emily Carter | `payments_officer` | PAYMENTS | SYD002 | 4 |
 | `daniel.ops` | Daniel Cooper | `operations_administrator` | OPERATIONS | BNE001 | 4 |
@@ -110,6 +111,8 @@ All staff are `FULL_TIME`. `ethan.kyc` and `noah.kyc` are deliberately unassigne
 **Branches** (city, country; region = state): `SYD001` Sydney CBD and `SYD002` Sydney North (Sydney, AU, NSW); `MEL001` Melbourne Central (Melbourne, AU, VIC); `BNE001` Brisbane City (Brisbane, AU, QLD); `ADL001` Adelaide City (Adelaide, AU, SA); `PER001` Perth City (Perth, AU, WA).
 
 **Branch-scope demonstration:** `sophie.cs` (Sydney) and `mia.cs` (Melbourne) are both Customer Service Agents. Each can onboard and see only customers with a primary residential address in their own branch city. Applications record the branch they were opened in, and KYC officers see only their own branch's cases: the KYC officers are in Sydney, so they review Sophie's onboardings, while Mia's would wait for a Melbourne officer. Documents uploaded by Mia stay invisible to them as well.
+
+**Clearance-by-risk demonstration (CMP):** approving a compliance case needs clearance 3 (LOW risk), 4 (MEDIUM) or 5 (HIGH, a sanctions MATCH). `olivia.compliance` (4) can therefore only reject or hold a HIGH-risk case; `grace.compliance` (5) can approve it.
 
 **ReBAC demonstration** (relationships live in the business contexts, not here):
 - The agent who creates a customer **manages** it: only `sophie.cs` can change her customers or open their applications.

@@ -1,4 +1,5 @@
 using EnterpriseWebPlatform.DocumentsManagement.Application.Abstractions.Persistence;
+using EnterpriseWebPlatform.DocumentsManagement.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.DocumentsManagement.Application.Documents.Queries.GetDocument;
 
@@ -20,7 +21,10 @@ public sealed class GetDocumentQueryHandler(IDocumentRepository repository)
             document.ContentHash.Value,
             document.CreatedAt,
             document.UpdatedAt,
-            document.Version);
+            document.Version,
+            document.Status.ToCode(),
+            document.InvalidatedAt,
+            document.InvalidationReason);
     }
 }
 
@@ -32,4 +36,7 @@ public sealed record DocumentDetailsDto(
     string ContentHash,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
-    long Version);
+    long Version,
+    string Status,
+    DateTimeOffset? InvalidatedAt,
+    string? InvalidationReason);

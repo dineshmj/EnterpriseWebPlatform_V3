@@ -85,6 +85,33 @@ public sealed class OnboardingApplicationConfiguration
             .IsConcurrencyToken()
             .IsRequired();
 
+        // The evidence submitted with the application: part of the aggregate (loaded and
+        // saved with it), referencing Documents Management's documents by ID only.
+        builder.OwnsMany(x => x.EvidenceDocuments, evidence =>
+        {
+            evidence.ToTable("onboarding_application_documents");
+            evidence.WithOwner().HasForeignKey("ApplicationId");
+
+            evidence.Property<long>("ApplicationId")
+                .HasColumnName("application_id");
+
+            evidence.Property(x => x.DocumentId)
+                .HasColumnName("document_id")
+                .HasColumnType("uuid")
+                .IsRequired();
+
+            evidence.Property(x => x.DocumentType)
+                .HasColumnName("document_type")
+                .HasMaxLength(EvidenceDocument.DocumentTypeMaxLength)
+                .IsRequired();
+
+            evidence.HasKey("ApplicationId", nameof(EvidenceDocument.DocumentId))
+                .HasName("pk_onboarding_application_documents");
+        });
+
+        builder.Navigation(x => x.EvidenceDocuments)
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
+
         // Foreign key only: the application references the Customer aggregate by ID
         // and has no navigation to it (aggregates never hold each other).
         builder.HasOne<Customer>()

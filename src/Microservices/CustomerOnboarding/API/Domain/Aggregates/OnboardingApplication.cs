@@ -16,9 +16,13 @@ namespace EnterpriseWebPlatform.CustomerOnboarding.Domain.Aggregates;
 /// Invariants:
 ///  - Status moves only along the transition table below; terminal statuses are final.
 ///  - Only a draft can be submitted; only an application awaiting a decision can be rejected.
+///  - An application is submitted together with its evidence (at least one document,
+///    each once); a rejection names that evidence so it can be compensated.
 /// </summary>
 public sealed class OnboardingApplication : AggregateRoot
 {
+    private readonly List<EvidenceDocument> _evidenceDocuments = [];
+
     // For EF Core materialization.
     private OnboardingApplication()
     {
@@ -67,6 +71,9 @@ public sealed class OnboardingApplication : AggregateRoot
 
     public long Version { get; private set; }
 
+    /// <summary>The Documents Management documents submitted as this application's evidence.</summary>
+    public IReadOnlyList<EvidenceDocument> EvidenceDocuments => _evidenceDocuments;
+
     public bool IsTerminal => Status is
         OnboardingApplicationStatus.Completed or
         OnboardingApplicationStatus.Rejected or
@@ -88,9 +95,18 @@ public sealed class OnboardingApplication : AggregateRoot
         return new OnboardingApplication(applicationNumber, customerId, branchCode, now);
     }
 
-    public void Submit(DateTimeOffset now)
+    public void Submit(IReadOnlyCollection<EvidenceDocument> evidenceDocuments, DateTimeOffset now)
     {
+        ArgumentNullException.ThrowIfNull(evidenceDocuments);
         EnsureStatus(OnboardingApplicationStatus.Draft);
+
+        if (evidenceDocuments.Count == 0)
+            throw new DomainRuleViolationException("An application is submitted together with its evidence documents.");
+
+        if (evidenceDocuments.DistinctBy(x => x.DocumentId).Count() != evidenceDocuments.Count)
+            throw new DomainRuleViolationException("Each evidence document can be submitted only once.");
+
+        _evidenceDocuments.AddRange(evidenceDocuments);
         SubmittedAt = now;
 
         RaiseDomainEvent(new OnboardingApplicationSubmittedDomainEvent(
@@ -155,7 +171,7 @@ public sealed class OnboardingApplication : AggregateRoot
         if (Status is not (OnboardingApplicationStatus.Submitted or OnboardingApplicationStatus.KycInProgress))
             return false;
 
-        Reject(now);
+        Reject(OnboardingRejectionStage.Kyc, now);
         return true;
     }
 
@@ -197,15 +213,17 @@ public sealed class OnboardingApplication : AggregateRoot
         if (Status != OnboardingApplicationStatus.ComplianceInProgress)
             return changed;
 
-        Reject(now);
+        Reject(OnboardingRejectionStage.Compliance, now);
         return true;
     }
 
     /// <summary>
     /// A verifying context rejected the application. Only possible while a decision
     /// is pending (submitted, in KYC or in compliance) - never from a draft.
+    /// The rejection is a business failure of the saga: it is announced with the
+    /// evidence documents, so that Documents Management can invalidate them.
     /// </summary>
-    public void Reject(DateTimeOffset now)
+    public void Reject(OnboardingRejectionStage stage, DateTimeOffset now)
     {
         if (Status is not (OnboardingApplicationStatus.Submitted or
                            OnboardingApplicationStatus.KycInProgress or
@@ -214,6 +232,10 @@ public sealed class OnboardingApplication : AggregateRoot
             throw new DomainRuleViolationException(
                 $"An application can only be rejected while a decision is pending, not in status '{Status.ToCode()}'.");
         }
+
+        RaiseDomainEvent(new OnboardingApplicationRejectedDomainEvent(
+            Id, ApplicationRef, CustomerId, ApplicationNumber.Value, BranchCode.Value,
+            stage, Status, [.. _evidenceDocuments], now));
 
         SetStatus(OnboardingApplicationStatus.Rejected, now);
     }

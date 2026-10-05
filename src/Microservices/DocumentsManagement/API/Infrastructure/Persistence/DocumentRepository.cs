@@ -48,6 +48,13 @@ public sealed class DocumentRepository(DocumentsManagementDbContext dbContext)
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Document>> GetForUpdateAsync(
+        IReadOnlyCollection<Guid> documentIds,
+        CancellationToken cancellationToken) =>
+        await dbContext.Documents
+            .Where(x => documentIds.Contains(x.Id))
+            .ToListAsync(cancellationToken);
+
     public void Remove(Document document) => dbContext.Documents.Remove(document);
 
     public Task SaveChangesAsync(CancellationToken cancellationToken) =>

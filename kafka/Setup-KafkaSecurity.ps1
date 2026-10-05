@@ -53,6 +53,7 @@ $Users = [ordered]@{
     'ewp-onboarding-outcome-subscriber' = 'ewp-onboarding-outcome-kafka-dev' # OnboardingOutcomeSubscriber
     'ewp-compliance-api'                = 'ewp-compliance-api-kafka-dev'     # Compliance API (in-process relay)
     'ewp-compliance-case-opening-subscriber' = 'ewp-compliance-case-opening-kafka-dev' # ComplianceCaseOpeningSubscriber
+    'ewp-dm-invalidation-subscriber'    = 'ewp-dm-invalidation-kafka-dev'    # DocumentInvalidationSubscriber
     'ewp-kafka-ui'                      = 'ewp-kafka-ui-dev'                 # Kafka UI (read-only)
 }
 
@@ -60,6 +61,7 @@ $Topics = @(
     'customer.created',
     'onboarding.application.submitted',
     'onboarding.application.status.changed',
+    'onboarding.application.rejected',
     'kyc.case.created',
     'kyc.case.approved',
     'kyc.case.rejected',
@@ -72,7 +74,8 @@ $Topics = @(
     'compliance.case.created',
     'compliance.case.approved',
     'compliance.case.rejected',
-    'compliance.case-opening-subscriber.dlq'
+    'compliance.case-opening-subscriber.dlq',
+    'documents-management.invalidation-subscriber.dlq'
 )
 
 # Consumer groups introduced with these security settings, and the topics they read.
@@ -80,6 +83,7 @@ $NewGroups = [ordered]@{
     'customer-kyc.case-opening-subscriber'  = @('onboarding.application.submitted')
     'customer-onboarding.outcome-subscriber' = @('kyc.case.created', 'kyc.case.approved', 'kyc.case.rejected')
     'compliance.case-opening-subscriber'     = @('kyc.case.approved')
+    'documents-management.invalidation-subscriber' = @('onboarding.application.rejected')
 }
 
 $Bootstrap   = 'localhost:9092'
@@ -232,8 +236,8 @@ switch ($Phase) {
         Invoke-KafkaTool 'kafka-acls.bat' "$base --allow-principal User:$Principal $What" | Out-Null
     }
 
-    Write-Host 'Customer Onboarding Outbox relay: write its three topics' -ForegroundColor Cyan
-    foreach ($t in 'customer.created', 'onboarding.application.submitted', 'onboarding.application.status.changed') {
+    Write-Host 'Customer Onboarding Outbox relay: write its four topics' -ForegroundColor Cyan
+    foreach ($t in 'customer.created', 'onboarding.application.submitted', 'onboarding.application.status.changed', 'onboarding.application.rejected') {
         Grant 'ewp-co-outbox-relay' "--operation Write --operation Describe --topic $t"
     }
 
@@ -259,6 +263,11 @@ switch ($Phase) {
     Grant 'ewp-compliance-case-opening-subscriber' '--operation Read --operation Describe --topic kyc.case.approved'
     Grant 'ewp-compliance-case-opening-subscriber' '--operation Read --group compliance.case-opening-subscriber'
     Grant 'ewp-compliance-case-opening-subscriber' '--operation Write --operation Describe --topic compliance.case-opening-subscriber.dlq'
+
+    Write-Host 'DocumentInvalidationSubscriber: read onboarding.application.rejected and its group; write its dead-letter topic' -ForegroundColor Cyan
+    Grant 'ewp-dm-invalidation-subscriber' '--operation Read --operation Describe --topic onboarding.application.rejected'
+    Grant 'ewp-dm-invalidation-subscriber' '--operation Read --group documents-management.invalidation-subscriber'
+    Grant 'ewp-dm-invalidation-subscriber' '--operation Write --operation Describe --topic documents-management.invalidation-subscriber.dlq'
 
     # Clean-up of an earlier run where "*" was expanded to ".git" (see Invoke-KafkaTool).
     Invoke-KafkaTool 'kafka-acls.bat' "--bootstrap-server $Bootstrap --command-config `"$AdminProps`" --remove --force --topic .git" -AllowFailure | Out-Null

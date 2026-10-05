@@ -10,6 +10,13 @@ public static class KafkaTopicNames
     public const string OnboardingApplicationStatusChanged =
         "onboarding.application.status.changed";
 
+    /// <summary>
+    /// A verifying context rejected an onboarding application (saga business failure);
+    /// carries the evidence document IDs for compensation by Documents Management.
+    /// </summary>
+    public const string OnboardingApplicationRejected =
+        "onboarding.application.rejected";
+
     public const string KycCaseCreated = "kyc.case.created";
 
     public const string KycCaseApproved = "kyc.case.approved";
@@ -43,4 +50,11 @@ public static class KafkaTopicNames
     /// </summary>
     public const string KycCaseOpeningSubscriberDeadLetter =
         "customer-kyc.case-opening-subscriber.dlq";
+
+    /// <summary>
+    /// Dead-letter topic of the Document Invalidation Subscriber (Documents Management):
+    /// onboarding.application.rejected messages that can never be compensated.
+    /// </summary>
+    public const string DocumentInvalidationSubscriberDeadLetter =
+        "documents-management.invalidation-subscriber.dlq";
 }

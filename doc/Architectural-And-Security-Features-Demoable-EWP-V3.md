@@ -14,6 +14,7 @@ The document answers *how the platform is built and protected*, not *which busin
 | Can I run several instances of a worker at once? | [1.6.1](#161-pod-replacement-and-horizontal-scaling), [1.3.1](#131-transactional-outbox) |
 | How do you handle dead-letter queues? | [1.6.2](#162-dead-letter-handling) |
 | What if Kafka delivers the same message twice? | [1.3.2](#132-idempotent-consumers-inbox) |
+| What happens to the uploaded documents when an application is rejected? Are they deleted? | [1.4.2](#142-compensation-on-rejection-retain-dont-delete) |
 | What if a downstream API is down for an hour? | [1.6.3](#163-timeouts-retries-and-circuit-breakers), [1.3.3](#133-reliable-subscriber-pipeline) |
 | What if an external provider (e.g. sanctions screening) is slow or down? Does a case slip through? | [1.6.3](#163-timeouts-retries-and-circuit-breakers) |
 | How do you avoid losing an event when the database commit succeeds but Kafka is down? | [1.3.1](#131-transactional-outbox) |
@@ -61,6 +62,7 @@ The document answers *how the platform is built and protected*, not *which busin
     - [1.3.6 Tolerant readers and contract evolution](#136-tolerant-readers-and-contract-evolution)
   - [1.4 Saga pattern](#14-saga-pattern)
     - [1.4.1 Choreography across Customer Onboarding, KYC and Compliance](#141-choreography-across-customer-onboarding-kyc-and-compliance)
+    - [1.4.2 Compensation on rejection: retain, don't delete](#142-compensation-on-rejection-retain-dont-delete)
   - [1.5 Front-end composition](#15-front-end-composition)
     - [1.5.1 Micro-frontends hosted by a business-neutral Shell](#151-micro-frontends-hosted-by-a-business-neutral-shell)
     - [1.5.2 Shell–MFE protocol and the Application Workspace](#152-shellmfe-protocol-and-the-application-workspace)
@@ -267,7 +269,7 @@ Consumers read only the fields they need into their own message models and ignor
 
 #### 1.4.1 Choreography across Customer Onboarding, KYC and Compliance
 
-Customer onboarding is a long-running, choreographed saga with no central coordinator. Each context performs its own local transaction, publishes the fact through its Outbox and reacts to other contexts' facts. Submitting an application causes KYC to open a case. The case being opened moves the application to `KYC_IN_PROGRESS`. The KYC decision moves it to `KYC_COMPLETED` or `REJECTED`. A KYC approval opens a Compliance case, which moves the application to `COMPLIANCE_IN_PROGRESS`; the Compliance decision moves it to `COMPLIANCE_COMPLETED` or `COMPLIANCE_REJECTED`. Human review is a persisted state, not a waiting process: nothing stays in memory while an officer is away for days. The officer's decision is a new transaction that resumes the workflow. Each context changes only the state it owns.
+Customer onboarding is a long-running, choreographed saga with no central coordinator. Each context performs its own local transaction, publishes the fact through its Outbox and reacts to other contexts' facts. Submitting an application causes KYC to open a case. The case being opened moves the application to `KYC_IN_PROGRESS`. The KYC decision moves it to `KYC_COMPLETED` or `REJECTED`. A KYC approval opens a Compliance case, which moves the application to `COMPLIANCE_IN_PROGRESS`; the Compliance decision moves it to `COMPLIANCE_COMPLETED` or `REJECTED`. Human review is a persisted state, not a waiting process: nothing stays in memory while an officer is away for days. The officer's decision is a new transaction that resumes the workflow. Each context changes only the state it owns.
 
 **Where to look at:**
 
@@ -275,7 +277,20 @@ Customer onboarding is a long-running, choreographed saga with no central coordi
 - Forward hops: [KycCaseOpeningSubscriber](../src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/README.md), [ComplianceCaseOpeningSubscriber](../src/AsyncWorkflows/Subscribers/Compliance/ComplianceCaseOpeningSubscriber/README.md); return hop for both: [OnboardingOutcomeSubscriber](../src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/README.md)
 - Live evidence: the CO, KYC and Compliance Outbox tables of one onboarding, linked by `causation_id`
 
-**Not yet:** the Accounts participant, compensation (e.g. invalidating documents on rejection), and the orchestrated Payments saga.
+**Not yet:** the Accounts participant and the orchestrated Payments saga.
+
+#### 1.4.2 Compensation on rejection: retain, don't delete
+
+A saga cannot roll back a distributed transaction; it **compensates** instead. Each context undoes or neutralises its own work, and none touches another context's database. When KYC or Compliance rejects an onboarding application, Customer Onboarding (the owner of the application's state) marks it REJECTED and publishes `OnboardingApplicationRejected`. That event names exactly the evidence documents recorded when the application was submitted. Documents Management's own subscriber then marks those documents **INVALIDATED**. They are retained rather than deleted, because a bank must keep evidence for audit and regulatory retention. Deleting an invalidated document is refused. The compensation is idempotent (Inbox, and invalidating twice changes nothing), and it is scoped: an event can only invalidate documents of the application's own branch.
+
+**Where to look at:**
+
+- The rejection naming the evidence: `Reject` in [OnboardingApplication.cs](../src/Microservices/CustomerOnboarding/API/Domain/Aggregates/OnboardingApplication.cs), [OnboardingApplicationRejectedIntegrationEvent.cs](../src/Microservices/CustomerOnboarding/API/Infrastructure/Messaging/OnboardingApplicationRejectedIntegrationEvent.cs)
+- The compensating participant: [DocumentInvalidationSubscriber](../src/AsyncWorkflows/Subscribers/DocumentsManagement/DocumentInvalidationSubscriber/README.md), [InvalidateDocumentsCommand.cs](../src/Microservices/DocumentsManagement/API/Application/Documents/Commands/InvalidateDocuments/InvalidateDocumentsCommand.cs)
+- Retention in the aggregate: `Invalidate` / `CanBeRemoved` in [Document.cs](../src/Microservices/DocumentsManagement/API/Domain/Aggregates/Document.cs)
+- Design: [Saga plan §1.5](EWP-V3-Saga-Choreography-and-Orchestration-Plans.md#15-rejection-and-compensation)
+
+**Not yet:** compensation of later failures (e.g. account opening failing after approval, COMPENSATING status) and disposal after the retention period.
 
 ### 1.5 Front-end composition
 

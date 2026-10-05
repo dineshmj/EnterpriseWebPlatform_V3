@@ -34,7 +34,8 @@ public sealed class CustomerOutboxPublisher(
         {
             ["CustomerCreated"] = KafkaTopicNames.CustomerCreated,
             ["OnboardingApplicationSubmitted"] = KafkaTopicNames.OnboardingApplicationSubmitted,
-            ["OnboardingApplicationStatusChanged"] = KafkaTopicNames.OnboardingApplicationStatusChanged
+            ["OnboardingApplicationStatusChanged"] = KafkaTopicNames.OnboardingApplicationStatusChanged,
+            ["OnboardingApplicationRejected"] = KafkaTopicNames.OnboardingApplicationRejected
         };
 
     private const int MaxCyclesPerPoll = 10;

@@ -14,7 +14,9 @@ namespace EnterpriseWebPlatform.DocumentsManagement.Domain.Aggregates;
 ///  - Content is identified by its SHA-256 hash and an opaque storage reference.
 ///  - Every new document belongs to a branch; a document without a resource
 ///    branch (legacy data only) is accessible to nobody (fail closed).
-///  - A document is immutable once stored; it can only be removed.
+///  - The content of a stored document never changes. Its lifecycle does: AVAILABLE,
+///    then possibly INVALIDATED (business compensation). An invalidated document is
+///    retained for audit / regulatory retention and can no longer be removed.
 /// </summary>
 public sealed class Document : AggregateRoot
 {
@@ -50,6 +52,19 @@ public sealed class Document : AggregateRoot
     public DateTimeOffset UpdatedAt { get; private set; }
 
     public long Version { get; private set; }
+
+    public DocumentStatus Status { get; private set; } = DocumentStatus.Available;
+
+    public DateTimeOffset? InvalidatedAt { get; private set; }
+
+    /// <summary>Why the document was invalidated, e.g. which rejected application it belonged to.</summary>
+    public string? InvalidationReason { get; private set; }
+
+    /// <summary>
+    /// Only an AVAILABLE document may be removed (cleanup of an upload that never became
+    /// part of a submitted application). An invalidated document is retained.
+    /// </summary>
+    public bool CanBeRemoved => Status == DocumentStatus.Available;
 
     public static Document Upload(
         Guid documentId,
@@ -105,6 +120,31 @@ public sealed class Document : AggregateRoot
 
         return document;
     }
+
+    /// <summary>
+    /// Marks the document as no longer valid evidence (business compensation, e.g. its
+    /// onboarding application was rejected). The content is retained. Idempotent:
+    /// returns false when the document is already invalidated.
+    /// </summary>
+    public bool Invalidate(string reason, DateTimeOffset now)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new DomainRuleViolationException("A reason is required to invalidate a document.");
+
+        if (Status == DocumentStatus.Invalidated)
+            return false;
+
+        Status = DocumentStatus.Invalidated;
+        InvalidatedAt = now;
+        InvalidationReason = reason.Trim()[..Math.Min(reason.Trim().Length, MaxInvalidationReasonLength)];
+        UpdatedAt = now;
+        Version++;
+
+        RaiseDomainEvent(new DocumentInvalidatedDomainEvent(Id, ResourceBranch?.Value ?? string.Empty, InvalidationReason, now));
+        return true;
+    }
+
+    public const int MaxInvalidationReasonLength = 500;
 
     public bool BelongsTo(BranchCode? branch) =>
         branch is not null && ResourceBranch is not null && ResourceBranch == branch;

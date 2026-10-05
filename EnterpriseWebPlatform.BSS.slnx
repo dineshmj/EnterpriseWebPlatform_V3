@@ -1,0 +1,65 @@
+<Solution>
+  <Folder Name="/AsyncWorkflows/" />
+  <Folder Name="/AsyncWorkflows/Contracts/">
+    <Project Path="src/AsyncWorkflows/Contracts/EnterpriseWebPlatform.BSS.AsyncWorkflows.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/AsyncWorkflows/Infrastructure/">
+    <Project Path="src/AsyncWorkflows/Infrastructure/Kafka/EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka.csproj" />
+    <Project Path="src/AsyncWorkflows/Infrastructure/Subscribers/EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Subscribers.csproj" />
+  </Folder>
+  <Folder Name="/AsyncWorkflows/Publishers/" />
+  <Folder Name="/AsyncWorkflows/Publishers/CustomerOnboarding/">
+    <Project Path="src/AsyncWorkflows/Publishers/CustomerOnboarding/CustomerOutboxPublisher/CustomerOutboxPublisher.csproj" />
+  </Folder>
+  <Folder Name="/AsyncWorkflows/Subscribers/" />
+  <Folder Name="/AsyncWorkflows/Subscribers/Compliance/">
+    <Project Path="src/AsyncWorkflows/Subscribers/Compliance/ComplianceCaseOpeningSubscriber/ComplianceCaseOpeningSubscriber.csproj" />
+  </Folder>
+  <Folder Name="/AsyncWorkflows/Subscribers/CustomerKyc/">
+    <Project Path="src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/KycCaseOpeningSubscriber.csproj" />
+  </Folder>
+  <Folder Name="/AsyncWorkflows/Subscribers/CustomerOnboarding/">
+    <Project Path="src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/OnboardingOutcomeSubscriber.csproj" />
+  </Folder>
+  <Folder Name="/AsyncWorkflows/Subscribers/DocumentsManagement/">
+    <Project Path="src/AsyncWorkflows/Subscribers/DocumentsManagement/DocumentInvalidationSubscriber/DocumentInvalidationSubscriber.csproj" />
+  </Folder>
+  <Folder Name="/Common/">
+    <Project Path="src/Common/Landscape/EnterpriseWebPlatform.Common.Landscape.csproj" />
+    <Project Path="src/Common/Observability/EnterpriseWebPlatform.Common.Observability.csproj" />
+    <Project Path="src/Common/WebUtilities/EnterpriseWebPlatform.Common.WebUtilties.csproj" />
+  </Folder>
+  <Folder Name="/IDP/">
+    <Project Path="src/IDP/EnterpriseWebPlatform.IdentityServer.csproj" />
+  </Folder>
+  <Folder Name="/Microservices/" />
+  <Folder Name="/Microservices/Accounts/" />
+  <Folder Name="/Microservices/Compliance/">
+    <Project Path="src/Microservices/Compliance/API/EnterpriseWebPlatform.Compliance.Api.csproj" />
+    <Project Path="src/Microservices/Compliance/BFF.Web/EnterpriseWebPlatform.Compliance.Bff.Web.csproj" />
+  </Folder>
+  <Folder Name="/Microservices/CustomerKyc/">
+    <Project Path="src/Microservices/CustomerKyc/API/EnterpriseWebPlatform.CustomerKyc.Api.csproj" />
+  </Folder>
+  <Folder Name="/Microservices/CustomerOnboarding/">
+    <Project Path="src/Microservices/CustomerOnboarding/API/EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Api.csproj" />
+    <Project Path="src/Microservices/CustomerOnboarding/BFF.Web/EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.csproj" />
+  </Folder>
+  <Folder Name="/Microservices/DocumentsManagement/">
+    <Project Path="src/Microservices/DocumentsManagement/API/EnterpriseWebPlatform.BSS.Microservices.DocumentsManagement.Api.csproj" />
+  </Folder>
+  <Folder Name="/Microservices/Payments/" />
+  <Folder Name="/Shell/">
+    <Project Path="src/Shell/EnterpriseWebPlatform.BSS.BFFWeb.csproj" />
+  </Folder>
+  <Folder Name="/Simulators/">
+    <Project Path="src/Simulators/ScreeningProviderSimulator/EnterpriseWebPlatform.Simulators.ScreeningProvider.csproj" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path="ReadMe.txt" />
+  </Folder>
+  <Folder Name="/Solution Items/Scripts/">
+    <File Path="CompileAndExportBFFClients_V3.ps1" />
+    <File Path="Scan-Dependencies.ps1" />
+  </Folder>
+</Solution>

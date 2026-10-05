@@ -34,6 +34,7 @@
 
 DROP TABLE IF EXISTS inbox_messages CASCADE;
 DROP TABLE IF EXISTS outbox_messages CASCADE;
+DROP TABLE IF EXISTS onboarding_application_documents CASCADE;
 DROP TABLE IF EXISTS onboarding_applications CASCADE;
 DROP TABLE IF EXISTS customer_addresses CASCADE;
 DROP TABLE IF EXISTS customers CASCADE;
@@ -46,6 +47,12 @@ DROP SEQUENCE IF EXISTS public.application_number_seq CASCADE;
 -- ============================================================================ 
 -- CUSTOMER NUMBER SEQUENCE
 -- ============================================================================
+--
+-- CACHE 1 (no per-connection pre-allocation): with CACHE 20 every pooled
+-- connection reserved its own block of 20 numbers, so consecutive customers
+-- got 100001, 100021, ... Numbers are still not guaranteed gap-free (a value
+-- taken by a transaction that later fails is not returned), only unique.
+--
 
 CREATE SEQUENCE public.customer_number_seq
     AS BIGINT
@@ -53,7 +60,7 @@ CREATE SEQUENCE public.customer_number_seq
     INCREMENT BY 1
     NO MINVALUE
     NO MAXVALUE
-    CACHE 20;
+    CACHE 1;
 
 -- Application numbers are issued by Customer Onboarding itself
 -- (APP-yyyyMMdd-nnnnnn), never by a caller.
@@ -63,7 +70,7 @@ CREATE SEQUENCE public.application_number_seq
     INCREMENT BY 1
     NO MINVALUE
     NO MAXVALUE
-    CACHE 20;
+    CACHE 1;
 
 -- ============================================================================
 -- CUSTOMERS
@@ -275,6 +282,33 @@ CREATE TABLE onboarding_applications
 
     CONSTRAINT ck_onboarding_applications_version
         CHECK (version > 0)
+);
+
+
+-- ============================================================================
+-- ONBOARDING APPLICATION DOCUMENTS (evidence)
+-- ============================================================================
+--
+-- Part of the OnboardingApplication aggregate: the Documents Management
+-- documents submitted as the application's evidence, by ID only (DM owns the
+-- documents; no cross-database key). A rejection publishes exactly these IDs,
+-- so DM can invalidate them (saga compensation).
+--
+-- ============================================================================
+
+CREATE TABLE onboarding_application_documents
+(
+    application_id      BIGINT        NOT NULL,
+    document_id         UUID          NOT NULL,
+    document_type       VARCHAR(100)  NOT NULL,
+
+    CONSTRAINT pk_onboarding_application_documents
+        PRIMARY KEY (application_id, document_id),
+
+    CONSTRAINT fk_onboarding_application_documents_application
+        FOREIGN KEY (application_id)
+        REFERENCES onboarding_applications (id)
+        ON DELETE CASCADE
 );
 
 

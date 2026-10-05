@@ -98,7 +98,7 @@ SCREENING ──result──► UNDER_REVIEW ──approve──► APPROVED (te
 | Direction | Contract |
 |---|---|
 | In | `kyc.case.approved` → `ComplianceCaseOpeningSubscriber` → `POST internal/v1/compliance/cases/from-kyc-approved` (Inbox, plus one case per `ApplicationRef`) |
-| Out | `compliance.case.created`, `compliance.case.approved`, `compliance.case.rejected` (Outbox) → `OnboardingOutcomeSubscriber` → Customer Onboarding (COMPLIANCE_IN_PROGRESS / COMPLIANCE_COMPLETED / COMPLIANCE_REJECTED) |
+| Out | `compliance.case.created`, `compliance.case.approved`, `compliance.case.rejected` (Outbox) → `OnboardingOutcomeSubscriber` → Customer Onboarding (COMPLIANCE_IN_PROGRESS / COMPLIANCE_COMPLETED / REJECTED) |
 | Out (synchronous) | `POST /v1/screenings` to the screening provider (API key; resilience pipeline) |
 
 Contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Event-Catalogue.md).

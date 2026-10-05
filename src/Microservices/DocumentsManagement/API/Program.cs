@@ -10,6 +10,7 @@ using Npgsql;
 using OpenTelemetry.Trace;
 
 using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
+using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.DocumentsManagement.API.Authorization;
 using EnterpriseWebPlatform.DocumentsManagement.Application;
@@ -130,6 +131,19 @@ builder.Services.AddAuthorization(options =>
         policy.RequireClaim(
             "scope",
             DocumentsManagementApiScopesRequired.DOCUMENTS_MANAGEMENT_WRITE);
+    });
+
+    // The Document Invalidation Subscriber's pinned machine identity: nobody else
+    // may invalidate documents (saga compensation).
+    options.AddPolicy("DocumentInvalidationSubscriberWrite", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireClaim(
+            "scope",
+            DocumentsManagementApiScopesRequired.DOCUMENTS_MANAGEMENT_WRITE);
+        policy.RequireClaim(
+            "client_id",
+            DocumentsManagementMicroservice.CLIENT_ID_FOR_IDP_FOR_DOCUMENT_INVALIDATION_SUBSCRIBER_TO_DOC_MGMT_API_M2M);
     });
 });
 

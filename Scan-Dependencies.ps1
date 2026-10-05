@@ -34,7 +34,7 @@ function Invoke-Native([string] $commandLine, [string] $workingDirectory) {
 }
 
 Write-Host "`n=== .NET packages (solution) ===" -ForegroundColor Cyan
-$dotnetOutput = Invoke-Native 'dotnet list EnterpriseWebPlatform.BSS.sln package --vulnerable --include-transitive' $root
+$dotnetOutput = Invoke-Native 'dotnet list EnterpriseWebPlatform.BSS.slnx package --vulnerable --include-transitive' $root
 $dotnetOutput | ForEach-Object { Write-Host $_ }
 foreach ($line in $dotnetOutput) {
     if ($line -match '\b(Low|Moderate|High|Critical)\b' -and $severityRank[$Matches[1].ToLowerInvariant()] -ge $severityRank[$FailOn]) {

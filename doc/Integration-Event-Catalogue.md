@@ -96,6 +96,7 @@ The body remains the source of truth for consumers; headers are a copy for infra
 | `CustomerCreated` | `customer.created` | Customer ID | `CustomerId`, `CustomerNumber`, `SubjectId`, `CustomerType`, `Status` | — | Published; no consumer |
 | `OnboardingApplicationSubmitted` | `onboarding.application.submitted` | Application ID | `ApplicationRef`, `ApplicationNumber`, `CustomerNumber`, `BranchCode` (branch the application was opened in), plus `ApplicationId` / `CustomerId` (information only) | `KycCaseOpeningSubscriber` → Customer KYC opens one case per `ApplicationRef` | Present |
 | `OnboardingApplicationStatusChanged` | `onboarding.application.status.changed` | Application ID | `ApplicationRef`, `PreviousStatus`, `NewStatus`, plus `ApplicationId` / `CustomerId` | Notifications (planned) | Published; no consumer yet |
+| `OnboardingApplicationRejected` | `onboarding.application.rejected` | Application ID | `ApplicationRef`, `ApplicationNumber`, `CustomerNumber`, `BranchCode`, `RejectedBy` (`KYC` / `COMPLIANCE`), `PreviousStatus`, `EvidenceDocuments` (`DocumentId`, `DocumentType`: the evidence recorded at submission) | `DocumentInvalidationSubscriber` → Documents Management invalidates exactly those documents (saga compensation; retained, not deleted) | Present |
 
 ### 4.2 Customer KYC (producer: Customer KYC API, in-process Outbox relay)
 
@@ -121,7 +122,7 @@ Every KYC payload (under `Payload`) carries `KycCaseId`, `ApplicationRef`, `Appl
 |---|---|---|---|---|
 | `ComplianceCaseCreated` | `compliance.case.created` | Compliance case ID | `OnboardingOutcomeSubscriber` (application → COMPLIANCE_IN_PROGRESS) | Present |
 | `ComplianceCaseApproved` | `compliance.case.approved` | Compliance case ID | `OnboardingOutcomeSubscriber` (application → COMPLIANCE_COMPLETED); Accounts (planned) | Present |
-| `ComplianceCaseRejected` | `compliance.case.rejected` | Compliance case ID | `OnboardingOutcomeSubscriber` (application → COMPLIANCE_REJECTED) | Present |
+| `ComplianceCaseRejected` | `compliance.case.rejected` | Compliance case ID | `OnboardingOutcomeSubscriber` (application → REJECTED) | Present |
 
 Every Compliance payload carries `ComplianceCaseId`, `ApplicationRef`, `ApplicationNumber`, `CustomerNumber` and `BranchCode`. `ComplianceCaseCreated` adds `KycCaseId` and `Status`; the decision events add `PreviousStatus` / `NewStatus`, `ScreeningOutcome`, `RiskRating`, `DecisionByUserId`, `DecisionAt` and `DecisionRemarks`. Screening progress (provider attempts, retries, assignment, holds) stays inside Compliance and is not published.
 
@@ -131,6 +132,7 @@ Every Compliance payload carries `ComplianceCaseId`, `ApplicationRef`, `Applicat
 |---|---|---|
 | `customer-kyc.case-opening-subscriber.dlq` | `KycCaseOpeningSubscriber` | `onboarding.application.submitted` messages that can never open a case (malformed, wrong type, required fields missing, rejected with 4xx), with the same `dlq-*` headers. Transient failures are never dead-lettered. |
 | `compliance.case-opening-subscriber.dlq` | `ComplianceCaseOpeningSubscriber` | `kyc.case.approved` messages that can never open a Compliance case (malformed, wrong type, required fields such as `BranchCode` missing, rejected with 4xx), with the same `dlq-*` headers. Transient failures are never dead-lettered. |
+| `documents-management.invalidation-subscriber.dlq` | `DocumentInvalidationSubscriber` | `onboarding.application.rejected` messages that can never be compensated (malformed, wrong type, required fields missing, rejected with 4xx), with the same `dlq-*` headers. Transient failures are never dead-lettered. |
 | `customer-onboarding.outcome-subscriber.dlq` | `OnboardingOutcomeSubscriber` | Messages that can never be processed (malformed, unknown type, no application, rejected with 4xx), copied unchanged with headers `dlq-reason`, `dlq-original-topic`, `dlq-original-partition`, `dlq-original-offset`, `dlq-consumer-group`, `dlq-failed-at`. Transient failures are never dead-lettered. |
 
 ### 4.5 Planned events

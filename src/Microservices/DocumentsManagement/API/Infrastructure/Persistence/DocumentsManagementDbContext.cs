@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 
+using EnterpriseWebPlatform.DocumentsManagement.Application.Abstractions.Persistence;
 using EnterpriseWebPlatform.DocumentsManagement.Domain.Aggregates;
 using EnterpriseWebPlatform.DocumentsManagement.Domain.Common;
 using EnterpriseWebPlatform.DocumentsManagement.Domain.ValueObjects;
@@ -7,9 +8,18 @@ using EnterpriseWebPlatform.DocumentsManagement.Domain.ValueObjects;
 namespace EnterpriseWebPlatform.DocumentsManagement.Infrastructure.Persistence;
 
 public sealed class DocumentsManagementDbContext(DbContextOptions<DocumentsManagementDbContext> options)
-    : DbContext(options)
+    : DbContext(options), IInboxStore
 {
     public DbSet<Document> Documents => Set<Document>();
+
+    public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
+
+    public Task<bool> HasProcessedAsync(Guid messageId, string consumer, CancellationToken cancellationToken) =>
+        InboxMessages.AsNoTracking().AnyAsync(x => x.MessageId == messageId && x.Consumer == consumer, cancellationToken);
+
+    /// <summary>Records the message in the same transaction as the change it caused (unique per consumer).</summary>
+    public void RecordProcessed(Guid messageId, string consumer, DateTimeOffset now) =>
+        InboxMessages.Add(new InboxMessage { Id = Guid.NewGuid(), MessageId = messageId, Consumer = consumer, ReceivedAt = now, ProcessedAt = now });
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
@@ -69,7 +79,21 @@ public sealed class DocumentsManagementDbContext(DbContextOptions<DocumentsManag
 
             entity.Property(x => x.Version)
                 .HasColumnName("version")
+                .IsConcurrencyToken()
                 .IsRequired();
+
+            entity.Property(x => x.Status)
+                .HasColumnName("status")
+                .HasConversion(v => v.ToCode(), v => DocumentStatusCode.FromCode(v))
+                .HasMaxLength(20)
+                .IsRequired();
+
+            entity.Property(x => x.InvalidatedAt)
+                .HasColumnName("invalidated_at");
+
+            entity.Property(x => x.InvalidationReason)
+                .HasColumnName("invalidation_reason")
+                .HasMaxLength(Document.MaxInvalidationReasonLength);
 
             entity.Property(x => x.DocumentType)
                 .HasColumnName("document_type")
@@ -88,5 +112,31 @@ public sealed class DocumentsManagementDbContext(DbContextOptions<DocumentsManag
 
             entity.HasIndex(x => x.ContentHash);
         });
+
+        modelBuilder.Entity<InboxMessage>(entity =>
+        {
+            entity.ToTable("inbox_messages");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.MessageId).HasColumnName("message_id").IsRequired();
+            entity.Property(x => x.Consumer).HasColumnName("consumer").HasMaxLength(200).IsRequired();
+            entity.Property(x => x.ReceivedAt).HasColumnName("received_at").IsRequired();
+            entity.Property(x => x.ProcessedAt).HasColumnName("processed_at");
+            entity.HasIndex(x => new { x.MessageId, x.Consumer }).IsUnique();
+        });
     }
+}
+
+/// <summary>Idempotent consumer record: one row per (message, consumer) processed.</summary>
+public sealed class InboxMessage
+{
+    public Guid Id { get; init; }
+
+    public Guid MessageId { get; init; }
+
+    public string Consumer { get; init; } = string.Empty;
+
+    public DateTimeOffset ReceivedAt { get; init; }
+
+    public DateTimeOffset? ProcessedAt { get; init; }
 }

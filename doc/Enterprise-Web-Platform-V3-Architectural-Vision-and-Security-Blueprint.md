@@ -203,6 +203,7 @@ The domain layer has no knowledge of HTTP, EF Core, Kafka or the IDP.
 | KYC API (+ in-process Outbox relay) | Customer KYC | ASP.NET Core 10 | `EwpKycDb` | Present |
 | KycCaseOpeningSubscriber | Customer KYC | .NET worker | — | Present |
 | DM API | Documents Management | ASP.NET Core 10 | `EwpDocumentsManagementDb` + object storage | Present |
+| DocumentInvalidationSubscriber | Documents Management | .NET worker | — (invalidates through the DM API) | Present |
 | Compliance API (+ in-process Outbox relay, screening worker) | Compliance | ASP.NET Core 10 | `EwpComplianceDb` | Present |
 | ComplianceCaseOpeningSubscriber | Compliance | .NET worker | — | Present |
 | Compliance BFF + MFE | Compliance | ASP.NET Core 10 + Next.js | — | Present |
@@ -406,7 +407,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Circuit breakers | Present on every subscriber (→ CO, KYC and Compliance APIs) and on the Compliance API → external screening provider (failure is never a pass; cases wait in SCREENING with back-off); Partial platform-wide (BFF → API calls not yet) |
 | Dead-letter / poison-message handling | Present (every subscriber, one shared consume loop: `AsyncWorkflows.Infrastructure.Subscribers`) |
 | Saga choreography | Partial (CO ⇄ KYC ⇄ Compliance, all directions; Accounts planned) |
-| Compensation | Planned |
+| Compensation | Partial (onboarding rejection: CO names the evidence, DM invalidates and retains it; later-failure compensation planned) |
 | Saga orchestration (Payments) | Planned |
 | User-specific SignalR notifications | Planned |
 | Centralized audit trail | Planned |
@@ -462,7 +463,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [x] CO reacts to KYC outcomes
 - [x] Compliance (backend and officer UI)
 - [ ] Account opening
-- [ ] Compensation
+- [x] Compensation on rejection (DM document invalidation)
 - [ ] Failure recovery
 - [ ] Workflow audit history
 
