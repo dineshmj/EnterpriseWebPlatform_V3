@@ -227,10 +227,6 @@ CREATE INDEX IF NOT EXISTS ix_kyc_outbox_correlation_id ON outbox_messages (corr
 CREATE INDEX IF NOT EXISTS ix_kyc_outbox_causation_id ON outbox_messages (causation_id);
 CREATE INDEX IF NOT EXISTS ix_kyc_outbox_initiated_by_user_id ON outbox_messages (initiated_by_user_id);
 CREATE INDEX IF NOT EXISTS ix_kyc_outbox_acted_by_user_id ON outbox_messages (acted_by_user_id);
--- Inbox (idempotent consumer): one row per consumed message and consumer, written
--- in the SAME transaction as the business change the message caused. A redelivered
--- message is recognised and not applied twice. Additive: safe to run on an existing
--- database (CREATE ... IF NOT EXISTS).
 -- Staff directory: the LAN ID of each staff member this context has seen (from the
 -- officer's token, or from an event that names them). Screens and published events
 -- show the LAN ID; records and every rule keep the subject ID (user_id).
@@ -240,6 +236,10 @@ CREATE TABLE IF NOT EXISTS staff_members (
     updated_at TIMESTAMPTZ NOT NULL
 );
 
+-- Inbox (idempotent consumer): one row per consumed message and consumer, written
+-- in the SAME transaction as the business change the message caused. A redelivered
+-- message is recognised and not applied twice. Additive: safe to run on an existing
+-- database (CREATE ... IF NOT EXISTS).
 CREATE TABLE IF NOT EXISTS inbox_messages (
     id UUID NOT NULL,
     message_id UUID NOT NULL,
@@ -258,6 +258,6 @@ CREATE INDEX IF NOT EXISTS ix_kyc_inbox_messages_message_id ON inbox_messages (m
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ewp_kyc_api') THEN
-        GRANT SELECT, INSERT, UPDATE, DELETE ON inbox_messages TO ewp_kyc_api;
+        GRANT SELECT, INSERT, UPDATE, DELETE ON inbox_messages, staff_members TO ewp_kyc_api;
     END IF;
 END $$;

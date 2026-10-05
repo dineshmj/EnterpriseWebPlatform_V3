@@ -2,6 +2,7 @@
 using Duende.IdentityServer.Models;
 
 using EnterpriseWebPlatform.Common.Landscape;
+using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 using EnterpriseWebPlatform.IdentityServer.Security;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients;
@@ -53,7 +54,11 @@ public sealed class BssClient
                         IdentityServerConstants.StandardScopes.OpenId,
                         IdentityServerConstants.StandardScopes.Profile,
                         IdentityServerConstants.StandardScopes.Email,
-                        "roles"
+                        "roles",
+
+                        // Notifications: the Shell shows the person's notifications (bell, live via SignalR).
+                        NotificationsApiScopesRequired.NOTIFICATIONS_READ,
+                        NotificationsApiScopesRequired.NOTIFICATIONS_WRITE
                     },
 
                     // For the Shell application, show the content page.

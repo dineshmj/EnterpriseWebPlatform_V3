@@ -7,12 +7,15 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 using Duende.AccessTokenManagement.OpenIdConnect;
 using Duende.Bff;
+using Duende.Bff.AccessTokenManagement;
 using Duende.Bff.Yarp;
 using Npgsql;
 using OpenTelemetry.Trace;
 
 using EnterpriseWebPlatform.BSS.BFFWeb.Data;
 using EnterpriseWebPlatform.Common.Landscape;
+using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
+using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 
@@ -155,6 +158,9 @@ builder.Services
         options.Scope.Add("email");
         options.Scope.Add("roles");
         options.Scope.Add("offline_access");
+        // Notifications API: the person's bell (REST) and live channel (SignalR), proxied below.
+        options.Scope.Add(NotificationsApiScopesRequired.NOTIFICATIONS_READ);
+        options.Scope.Add(NotificationsApiScopesRequired.NOTIFICATIONS_WRITE);
 
         options.CorrelationCookie.SameSite = SameSiteMode.None;
 			// 🡡__ WHY   : Correlation cookies are used to tie the outgoing authentication request to the incoming response.
@@ -216,6 +222,31 @@ app.UseSession();
 	// 🡡__ IF NOT: Calls to HttpContext.Session will throw or return uninitialized data and any code relying on session state will fail.
 
 app.UseHttpsRedirection();
+
+// Cross-site WebSocket hijacking guard for the notifications hub. A browser cannot add
+// Duende's anti-forgery header to a WebSocket upgrade, so the hub route skips that check
+// (below); instead, only pages of the Shell's own origin may open the connection. The
+// session cookie is SameSite=Lax as well.
+var shellOrigin = ContentSecurityPolicy.Origin(BSSShellBFF.SHELL_BFF_CLIENT_BASE_URL);
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments(NotificationsHubPath))
+    {
+        var origin = context.Request.Headers.Origin.ToString();
+        var fetchSite = context.Request.Headers["Sec-Fetch-Site"].ToString();
+        var sameOrigin = origin.Length > 0
+            ? string.Equals(origin, shellOrigin, StringComparison.OrdinalIgnoreCase)
+            : fetchSite.Length == 0 || fetchSite == "same-origin";
+
+        if (!sameOrigin)
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return;
+        }
+    }
+
+    await next();
+});
 	// 🡡__ WHY   : Redirects plain HTTP requests to HTTPS to guarantee transport security for cookies and token exchanges.
 	// 🡡__ IF NOT: Sensitive data (cookies, tokens) could be transmitted over plaintext HTTP and be intercepted or modified.
 
@@ -283,6 +314,18 @@ app.MapControllerRoute(
 );
 
 app.MapBffManagementEndpoints();
+
+// ---------------------------------------------------------------- Notifications (proxied)
+// The Shell owns no notification logic: it forwards the person's requests, with their
+// access token, to the Notifications API. The browser never sees the token.
+//   /bff/notifications/...  -> GET list, POST {id}/read, POST read-all (anti-forgery header required)
+//   /hubs/notifications     -> SignalR (negotiate + WebSocket), guarded by the Origin check above
+app.MapRemoteBffApiEndpoint("/bff/notifications", new Uri($"{NotificationsMicroservice.MICROSERVICE_API_BASE_URL}/v1/notifications"))
+    .WithAccessToken(RequiredTokenType.User);
+
+app.MapRemoteBffApiEndpoint(NotificationsHubPath, new Uri($"{NotificationsMicroservice.MICROSERVICE_API_BASE_URL}{NotificationsHubPath}"))
+    .WithAccessToken(RequiredTokenType.User)
+    .SkipAntiforgery();
 	// 🡡__ WHY   : Registers management endpoints used by the BFF (e.g., to inspect or administrate remote API mappings, token
     //               management, and health checks). These are useful for development and operational diagnostics.
 	// 🡡__ IF NOT: You will lack the BFF management endpoints which can make debugging and runtime diagnostics harder;
@@ -291,3 +334,9 @@ app.MapBffManagementEndpoints();
 app.MapEwpHealthEndpoints();
 
 app.Run();
+
+public partial class Program
+{
+    /// <summary>The notifications hub, proxied to the Notifications API under the same path.</summary>
+    private const string NotificationsHubPath = "/hubs/notifications";
+}

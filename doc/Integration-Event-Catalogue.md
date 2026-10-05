@@ -105,7 +105,7 @@ The body remains the source of truth for consumers; headers are a copy for infra
 
 | Event type | Topic | Key | Consumers | Status |
 |---|---|---|---|---|
-| `KycCaseCreated` | `kyc.case.created` | KYC case ID | `OnboardingOutcomeSubscriber` (application → KYC_IN_PROGRESS); Notifications (planned) | Present |
+| `KycCaseCreated` | `kyc.case.created` | KYC case ID | `OnboardingOutcomeSubscriber` (application → KYC_IN_PROGRESS); `NotificationsSubscriber` (new work for the branch's KYC officers; payload adds `ApplicantName`) | Present |
 | `KycIdentityVerificationApproved` | `kyc.identity.verification.approved` | KYC case ID | — | Published; no consumer |
 | `KycIdentityVerificationRejected` | `kyc.identity.verification.rejected` | KYC case ID | — | Published; no consumer |
 | `KycDocumentVerificationApproved` | `kyc.document.verification.approved` | KYC case ID | — | Published; no consumer |
@@ -123,7 +123,7 @@ Every KYC payload (under `Payload`) carries `KycCaseId`, `ApplicationRef`, `Appl
 
 | Event type | Topic | Key | Consumers | Status |
 |---|---|---|---|---|
-| `ComplianceCaseCreated` | `compliance.case.created` | Compliance case ID | `OnboardingOutcomeSubscriber` (application → COMPLIANCE_IN_PROGRESS) | Present |
+| `ComplianceCaseCreated` | `compliance.case.created` | Compliance case ID | `OnboardingOutcomeSubscriber` (application → COMPLIANCE_IN_PROGRESS); `NotificationsSubscriber` (new work for the branch's compliance officers; payload adds `ApplicantName`) | Present |
 | `ComplianceCaseApproved` | `compliance.case.approved` | Compliance case ID | `OnboardingOutcomeSubscriber` (application → COMPLIANCE_COMPLETED); `AccountApplicationOpeningSubscriber` → Accounts opens one account application per `ApplicationRef` (uses `DecisionByUserId`, the Compliance approver, for separation of duties) | Present |
 | `ComplianceCaseRejected` | `compliance.case.rejected` | Compliance case ID | `OnboardingOutcomeSubscriber` (application → REJECTED) | Present |
 
@@ -133,12 +133,14 @@ Every Compliance payload carries `ComplianceCaseId`, `ApplicationRef`, `Applicat
 
 | Event type | Topic | Key | Consumers | Status |
 |---|---|---|---|---|
-| `AccountApplicationCreated` | `accounts.application.created` | Account application ID | `OnboardingOutcomeSubscriber` (application → ACCOUNT_OPENING_IN_PROGRESS) | Present |
+| `AccountApplicationCreated` | `accounts.application.created` | Account application ID | `OnboardingOutcomeSubscriber` (application → ACCOUNT_OPENING_IN_PROGRESS); `NotificationsSubscriber` (new work for the branch's account officers) | Present |
 | `AccountOpened` | `accounts.account.opened` | Account application ID | `OnboardingOutcomeSubscriber` (application → **COMPLETED**: the onboarding saga ends) | Present |
 | `AccountApplicationRejected` | `accounts.application.rejected` | Account application ID | `OnboardingOutcomeSubscriber` (application → REJECTED, then `OnboardingApplicationRejected` → document invalidation) | Present |
 | `AccountOpeningFailed` | `accounts.account.opening.failed` | Account application ID | `OnboardingOutcomeSubscriber` → CO: COMPENSATING → REJECTED, then `OnboardingApplicationRejected` (`RejectedBy: ACCOUNT_OPENING`) → DM invalidates the evidence | Present |
 
 Every Accounts payload carries `AccountApplicationId`, `ApplicationRef`, `ApplicationNumber`, `CustomerNumber` and `BranchCode`. `AccountApplicationCreated` adds `ComplianceCaseId` and `Status`; `AccountOpened` adds `AccountNumber`, `Bsb`, `Product`, `ApprovedByUserId` and `OpenedAt`; `AccountApplicationRejected` adds `PreviousStatus` / `NewStatus`, `DecisionByUserId`, `DecisionAt` and `DecisionRemarks`; `AccountOpeningFailed` adds `Reason`, `Attempts` and `FailedAt`. `AccountOpened`'s `CausationId` is the account officer's approval command, even though a background worker opened the account later. Assignment, holds and the approval itself stay internal.
+
+**Notifications.** `NotificationsSubscriber` also reads every KYC, Compliance and Accounts decision / outcome topic above and tells the initiator. For this the Accounts payloads add `HolderName` (all events), `DecisionByLanId` (`AccountApplicationRejected`) and `ApprovedByLanId` (`AccountOpened`) — additively, same SchemaVersion.
 
 ### 4.5 Dead-letter topics
 
@@ -149,6 +151,7 @@ Every Accounts payload carries `AccountApplicationId`, `ApplicationRef`, `Applic
 | `documents-management.invalidation-subscriber.dlq` | `DocumentInvalidationSubscriber` | `onboarding.application.submitted` / `onboarding.application.rejected` messages that can never be applied (malformed, wrong type, required fields missing, rejected with 4xx), with the same `dlq-*` headers. Transient failures are never dead-lettered. |
 | `accounts.application-opening-subscriber.dlq` | `AccountApplicationOpeningSubscriber` | `compliance.case.approved` messages that can never open an account application (malformed, wrong type, required fields missing, rejected with 4xx), with the same `dlq-*` headers. Transient failures are never dead-lettered. |
 | `customer-onboarding.outcome-subscriber.dlq` | `OnboardingOutcomeSubscriber` | Messages that can never be processed (malformed, unknown type, no application, rejected with 4xx), copied unchanged with headers `dlq-reason`, `dlq-original-topic`, `dlq-original-partition`, `dlq-original-offset`, `dlq-consumer-group`, `dlq-failed-at`. Transient failures are never dead-lettered. |
+| `notifications.subscriber.dlq` | `NotificationsSubscriber` | Workflow events that can never become notifications (malformed, no MessageId / EventType, refused with 4xx), with the same `dlq-*` headers. Transient failures are never dead-lettered. |
 
 ### 4.6 Planned events
 

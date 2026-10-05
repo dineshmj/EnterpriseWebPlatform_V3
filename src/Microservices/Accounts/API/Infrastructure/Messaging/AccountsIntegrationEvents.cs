@@ -31,7 +31,8 @@ public sealed record AccountApplicationCreatedPayload(
     string CustomerNumber,
     string BranchCode,
     long ComplianceCaseId,
-    string Status);
+    string Status,
+    string HolderName);
 
 public sealed record AccountApplicationRejectedPayload(
     long AccountApplicationId,
@@ -43,7 +44,9 @@ public sealed record AccountApplicationRejectedPayload(
     string NewStatus,
     string DecisionByUserId,
     DateTimeOffset DecisionAt,
-    string DecisionRemarks);
+    string DecisionRemarks,
+    string HolderName,
+    string? DecisionByLanId);
 
 public sealed record AccountOpenedPayload(
     long AccountApplicationId,
@@ -55,7 +58,9 @@ public sealed record AccountOpenedPayload(
     string Bsb,
     string Product,
     string ApprovedByUserId,
-    DateTimeOffset OpenedAt);
+    DateTimeOffset OpenedAt,
+    string HolderName,
+    string? ApprovedByLanId);
 
 public sealed record AccountOpeningFailedPayload(
     long AccountApplicationId,
@@ -65,7 +70,8 @@ public sealed record AccountOpeningFailedPayload(
     string BranchCode,
     string Reason,
     int Attempts,
-    DateTimeOffset FailedAt);
+    DateTimeOffset FailedAt,
+    string HolderName);
 
 /// <summary>
 /// Translates Accounts domain events into published integration events (Outbox rows):
@@ -108,7 +114,8 @@ internal static class AccountsIntegrationEventMapper
                         application.CustomerNumber,
                         application.BranchCode.Value,
                         application.ComplianceCaseId,
-                        application.Status.ToCode()));
+                        application.Status.ToCode(),
+                        application.HolderName.FullName));
                 break;
 
             case AccountApplicationRejectedDomainEvent rejected:
@@ -125,7 +132,9 @@ internal static class AccountsIntegrationEventMapper
                         AccountApplicationStatus.Rejected.ToCode(),
                         rejected.DecidedByUserId,
                         rejected.OccurredAt,
-                        rejected.Remarks));
+                        rejected.Remarks,
+                        application.HolderName.FullName,
+                        lanOf(rejected.DecidedByUserId)));
                 break;
 
             case AccountOpenedDomainEvent opened:
@@ -142,7 +151,9 @@ internal static class AccountsIntegrationEventMapper
                         opened.Bsb,
                         opened.Product.ToCode(),
                         application.DecisionByUserId ?? string.Empty,
-                        opened.OccurredAt));
+                        opened.OccurredAt,
+                        application.HolderName.FullName,
+                        lanOf(application.DecisionByUserId)));
                 break;
 
             case AccountOpeningFailedDomainEvent failed:
@@ -156,7 +167,8 @@ internal static class AccountsIntegrationEventMapper
                         application.BranchCode.Value,
                         failed.Reason,
                         failed.Attempts,
-                        failed.OccurredAt));
+                        failed.OccurredAt,
+                        application.HolderName.FullName));
                 break;
 
             // Internal facts. Listed explicitly so that a NEW, unmapped event still fails loudly.

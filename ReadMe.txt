@@ -44,6 +44,8 @@ What the platform is, how it is designed and what each component must do are doc
 		127.0.0.1    accounts.dev.localhost
 		127.0.0.1    accounts-api.dev.localhost
 
+		127.0.0.1    notifications-api.dev.localhost
+
 		127.0.0.1    payments.dev.localhost
 		127.0.0.1    payments-api.dev.localhost
 
@@ -79,6 +81,7 @@ What the platform is, how it is designed and what each component must do are doc
 		Accounts BFF (MFE)				https://accounts.dev.localhost:45456
 		Accounts API					https://accounts-api.dev.localhost:48486
 		Core Banking Simulator			https://localhost:46376   (stands in for the bank's core-banking system)
+		Notifications API				https://notifications-api.dev.localhost:46377   (no UI of its own; the Shell proxies it)
 		Kafka UI						http://localhost:8080
 
 	Reserved (not implemented yet):
@@ -134,6 +137,7 @@ What the platform is, how it is designed and what each component must do are doc
 			EwpDocumentsManagementDb	src\Microservices\DocumentsManagement\API\DocumentMgmtDB\EwpDocumentsManagementDb.sql
 			EwpComplianceDb				src\Microservices\Compliance\API\ComplianceDb\EwpComplianceDb.sql
 			EwpAccountsDb				src\Microservices\Accounts\API\AccountsDb\EwpAccountsDb.sql
+			EwpNotificationsDb			src\Microservices\Notifications\API\NotificationsDb\EwpNotificationsDb.sql
 
 		WARNING:
 			Running a script erases that database's data. Each script must run while connected to ITS OWN database.
@@ -216,7 +220,7 @@ What the platform is, how it is designed and what each component must do are doc
 	NOTE - secrets:
 		Each component reads its own client secrets from its own configuration; nothing is compiled into Common.Landscape any more.
 		Development values: appsettings.Development.json of the IDP, Shell BFF, Customer Onboarding BFF, Compliance BFF, Accounts BFF, KycCaseOpeningSubscriber,
-		ComplianceCaseOpeningSubscriber, DocumentInvalidationSubscriber, AccountApplicationOpeningSubscriber, Compliance API
+		ComplianceCaseOpeningSubscriber, DocumentInvalidationSubscriber, AccountApplicationOpeningSubscriber, NotificationsSubscriber, Compliance API
 		(screening API key), Accounts API (core-banking API key), Screening Provider Simulator and Core Banking Simulator, and
 		runnow.bat of the KYC BFF.
 		A component refuses to start when a secret is missing. Outside Development, supply them as environment variables or from a secret store.
@@ -232,8 +236,8 @@ What the platform is, how it is designed and what each component must do are doc
 
 		IDP, Documents Management API, Customer Onboarding API, Customer KYC API, CustomerOutboxPublisher, KycCaseOpeningSubscriber,
 		OnboardingOutcomeSubscriber, Compliance API, ComplianceCaseOpeningSubscriber, DocumentInvalidationSubscriber, Accounts API,
-		AccountApplicationOpeningSubscriber, Screening Provider Simulator, Core Banking Simulator, Shell BFF, Customer Onboarding BFF,
-		Compliance BFF and Accounts BFF.
+		AccountApplicationOpeningSubscriber, Notifications API, NotificationsSubscriber, Screening Provider Simulator,
+		Core Banking Simulator, Shell BFF, Customer Onboarding BFF, Compliance BFF and Accounts BFF.
 
 		Every publisher and subscriber is a console (generic host) application. Several instances of each may run in parallel:
 		publishers claim Outbox rows with FOR UPDATE SKIP LOCKED, subscribers share one Kafka consumer group per subscriber (one
@@ -305,6 +309,7 @@ What the platform is, how it is designed and what each component must do are doc
 			ComplianceCaseOpeningSubscriber: http://localhost:5104/health/live | /health/ready
 			DocumentInvalidationSubscriber:  http://localhost:5105/health/live | /health/ready
 			AccountApplicationOpeningSubscriber: http://localhost:5106/health/live | /health/ready
+			NotificationsSubscriber:      http://localhost:5107/health/live | /health/ready
 
 		live  = the process (and its background loop) is working; 503 means "restart it".
 		ready = its dependencies are reachable (database; for a subscriber, its Kafka consumer group). "Degraded" (still 200)

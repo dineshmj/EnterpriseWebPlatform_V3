@@ -72,4 +72,11 @@ public static class KafkaTopicNames
     /// </summary>
     public const string DocumentInvalidationSubscriberDeadLetter =
         "documents-management.invalidation-subscriber.dlq";
+
+    /// <summary>
+    /// Dead-letter topic of the Notifications Subscriber: workflow events that can never
+    /// become notifications (malformed, or permanently refused by the Notifications API).
+    /// </summary>
+    public const string NotificationsSubscriberDeadLetter =
+        "notifications.subscriber.dlq";
 }

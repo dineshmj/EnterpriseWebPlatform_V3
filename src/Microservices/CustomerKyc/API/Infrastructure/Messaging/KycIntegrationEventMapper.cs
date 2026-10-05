@@ -67,7 +67,8 @@ internal static class KycIntegrationEventMapper
                         kycCase.ApplicationNumber,
                         kycCase.CustomerNumber,
                         kycCase.BranchCode.Value,
-                        KycCaseStatus.PendingReview.ToCode()));
+                        KycCaseStatus.PendingReview.ToCode(),
+                        kycCase.Applicant.FullName));
                 break;
 
             case VerificationStageDecidedDomainEvent stage:

@@ -28,7 +28,8 @@ public sealed record KycCaseCreatedPayload(
     string ApplicationNumber,
     string CustomerNumber,
     string BranchCode,
-    string Status);
+    string Status,
+    string ApplicantName);
 
 public sealed record KycVerificationStageDecisionPayload(
     long KycCaseId,

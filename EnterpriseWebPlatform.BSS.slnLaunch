@@ -33,6 +33,11 @@
         "DebugTarget": "https"
       },
       {
+        "Path": "src\\Microservices\\Notifications\\API\\EnterpriseWebPlatform.Notifications.Api.csproj",
+        "Action": "Start",
+        "DebugTarget": "https"
+      },
+      {
         "Path": "src\\AsyncWorkflows\\Publishers\\CustomerOnboarding\\CustomerOutboxPublisher\\CustomerOutboxPublisher.csproj",
         "Action": "Start",
         "DebugTarget": "CustomerOutboxPublisher"
@@ -61,6 +66,11 @@
         "Path": "src\\AsyncWorkflows\\Subscribers\\Accounts\\AccountApplicationOpeningSubscriber\\AccountApplicationOpeningSubscriber.csproj",
         "Action": "Start",
         "DebugTarget": "AccountApplicationOpeningSubscriber"
+      },
+      {
+        "Path": "src\\AsyncWorkflows\\Subscribers\\Notifications\\NotificationsSubscriber\\NotificationsSubscriber.csproj",
+        "Action": "Start",
+        "DebugTarget": "NotificationsSubscriber"
       },
       {
         "Path": "src\\Simulators\\ScreeningProviderSimulator\\EnterpriseWebPlatform.Simulators.ScreeningProvider.csproj",

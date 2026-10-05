@@ -46,7 +46,11 @@ public static class Config
 
             // Payments API
             PaymentsApiScope.Read,
-            PaymentsApiScope.Write            
+            PaymentsApiScope.Write,
+
+            // Notifications API
+            NotificationsApiScope.Read,
+            NotificationsApiScope.Write            
         ];
 
     public static IEnumerable<ApiResource> ApiResources =>
@@ -56,7 +60,8 @@ public static class Config
             DocumentsManagementApiResource.ApiResource,
             ComplianceApiResource.ApiResource,
             AccountsApiResource.ApiResource,
-            PaymentsApiResource.ApiResource
+            PaymentsApiResource.ApiResource,
+            NotificationsApiResource.ApiResource
         ];
 
     /// <summary>
@@ -85,6 +90,7 @@ public static class Config
             ComplianceCaseOpeningSubscriberToComplianceApiM2M.Client,
             DocumentInvalidationSubscriberToDocumentsManagementApiM2M.Client,
             AccountApplicationOpeningSubscriberToAccountsApiM2M.Client,
+            NotificationsSubscriberToNotificationsApiM2M.Client,
             KycBFFToDocumentsManagementM2M.Client
         ];
 }

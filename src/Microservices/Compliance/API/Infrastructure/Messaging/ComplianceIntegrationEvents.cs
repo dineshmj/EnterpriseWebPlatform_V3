@@ -31,7 +31,8 @@ public sealed record ComplianceCaseCreatedPayload(
     string CustomerNumber,
     string BranchCode,
     long KycCaseId,
-    string Status);
+    string Status,
+    string ApplicantName);
 
 public sealed record ComplianceCaseDecisionPayload(
     long ComplianceCaseId,
@@ -95,7 +96,8 @@ internal static class ComplianceIntegrationEventMapper
                         complianceCase.CustomerNumber,
                         complianceCase.BranchCode.Value,
                         complianceCase.KycCaseId,
-                        complianceCase.Status.ToCode()));
+                        complianceCase.Status.ToCode(),
+                        complianceCase.Applicant.FullName));
                 break;
 
             case ComplianceCaseDecidedDomainEvent decided:

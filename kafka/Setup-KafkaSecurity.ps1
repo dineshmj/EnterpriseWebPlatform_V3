@@ -56,6 +56,7 @@ $Users = [ordered]@{
     'ewp-dm-invalidation-subscriber'    = 'ewp-dm-invalidation-kafka-dev'    # DocumentInvalidationSubscriber
     'ewp-accounts-api'                  = 'ewp-accounts-api-kafka-dev'       # Accounts API (in-process relay)
     'ewp-accounts-application-opening-subscriber' = 'ewp-accounts-application-opening-kafka-dev' # AccountApplicationOpeningSubscriber
+    'ewp-notifications-subscriber'      = 'ewp-notifications-kafka-dev'      # NotificationsSubscriber
     'ewp-kafka-ui'                      = 'ewp-kafka-ui-dev'                 # Kafka UI (read-only)
 }
 
@@ -82,7 +83,8 @@ $Topics = @(
     'accounts.application.rejected',
     'accounts.account.opened',
     'accounts.account.opening.failed',
-    'accounts.application-opening-subscriber.dlq'
+    'accounts.application-opening-subscriber.dlq',
+    'notifications.subscriber.dlq'
 )
 
 # Consumer groups introduced with these security settings, and the topics they read.
@@ -92,6 +94,11 @@ $NewGroups = [ordered]@{
     'compliance.case-opening-subscriber'     = @('kyc.case.approved')
     'documents-management.invalidation-subscriber' = @('onboarding.application.submitted', 'onboarding.application.rejected')
     'accounts.application-opening-subscriber' = @('compliance.case.approved')
+    # Starts at "latest": notifications are about what happens from now on, never a replay of history.
+    'notifications.subscriber'                = @('kyc.case.created', 'kyc.case.approved', 'kyc.case.rejected',
+                                                  'compliance.case.created', 'compliance.case.approved', 'compliance.case.rejected',
+                                                  'accounts.application.created', 'accounts.application.rejected',
+                                                  'accounts.account.opened', 'accounts.account.opening.failed')
 }
 
 $Bootstrap   = 'localhost:9092'
@@ -288,6 +295,16 @@ switch ($Phase) {
     Grant 'ewp-accounts-application-opening-subscriber' '--operation Read --operation Describe --topic compliance.case.approved'
     Grant 'ewp-accounts-application-opening-subscriber' '--operation Read --group accounts.application-opening-subscriber'
     Grant 'ewp-accounts-application-opening-subscriber' '--operation Write --operation Describe --topic accounts.application-opening-subscriber.dlq'
+
+    Write-Host 'NotificationsSubscriber: read the workflow outcome / new-work topics and its group; write its dead-letter topic' -ForegroundColor Cyan
+    foreach ($t in 'kyc.case.created', 'kyc.case.approved', 'kyc.case.rejected',
+                                                  'compliance.case.created', 'compliance.case.approved', 'compliance.case.rejected',
+                                                  'accounts.application.created', 'accounts.application.rejected',
+                                                  'accounts.account.opened', 'accounts.account.opening.failed') {
+        Grant 'ewp-notifications-subscriber' "--operation Read --operation Describe --topic $t"
+    }
+    Grant 'ewp-notifications-subscriber' '--operation Read --group notifications.subscriber'
+    Grant 'ewp-notifications-subscriber' '--operation Write --operation Describe --topic notifications.subscriber.dlq'
 
     # Clean-up of an earlier run where "*" was expanded to ".git" (see Invoke-KafkaTool).
     Invoke-KafkaTool 'kafka-acls.bat' "--bootstrap-server $Bootstrap --command-config `"$AdminProps`" --remove --force --topic .git" -AllowFailure | Out-Null

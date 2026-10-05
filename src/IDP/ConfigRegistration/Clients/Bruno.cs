@@ -62,6 +62,8 @@ public sealed class Bruno
 
                 AccountsApiScopesRequired.ACCOUNTS_READ,
                 AccountsApiScopesRequired.ACCOUNTS_WRITE,
+                NotificationsApiScopesRequired.NOTIFICATIONS_READ,
+                NotificationsApiScopesRequired.NOTIFICATIONS_WRITE,
 
                 PaymentsApiScopesRequired.PAYMENTS_READ,
                 PaymentsApiScopesRequired.PAYMENTS_WRITE

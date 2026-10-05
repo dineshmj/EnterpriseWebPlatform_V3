@@ -20,4 +20,7 @@ public static class MicroserviceApiResourceNames
 
     public const string PAYMENTS_API =
         "payments-api";
+
+    public const string NOTIFICATIONS_API =
+        "notifications-api";
 }

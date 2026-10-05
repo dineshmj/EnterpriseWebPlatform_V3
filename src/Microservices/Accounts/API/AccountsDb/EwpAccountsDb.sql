@@ -162,7 +162,6 @@ CREATE INDEX ix_accounts_outbox_unpublished ON outbox_messages (sequence) WHERE 
 CREATE INDEX ix_accounts_outbox_workflow_id ON outbox_messages (workflow_id);
 CREATE INDEX ix_accounts_outbox_causation_id ON outbox_messages (causation_id);
 
--- Inbox (idempotent consumer).
 -- Staff directory: the LAN ID of each staff member this context has seen (from the
 -- officer's token, or from an event that names them). Screens and published events
 -- show the LAN ID; records and every rule keep the subject ID (user_id).
@@ -172,6 +171,7 @@ CREATE TABLE staff_members (
     updated_at TIMESTAMPTZ NOT NULL
 );
 
+-- Inbox (idempotent consumer).
 CREATE TABLE inbox_messages (
     id UUID NOT NULL,
     message_id UUID NOT NULL,
@@ -186,7 +186,7 @@ CREATE TABLE inbox_messages (
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ewp_accounts_api') THEN
-        GRANT SELECT, INSERT, UPDATE, DELETE ON account_applications, accounts, outbox_messages, inbox_messages TO ewp_accounts_api;
+        GRANT SELECT, INSERT, UPDATE, DELETE ON account_applications, accounts, outbox_messages, inbox_messages, staff_members TO ewp_accounts_api;
         GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_accounts_api;
     ELSE
         RAISE WARNING 'Role ewp_accounts_api does not exist yet: run db\Apply-EwpServiceDbUsers.ps1, then this script again.';

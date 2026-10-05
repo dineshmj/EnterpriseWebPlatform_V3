@@ -27,6 +27,9 @@
   <Folder Name="/AsyncWorkflows/Subscribers/DocumentsManagement/">
     <Project Path="src/AsyncWorkflows/Subscribers/DocumentsManagement/DocumentInvalidationSubscriber/DocumentInvalidationSubscriber.csproj" />
   </Folder>
+  <Folder Name="/AsyncWorkflows/Subscribers/Notifications/">
+    <Project Path="src/AsyncWorkflows/Subscribers/Notifications/NotificationsSubscriber/NotificationsSubscriber.csproj" />
+  </Folder>
   <Folder Name="/Common/">
     <Project Path="src/Common/Landscape/EnterpriseWebPlatform.Common.Landscape.csproj" />
     <Project Path="src/Common/Observability/EnterpriseWebPlatform.Common.Observability.csproj" />
@@ -53,6 +56,9 @@
   </Folder>
   <Folder Name="/Microservices/DocumentsManagement/">
     <Project Path="src/Microservices/DocumentsManagement/API/EnterpriseWebPlatform.BSS.Microservices.DocumentsManagement.Api.csproj" />
+  </Folder>
+  <Folder Name="/Microservices/Notifications/">
+    <Project Path="src/Microservices/Notifications/API/EnterpriseWebPlatform.Notifications.Api.csproj" />
   </Folder>
   <Folder Name="/Microservices/Payments/" />
   <Folder Name="/Shell/">

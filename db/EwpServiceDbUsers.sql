@@ -35,7 +35,8 @@ BEGIN
         ('ewp_kyc_api',                 'ewp-kyc-api-dev'),
         ('ewp_documents_api',           'ewp-dm-api-dev'),
         ('ewp_compliance_api',          'ewp-compliance-api-dev'),
-        ('ewp_accounts_api',            'ewp-accounts-api-dev')
+        ('ewp_accounts_api',            'ewp-accounts-api-dev'),
+        ('ewp_notifications_api',       'ewp-notifications-api-dev')
     ) AS t(role_name, role_password)
     LOOP
         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r.role_name) THEN
@@ -57,6 +58,7 @@ REVOKE CONNECT ON DATABASE "EwpKycDb"                 FROM PUBLIC;
 REVOKE CONNECT ON DATABASE "EwpDocumentsManagementDb" FROM PUBLIC;
 REVOKE CONNECT ON DATABASE "EwpComplianceDb"          FROM PUBLIC;
 REVOKE CONNECT ON DATABASE "EwpAccountsDb"            FROM PUBLIC;
+REVOKE CONNECT ON DATABASE "EwpNotificationsDb"       FROM PUBLIC;
 
 GRANT CONNECT ON DATABASE "EwpIdentityAccessDb"      TO ewp_idp;
 GRANT CONNECT ON DATABASE "EwpBssShellDb"            TO ewp_shell;
@@ -65,6 +67,7 @@ GRANT CONNECT ON DATABASE "EwpKycDb"                 TO ewp_kyc_api;
 GRANT CONNECT ON DATABASE "EwpDocumentsManagementDb" TO ewp_documents_api;
 GRANT CONNECT ON DATABASE "EwpComplianceDb"          TO ewp_compliance_api;
 GRANT CONNECT ON DATABASE "EwpAccountsDb"            TO ewp_accounts_api;
+GRANT CONNECT ON DATABASE "EwpNotificationsDb"       TO ewp_notifications_api;
 
 -- -----------------------------------------------------------------------------
 -- 3. Per database: data access for the owning service role
@@ -128,3 +131,11 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ewp_accou
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_accounts_api;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ewp_accounts_api;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ewp_accounts_api;
+
+\connect EwpNotificationsDb
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+GRANT USAGE ON SCHEMA public TO ewp_notifications_api;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ewp_notifications_api;
+GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_notifications_api;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ewp_notifications_api;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ewp_notifications_api;
