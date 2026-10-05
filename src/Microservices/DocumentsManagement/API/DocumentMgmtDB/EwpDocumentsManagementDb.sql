@@ -74,11 +74,14 @@ CREATE TABLE documents
 
     version             BIGINT        NOT NULL DEFAULT 1,
 
-    -- Lifecycle: AVAILABLE, or INVALIDATED by business compensation (e.g. the
-    -- onboarding application was rejected). Invalidated documents are retained.
+    -- Lifecycle: AVAILABLE; ATTACHED once submitted as evidence of an onboarding
+    -- application; INVALIDATED by business compensation (e.g. the application was
+    -- rejected). Attached and invalidated documents are retained (never deleted).
     status              VARCHAR(20)   NOT NULL DEFAULT 'AVAILABLE',
     invalidated_at      TIMESTAMPTZ   NULL,
     invalidation_reason VARCHAR(500)  NULL,
+    attached_at         TIMESTAMPTZ   NULL,
+    attached_to         VARCHAR(100)  NULL,
 
     CONSTRAINT pk_documents
         PRIMARY KEY (id),
@@ -90,11 +93,15 @@ CREATE TABLE documents
         CHECK (version > 0),
 
     CONSTRAINT ck_documents_status
-        CHECK (status IN ('AVAILABLE', 'INVALIDATED')),
+        CHECK (status IN ('AVAILABLE', 'ATTACHED', 'INVALIDATED')),
 
     -- Invalidation metadata exists exactly when the document is invalidated.
     CONSTRAINT ck_documents_invalidation
-        CHECK ((status = 'INVALIDATED') = (invalidated_at IS NOT NULL AND invalidation_reason IS NOT NULL))
+        CHECK ((status = 'INVALIDATED') = (invalidated_at IS NOT NULL AND invalidation_reason IS NOT NULL)),
+
+    -- An attached document records what it is evidence of (kept after invalidation).
+    CONSTRAINT ck_documents_attachment
+        CHECK ((attached_at IS NULL) = (attached_to IS NULL) AND (status <> 'ATTACHED' OR attached_at IS NOT NULL))
 );
 
 CREATE INDEX ix_documents_content_hash

@@ -43,7 +43,17 @@ public sealed class ScreenDueCaseCommandHandler(
         try
         {
             var response = await provider.ScreenAsync(
-                new ScreeningRequest(complianceCase.CustomerNumber, complianceCase.ApplicationNumber, Guid.NewGuid()),
+                new ScreeningRequest(
+                    complianceCase.CustomerNumber,
+                    complianceCase.ApplicationNumber,
+                    Guid.NewGuid(),
+                    complianceCase.Applicant.FirstName,
+                    complianceCase.Applicant.LastName,
+                    complianceCase.Applicant.AddressLine1,
+                    complianceCase.Applicant.City,
+                    complianceCase.Applicant.State,
+                    complianceCase.Applicant.PostalCode,
+                    complianceCase.Applicant.CountryCode),
                 cancellationToken);
 
             complianceCase.RecordScreeningResult(response.Outcome, response.Provider, response.Reference, clock.GetUtcNow());

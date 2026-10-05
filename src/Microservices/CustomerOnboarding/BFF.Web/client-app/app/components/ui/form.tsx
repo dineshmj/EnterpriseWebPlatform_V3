@@ -2,7 +2,7 @@ import { forwardRef, type InputHTMLAttributes, type ReactNode, type SelectHTMLAt
 import { cn } from './cn';
 
 const controlBase =
-  'w-full rounded-control border border-line-strong bg-surface px-3 text-sm text-ink shadow-[0_1px_1px_rgba(16,35,58,0.03)] transition-colors placeholder:text-ink-faint hover:border-brand-300 focus:border-accent-500 focus:outline-none focus:ring-3 focus:ring-accent-100 disabled:cursor-not-allowed disabled:bg-subtle disabled:text-ink-muted';
+  'w-full rounded-control border border-line-strong bg-surface px-3 text-sm text-ink shadow-[0_1px_1px_rgba(16,35,58,0.03)] transition-colors placeholder:text-ink-faint hover:border-brand-300 focus:border-accent-500 focus:outline-none focus:ring-3 focus:ring-accent-100 disabled:cursor-not-allowed disabled:bg-subtle disabled:text-ink-muted read-only:bg-subtle read-only:text-ink-muted read-only:hover:border-line-strong';
 
 /** A labelled form field: label, control, optional hint. */
 export function Field({

@@ -30,6 +30,16 @@ interface CustomerDetails {
   status: string;
   branchId: number | null;
   version: number;
+  residentialAddress: CustomerAddress | null;
+}
+
+interface CustomerAddress {
+  addressLine1: string;
+  addressLine2: string | null;
+  city: string;
+  state: string;
+  postalCode: string;
+  countryCode: string;
 }
 
 interface WorkspaceContextItem {
@@ -85,6 +95,19 @@ function getCustomerId(context: WorkspaceContext): number | null {
 
   const id = Number(item.value);
   return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+/**
+ * Why an existing customer cannot start onboarding, or null when they can (PROSPECT).
+ * The Customer Onboarding API enforces the rule; this only explains it up front.
+ */
+function onboardingBlockedReason(customer: CustomerDetails): string | null {
+  switch (String(customer.status).toUpperCase()) {
+    case 'PROSPECT': return null;
+    case 'ONBOARDING': return `${customer.customerNumber} already has an onboarding application in progress.`;
+    case 'ACTIVE': return `${customer.customerNumber} is already onboarded.`;
+    default: return `${customer.customerNumber} cannot be onboarded (status ${customer.status}).`;
+  }
 }
 
 function formatSize(bytes: number) {
@@ -160,6 +183,19 @@ export function CustomerOnboardingForm({
     return () => window.removeEventListener('bss-context-handoff', handleContextHandoff);
   }, []);
 
+  function clearSelectedCustomer() {
+    setSelectedCustomer(null);
+    setFormValues(emptyForm);
+    setAddress(emptyAddress);
+    setError(null);
+    setUnsavedChanges(false);
+  }
+
+  const blockedReason = selectedCustomer ? onboardingBlockedReason(selectedCustomer) : null;
+  // An existing customer's name and contact details come from their record and are not
+  // changed by onboarding (the BFF ignores them): show them read-only.
+  const identityReadOnly = selectedCustomer !== null;
+
   function updateField(field: keyof FormValues, value: string) {
     setFormValues(previous => ({ ...previous, [field]: value }));
     setUnsavedChanges(true);
@@ -176,8 +212,9 @@ export function CustomerOnboardingForm({
   }
 
   const detailsComplete = Object.values(formValues).every(value => value.trim() !== '');
-  const addressComplete = selectedCustomer !== null ||
-    (address.addressLine1.trim() !== '' && address.city.trim() !== '' && address.state.trim() !== '' &&
+  const addressComplete = selectedCustomer !== null
+    ? selectedCustomer.residentialAddress !== null
+    : (address.addressLine1.trim() !== '' && address.city.trim() !== '' && address.state.trim() !== '' &&
       address.postalCode.trim() !== '' && /^[A-Za-z]{2}$/.test(address.countryCode.trim()));
   const isAustralia = address.countryCode.trim().toUpperCase() === 'AU';
 
@@ -185,6 +222,11 @@ export function CustomerOnboardingForm({
     event.preventDefault();
     setError(null);
     setResult(null);
+
+    if (blockedReason) {
+      setError(blockedReason);
+      return;
+    }
 
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
@@ -270,6 +312,15 @@ export function CustomerOnboardingForm({
       <div className="flex min-w-0 flex-col gap-6">
         {error && <Alert tone="danger" title="Submission failed">{error}</Alert>}
 
+        {blockedReason && (
+          <Alert tone="warning" title="A new onboarding application cannot start">
+            {blockedReason} Its record is read-only here; follow the application in Recent applications below.
+            <span className="mt-2 block">
+              <Button type="button" variant="secondary" size="sm" onClick={clearSelectedCustomer}>Onboard a new customer instead</Button>
+            </span>
+          </Alert>
+        )}
+
         {result && (
           <Alert tone="success" title="Application submitted">
             Customer <strong>{result.customerNumber}</strong> · application <strong>{result.applicationNumber}</strong>.
@@ -282,7 +333,12 @@ export function CustomerOnboardingForm({
             icon={<UserRound />}
             title="Customer details"
             description={selectedCustomer ? 'An existing customer is selected; these details come from their record.' : 'The applicant’s legal name and contact details.'}
-            actions={selectedCustomer && <Badge tone="info">Existing · {selectedCustomer.customerNumber}</Badge>}
+            actions={selectedCustomer && (
+              <div className="flex items-center gap-2">
+                <Badge tone="info">Existing · {selectedCustomer.customerNumber}</Badge>
+                {!blockedReason && <Button type="button" variant="ghost" size="sm" onClick={clearSelectedCustomer}>Clear</Button>}
+              </div>
+            )}
           />
           <CardContent>
             {loadingCustomer ? (
@@ -290,25 +346,48 @@ export function CustomerOnboardingForm({
             ) : (
               <div className="grid gap-x-5 gap-y-4 sm:grid-cols-12">
                 <Field label="First name" htmlFor="firstName" required className="sm:col-span-6">
-                  <Input id="firstName" name="firstName" required maxLength={100} autoComplete="given-name"
+                  <Input id="firstName" name="firstName" required maxLength={100} autoComplete="given-name" readOnly={identityReadOnly}
                     value={formValues.firstName} onChange={e => updateField('firstName', e.target.value)} />
                 </Field>
                 <Field label="Last name" htmlFor="lastName" required className="sm:col-span-6">
-                  <Input id="lastName" name="lastName" required maxLength={100} autoComplete="family-name"
+                  <Input id="lastName" name="lastName" required maxLength={100} autoComplete="family-name" readOnly={identityReadOnly}
                     value={formValues.lastName} onChange={e => updateField('lastName', e.target.value)} />
                 </Field>
                 <Field label="Email" htmlFor="email" required className="sm:col-span-7">
-                  <Input id="email" name="email" type="email" required maxLength={254} autoComplete="email"
+                  <Input id="email" name="email" type="email" required maxLength={254} autoComplete="email" readOnly={identityReadOnly}
                     value={formValues.email} onChange={e => updateField('email', e.target.value)} />
                 </Field>
                 <Field label="Phone number" htmlFor="phoneNumber" required className="sm:col-span-5" hint="Australian format, e.g. +61 4xx xxx xxx">
-                  <Input id="phoneNumber" name="phoneNumber" type="tel" required maxLength={30} autoComplete="tel"
+                  <Input id="phoneNumber" name="phoneNumber" type="tel" required maxLength={30} autoComplete="tel" readOnly={identityReadOnly}
                     value={formValues.phoneNumber} onChange={e => updateField('phoneNumber', e.target.value)} />
                 </Field>
               </div>
             )}
           </CardContent>
         </Card>
+
+        {selectedCustomer && (
+          <Card>
+            <CardHeader
+              icon={<MapPin />}
+              title="Primary residential address"
+              description="From the customer's record. Onboarding does not change it; KYC verifies the applicant against it."
+            />
+            <CardContent>
+              {selectedCustomer.residentialAddress ? (
+                <address className="text-sm not-italic leading-6 text-ink">
+                  {selectedCustomer.residentialAddress.addressLine1}
+                  {selectedCustomer.residentialAddress.addressLine2 && <>, {selectedCustomer.residentialAddress.addressLine2}</>}
+                  <br />
+                  {selectedCustomer.residentialAddress.city} {selectedCustomer.residentialAddress.state} {selectedCustomer.residentialAddress.postalCode}
+                  {' · '}{selectedCustomer.residentialAddress.countryCode}
+                </address>
+              ) : (
+                <p className="text-sm text-ink-muted">No residential address is on record for this customer.</p>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {!selectedCustomer && (
           <Card>
@@ -355,6 +434,7 @@ export function CustomerOnboardingForm({
           </Card>
         )}
 
+        {!blockedReason && (
         <Card>
           <CardHeader
             icon={<FileText />}
@@ -370,6 +450,7 @@ export function CustomerOnboardingForm({
             </div>
           </CardContent>
         </Card>
+        )}
       </div>
 
       <aside className="xl:sticky xl:top-6">
@@ -392,7 +473,7 @@ export function CustomerOnboardingForm({
             </p>
           </CardContent>
           <div className="border-t border-line px-6 py-4">
-            <Button type="submit" variant="accent" size="lg" className="w-full" disabled={busy || loadingCustomer}>
+            <Button type="submit" variant="accent" size="lg" className="w-full" disabled={busy || loadingCustomer || blockedReason !== null}>
               <Send aria-hidden="true" />
               {busy ? 'Submitting…' : 'Submit application'}
             </Button>

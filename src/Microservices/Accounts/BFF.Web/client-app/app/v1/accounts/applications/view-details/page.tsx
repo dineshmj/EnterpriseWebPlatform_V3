@@ -43,7 +43,7 @@ export default function AccountApplicationDetailsPage() {
       .then(detail => {
         setData(detail);
         publishSelection(
-          [{ title: 'Customer Number', value: detail.customerNumber }],
+          [{ title: 'Customer Name', value: detail.customerName }, { title: 'Customer Number', value: detail.customerNumber }],
           [
             { title: 'Application Number', value: detail.applicationNumber },
             { title: 'Account Application', value: `#${detail.accountApplicationId}` },
@@ -118,6 +118,7 @@ export default function AccountApplicationDetailsPage() {
                   columns={3}
                   items={[
                     { label: 'Application', value: <span className="font-mono text-[13px]">{data.applicationNumber}</span> },
+                    { label: 'Account holder', value: <span className="font-medium">{data.customerName}</span> },
                     { label: 'Customer', value: <span className="font-mono text-[13px]">{data.customerNumber}</span> },
                     { label: 'Branch', value: data.branchCode },
                     { label: 'Account application', value: `#${data.accountApplicationId}` },
@@ -250,7 +251,7 @@ export default function AccountApplicationDetailsPage() {
           onConfirm={() => act(confirm)}
         >
           {confirm === 'approve'
-            ? <>The core-banking system will open a {productLabel(product).toLowerCase()} for {data.customerNumber}. The decision is final.</>
+            ? <>The core-banking system will open a {productLabel(product).toLowerCase()} for {data.customerName} ({data.customerNumber}). The decision is final.</>
             : <>The decision for {data.applicationNumber} is final and is sent to Customer Onboarding.</>}
         </ConfirmDialog>
       )}

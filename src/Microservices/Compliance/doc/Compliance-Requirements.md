@@ -78,6 +78,7 @@ SCREENING ──result──► UNDER_REVIEW ──approve──► APPROVED (te
 5. A provider failure is a **technical** failure. It is never a silent pass: the case stays in SCREENING and is retried with exponential back-off (15 s doubling to 5 min). Calls to the provider are protected by timeouts, retries and a circuit breaker, and readiness reports Degraded once a case has waited more than 2 minutes.
 6. **ReBAC:** the first officer action (claim, or a decision) assigns the case. Afterwards only the assigned officer may act until they release it.
 7. Reject needs remarks; hold needs a reason. A decided case is final.
+8. **Screening is on the applicant as KYC verified them** — name and residential address, received in `kyc.case.approved` and kept on the case as a snapshot. Only these, with the case references, are sent to the screening provider (no contact details: data minimisation towards a third party). Only the name is passed on to Accounts.
 
 ---
 

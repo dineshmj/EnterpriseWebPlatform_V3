@@ -107,6 +107,18 @@ public sealed class ComplianceDbContext(DbContextOptions<ComplianceDbContext> op
             e.HasIndex(x => x.ApplicationRef).IsUnique().HasDatabaseName("uq_compliance_cases_application_ref");
             e.Property(x => x.ApplicationNumber).HasColumnName("application_number").HasMaxLength(30).IsRequired();
             e.Property(x => x.CustomerNumber).HasColumnName("customer_number").HasMaxLength(100).IsRequired();
+            e.ComplexProperty(x => x.Applicant, a =>
+            {
+                a.Property(x => x.FirstName).HasColumnName("applicant_first_name").HasMaxLength(Applicant.MaxNameLength).IsRequired();
+                a.Property(x => x.LastName).HasColumnName("applicant_last_name").HasMaxLength(Applicant.MaxNameLength).IsRequired();
+                a.Property(x => x.AddressLine1).HasColumnName("applicant_address_line1").HasMaxLength(200);
+                a.Property(x => x.AddressLine2).HasColumnName("applicant_address_line2").HasMaxLength(200);
+                a.Property(x => x.City).HasColumnName("applicant_city").HasMaxLength(100);
+                a.Property(x => x.State).HasColumnName("applicant_state").HasMaxLength(100);
+                a.Property(x => x.PostalCode).HasColumnName("applicant_postal_code").HasMaxLength(20);
+                a.Property(x => x.CountryCode).HasColumnName("applicant_country_code").HasMaxLength(2);
+                a.Ignore(x => x.FullName);
+            });
             e.Property(x => x.KycCaseId).HasColumnName("kyc_case_id").IsRequired();
             e.Property(x => x.BranchCode).HasColumnName("branch_code").HasMaxLength(BranchCode.MaxLength)
                 .HasConversion(v => v.Value, v => BranchCode.Create(v)).IsRequired();

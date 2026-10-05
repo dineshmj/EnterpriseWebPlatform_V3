@@ -12,7 +12,7 @@ var builder = Host.CreateApplicationBuilder(args);
 builder.AddEwpObservability("document-invalidation-subscriber");
 
 // The shared reliable consume loop (commit after processing, retry in place, dead-letter).
-builder.Services.AddKafkaSubscriber<DocumentInvalidationProcessor, DocumentInvalidationSubscriberOptions>(
+builder.Services.AddKafkaSubscriber<DocumentEvidenceProcessor, DocumentInvalidationSubscriberOptions>(
     builder.Configuration, DocumentInvalidationSubscriberOptions.SectionName);
 
 // The worker's own machine identity; the token is cached until shortly before expiry.
@@ -21,7 +21,7 @@ builder.Services
     .AddStandardResilienceHandler();
 
 builder.Services
-    .AddHttpClient(DocumentInvalidationProcessor.HttpClientName, (sp, client) =>
+    .AddHttpClient(DocumentEvidenceProcessor.HttpClientName, (sp, client) =>
         client.BaseAddress = new Uri(sp.GetRequiredService<IOptions<DocumentInvalidationSubscriberOptions>>().Value.DocumentsManagementApiBaseUrl.TrimEnd('/')))
     // Timeout, jittered retry and circuit breaker; the endpoint is idempotent (Inbox +
     // invalidation is a no-op the second time), so retrying the POST is safe.

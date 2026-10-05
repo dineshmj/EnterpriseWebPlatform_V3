@@ -10,8 +10,12 @@ public sealed class DocumentInvalidationSubscriberOptions : ISubscriberSettings,
 {
     public const string SectionName = "DocumentInvalidationSubscriber";
 
-    /// <summary>Fixed in code: the topic is part of this worker's contract, not configuration.</summary>
-    public IReadOnlyList<string> Topics { get; } = [KafkaTopicNames.OnboardingApplicationRejected];
+    /// <summary>
+    /// Fixed in code: the topics are part of this worker's contract, not configuration.
+    /// Submitted attaches the evidence (retained); rejected invalidates it (compensation).
+    /// </summary>
+    public IReadOnlyList<string> Topics { get; } =
+        [KafkaTopicNames.OnboardingApplicationSubmitted, KafkaTopicNames.OnboardingApplicationRejected];
 
     /// <summary>The Kafka ACLs grant this worker's user READ on this group only.</summary>
     public string GroupId { get; init; } = "documents-management.invalidation-subscriber";

@@ -16,7 +16,10 @@ public sealed record OpenKycCaseCommand(
     string? InitiatedByUserId,
     Guid? WorkflowId,
     Guid? CorrelationId,
-    Guid CausationId);
+    Guid CausationId,
+    Applicant Applicant,
+    Guid IdentityProofDocumentId,
+    Guid TaxProofDocumentId);
 
 public sealed record OpenKycCaseResult(
     long KycCaseId,
@@ -79,6 +82,9 @@ public sealed class OpenKycCaseCommandHandler(
                 command.ApplicationNumber,
                 command.CustomerNumber,
                 BranchCode.Create(command.BranchCode),
+                command.Applicant,
+                command.IdentityProofDocumentId,
+                command.TaxProofDocumentId,
                 command.InitiatedByUserId,
                 clock.GetUtcNow());
 

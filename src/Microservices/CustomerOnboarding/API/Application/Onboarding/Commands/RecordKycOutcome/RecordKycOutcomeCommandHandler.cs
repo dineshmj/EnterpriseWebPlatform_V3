@@ -15,16 +15,20 @@ public sealed class RecordKycOutcomeCommandHandler
 
     private readonly TimeProvider _clock;
 
+    private readonly CustomerLifecycleSync _customerLifecycle;
+
     public RecordKycOutcomeCommandHandler(
         IOnboardingApplicationRepository applicationRepository,
         IInboxStore inbox,
         IApplicationUnitOfWork unitOfWork,
-        TimeProvider clock)
+        TimeProvider clock,
+        CustomerLifecycleSync customerLifecycle)
     {
         _applicationRepository = applicationRepository;
         _inbox = inbox;
         _unitOfWork = unitOfWork;
         _clock = clock;
+        _customerLifecycle = customerLifecycle;
     }
 
     public async Task<RecordKycOutcomeResult> HandleAsync(
@@ -74,7 +78,12 @@ public sealed class RecordKycOutcomeCommandHandler
                 return RecordKycOutcomeResult.UnsupportedEventType;
         }
 
-        // The Inbox record, the application's new state and the resulting Outbox
+        if (changed)
+        {
+            await _customerLifecycle.ApplyAsync(application, now, cancellationToken);
+        }
+
+        // The Inbox record, the application's (and customer's) new state and the resulting Outbox
         // events (OnboardingApplicationStatusChanged) commit in ONE transaction.
         // Even a no-op is recorded, so the message is never evaluated twice.
         _inbox.RecordProcessed(command.MessageId, InboxConsumer);

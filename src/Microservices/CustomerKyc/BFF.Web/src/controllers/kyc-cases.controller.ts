@@ -23,6 +23,12 @@ interface DecisionBody {
   decisionRemarks?: unknown;
 }
 
+interface CaseEvidence {
+  applicationNumber: string;
+  identityProofDocumentId: string;
+  taxProofDocumentId: string;
+}
+
 @Controller('bff/api/kyc')
 export class KycCasesController {
   constructor(
@@ -101,16 +107,16 @@ export class KycCasesController {
   async identityProof(@Param('caseId') caseIdRaw: string, @Req() req: Request, @Res() res: Response) {
     this.requireSession(req);
     const caseId = this.parseCaseId(caseIdRaw);
-    const customerNumber = await this.getCustomerNumber(req, caseId);
-    res.json(await this.documents.getIdentityProof(customerNumber, req.session.user?.branch));
+    const evidence = await this.getCaseEvidence(req, caseId);
+    res.json(await this.documents.getEvidence(evidence.identityProofDocumentId, 'Identity proof', evidence.applicationNumber, req.session.user?.branch));
   }
 
   @Get('cases/:caseId/tax-proof')
   async taxProof(@Param('caseId') caseIdRaw: string, @Req() req: Request, @Res() res: Response) {
     this.requireSession(req);
     const caseId = this.parseCaseId(caseIdRaw);
-    const customerNumber = await this.getCustomerNumber(req, caseId);
-    res.json(await this.documents.getTaxProof(customerNumber, req.session.user?.branch));
+    const evidence = await this.getCaseEvidence(req, caseId);
+    res.json(await this.documents.getEvidence(evidence.taxProofDocumentId, 'Tax proof', evidence.applicationNumber, req.session.user?.branch));
   }
 
   @Get('cases/:caseId/identity-proof/content')
@@ -118,8 +124,8 @@ export class KycCasesController {
     this.requireSession(req);
     const branch = req.session.user?.branch;
     const caseId = this.parseCaseId(caseIdRaw);
-    const customerNumber = await this.getCustomerNumber(req, caseId);
-    const document = await this.documents.getIdentityProof(customerNumber, branch);
+    const evidence = await this.getCaseEvidence(req, caseId);
+    const document = await this.documents.getEvidence(evidence.identityProofDocumentId, 'Identity proof', evidence.applicationNumber, branch);
     const documentResponse = await this.documents.getContent(document.documentId, branch);
     return this.forwardDocumentContent(documentResponse, res, document.fileName);
   }
@@ -129,8 +135,8 @@ export class KycCasesController {
     this.requireSession(req);
     const branch = req.session.user?.branch;
     const caseId = this.parseCaseId(caseIdRaw);
-    const customerNumber = await this.getCustomerNumber(req, caseId);
-    const document = await this.documents.getTaxProof(customerNumber, branch);
+    const evidence = await this.getCaseEvidence(req, caseId);
+    const document = await this.documents.getEvidence(evidence.taxProofDocumentId, 'Tax proof', evidence.applicationNumber, branch);
     const documentResponse = await this.documents.getContent(document.documentId, branch);
     return this.forwardDocumentContent(documentResponse, res, document.fileName);
   }
@@ -178,12 +184,15 @@ export class KycCasesController {
     return remarks;
   }
 
-  private async getCustomerNumber(req: Request, caseId: number): Promise<string> {
+  /** The evidence the case recorded at submission (the KYC API applies branch scope). */
+  private async getCaseEvidence(req: Request, caseId: number): Promise<CaseEvidence> {
     const response = await this.api.getCase(req, caseId);
     if (!response.ok) throw new BadRequestException(`Unable to resolve KYC Case ${caseId}; KYC API returned HTTP ${response.status}.`);
-    const body = await response.json() as { customerNumber?: string };
-    if (!body.customerNumber) throw new BadRequestException(`KYC Case ${caseId} did not contain a customer number.`);
-    return body.customerNumber;
+    const body = await response.json() as Partial<CaseEvidence>;
+    if (!body.identityProofDocumentId || !body.taxProofDocumentId || !body.applicationNumber) {
+      throw new BadRequestException(`KYC Case ${caseId} does not name its evidence documents.`);
+    }
+    return body as CaseEvidence;
   }
 
   private async forwardApiResponse(response: globalThis.Response, res: Response) {

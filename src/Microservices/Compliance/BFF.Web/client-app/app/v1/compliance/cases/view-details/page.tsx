@@ -13,7 +13,7 @@ import { Alert, Skeleton, StatusBadge, statusLabel } from '../../../../component
 import { Field, Textarea } from '../../../../components/ui/form';
 import { getJson, postJson } from '../../../../lib/api';
 import {
-  type ComplianceCase, type Officer, getOfficer, isDecided, separationOfDutiesConflict, shortId,
+  type ComplianceCase, type Officer, formatAddress, getOfficer, isDecided, separationOfDutiesConflict, shortId,
 } from '../../../../lib/compliance';
 
 type Action = 'claim' | 'release' | 'approve' | 'reject' | 'hold' | 'release-hold';
@@ -43,7 +43,7 @@ export default function ComplianceCaseDetailsPage() {
       .then(detail => {
         setData(detail);
         publishSelection(
-          [{ title: 'Customer Number', value: detail.customerNumber }],
+          [{ title: 'Customer Name', value: detail.customerName }, { title: 'Customer Number', value: detail.customerNumber }],
           [
             { title: 'Application Number', value: detail.applicationNumber },
             { title: 'Compliance Case', value: `#${detail.complianceCaseId}` },
@@ -111,7 +111,9 @@ export default function ComplianceCaseDetailsPage() {
                   columns={3}
                   items={[
                     { label: 'Application', value: <span className="font-mono text-[13px]">{data.applicationNumber}</span> },
+                    { label: 'Applicant (screened)', value: <span className="font-medium">{data.customerName}</span> },
                     { label: 'Customer', value: <span className="font-mono text-[13px]">{data.customerNumber}</span> },
+                    { label: 'Residential address', value: formatAddress(data.residentialAddress) },
                     { label: 'Branch', value: data.branchCode },
                     { label: 'Compliance case', value: `#${data.complianceCaseId}` },
                     { label: 'KYC case', value: `#${data.kycCaseId}` },

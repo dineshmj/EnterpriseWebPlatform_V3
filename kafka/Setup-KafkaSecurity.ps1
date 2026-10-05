@@ -90,7 +90,7 @@ $NewGroups = [ordered]@{
     'customer-kyc.case-opening-subscriber'  = @('onboarding.application.submitted')
     'customer-onboarding.outcome-subscriber' = @('kyc.case.created', 'kyc.case.approved', 'kyc.case.rejected')
     'compliance.case-opening-subscriber'     = @('kyc.case.approved')
-    'documents-management.invalidation-subscriber' = @('onboarding.application.rejected')
+    'documents-management.invalidation-subscriber' = @('onboarding.application.submitted', 'onboarding.application.rejected')
     'accounts.application-opening-subscriber' = @('compliance.case.approved')
 }
 
@@ -273,7 +273,8 @@ switch ($Phase) {
     Grant 'ewp-compliance-case-opening-subscriber' '--operation Read --group compliance.case-opening-subscriber'
     Grant 'ewp-compliance-case-opening-subscriber' '--operation Write --operation Describe --topic compliance.case-opening-subscriber.dlq'
 
-    Write-Host 'DocumentInvalidationSubscriber: read onboarding.application.rejected and its group; write its dead-letter topic' -ForegroundColor Cyan
+    Write-Host 'DocumentInvalidationSubscriber: read onboarding.application.submitted / .rejected and its group; write its dead-letter topic' -ForegroundColor Cyan
+    Grant 'ewp-dm-invalidation-subscriber' '--operation Read --operation Describe --topic onboarding.application.submitted'
     Grant 'ewp-dm-invalidation-subscriber' '--operation Read --operation Describe --topic onboarding.application.rejected'
     Grant 'ewp-dm-invalidation-subscriber' '--operation Read --group documents-management.invalidation-subscriber'
     Grant 'ewp-dm-invalidation-subscriber' '--operation Write --operation Describe --topic documents-management.invalidation-subscriber.dlq'

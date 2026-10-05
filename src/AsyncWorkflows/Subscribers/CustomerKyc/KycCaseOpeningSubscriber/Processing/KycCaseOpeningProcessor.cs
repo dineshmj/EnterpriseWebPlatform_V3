@@ -135,7 +135,9 @@ public sealed class KycCaseOpeningProcessor(
                 initiatedByUserId = message.InitiatedByUserId,
                 workflowId = message.WorkflowId,
                 correlationId = message.CorrelationId,
-                causationId = message.MessageId
+                causationId = message.MessageId,
+                applicant = message.Applicant,
+                evidenceDocuments = message.EvidenceDocuments
             })
         };
 
@@ -180,7 +182,9 @@ public sealed class KycCaseOpeningProcessor(
             envelope.WorkflowId,
             envelope.CorrelationId,
             envelope.CausationId,
-            envelope.Source), null);
+            envelope.Source,
+            application.Applicant,
+            application.EvidenceDocuments ?? []), null);
     }
 
     private sealed record Envelope(
@@ -198,5 +202,7 @@ public sealed class KycCaseOpeningProcessor(
         Guid ApplicationRef,
         string? ApplicationNumber,
         string? CustomerNumber,
-        string? BranchCode);
+        string? BranchCode,
+        ApplicantInfo? Applicant,
+        IReadOnlyList<EvidenceDocumentInfo>? EvidenceDocuments);
 }

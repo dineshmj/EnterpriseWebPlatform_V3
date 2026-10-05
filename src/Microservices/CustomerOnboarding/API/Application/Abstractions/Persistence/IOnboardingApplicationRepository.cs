@@ -9,6 +9,9 @@ public interface IOnboardingApplicationRepository
     /// <summary>Looks an application up by the reference other bounded contexts use.</summary>
     Task<OnboardingApplication?> GetByRefAsync(Guid applicationRef, CancellationToken cancellationToken);
 
+    /// <summary>The customer's application still in DRAFT (a submission that failed part-way), if any.</summary>
+    Task<OnboardingApplication?> GetDraftForCustomerAsync(long customerId, CancellationToken cancellationToken);
+
     Task AddAsync(OnboardingApplication application, CancellationToken cancellationToken);
 }
 

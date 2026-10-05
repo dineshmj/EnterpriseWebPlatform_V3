@@ -36,6 +36,7 @@ public sealed class AccountApplication : AggregateRoot
         ApplicationNumber = null!;
         CustomerNumber = null!;
         BranchCode = null!;
+        HolderName = null!;
     }
 
     private AccountApplication(
@@ -44,11 +45,13 @@ public sealed class AccountApplication : AggregateRoot
         string customerNumber,
         long complianceCaseId,
         BranchCode branchCode,
+        HolderName holderName,
         string? initiatedByUserId,
         string? complianceApprovedByUserId,
         DateTimeOffset now)
     {
         ApplicationRef = applicationRef;
+        HolderName = holderName;
         ApplicationNumber = applicationNumber;
         CustomerNumber = customerNumber;
         ComplianceCaseId = complianceCaseId;
@@ -68,6 +71,9 @@ public sealed class AccountApplication : AggregateRoot
     public string ApplicationNumber { get; private set; }
 
     public string CustomerNumber { get; private set; }
+
+    /// <summary>The name the account is opened in (as Compliance cleared it).</summary>
+    public HolderName HolderName { get; private set; }
 
     /// <summary>The Compliance case that approved the application (by value).</summary>
     public long ComplianceCaseId { get; private set; }
@@ -127,11 +133,13 @@ public sealed class AccountApplication : AggregateRoot
         string customerNumber,
         long complianceCaseId,
         BranchCode branchCode,
+        HolderName holderName,
         string? initiatedByUserId,
         string? complianceApprovedByUserId,
         DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(branchCode);
+        ArgumentNullException.ThrowIfNull(holderName);
 
         if (applicationRef == Guid.Empty)
             throw new DomainRuleViolationException("A valid onboarding application reference is required.");
@@ -148,6 +156,7 @@ public sealed class AccountApplication : AggregateRoot
             customerNumber.Trim(),
             complianceCaseId,
             branchCode,
+            holderName,
             Normalize(initiatedByUserId),
             Normalize(complianceApprovedByUserId),
             now);

@@ -81,7 +81,8 @@ hold ▼  │ release              OPENING ──refused, or still failing after
 4. Reject needs remarks; hold needs a reason. A decision is final.
 5. **Only the core-banking system opens an account.** A technical failure keeps the application OPENING and is retried with exponential back-off (15 s doubling to 5 min). After `MaxOpeningAttempts` (6) failures, or a refusal (HTTP 422), the application is FAILED and `AccountOpeningFailed` is published — compensation follows (3c).
 6. **No duplicate accounts:** every core-banking request carries an `Idempotency-Key` (the `ApplicationRef`). A retried request after a lost answer returns the same account, which is why the POST may be retried at all.
-7. A funds reservation (Payments, planned) is idempotent per payment saga ID; releasing an unknown or already-released reservation is a no-op that succeeds.
+7. **The account holder's name** comes from `compliance.case.approved` (the applicant as Compliance cleared them) and is the name core banking opens the account in. Accounts stores no other personal data — no address or contact details.
+8. A funds reservation (Payments, planned) is idempotent per payment saga ID; releasing an unknown or already-released reservation is a no-op that succeeds.
 
 ---
 

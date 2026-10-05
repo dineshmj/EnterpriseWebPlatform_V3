@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { MfeShell, getWorkspaceContext, publishSelection, type WorkspaceContext } from './MfeShell';
 import { getJson, postJson } from '../lib/api';
+import { type ApplicantAddress, formatAddress } from '../lib/applicant';
 import { Button, buttonVariants } from './ui/button';
 import { Card, CardContent, CardHeader } from './ui/card';
 import { cn } from './ui/cn';
@@ -15,6 +16,8 @@ import { Textarea } from './ui/form';
 interface KycCase {
   kycCaseId: number;
   customerNumber: string;
+  customerName: string;
+  residentialAddress?: ApplicantAddress | null;
   applicationNumber?: string;
   branchCode?: string;
   assignedOfficerUserId?: string | null;
@@ -84,6 +87,22 @@ function shortId(id: string | null | undefined) {
   return id ? `${id.slice(0, 8)}…` : '—';
 }
 
+const sameUser = (a: string | null | undefined, b: string | null | undefined) =>
+  !!a && !!b && a.toLowerCase() === b.toLowerCase();
+
+/**
+ * Why the signed-in officer may not decide this case, or null. The KYC API enforces
+ * both rules; the screen only explains them before the officer tries.
+ */
+function decisionBlockedReason(item: KycCase, me: string | null): string | null {
+  if (!me) return null;
+  if (sameUser(item.initiatedByUserId, me))
+    return 'You initiated this onboarding. Separation of duties requires another officer to decide it.';
+  if (item.assignedOfficerUserId && !sameUser(item.assignedOfficerUserId, me))
+    return `This case is assigned to another officer (${shortId(item.assignedOfficerUserId)}). Only they can decide it until they release it.`;
+  return null;
+}
+
 export function KycDocumentVerificationView({
   title,
   subtitle,
@@ -101,6 +120,9 @@ export function KycDocumentVerificationView({
   const [loading, setLoading] = useState(true);
   const [loadingDocument, setLoadingDocument] = useState(false);
   const [submittingDecision, setSubmittingDecision] = useState<'approve' | 'reject' | null>(null);
+  const [me, setMe] = useState<string | null>(null);
+  // A link named a case that has nothing awaiting this review (decided, or not in the branch).
+  const [deepLinkNotice, setDeepLinkNotice] = useState<string | null>(null);
   // How the current case was chosen; only a default choice may be replaced by a late context hand-over.
   const selectionSource = useRef<'url' | 'context' | 'default' | 'user'>('default');
 
@@ -111,10 +133,18 @@ export function KycDocumentVerificationView({
       : selectedCase.documentVerificationStatus)
     : null;
   const awaitingDecision = stageStatus === 'PENDING_REVIEW';
+  const blockedReason = selectedCase ? decisionBlockedReason(selectedCase, me) : null;
+  const canDecide = awaitingDecision && blockedReason === null;
   const stageName = verificationStage === 'IdentityVerification' ? 'Identity verification' : 'Document verification';
   const otherStage = verificationStage === 'IdentityVerification'
     ? { label: 'Review tax proof', path: '/v1/kyc/documents/view-all' }
     : { label: 'Review identity proof', path: '/v1/kyc/identity-verification/view-all' };
+
+  useEffect(() => {
+    getJson<{ sub: string }>('/api/auth/user')
+      .then(user => setMe(user.sub))
+      .catch(() => setMe(null));
+  }, []);
 
   useEffect(() => {
     getJson<PageResult>(
@@ -122,8 +152,17 @@ export function KycDocumentVerificationView({
     )
       .then(result => {
         setCases(result.items);
+        const rawCaseId = new URLSearchParams(window.location.search).get('caseId');
+        const requested = Number(rawCaseId);
+        if (rawCaseId !== null && !result.items.some(x => x.kycCaseId === requested)) {
+          // Never silently show a different case than the one the link named.
+          selectionSource.current = 'user';
+          setDeepLinkNotice(
+            `KYC case ${rawCaseId} has nothing awaiting ${verificationStage === 'IdentityVerification' ? 'identity' : 'document'} verification: it may be decided already. Choose a case from the queue, or open the case details.`,
+          );
+          return;
+        }
         if (result.items.length > 0) {
-          const requested = Number(new URLSearchParams(window.location.search).get('caseId'));
           const applicationNumber = contextApplicationNumber(getWorkspaceContext());
           const fromContext = result.items.find(x => applicationNumber !== null && x.applicationNumber === applicationNumber);
 
@@ -162,7 +201,7 @@ export function KycDocumentVerificationView({
   useEffect(() => {
     if (!selectedCase) return;
     publishSelection(
-      [{ title: 'Customer Number', value: selectedCase.customerNumber }],
+      [{ title: 'Customer Name', value: selectedCase.customerName }, { title: 'Customer Number', value: selectedCase.customerNumber }],
       [
         { title: 'Application Number', value: selectedCase.applicationNumber ?? '—' },
         { title: 'KYC Case', value: `#${selectedCase.kycCaseId}` },
@@ -196,7 +235,7 @@ export function KycDocumentVerificationView({
   }, [selectedCaseId, documentRoute, documentLabel]);
 
   async function submitDecision(action: 'approve' | 'reject') {
-    if (selectedCaseId === null || !awaitingDecision) return;
+    if (selectedCaseId === null || !canDecide) return;
 
     const remarks = decisionRemarks.trim();
     if (action === 'reject' && !remarks) {
@@ -222,7 +261,7 @@ export function KycDocumentVerificationView({
 
       if (selectedCase) {
         publishSelection(
-          [{ title: 'Customer Number', value: selectedCase.customerNumber }],
+          [{ title: 'Customer Name', value: selectedCase.customerName }, { title: 'Customer Number', value: selectedCase.customerNumber }],
           [
             { title: 'Application Number', value: selectedCase.applicationNumber ?? '—' },
             { title: 'KYC Case', value: `#${selectedCase.kycCaseId}` },
@@ -276,6 +315,8 @@ export function KycDocumentVerificationView({
         </Alert>
       )}
 
+      {deepLinkNotice && <Alert tone="info" className="mb-6">{deepLinkNotice}</Alert>}
+
       <div className="grid items-start gap-6 xl:grid-cols-[300px_minmax(0,1fr)_380px]">
         {/* 1. Work queue */}
         <Card className="xl:sticky xl:top-6">
@@ -306,7 +347,7 @@ export function KycDocumentVerificationView({
                         <span className="font-mono text-[13px] font-semibold text-ink">{item.applicationNumber ?? `Case ${item.kycCaseId}`}</span>
                         <span className="text-xs text-ink-faint">#{item.kycCaseId}</span>
                       </span>
-                      <span className="text-xs text-ink-muted">{item.customerNumber} · {formatDateTime(item.createdAt)}</span>
+                      <span className="text-xs text-ink-muted">{item.customerName} · {item.customerNumber} · {formatDateTime(item.createdAt)}</span>
                       {item.assignedOfficerUserId && (
                         <span className="text-xs text-info-700">Assigned · {shortId(item.assignedOfficerUserId)}</span>
                       )}
@@ -364,6 +405,8 @@ export function KycDocumentVerificationView({
                   <DescriptionList
                     items={[
                       { label: 'Application', value: <span className="font-mono text-[13px]">{selectedCase.applicationNumber ?? '—'}</span> },
+                      { label: 'Applicant (as submitted)', value: <span className="font-medium">{selectedCase.customerName}</span> },
+                      { label: 'Residential address', value: formatAddress(selectedCase.residentialAddress) },
                       { label: 'Customer', value: <span className="font-mono text-[13px]">{selectedCase.customerNumber}</span> },
                       { label: 'Branch', value: selectedCase.branchCode ?? '—' },
                       { label: 'Opened', value: formatDateTime(selectedCase.createdAt) },
@@ -394,6 +437,9 @@ export function KycDocumentVerificationView({
           <Card>
             <CardHeader title={`${stageName} decision`} description="Approve the evidence, or reject it with a reason. The KYC API makes the final authorization decision." />
             <CardContent className="space-y-2">
+              {awaitingDecision && blockedReason && (
+                <Alert tone="warning" title="You cannot decide this case" className="mb-2">{blockedReason}</Alert>
+              )}
               <label htmlFor="decisionRemarks" className="text-[13px] font-medium text-ink">
                 Remarks <span className="font-normal text-ink-faint">(required to reject)</span>
               </label>
@@ -403,7 +449,7 @@ export function KycDocumentVerificationView({
                 onChange={event => setDecisionRemarks(event.target.value)}
                 maxLength={REMARKS_LIMIT}
                 rows={5}
-                disabled={!awaitingDecision || submittingDecision !== null}
+                disabled={!canDecide || submittingDecision !== null}
                 placeholder="Approval notes, or the reason for rejection…"
               />
               <p className="text-right text-xs text-ink-faint">{decisionRemarks.length} / {REMARKS_LIMIT}</p>
@@ -413,7 +459,7 @@ export function KycDocumentVerificationView({
                 variant="danger-outline"
                 size="lg"
                 onClick={() => submitDecision('reject')}
-                disabled={!awaitingDecision || submittingDecision !== null}
+                disabled={!canDecide || submittingDecision !== null}
               >
                 <ThumbsDown aria-hidden="true" />
                 {submittingDecision === 'reject' ? 'Rejecting…' : 'Reject'}
@@ -422,7 +468,7 @@ export function KycDocumentVerificationView({
                 variant="accent"
                 size="lg"
                 onClick={() => submitDecision('approve')}
-                disabled={!awaitingDecision || submittingDecision !== null}
+                disabled={!canDecide || submittingDecision !== null}
               >
                 <ThumbsUp aria-hidden="true" />
                 {submittingDecision === 'approve' ? 'Approving…' : 'Approve'}

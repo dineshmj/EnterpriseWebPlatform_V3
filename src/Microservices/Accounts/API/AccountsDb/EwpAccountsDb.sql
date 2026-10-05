@@ -21,6 +21,11 @@ CREATE TABLE account_applications (
     application_number VARCHAR(30) NOT NULL,
     customer_number VARCHAR(100) NOT NULL,
 
+    -- The account holder's name as Compliance cleared it (snapshot from
+    -- compliance.case.approved): the name core banking opens the account in.
+    holder_first_name VARCHAR(100) NOT NULL,
+    holder_last_name VARCHAR(100) NOT NULL,
+
     -- The Compliance case that approved the application (Compliance, by value).
     compliance_case_id BIGINT NOT NULL,
 
@@ -103,6 +108,8 @@ CREATE TABLE accounts (
 
     -- The account holder (Customer Onboarding's customer, by value): ReBAC "owns".
     customer_number VARCHAR(100) NOT NULL,
+    holder_first_name VARCHAR(100) NOT NULL,
+    holder_last_name VARCHAR(100) NOT NULL,
     application_ref UUID NOT NULL,
     branch_code VARCHAR(20) NOT NULL,
     product VARCHAR(30) NOT NULL,

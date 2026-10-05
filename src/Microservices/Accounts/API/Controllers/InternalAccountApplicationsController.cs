@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 
 using EnterpriseWebPlatform.Accounts.Api.Application.Commands;
 using EnterpriseWebPlatform.Accounts.Api.Domain.Exceptions;
+using EnterpriseWebPlatform.Accounts.Api.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.Accounts.Api.Controllers;
 
@@ -16,7 +17,11 @@ public sealed record OpenAccountApplicationRequest(
     string? ComplianceApprovedByUserId,
     Guid? WorkflowId,
     Guid? CorrelationId,
-    Guid CausationId);
+    Guid CausationId,
+    ApplicantNameContract? Applicant);
+
+/// <summary>The applicant's name as Compliance cleared it: the account holder.</summary>
+public sealed record ApplicantNameContract(string? FirstName, string? LastName);
 
 /// <summary>
 /// Machine-only endpoint: called by the AccountApplicationOpeningSubscriber (pinned M2M
@@ -37,11 +42,13 @@ public sealed class InternalAccountApplicationsController(OpenAccountApplication
         OpenAccountApplicationResult result;
         try
         {
+            var holderName = HolderName.Create(request.Applicant?.FirstName, request.Applicant?.LastName);
+
             result = await handler.HandleAsync(
                 new OpenAccountApplicationCommand(
                     request.ApplicationRef, request.ApplicationNumber, request.CustomerNumber, request.ComplianceCaseId,
                     request.BranchCode, request.InitiatedByUserId, request.ComplianceApprovedByUserId,
-                    request.WorkflowId, request.CorrelationId, request.CausationId),
+                    request.WorkflowId, request.CorrelationId, request.CausationId, holderName),
                 cancellationToken);
         }
         catch (DomainRuleViolationException ex)

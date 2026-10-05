@@ -37,7 +37,18 @@ public sealed record ComplianceCaseDetail(
     DateTimeOffset? DecisionAt,
     string? DecisionRemarks,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    string CustomerName,
+    ApplicantAddress ResidentialAddress);
+
+/// <summary>The applicant's residential address as KYC verified it (snapshot).</summary>
+public sealed record ApplicantAddress(
+    string? AddressLine1,
+    string? AddressLine2,
+    string? City,
+    string? State,
+    string? PostalCode,
+    string? CountryCode);
 
 public sealed record PagedComplianceCasesResponse(
     IReadOnlyList<ComplianceCaseDetail> Items,

@@ -17,6 +17,7 @@ public sealed class Account
         AccountNumber = null!;
         Bsb = null!;
         CustomerNumber = null!;
+        HolderName = null!;
         BranchCode = null!;
         CoreBankingReference = null!;
     }
@@ -30,6 +31,9 @@ public sealed class Account
 
     /// <summary>The account holder (Customer Onboarding's customer, by value): ReBAC "owns".</summary>
     public string CustomerNumber { get; private set; }
+
+    /// <summary>The name the account is held in.</summary>
+    public HolderName HolderName { get; private set; }
 
     public Guid ApplicationRef { get; private set; }
 
@@ -67,6 +71,7 @@ public sealed class Account
             Bsb = bsb.Trim(),
             CoreBankingReference = coreBankingReference.Trim(),
             CustomerNumber = application.CustomerNumber,
+            HolderName = HolderName.Create(application.HolderName.FirstName, application.HolderName.LastName),
             ApplicationRef = application.ApplicationRef,
             BranchCode = application.BranchCode,
             Product = application.Product.Value,

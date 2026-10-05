@@ -13,8 +13,12 @@ namespace EnterpriseWebPlatform.CustomerOnboarding.Domain.Aggregates;
 /// Invariants:
 ///  - A customer always has a valid name, e-mail address and phone number.
 ///  - At most one address is primary.
-///  - Lifecycle: PROSPECT → ONBOARDING → ACTIVE; SUSPENDED from any non-closed
-///    status; a closed or suspended customer cannot start onboarding.
+///  - Lifecycle: PROSPECT → ONBOARDING → ACTIVE (application completed), or back to
+///    PROSPECT (application rejected or cancelled); SUSPENDED from any non-closed status.
+///  - One onboarding at a time: only a PROSPECT starts onboarding. An ACTIVE customer
+///    is already onboarded; an ONBOARDING one already has an application in progress.
+///  - The name is the identity KYC verifies: it can change only while the customer is a
+///    PROSPECT. Contact details can change before and after onboarding, never during it.
 ///  - Every customer has exactly one managing agent (ReBAC "manages" relationship,
 ///    owned by this context, not by the IDP).
 /// </summary>
@@ -166,6 +170,12 @@ public sealed class Customer : AggregateRoot
             return;
         }
 
+        if (Status is not (CustomerStatus.Prospect or CustomerStatus.Active))
+        {
+            throw new DomainRuleViolationException(
+                $"Contact details cannot change while the customer is {Status.ToString().ToUpperInvariant()}.");
+        }
+
         Email = email;
         PhoneNumber = phoneNumber;
         Touch(now);
@@ -182,19 +192,44 @@ public sealed class Customer : AggregateRoot
             return;
         }
 
+        if (Status != CustomerStatus.Prospect)
+        {
+            throw new DomainRuleViolationException(
+                "The customer's name is verified identity: it can change only before onboarding is submitted.");
+        }
+
         Name = name;
         Touch(now);
     }
 
     public void StartOnboarding(DateTimeOffset now)
     {
-        if (Status is CustomerStatus.Closed or CustomerStatus.Suspended)
+        var refusal = Status switch
         {
-            throw new DomainRuleViolationException(
-                "A closed or suspended customer cannot start onboarding.");
+            CustomerStatus.Prospect => null,
+            CustomerStatus.Onboarding => "The customer already has an onboarding application in progress.",
+            CustomerStatus.Active => "The customer is already onboarded.",
+            _ => "A closed or suspended customer cannot start onboarding."
+        };
+
+        if (refusal is not null)
+        {
+            throw new DomainRuleViolationException(refusal);
         }
 
         ChangeStatus(CustomerStatus.Onboarding, now);
+    }
+
+    /// <summary>The onboarding application was rejected or cancelled: ONBOARDING → PROSPECT, so a new one can start.</summary>
+    public void AbandonOnboarding(DateTimeOffset now)
+    {
+        if (Status != CustomerStatus.Onboarding)
+        {
+            throw new DomainRuleViolationException(
+                "Only a customer in onboarding can return to prospect.");
+        }
+
+        ChangeStatus(CustomerStatus.Prospect, now);
     }
 
     public void Activate(DateTimeOffset now)

@@ -44,7 +44,14 @@ public sealed record ComplianceCaseDecisionPayload(
     string? RiskRating,
     string DecisionByUserId,
     DateTimeOffset DecisionAt,
-    string? DecisionRemarks);
+    string? DecisionRemarks,
+    ApplicantNamePayload Applicant);
+
+/// <summary>
+/// The applicant's name (added additively, same SchemaVersion): Accounts opens the
+/// account in this name. The address is not passed on - Accounts does not need it.
+/// </summary>
+public sealed record ApplicantNamePayload(string FirstName, string LastName);
 
 /// <summary>
 /// Translates Compliance domain events into published integration events (Outbox
@@ -104,7 +111,8 @@ internal static class ComplianceIntegrationEventMapper
                         complianceCase.RiskRating?.ToCode(),
                         decided.DecidedByUserId,
                         decided.OccurredAt,
-                        decided.Remarks));
+                        decided.Remarks,
+                        new ApplicantNamePayload(complianceCase.Applicant.FirstName, complianceCase.Applicant.LastName)));
                 break;
 
             // Internal facts. Listed explicitly so that a NEW, unmapped event still fails loudly.

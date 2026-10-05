@@ -31,7 +31,10 @@ export function AccountsTable({ accounts }: { accounts: Account[] }) {
         {accounts.map(a => (
           <tr key={a.accountId} className="hover:bg-subtle/70">
             <Td className="font-mono text-[13px] font-semibold text-brand-700">{formatAccount(a.bsb, a.accountNumber)}</Td>
-            <Td className="font-mono text-[13px]">{a.customerNumber}</Td>
+            <Td>
+              <div className="font-medium text-ink">{a.holderName}</div>
+              <div className="font-mono text-xs text-ink-faint">{a.customerNumber}</div>
+            </Td>
             <Td className="text-ink-muted">{productLabel(a.product)}</Td>
             <Td><StatusBadge status={a.status} /></Td>
             <Td className="text-ink-muted">{formatDateTime(a.openedAt)}</Td>

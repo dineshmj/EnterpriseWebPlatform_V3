@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.RegularExpressions;
 
 using EnterpriseWebPlatform.DocumentsManagement.Domain.Exceptions;
@@ -23,7 +24,7 @@ public sealed partial record BranchCode
         return new BranchCode(normalized);
     }
 
-    public static bool TryCreate(string? value, out BranchCode? branch)
+    public static bool TryCreate(string? value, [NotNullWhen(true)] out BranchCode? branch)
     {
         try { branch = Create(value); return true; }
         catch (DomainRuleViolationException) { branch = null; return false; }

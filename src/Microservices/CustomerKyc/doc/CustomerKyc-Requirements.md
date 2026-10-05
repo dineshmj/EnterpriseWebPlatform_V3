@@ -126,7 +126,8 @@ Target additional states: `AWAITING_INFORMATION` (more evidence requested; retur
 6. **SoD:** the workflow initiator cannot decide any stage of the case.
 7. **SoD fails closed:** if the initiator is unknown, the decision is denied (403), never allowed.
 8. Every stage decision emits a stage event. A decision that makes the case terminal also emits `KycCaseApproved` or `KycCaseRejected`, in the same transaction.
-9. KYC never stores document content. It reads evidence from Documents Management by business reference and document type.
+9. KYC never stores document content. A case records exactly the two evidence documents submitted with its application (their Documents Management IDs, from `onboarding.application.submitted`) and the officer reviews those documents, never "the latest" of the customer. A case is not opened without them (fail closed).
+10. A case also records the applicant **as submitted** (name and residential address, no contact details): the identity the officer verifies the evidence against. It is a snapshot and never refreshed, so the case keeps showing what was verified even if the customer's record changes later. It is passed on to Compliance in `kyc.case.approved`.
 
 ---
 
@@ -182,7 +183,7 @@ Contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Event-Ca
 | Standard event envelope | **Gap**: KYC events are flat |
 | Inbox / idempotent consumer | Present: `inbox_messages` (unique `message_id` + `consumer`) is written in the same transaction as the new case and its Outbox event; one case per `ApplicationRef` as well |
 | Consumer resilience | Present: timeout, retry with jitter and circuit breaker on the API call; cached M2M token; transient failures retried in place; permanent failures to `customer-kyc.case-opening-subscriber.dlq` (shared consume loop) |
-| Document lookup | Present: by business reference and document type only (the filename fallback is removed). The officer's branch is passed to Documents Management, so an officer sees only evidence uploaded in their own branch. |
+| Document lookup | Present: by the document IDs the case recorded at submission (no search by customer number or file name). The officer's branch is passed to Documents Management, so an officer sees only evidence uploaded in their own branch. |
 | Safe evidence display | Present: only DM-verified PDF is shown inline (`nosniff`, framable only by the KYC MFE); other types are downloaded; content is streamed |
 | BFF session security | Present: session regenerated at sign-in; `SameSite=Lax` session cookie; logout revokes the refresh token and ends the IDP session; front-channel (`/signout-oidc`) and back-channel (`/backchannel-logout`, fully validated logout token) logout; timing-safe CSRF check; strict CSP with hashed inline scripts; secrets required from the environment (no fallbacks). Sessions are in memory (single instance). |
 | Evidence display hardening | Decision: the PDF preview is **not** sandboxed, because Chrome refuses to render PDFs in sandboxed frames. Instead: magic-byte verification in DM, inline display only for verified PDF, `nosniff`, framable only by the KYC MFE. |

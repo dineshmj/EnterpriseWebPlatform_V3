@@ -60,4 +60,19 @@ public sealed record KycCaseDecisionPayload(
     IReadOnlyList<Guid> CausedByMessageIds,
     string BranchCode,
     string? IdentityVerificationByUserId,
-    string? DocumentVerificationByUserId);
+    string? DocumentVerificationByUserId,
+    ApplicantPayload Applicant);
+
+/// <summary>
+/// The applicant as submitted and verified by KYC (added additively, same SchemaVersion):
+/// Compliance screens on the name and address. No contact details are passed on.
+/// </summary>
+public sealed record ApplicantPayload(string FirstName, string LastName, AddressPayload ResidentialAddress);
+
+public sealed record AddressPayload(
+    string? AddressLine1,
+    string? AddressLine2,
+    string? City,
+    string? State,
+    string? PostalCode,
+    string? CountryCode);

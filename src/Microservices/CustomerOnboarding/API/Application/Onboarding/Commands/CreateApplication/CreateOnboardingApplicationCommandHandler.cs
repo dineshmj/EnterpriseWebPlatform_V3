@@ -1,5 +1,6 @@
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Persistence;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Aggregates;
+using EnterpriseWebPlatform.CustomerOnboarding.Domain.Enums;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Application.Onboarding.Commands.CreateApplication;
@@ -31,6 +32,10 @@ public sealed class CreateOnboardingApplicationCommandHandler
     /// one transaction (Customer → ONBOARDING, a new OnboardingApplication): both live
     /// in this bounded context and database, and the business requires that neither
     /// exists without the other. Every other command changes exactly one aggregate.
+    ///
+    /// A customer can have only one onboarding at a time (the Customer aggregate refuses a
+    /// second). The exception is a DRAFT left by a submission that failed part-way (e.g. a
+    /// document upload failed): retrying resumes that draft instead of being refused.
     /// </summary>
     public async Task<CreateOnboardingApplicationResult> HandleAsync(
         CreateOnboardingApplicationCommand command,
@@ -44,6 +49,16 @@ public sealed class CreateOnboardingApplicationCommandHandler
         {
             throw new KeyNotFoundException(
                 $"Customer '{command.CustomerId}' was not found.");
+        }
+
+        if (customer.Status == CustomerStatus.Onboarding &&
+            await _applicationRepository.GetDraftForCustomerAsync(customer.Id, cancellationToken) is { } draft &&
+            draft.BranchCode.Value == BranchCode.Create(command.BranchCode).Value)
+        {
+            return new CreateOnboardingApplicationResult(
+                draft.Id,
+                draft.ApplicationNumber.Value,
+                draft.ApplicationRef);
         }
 
         var now = _clock.GetUtcNow();

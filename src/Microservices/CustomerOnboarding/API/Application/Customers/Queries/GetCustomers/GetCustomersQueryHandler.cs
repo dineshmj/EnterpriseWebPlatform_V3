@@ -66,7 +66,7 @@ public sealed class GetCustomersQueryHandler
                 x.LastName,
                 x.Email,
                 x.CustomerType,
-                x.Status.ToString()))
+                x.Status.ToString().ToUpperInvariant()))
             .ToList();
 
         return new PagedResult<CustomerListItemDto>(
@@ -84,6 +84,7 @@ public sealed record CustomerListItemDto(
     string LastName,
     string Email,
     Domain.Enums.CustomerType CustomerType,
+    // PROSPECT / ONBOARDING / ACTIVE / SUSPENDED / CLOSED: tells the UI whether onboarding can start.
     string Status);
 
 public sealed record PagedResult<T>(

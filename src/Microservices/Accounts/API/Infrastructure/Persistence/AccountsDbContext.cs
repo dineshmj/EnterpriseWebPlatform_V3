@@ -108,6 +108,12 @@ public sealed class AccountsDbContext(DbContextOptions<AccountsDbContext> option
             e.HasIndex(x => x.ApplicationRef).IsUnique().HasDatabaseName("uq_account_applications_application_ref");
             e.Property(x => x.ApplicationNumber).HasColumnName("application_number").HasMaxLength(30).IsRequired();
             e.Property(x => x.CustomerNumber).HasColumnName("customer_number").HasMaxLength(100).IsRequired();
+            e.ComplexProperty(x => x.HolderName, h =>
+            {
+                h.Property(x => x.FirstName).HasColumnName("holder_first_name").HasMaxLength(HolderName.MaxLength).IsRequired();
+                h.Property(x => x.LastName).HasColumnName("holder_last_name").HasMaxLength(HolderName.MaxLength).IsRequired();
+                h.Ignore(x => x.FullName);
+            });
             e.Property(x => x.ComplianceCaseId).HasColumnName("compliance_case_id").IsRequired();
             e.Property(x => x.BranchCode).HasColumnName("branch_code").HasMaxLength(BranchCode.MaxLength)
                 .HasConversion(v => v.Value, v => BranchCode.Create(v)).IsRequired();
@@ -148,6 +154,12 @@ public sealed class AccountsDbContext(DbContextOptions<AccountsDbContext> option
             e.Property(x => x.Bsb).HasColumnName("bsb").HasMaxLength(7).IsRequired();
             e.HasIndex(x => new { x.Bsb, x.AccountNumber }).IsUnique().HasDatabaseName("uq_accounts_bsb_account_number");
             e.Property(x => x.CustomerNumber).HasColumnName("customer_number").HasMaxLength(100).IsRequired();
+            e.ComplexProperty(x => x.HolderName, h =>
+            {
+                h.Property(x => x.FirstName).HasColumnName("holder_first_name").HasMaxLength(HolderName.MaxLength).IsRequired();
+                h.Property(x => x.LastName).HasColumnName("holder_last_name").HasMaxLength(HolderName.MaxLength).IsRequired();
+                h.Ignore(x => x.FullName);
+            });
             e.Property(x => x.ApplicationRef).HasColumnName("application_ref").IsRequired();
             e.HasIndex(x => x.ApplicationRef).IsUnique().HasDatabaseName("uq_accounts_application_ref");
             e.Property(x => x.BranchCode).HasColumnName("branch_code").HasMaxLength(BranchCode.MaxLength)

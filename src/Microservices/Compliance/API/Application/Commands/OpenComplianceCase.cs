@@ -19,7 +19,8 @@ public sealed record OpenComplianceCaseCommand(
     string? KycDocumentDecidedByUserId,
     Guid? WorkflowId,
     Guid? CorrelationId,
-    Guid CausationId);
+    Guid CausationId,
+    Applicant Applicant);
 
 public sealed record OpenComplianceCaseResult(long ComplianceCaseId, string Status, bool Created);
 
@@ -53,6 +54,7 @@ public sealed class OpenComplianceCaseCommandHandler(
                 command.CustomerNumber,
                 command.KycCaseId,
                 BranchCode.Create(command.BranchCode),
+                command.Applicant,
                 command.InitiatedByUserId,
                 command.KycIdentityDecidedByUserId,
                 command.KycDocumentDecidedByUserId,

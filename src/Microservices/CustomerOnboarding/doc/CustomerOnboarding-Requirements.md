@@ -116,10 +116,19 @@ API scopes: `customer-onboarding.read`, `customer-onboarding.write`.
 ### 5.1 Customer status
 
 ```text
-PROSPECT ──StartOnboarding──► ONBOARDING ──Activate──► ACTIVE
+PROSPECT ──StartOnboarding──► ONBOARDING ──Activate (application COMPLETED)──► ACTIVE
+    ▲                              │
+    └──AbandonOnboarding───────────┘ (application REJECTED or CANCELLED)
    any (except CLOSED) ──Suspend──► SUSPENDED
                                     CLOSED (terminal)
 ```
+
+Rules (enforced by the Customer aggregate; the UI only reflects them):
+
+- **One onboarding at a time.** Only a PROSPECT starts onboarding. An ACTIVE customer is already onboarded (refused: "already onboarded"); an ONBOARDING customer already has an application in progress. A new application may follow only a rejected or cancelled one. The database backs this with a partial unique index (one application per customer that is not REJECTED / CANCELLED).
+- **The name is verified identity.** It can change only while the customer is a PROSPECT. Contact details can change before and after onboarding, never while an application is in progress.
+- The customer's status follows the end of the application in the same transaction as the outcome (Inbox, application, customer and Outbox commit together).
+- Replacing evidence after submission needs a formal correction path (an officer asks for more information). It is **not built yet**: today evidence can be chosen only when the application is submitted.
 
 ### 5.2 Onboarding application status
 

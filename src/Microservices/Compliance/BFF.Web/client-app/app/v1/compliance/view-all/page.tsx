@@ -99,7 +99,10 @@ export default function ComplianceWorkQueuePage() {
                       </Link>
                       <div className="text-xs text-ink-faint">Case #{item.complianceCaseId}</div>
                     </Td>
-                    <Td className="font-mono text-[13px]">{item.customerNumber}</Td>
+                    <Td>
+                    <div className="font-medium text-ink">{item.customerName}</div>
+                    <div className="font-mono text-xs text-ink-faint">{item.customerNumber}</div>
+                  </Td>
                     <Td><RiskBadge risk={item.riskRating} clearance={item.requiredClearance} /></Td>
                     <Td><StatusBadge status={item.status} /></Td>
                     <Td className="text-ink-muted">{assignee(item.assignedOfficerUserId)}</Td>

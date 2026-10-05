@@ -16,4 +16,20 @@ public sealed record ApplicationSubmittedMessage(
     Guid? WorkflowId,
     Guid? CorrelationId,
     Guid? CausationId,
-    string? Source);
+    string? Source,
+    ApplicantInfo? Applicant,
+    IReadOnlyList<EvidenceDocumentInfo> EvidenceDocuments);
+
+/// <summary>The applicant as submitted (name and residential address); KYC verifies against it.</summary>
+public sealed record ApplicantInfo(string? FirstName, string? LastName, AddressInfo? ResidentialAddress);
+
+public sealed record AddressInfo(
+    string? AddressLine1,
+    string? AddressLine2,
+    string? City,
+    string? State,
+    string? PostalCode,
+    string? CountryCode);
+
+/// <summary>A document submitted as evidence: KYC reviews exactly these.</summary>
+public sealed record EvidenceDocumentInfo(Guid DocumentId, string? DocumentType);

@@ -142,6 +142,22 @@ public sealed class KycDbContext(DbContextOptions<KycDbContext> options, TimePro
 
             e.Property(x => x.InitiatedByUserId).HasColumnName("initiated_by_user_id").HasMaxLength(200);
 
+            e.ComplexProperty(x => x.Applicant, a =>
+            {
+                a.Property(x => x.FirstName).HasColumnName("applicant_first_name").HasMaxLength(Applicant.MaxNameLength).IsRequired();
+                a.Property(x => x.LastName).HasColumnName("applicant_last_name").HasMaxLength(Applicant.MaxNameLength).IsRequired();
+                a.Property(x => x.AddressLine1).HasColumnName("applicant_address_line1").HasMaxLength(200);
+                a.Property(x => x.AddressLine2).HasColumnName("applicant_address_line2").HasMaxLength(200);
+                a.Property(x => x.City).HasColumnName("applicant_city").HasMaxLength(100);
+                a.Property(x => x.State).HasColumnName("applicant_state").HasMaxLength(100);
+                a.Property(x => x.PostalCode).HasColumnName("applicant_postal_code").HasMaxLength(20);
+                a.Property(x => x.CountryCode).HasColumnName("applicant_country_code").HasMaxLength(2);
+                a.Ignore(x => x.FullName);
+            });
+
+            e.Property(x => x.IdentityProofDocumentId).HasColumnName("identity_proof_document_id").HasColumnType("uuid").IsRequired();
+            e.Property(x => x.TaxProofDocumentId).HasColumnName("tax_proof_document_id").HasColumnType("uuid").IsRequired();
+
             e.ComplexProperty(x => x.IdentityVerification, s => MapStage(s, "identity_verification"));
             e.ComplexProperty(x => x.DocumentVerification, s => MapStage(s, "document_verification"));
 

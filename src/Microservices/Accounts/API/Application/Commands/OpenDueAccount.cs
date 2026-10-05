@@ -47,7 +47,7 @@ public sealed class OpenDueAccountCommandHandler(
         try
         {
             var response = await coreBanking.OpenAccountAsync(
-                new OpenAccountRequest(application.ApplicationRef, application.CustomerNumber, application.BranchCode.Value, application.Product!.Value),
+                new OpenAccountRequest(application.ApplicationRef, application.CustomerNumber, application.HolderName.FullName, application.BranchCode.Value, application.Product!.Value),
                 cancellationToken);
 
             var now = clock.GetUtcNow();

@@ -10,10 +10,13 @@ import { cn } from '../../../../components/ui/cn';
 import { DescriptionList, formatDateTime } from '../../../../components/ui/data';
 import { Alert, Skeleton, StatusBadge, statusLabel } from '../../../../components/ui/feedback';
 import { getJson } from '../../../../lib/api';
+import { type ApplicantAddress, formatAddress } from '../../../../lib/applicant';
 
 interface KycCaseDetail {
   kycCaseId: number;
   customerNumber: string;
+  customerName: string;
+  residentialAddress?: ApplicantAddress | null;
   applicationNumber?: string;
   branchCode?: string;
   assignedOfficerUserId?: string | null;
@@ -53,7 +56,7 @@ export default function KycCaseDetailsPage() {
       .then(detail => {
         setData(detail);
         publishSelection(
-          [{ title: 'Customer Number', value: detail.customerNumber }],
+          [{ title: 'Customer Name', value: detail.customerName }, { title: 'Customer Number', value: detail.customerNumber }],
           [
             { title: 'Application Number', value: detail.applicationNumber ?? '—' },
             { title: 'KYC Case', value: `#${detail.kycCaseId}` },
@@ -84,7 +87,9 @@ export default function KycCaseDetailsPage() {
                 columns={3}
                 items={[
                   { label: 'Application', value: <span className="font-mono text-[13px]">{data.applicationNumber ?? '—'}</span> },
+                  { label: 'Applicant (as submitted)', value: <span className="font-medium">{data.customerName}</span> },
                   { label: 'Customer', value: <span className="font-mono text-[13px]">{data.customerNumber}</span> },
+                  { label: 'Residential address', value: formatAddress(data.residentialAddress) },
                   { label: 'Branch', value: data.branchCode ?? '—' },
                   { label: 'KYC case', value: `#${data.kycCaseId}` },
                   { label: 'Assigned officer', value: data.assignedOfficerUserId ? <span className="font-mono text-[13px]">{shortId(data.assignedOfficerUserId)}</span> : 'Unassigned' },

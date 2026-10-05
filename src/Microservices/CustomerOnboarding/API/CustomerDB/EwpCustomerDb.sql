@@ -446,6 +446,14 @@ CREATE INDEX ix_customer_addresses_customer_address_type
 CREATE INDEX ix_onboarding_applications_customer_id
     ON onboarding_applications (customer_id);
 
+-- One onboarding per customer: at most one application that is in progress or
+-- completed. A new one may follow only a REJECTED or CANCELLED application. The
+-- Customer aggregate enforces this (only a PROSPECT starts onboarding); the index
+-- is the database's guarantee against two concurrent requests.
+CREATE UNIQUE INDEX ux_onboarding_applications_one_per_customer
+    ON onboarding_applications (customer_id)
+    WHERE status NOT IN ('REJECTED', 'CANCELLED');
+
 CREATE INDEX ix_onboarding_applications_status
     ON onboarding_applications (status);
 

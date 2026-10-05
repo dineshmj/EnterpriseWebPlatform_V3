@@ -15,6 +15,7 @@ The document answers *how the platform is built and protected*, not *which busin
 | How do you handle dead-letter queues? | [1.6.2](#162-dead-letter-handling) |
 | What if Kafka delivers the same message twice? | [1.3.2](#132-idempotent-consumers-inbox) |
 | What happens to the uploaded documents when an application is rejected? Are they deleted? | [1.4.2](#142-compensation-on-rejection-retain-dont-delete) |
+| Can an agent onboard the same customer twice, or change a verified name afterwards? | [1.2.1](#121-aggregates-that-enforce-their-own-invariants) |
 | What if a downstream API is down for an hour? | [1.6.3](#163-timeouts-retries-and-circuit-breakers), [1.3.3](#133-reliable-subscriber-pipeline) |
 | What if an external provider (e.g. sanctions screening) is slow or down? Does a case slip through? | [1.6.3](#163-timeouts-retries-and-circuit-breakers) |
 | How do you avoid losing an event when the database commit succeeds but Kafka is down? | [1.3.1](#131-transactional-outbox) |
@@ -158,7 +159,7 @@ Kafka relays and subscribers belong to the bounded context whose database or API
 
 #### 1.2.1 Aggregates that enforce their own invariants
 
-Business rules live in aggregates, not in controllers, BFFs or UIs. An aggregate is changed only through its methods. Each method checks the rule, changes state and records a domain event, so an invalid state cannot be reached from outside. `KycCase.DecideStage` enforces the stage workflow, separation of duties and case assignment. `OnboardingApplication` decides which status transitions are allowed and tolerates KYC facts that arrive twice or out of order. Aggregates reference other aggregates by ID only, and take the current time as a parameter (`TimeProvider`), so they are deterministic and testable.
+Business rules live in aggregates, not in controllers, BFFs or UIs. An aggregate is changed only through its methods. Each method checks the rule, changes state and records a domain event, so an invalid state cannot be reached from outside. `KycCase.DecideStage` enforces the stage workflow, separation of duties and case assignment. `OnboardingApplication` decides which status transitions are allowed and tolerates KYC facts that arrive twice or out of order. `Customer` allows one onboarding at a time (only a PROSPECT starts one; an onboarded customer or one with an application in progress is refused) and locks the KYC-verified name once onboarding starts; a partial unique index backs the one-at-a-time rule against concurrent requests. The screens only reflect these rules (no "Start onboarding" for an onboarded customer, read-only identity fields, decisions disabled with the reason shown): typing a URL, using a stale tab or calling the API directly is refused by the aggregate all the same. Aggregates reference other aggregates by ID only, and take the current time as a parameter (`TimeProvider`), so they are deterministic and testable.
 
 **Where to look at:**
 
@@ -259,6 +260,8 @@ Ordering is guaranteed where it matters: per aggregate. Each event is published 
 
 #### 1.3.6 Tolerant readers and contract evolution
 
+**Snapshots travel with the events, minimised per context.** The applicant's name and residential address are carried by the events that already flow (event-carried state transfer), not looked up from Customer Onboarding when a page loads. Each context stores only what it needs: KYC and Compliance keep name and address (to verify and to screen), Accounts keeps the name only (the account holder), and no context but Customer Onboarding holds contact details. A stored snapshot also keeps the record honest for audit: a case shows the identity that was verified or screened, even if the customer's record changes later, and the officer screens keep working when Customer Onboarding is down.
+
 Consumers read only the fields they need into their own message models and ignore everything else. A producer can therefore add fields without breaking anyone, and no shared contract package couples the producer's and consumer's release cycles. Event changes are additive within a version, and every envelope states its `SchemaVersion`. When KYC moved from a flat message to the standard envelope, its consumer was taught to read both shapes first, so the change needed no coordinated release and no topic reset.
 
 **Where to look at:**
@@ -282,13 +285,13 @@ Customer onboarding is a long-running, choreographed saga with no central coordi
 
 #### 1.4.2 Compensation on rejection: retain, don't delete
 
-A saga cannot roll back a distributed transaction; it **compensates** instead. Each context undoes or neutralises its own work, and none touches another context's database. When KYC or Compliance rejects an onboarding application, Customer Onboarding (the owner of the application's state) marks it REJECTED and publishes `OnboardingApplicationRejected`. That event names exactly the evidence documents recorded when the application was submitted. Documents Management's own subscriber then marks those documents **INVALIDATED**. They are retained rather than deleted, because a bank must keep evidence for audit and regulatory retention. Deleting an invalidated document is refused. The compensation is idempotent (Inbox, and invalidating twice changes nothing), and it is scoped: an event can only invalidate documents of the application's own branch.
+A saga cannot roll back a distributed transaction; it **compensates** instead. Each context undoes or neutralises its own work, and none touches another context's database. When KYC, Compliance or Accounts rejects an onboarding application, Customer Onboarding (the owner of the application's state) marks it REJECTED and publishes `OnboardingApplicationRejected`. That event names exactly the evidence documents recorded when the application was submitted. (The submission already made Documents Management mark those documents **ATTACHED**: from then on they are KYC records that cannot be deleted.) Documents Management's own subscriber then marks those documents **INVALIDATED**. They are retained rather than deleted, because a bank must keep evidence for audit and regulatory retention. Deleting an invalidated document is refused. The compensation is idempotent (Inbox, and invalidating twice changes nothing), and it is scoped: an event can only invalidate documents of the application's own branch.
 
 **Where to look at:**
 
 - The rejection naming the evidence: `Reject` in [OnboardingApplication.cs](../src/Microservices/CustomerOnboarding/API/Domain/Aggregates/OnboardingApplication.cs), [OnboardingApplicationRejectedIntegrationEvent.cs](../src/Microservices/CustomerOnboarding/API/Infrastructure/Messaging/OnboardingApplicationRejectedIntegrationEvent.cs)
 - The compensating participant: [DocumentInvalidationSubscriber](../src/AsyncWorkflows/Subscribers/DocumentsManagement/DocumentInvalidationSubscriber/README.md), [InvalidateDocumentsCommand.cs](../src/Microservices/DocumentsManagement/API/Application/Documents/Commands/InvalidateDocuments/InvalidateDocumentsCommand.cs)
-- Retention in the aggregate: `Invalidate` / `CanBeRemoved` in [Document.cs](../src/Microservices/DocumentsManagement/API/Domain/Aggregates/Document.cs)
+- Retention in the aggregate: `Attach` / `Invalidate` / `CanBeRemoved` in [Document.cs](../src/Microservices/DocumentsManagement/API/Domain/Aggregates/Document.cs)
 - Design: [Saga plan §1.5](EWP-V3-Saga-Choreography-and-Orchestration-Plans.md#15-rejection-and-compensation)
 
 **Not yet:** compensation of later failures (e.g. account opening failing after approval, COMPENSATING status) and disposal after the retention period.

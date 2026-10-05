@@ -92,5 +92,13 @@ public sealed class ComplianceCaseQueries(ComplianceDbContext db) : IComplianceC
             x.DecisionAt,
             x.DecisionRemarks,
             x.CreatedAt,
-            x.UpdatedAt));
+            x.UpdatedAt,
+            x.Applicant.FirstName + " " + x.Applicant.LastName,
+            new ApplicantAddress(
+                x.Applicant.AddressLine1,
+                x.Applicant.AddressLine2,
+                x.Applicant.City,
+                x.Applicant.State,
+                x.Applicant.PostalCode,
+                x.Applicant.CountryCode)));
 }

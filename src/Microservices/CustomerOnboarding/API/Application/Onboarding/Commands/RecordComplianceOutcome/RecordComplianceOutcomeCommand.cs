@@ -19,7 +19,8 @@ public sealed class RecordComplianceOutcomeCommandHandler(
     IOnboardingApplicationRepository applicationRepository,
     IInboxStore inbox,
     IApplicationUnitOfWork unitOfWork,
-    TimeProvider clock)
+    TimeProvider clock,
+    CustomerLifecycleSync customerLifecycle)
 {
     /// <summary>Inbox consumer name for Compliance outcomes.</summary>
     public const string InboxConsumer = "customer-onboarding.compliance-outcomes";
@@ -46,7 +47,10 @@ public sealed class RecordComplianceOutcomeCommandHandler(
             default: return RecordKycOutcomeResult.UnsupportedEventType;
         }
 
-        // Inbox record, new application state and its Outbox events: ONE transaction.
+        if (changed)
+            await customerLifecycle.ApplyAsync(application, now, cancellationToken);
+
+        // Inbox record, new application (and customer) state and its Outbox events: ONE transaction.
         inbox.RecordProcessed(command.MessageId, InboxConsumer);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 

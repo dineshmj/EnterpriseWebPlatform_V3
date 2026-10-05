@@ -112,7 +112,8 @@ public sealed class AccountApplicationOpeningProcessor(
                 complianceApprovedByUserId = p.DecisionByUserId,
                 workflowId = envelope.WorkflowId,
                 correlationId = envelope.CorrelationId,
-                causationId = envelope.MessageId
+                causationId = envelope.MessageId,
+                applicant = p.Applicant
             })
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -134,5 +135,9 @@ public sealed class AccountApplicationOpeningProcessor(
         string? ApplicationNumber,
         string? CustomerNumber,
         string? BranchCode,
-        string? DecisionByUserId);
+        string? DecisionByUserId,
+        ApplicantName? Applicant);
+
+    // The applicant's name as Compliance cleared it; forwarded as-is (Accounts validates it).
+    private sealed record ApplicantName(string? FirstName, string? LastName);
 }

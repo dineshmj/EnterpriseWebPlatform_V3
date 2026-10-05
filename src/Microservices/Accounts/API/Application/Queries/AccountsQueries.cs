@@ -39,7 +39,8 @@ public sealed record AccountApplicationDetail(
     DateTimeOffset? OpenedAt,
     string? FailureReason,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    string CustomerName);
 
 public sealed record AccountDetail(
     long AccountId,
@@ -50,7 +51,8 @@ public sealed record AccountDetail(
     string Product,
     string Status,
     string CoreBankingReference,
-    DateTimeOffset OpenedAt);
+    DateTimeOffset OpenedAt,
+    string HolderName);
 
 public sealed record PagedResponse<T>(
     IReadOnlyList<T> Items,

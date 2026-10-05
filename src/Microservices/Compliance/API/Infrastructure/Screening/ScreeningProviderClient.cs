@@ -33,8 +33,9 @@ public sealed class ScreeningProviderOptions
 /// resilience pipeline (timeout, jittered retry, circuit breaker - see Program.cs);
 /// whatever still fails surfaces as <see cref="ScreeningUnavailableException"/>, so
 /// the case stays in SCREENING and is retried later.
-/// Sends only what screening needs (customer and application numbers): data
-/// minimisation towards a third party.
+/// Sends only what screening needs - the applicant's name and residential address,
+/// plus the references to correlate the result: data minimisation towards a third
+/// party (no contact details).
 /// </summary>
 public sealed class ScreeningProviderClient(HttpClient http, IOptions<ScreeningProviderOptions> options) : IScreeningProvider
 {
@@ -52,6 +53,16 @@ public sealed class ScreeningProviderClient(HttpClient http, IOptions<ScreeningP
                     customerNumber = request.CustomerNumber,
                     applicationNumber = request.ApplicationNumber,
                     requestId = request.RequestId,
+                    subject = new
+                    {
+                        firstName = request.FirstName,
+                        lastName = request.LastName,
+                        addressLine1 = request.AddressLine1,
+                        city = request.City,
+                        state = request.State,
+                        postalCode = request.PostalCode,
+                        countryCode = request.CountryCode
+                    },
                     lists = new[] { "AML", "SANCTIONS", "PEP" }
                 })
             };

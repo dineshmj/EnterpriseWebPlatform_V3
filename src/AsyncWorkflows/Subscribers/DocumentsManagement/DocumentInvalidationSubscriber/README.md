@@ -1,11 +1,18 @@
 # DocumentInvalidationSubscriber
 
-Kafka subscriber **owned by the Documents Management (DM) bounded context**, and DM's first. It performs the onboarding saga's **compensation** in DM: when KYC or Compliance rejects an onboarding application, the application's evidence documents are marked **INVALIDATED**. They are **retained, never deleted**, because audit and regulatory retention may require them. Business requirements: [DocumentsManagement-Requirements.md](../../../../Microservices/DocumentsManagement/doc/DocumentsManagement-Requirements.md). Topic contracts: [Integration-Event-Catalogue.md](../../../../../doc/Integration-Event-Catalogue.md).
+Kafka subscriber **owned by the Documents Management (DM) bounded context**, and DM's first. It keeps DM's evidence in step with the onboarding saga:
+
+- **Submission** (`onboarding.application.submitted`): the application's evidence documents become **ATTACHED**. From then on they are KYC records and can no longer be deleted.
+- **Rejection** (`onboarding.application.rejected`, by KYC, Compliance or Accounts): the saga's **compensation**. The evidence documents are marked **INVALIDATED**.
+
+In both cases the documents are **retained, never deleted**, because audit and regulatory retention (AML/CTF record keeping) require them. The project keeps its original name; it now handles both topics through `DocumentEvidenceProcessor`. Business requirements: [DocumentsManagement-Requirements.md](../../../../Microservices/DocumentsManagement/doc/DocumentsManagement-Requirements.md). Topic contracts: [Integration-Event-Catalogue.md](../../../../../doc/Integration-Event-Catalogue.md).
 
 ## Flow
 
 ```text
-KYC or Compliance rejects ─► CO: application REJECTED + outbox "OnboardingApplicationRejected"
+CO submits ─► outbox "OnboardingApplicationSubmitted" (evidence document IDs) ─► same path, POST /internal/v1/documents/attachments ─► Document.Attach
+
+KYC, Compliance or Accounts rejects ─► CO: application REJECTED + outbox "OnboardingApplicationRejected"
                               (names the evidence document IDs recorded at submission)
 onboarding.application.rejected
         │  (consumer group: documents-management.invalidation-subscriber; Kafka user: ewp-dm-invalidation-subscriber)
@@ -27,13 +34,14 @@ DM API: Inbox check ─► Document.Invalidate per document of the SAME branch �
 commit Kafka offset
 ```
 
-The worker holds no document rules: the `Document` aggregate does (idempotent invalidation, retention). It is a thin adapter on the shared reliable consume loop (`AsyncWorkflows.Infrastructure.Subscribers`) and supplies only `DocumentInvalidationProcessor`.
+The worker holds no document rules: the `Document` aggregate does (idempotent invalidation, retention). It is a thin adapter on the shared reliable consume loop (`AsyncWorkflows.Infrastructure.Subscribers`) and supplies only `DocumentEvidenceProcessor`.
 
 ## Delivery guarantees
 
 | Situation | Behaviour |
 |---|---|
-| Redelivery, or the same rejection published twice | Harmless. DM records each `MessageId` in its Inbox (consumer `documents-management.invalidation`) in the same transaction, and invalidating an invalidated document changes nothing. |
+| Redelivery, or the same submission / rejection published twice | Harmless. DM records each `MessageId` in its Inbox (consumers `documents-management.attachment` and `documents-management.invalidation`) in the same transaction; attaching an attached document, or invalidating an invalidated one, changes nothing. |
+| The rejection overtakes the submission | The documents are INVALIDATED; the late submission leaves them INVALIDATED (evidence is never revived). |
 | A named document does not exist (e.g. DM's database was recreated) | Counted as *not found*; the message is still processed. |
 | A named document belongs to another branch | **Not** invalidated (an event never reaches across branches) and logged as a warning. |
 | No evidence documents in the event (an application submitted before evidence was recorded) | Processed as "nothing to do"; the Inbox records it. |

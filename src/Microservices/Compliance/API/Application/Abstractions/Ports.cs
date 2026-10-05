@@ -54,7 +54,18 @@ public sealed class UniqueConstraintViolationException(string message, Exception
 // ---------------------------------------------------------------------------- Screening
 
 /// <summary>What the Compliance context sends to the external screening provider (minimal data).</summary>
-public sealed record ScreeningRequest(string CustomerNumber, string ApplicationNumber, Guid RequestId);
+/// <summary>What is screened: the applicant's name and residential address (the lists match on these).</summary>
+public sealed record ScreeningRequest(
+    string CustomerNumber,
+    string ApplicationNumber,
+    Guid RequestId,
+    string FirstName,
+    string LastName,
+    string? AddressLine1,
+    string? City,
+    string? State,
+    string? PostalCode,
+    string? CountryCode);
 
 /// <summary>The provider's verdict.</summary>
 public sealed record ScreeningResponse(ScreeningOutcome Outcome, string Provider, string Reference);

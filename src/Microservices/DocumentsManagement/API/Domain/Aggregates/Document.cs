@@ -15,8 +15,10 @@ namespace EnterpriseWebPlatform.DocumentsManagement.Domain.Aggregates;
 ///  - Every new document belongs to a branch; a document without a resource
 ///    branch (legacy data only) is accessible to nobody (fail closed).
 ///  - The content of a stored document never changes. Its lifecycle does: AVAILABLE,
-///    then possibly INVALIDATED (business compensation). An invalidated document is
-///    retained for audit / regulatory retention and can no longer be removed.
+///    then ATTACHED (submitted as evidence of an application) and/or INVALIDATED
+///    (business compensation). Attached and invalidated documents are records kept for
+///    audit / regulatory retention (AML/CTF): they can no longer be removed, and an
+///    invalidated document never becomes attached again.
 /// </summary>
 public sealed class Document : AggregateRoot
 {
@@ -60,9 +62,14 @@ public sealed class Document : AggregateRoot
     /// <summary>Why the document was invalidated, e.g. which rejected application it belonged to.</summary>
     public string? InvalidationReason { get; private set; }
 
+    public DateTimeOffset? AttachedAt { get; private set; }
+
+    /// <summary>What the document is evidence of, e.g. the onboarding application number.</summary>
+    public string? AttachedTo { get; private set; }
+
     /// <summary>
     /// Only an AVAILABLE document may be removed (cleanup of an upload that never became
-    /// part of a submitted application). An invalidated document is retained.
+    /// part of a submitted application). Attached and invalidated documents are retained.
     /// </summary>
     public bool CanBeRemoved => Status == DocumentStatus.Available;
 
@@ -120,6 +127,31 @@ public sealed class Document : AggregateRoot
 
         return document;
     }
+
+    /// <summary>
+    /// Records that the document was submitted as evidence (e.g. of an onboarding
+    /// application): from now on it is retained. Idempotent: returns false when it is
+    /// already attached, or already invalidated (a late fact never revives evidence).
+    /// </summary>
+    public bool Attach(string attachedTo, DateTimeOffset now)
+    {
+        if (string.IsNullOrWhiteSpace(attachedTo))
+            throw new DomainRuleViolationException("What the document is attached to is required.");
+
+        if (Status != DocumentStatus.Available)
+            return false;
+
+        Status = DocumentStatus.Attached;
+        AttachedAt = now;
+        AttachedTo = attachedTo.Trim()[..Math.Min(attachedTo.Trim().Length, MaxAttachedToLength)];
+        UpdatedAt = now;
+        Version++;
+
+        RaiseDomainEvent(new DocumentAttachedDomainEvent(Id, ResourceBranch?.Value ?? string.Empty, AttachedTo, now));
+        return true;
+    }
+
+    public const int MaxAttachedToLength = 100;
 
     /// <summary>
     /// Marks the document as no longer valid evidence (business compensation, e.g. its

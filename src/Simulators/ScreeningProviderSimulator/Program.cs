@@ -66,7 +66,9 @@ app.MapPost("/v1/screenings", async (HttpContext http, ScreeningRequest request,
         outcome == "CLEAR" ? [] : [new ScreeningMatch(outcome == "MATCH" ? "SANCTIONS" : "PEP", outcome == "MATCH" ? 0.97 : 0.71)],
         DateTimeOffset.UtcNow);
 
-    log.LogInformation("Screened {Customer} ({Application}): {Outcome}.", request.CustomerNumber, request.ApplicationNumber, outcome);
+    log.LogInformation("Screened {Name} ({Country}) - {Customer}, {Application}: {Outcome}.",
+        request.Subject is null ? "(no subject)" : $"{request.Subject.FirstName} {request.Subject.LastName}",
+        request.Subject?.CountryCode ?? "-", request.CustomerNumber, request.ApplicationNumber, outcome);
     return Results.Ok(response);
 });
 
@@ -105,7 +107,10 @@ sealed record SimulatorState(Behaviour Behaviour, string? ForcedOutcome, int Slo
 
 sealed record BehaviourChange(Behaviour Behaviour, string? ForcedOutcome);
 
-sealed record ScreeningRequest(string CustomerNumber, string ApplicationNumber, Guid RequestId, string[]? Lists);
+sealed record ScreeningRequest(string CustomerNumber, string ApplicationNumber, Guid RequestId, string[]? Lists, ScreeningSubject? Subject);
+
+// Who is screened: real providers match the lists on name and address.
+sealed record ScreeningSubject(string? FirstName, string? LastName, string? AddressLine1, string? City, string? State, string? PostalCode, string? CountryCode);
 
 sealed record ScreeningMatch(string List, double Score);
 

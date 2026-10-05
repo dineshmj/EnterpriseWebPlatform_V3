@@ -54,6 +54,7 @@ public sealed class CoreBankingClient(HttpClient http, IOptions<CoreBankingOptio
                 Content = JsonContent.Create(new
                 {
                     customerNumber = request.CustomerNumber,
+                    accountName = request.AccountName,
                     branchCode = request.BranchCode,
                     product = request.Product.ToCode()
                 })

@@ -25,6 +25,7 @@ public static class DependencyInjection
 
         services.AddScoped<
             Onboarding.Commands.SubmitApplication.SubmitOnboardingApplicationCommandHandler>();
+        services.AddScoped<Onboarding.CustomerLifecycleSync>();
         services.AddScoped<
             Onboarding.Commands.RecordKycOutcome.RecordKycOutcomeCommandHandler>();
         services.AddScoped<

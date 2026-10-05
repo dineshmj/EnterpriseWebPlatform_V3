@@ -27,6 +27,7 @@ namespace EnterpriseWebPlatform.Compliance.Api.Domain.Aggregates;
 ///     unassigned case assigns it. The assignee may release it while it is open.
 ///  5. A rejection and a hold always carry a written reason.
 ///  6. Decision metadata exists exactly when the case is final.
+///  7. The case screens the applicant as KYC verified them (a snapshot, never refreshed).
 /// </summary>
 public sealed class ComplianceCase : AggregateRoot
 {
@@ -35,6 +36,7 @@ public sealed class ComplianceCase : AggregateRoot
         ApplicationNumber = null!;
         CustomerNumber = null!;
         BranchCode = null!;
+        Applicant = null!;
     }
 
     private ComplianceCase(
@@ -43,12 +45,14 @@ public sealed class ComplianceCase : AggregateRoot
         string customerNumber,
         long kycCaseId,
         BranchCode branchCode,
+        Applicant applicant,
         string? initiatedByUserId,
         string? kycIdentityDecidedByUserId,
         string? kycDocumentDecidedByUserId,
         DateTimeOffset now)
     {
         ApplicationRef = applicationRef;
+        Applicant = applicant;
         ApplicationNumber = applicationNumber;
         CustomerNumber = customerNumber;
         KycCaseId = kycCaseId;
@@ -74,6 +78,9 @@ public sealed class ComplianceCase : AggregateRoot
     public long KycCaseId { get; private set; }
 
     public BranchCode BranchCode { get; private set; }
+
+    /// <summary>The applicant as KYC verified them: what is screened and what the officer sees.</summary>
+    public Applicant Applicant { get; private set; }
 
     public string? InitiatedByUserId { get; private set; }
 
@@ -125,12 +132,14 @@ public sealed class ComplianceCase : AggregateRoot
         string customerNumber,
         long kycCaseId,
         BranchCode branchCode,
+        Applicant applicant,
         string? initiatedByUserId,
         string? kycIdentityDecidedByUserId,
         string? kycDocumentDecidedByUserId,
         DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(branchCode);
+        ArgumentNullException.ThrowIfNull(applicant);
 
         if (applicationRef == Guid.Empty)
             throw new DomainRuleViolationException("A valid onboarding application reference is required.");
@@ -147,6 +156,7 @@ public sealed class ComplianceCase : AggregateRoot
             customerNumber.Trim(),
             kycCaseId,
             branchCode,
+            applicant,
             Normalize(initiatedByUserId),
             Normalize(kycIdentityDecidedByUserId),
             Normalize(kycDocumentDecidedByUserId),

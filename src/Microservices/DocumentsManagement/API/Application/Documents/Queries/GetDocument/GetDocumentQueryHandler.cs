@@ -24,7 +24,9 @@ public sealed class GetDocumentQueryHandler(IDocumentRepository repository)
             document.Version,
             document.Status.ToCode(),
             document.InvalidatedAt,
-            document.InvalidationReason);
+            document.InvalidationReason,
+            document.AttachedAt,
+            document.AttachedTo);
     }
 }
 
@@ -39,4 +41,6 @@ public sealed record DocumentDetailsDto(
     long Version,
     string Status,
     DateTimeOffset? InvalidatedAt,
-    string? InvalidationReason);
+    string? InvalidationReason,
+    DateTimeOffset? AttachedAt,
+    string? AttachedTo);

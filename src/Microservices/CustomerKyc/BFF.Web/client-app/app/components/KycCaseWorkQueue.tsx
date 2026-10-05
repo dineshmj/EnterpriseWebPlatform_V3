@@ -12,6 +12,7 @@ import { Alert, EmptyState, StatusBadge } from './ui/feedback';
 export interface KycCase {
   kycCaseId: number;
   customerNumber: string;
+  customerName?: string;
   applicationNumber?: string;
   branchCode?: string;
   assignedOfficerUserId?: string | null;
@@ -80,7 +81,10 @@ export function KycCaseWorkQueue({ title, subtitle, description }: Props) {
                     </Link>
                     <div className="text-xs text-ink-faint">Case #{item.kycCaseId}</div>
                   </Td>
-                  <Td className="font-mono text-[13px]">{item.customerNumber}</Td>
+                  <Td>
+                    <div className="font-medium text-ink">{item.customerName ?? '—'}</div>
+                    <div className="font-mono text-xs text-ink-faint">{item.customerNumber}</div>
+                  </Td>
                   <Td><StatusBadge status={item.identityVerificationStatus} /></Td>
                   <Td><StatusBadge status={item.documentVerificationStatus} /></Td>
                   <Td className="text-ink-muted">{item.assignedOfficerUserId ? `${item.assignedOfficerUserId.slice(0, 8)}…` : 'Unassigned'}</Td>

@@ -52,7 +52,15 @@ public sealed class KycCaseQueries(KycDbContext db) : IKycCaseQueries
                 x.CreatedAt,
                 x.UpdatedAt,
                 x.BranchCode.Value,
-                x.AssignedOfficerUserId))
+                x.AssignedOfficerUserId,
+                x.Applicant.FirstName + " " + x.Applicant.LastName,
+                new ApplicantAddress(
+                    x.Applicant.AddressLine1,
+                    x.Applicant.AddressLine2,
+                    x.Applicant.City,
+                    x.Applicant.State,
+                    x.Applicant.PostalCode,
+                    x.Applicant.CountryCode)))
             .ToListAsync(cancellationToken);
 
         return new PagedKycCasesResponse(items, pageNumber, pageSize, totalCount);
@@ -81,7 +89,17 @@ public sealed class KycCaseQueries(KycDbContext db) : IKycCaseQueries
                 x.CreatedAt,
                 x.UpdatedAt,
                 x.BranchCode.Value,
-                x.AssignedOfficerUserId))
+                x.AssignedOfficerUserId,
+                x.Applicant.FirstName + " " + x.Applicant.LastName,
+                new ApplicantAddress(
+                    x.Applicant.AddressLine1,
+                    x.Applicant.AddressLine2,
+                    x.Applicant.City,
+                    x.Applicant.State,
+                    x.Applicant.PostalCode,
+                    x.Applicant.CountryCode),
+                x.IdentityProofDocumentId,
+                x.TaxProofDocumentId))
             .SingleOrDefaultAsync(cancellationToken);
 
     // BranchCode is stored through a value converter, so the comparison is made

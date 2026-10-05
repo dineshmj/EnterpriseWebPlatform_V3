@@ -94,7 +94,17 @@ internal static class KycIntegrationEventMapper
                         causedBy,
                         kycCase.BranchCode.Value,
                         kycCase.IdentityVerification.DecidedByUserId,
-                        kycCase.DocumentVerification.DecidedByUserId));
+                        kycCase.DocumentVerification.DecidedByUserId,
+                        new ApplicantPayload(
+                            kycCase.Applicant.FirstName,
+                            kycCase.Applicant.LastName,
+                            new AddressPayload(
+                                kycCase.Applicant.AddressLine1,
+                                kycCase.Applicant.AddressLine2,
+                                kycCase.Applicant.City,
+                                kycCase.Applicant.State,
+                                kycCase.Applicant.PostalCode,
+                                kycCase.Applicant.CountryCode))));
                 break;
 
             // Internal facts (ReBAC assignment) with no published contract. Listed

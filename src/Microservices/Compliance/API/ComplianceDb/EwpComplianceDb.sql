@@ -20,6 +20,17 @@ CREATE TABLE compliance_cases (
     application_number VARCHAR(30) NOT NULL,
     customer_number VARCHAR(100) NOT NULL,
 
+    -- The applicant AS KYC VERIFIED THEM (snapshot from kyc.case.approved): what is
+    -- screened and what the officer sees. Never refreshed; no contact details.
+    applicant_first_name VARCHAR(100) NOT NULL,
+    applicant_last_name VARCHAR(100) NOT NULL,
+    applicant_address_line1 VARCHAR(200) NULL,
+    applicant_address_line2 VARCHAR(200) NULL,
+    applicant_city VARCHAR(100) NULL,
+    applicant_state VARCHAR(100) NULL,
+    applicant_postal_code VARCHAR(20) NULL,
+    applicant_country_code CHAR(2) NULL,
+
     -- The KYC case that approved the application (Customer KYC, by value).
     kyc_case_id BIGINT NOT NULL,
 

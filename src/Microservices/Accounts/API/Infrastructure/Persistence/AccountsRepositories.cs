@@ -105,7 +105,8 @@ public sealed class AccountsQueries(AccountsDbContext db) : IAccountsQueries
             x.OpenedAt,
             x.FailureReason,
             x.CreatedAt,
-            x.UpdatedAt));
+            x.UpdatedAt,
+            x.HolderName.FirstName + " " + x.HolderName.LastName));
 
     private static IQueryable<AccountDetail> ProjectAccounts(IQueryable<Account> query) =>
         query.Select(x => new AccountDetail(
@@ -117,5 +118,6 @@ public sealed class AccountsQueries(AccountsDbContext db) : IAccountsQueries
             x.Product.ToCode(),
             x.Status.ToCode(),
             x.CoreBankingReference,
-            x.OpenedAt));
+            x.OpenedAt,
+            x.HolderName.FirstName + " " + x.HolderName.LastName));
 }

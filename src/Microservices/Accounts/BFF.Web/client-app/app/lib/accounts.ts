@@ -5,6 +5,8 @@ export interface AccountApplication {
   accountApplicationId: number;
   applicationNumber: string;
   customerNumber: string;
+  /** The applicant's name as Compliance cleared it: the future account holder. */
+  customerName: string;
   complianceCaseId: number;
   branchCode: string;
   status: string;
@@ -32,6 +34,8 @@ export interface Account {
   accountNumber: string;
   bsb: string;
   customerNumber: string;
+  /** The name the account is held in. */
+  holderName: string;
   branchCode: string;
   product: string;
   status: string;

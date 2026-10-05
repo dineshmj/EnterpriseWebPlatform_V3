@@ -110,7 +110,7 @@ public sealed class OnboardingApplication : AggregateRoot
         SubmittedAt = now;
 
         RaiseDomainEvent(new OnboardingApplicationSubmittedDomainEvent(
-            Id, ApplicationRef, CustomerId, ApplicationNumber.Value, BranchCode.Value, now));
+            Id, ApplicationRef, CustomerId, ApplicationNumber.Value, BranchCode.Value, [.. _evidenceDocuments], now));
 
         SetStatus(OnboardingApplicationStatus.Submitted, now);
     }

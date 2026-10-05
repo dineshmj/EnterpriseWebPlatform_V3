@@ -20,6 +20,8 @@ namespace EnterpriseWebPlatform.CustomerKyc.Api.Domain.Aggregates;
 ///     is assigned to the officer who takes it - by claiming it, or implicitly by
 ///     making the first decision. The assignee may release it before it is final.
 ///  7. The final decision metadata exists exactly when the case is terminal.
+///  8. The case is opened with what it verifies: the applicant as submitted (a snapshot,
+///     never refreshed) and exactly the two evidence documents of the application.
 /// </summary>
 public sealed class KycCase : AggregateRoot
 {
@@ -29,6 +31,7 @@ public sealed class KycCase : AggregateRoot
         ApplicationNumber = null!;
         CustomerNumber = null!;
         BranchCode = null!;
+        Applicant = null!;
         IdentityVerification = null!;
         DocumentVerification = null!;
     }
@@ -38,6 +41,9 @@ public sealed class KycCase : AggregateRoot
         string applicationNumber,
         string customerNumber,
         BranchCode branchCode,
+        Applicant applicant,
+        Guid identityProofDocumentId,
+        Guid taxProofDocumentId,
         string? initiatedByUserId,
         DateTimeOffset now)
     {
@@ -45,6 +51,9 @@ public sealed class KycCase : AggregateRoot
         ApplicationNumber = applicationNumber;
         CustomerNumber = customerNumber;
         BranchCode = branchCode;
+        Applicant = applicant;
+        IdentityProofDocumentId = identityProofDocumentId;
+        TaxProofDocumentId = taxProofDocumentId;
         InitiatedByUserId = initiatedByUserId;
         Status = KycCaseStatus.PendingReview;
         IdentityVerification = VerificationStage.Pending();
@@ -65,6 +74,15 @@ public sealed class KycCase : AggregateRoot
 
     /// <summary>ABAC: the branch the application was opened in.</summary>
     public BranchCode BranchCode { get; private set; }
+
+    /// <summary>The applicant as submitted: what the officer verifies the evidence against.</summary>
+    public Applicant Applicant { get; private set; }
+
+    /// <summary>The identity proof submitted with THIS application (Documents Management ID).</summary>
+    public Guid IdentityProofDocumentId { get; private set; }
+
+    /// <summary>The tax proof submitted with THIS application (Documents Management ID).</summary>
+    public Guid TaxProofDocumentId { get; private set; }
 
     public KycCaseStatus Status { get; private set; }
 
@@ -99,10 +117,21 @@ public sealed class KycCase : AggregateRoot
         string applicationNumber,
         string customerNumber,
         BranchCode branchCode,
+        Applicant applicant,
+        Guid identityProofDocumentId,
+        Guid taxProofDocumentId,
         string? initiatedByUserId,
         DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(branchCode);
+        ArgumentNullException.ThrowIfNull(applicant);
+
+        // Fail closed: a case without its evidence could only guess which documents to review.
+        if (identityProofDocumentId == Guid.Empty || taxProofDocumentId == Guid.Empty)
+            throw new DomainRuleViolationException("The application's identity proof and tax proof documents are required.");
+
+        if (identityProofDocumentId == taxProofDocumentId)
+            throw new DomainRuleViolationException("The identity proof and the tax proof must be different documents.");
 
         if (applicationRef == Guid.Empty)
             throw new DomainRuleViolationException("A valid onboarding application reference is required.");
@@ -118,6 +147,9 @@ public sealed class KycCase : AggregateRoot
             applicationNumber.Trim(),
             customerNumber.Trim(),
             branchCode,
+            applicant,
+            identityProofDocumentId,
+            taxProofDocumentId,
             string.IsNullOrWhiteSpace(initiatedByUserId) ? null : initiatedByUserId.Trim(),
             now);
 

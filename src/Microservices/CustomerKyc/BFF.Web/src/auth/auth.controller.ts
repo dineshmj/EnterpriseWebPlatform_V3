@@ -40,6 +40,18 @@ export class AuthController {
     return res.redirect(returnUrl);
   }
 
+  /**
+   * The signed-in officer, so the MFE can explain up front why it will not let them act
+   * (assigned to another officer, separation of duties). Tokens never leave the BFF; the
+   * KYC API still makes every authorization decision.
+   */
+  @Get('user')
+  user(@Req() req: Request, @Res() res: Response) {
+    const user = req.session.user;
+    if (!user) return res.status(401).json({ message: 'Not signed in.' });
+    return res.json({ sub: user.subject, name: user.name, branch: user.branch });
+  }
+
   @Get('csrf')
   csrf(@Req() req: Request) {
     req.session.csrfToken ??= randomBytes(32).toString('base64url');

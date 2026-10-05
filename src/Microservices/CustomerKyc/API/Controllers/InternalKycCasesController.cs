@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 
 using EnterpriseWebPlatform.CustomerKyc.Api.Application.Commands.OpenKycCase;
 using EnterpriseWebPlatform.CustomerKyc.Api.Domain.Exceptions;
+using EnterpriseWebPlatform.CustomerKyc.Api.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.CustomerKyc.Api.Controllers;
 
@@ -25,6 +26,23 @@ public sealed class InternalKycCasesController(OpenKycCaseCommandHandler openKyc
         OpenKycCaseResult result;
         try
         {
+            var address = request.Applicant?.ResidentialAddress;
+            var applicant = Applicant.Create(
+                request.Applicant?.FirstName,
+                request.Applicant?.LastName,
+                address?.AddressLine1,
+                address?.AddressLine2,
+                address?.City,
+                address?.State,
+                address?.PostalCode,
+                address?.CountryCode);
+
+            Guid EvidenceOfType(string documentType) =>
+                request.EvidenceDocuments?
+                    .Where(x => string.Equals(x.DocumentType, documentType, StringComparison.OrdinalIgnoreCase))
+                    .Select(x => x.DocumentId)
+                    .SingleOrDefault() ?? Guid.Empty;
+
             result = await openKycCaseHandler.HandleAsync(
                 new OpenKycCaseCommand(
                     request.ApplicationRef,
@@ -34,12 +52,20 @@ public sealed class InternalKycCasesController(OpenKycCaseCommandHandler openKyc
                     request.InitiatedByUserId,
                     request.WorkflowId,
                     request.CorrelationId,
-                    request.CausationId),
+                    request.CausationId,
+                    applicant,
+                    EvidenceOfType("KYCProof"),
+                    EvidenceOfType("TaxProof")),
                 cancellationToken);
         }
         catch (DomainRuleViolationException ex)
         {
             return ValidationProblem(ex.Message);
+        }
+        catch (InvalidOperationException)
+        {
+            // SingleOrDefault: more than one document of a type.
+            return ValidationProblem("The application names more than one document of the same type.");
         }
 
         var response = new

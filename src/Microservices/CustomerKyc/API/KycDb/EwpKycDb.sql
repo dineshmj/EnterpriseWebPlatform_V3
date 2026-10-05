@@ -26,6 +26,23 @@ CREATE TABLE IF NOT EXISTS kyc_cases (
     -- applications and therefore several KYC cases over time.
     customer_number VARCHAR(100) NOT NULL,
 
+    -- The applicant AS SUBMITTED (snapshot from onboarding.application.submitted):
+    -- the identity the officer verifies the evidence against. Never refreshed, so
+    -- the case keeps showing what was verified. No contact details (not needed).
+    applicant_first_name VARCHAR(100) NOT NULL,
+    applicant_last_name VARCHAR(100) NOT NULL,
+    applicant_address_line1 VARCHAR(200) NULL,
+    applicant_address_line2 VARCHAR(200) NULL,
+    applicant_city VARCHAR(100) NULL,
+    applicant_state VARCHAR(100) NULL,
+    applicant_postal_code VARCHAR(20) NULL,
+    applicant_country_code CHAR(2) NULL,
+
+    -- Exactly the evidence submitted with THIS application (Documents Management
+    -- IDs). The officer reviews these documents, never "the latest" of the customer.
+    identity_proof_document_id UUID NOT NULL,
+    tax_proof_document_id UUID NOT NULL,
+
     -- Overall KYC case status. This becomes APPROVED only after
     -- all mandatory verification stages have been approved.
     status VARCHAR(50) NOT NULL,

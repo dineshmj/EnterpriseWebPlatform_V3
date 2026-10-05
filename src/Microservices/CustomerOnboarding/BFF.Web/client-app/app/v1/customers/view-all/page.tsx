@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { MfeShell, publishWorkspaceContext, replacePersistentContext, type WorkspaceContext } from '../../../components/MfeShell';
 import { getJson } from '../../../lib/api';
-import { ArrowRight, UserPlus, Users } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Hourglass, UserPlus, Users } from 'lucide-react';
 import { Button, buttonVariants } from '../../../components/ui/button';
 import { Card, CardHeader } from '../../../components/ui/card';
 import { Table, Td, Th } from '../../../components/ui/data';
@@ -19,6 +19,16 @@ interface Customer {
   email: string;
   phoneNumber: string;
   status: string;
+}
+
+/** Only a prospect can start onboarding: the Customer Onboarding API enforces it; the grid only reflects it. */
+function onboardingState(status: string): 'can-start' | 'in-progress' | 'onboarded' | 'unavailable' {
+  switch (status.toUpperCase()) {
+    case 'PROSPECT': return 'can-start';
+    case 'ONBOARDING': return 'in-progress';
+    case 'ACTIVE': return 'onboarded';
+    default: return 'unavailable';
+  }
 }
 
 interface Page {
@@ -52,6 +62,8 @@ export default function CustomersPage() {
   }, []);
 
   function startOnboarding(customer: Customer) {
+    if (onboardingState(customer.status) !== 'can-start') return;
+
     const previousContext = workspaceContextRef.current;
 
     const previousCustomerId = previousContext?.persistentContext.find(
@@ -89,7 +101,7 @@ export default function CustomersPage() {
         <CardHeader
           icon={<Users />}
           title="Customer directory"
-          description="Customers of your branch. Start an onboarding application for an existing customer, or onboard a new one."
+          description="Customers of your branch. Onboarding can start for a prospect (new, or after a rejected application); onboarded customers and those with an application in progress are read-only."
           actions={
             <Link className={buttonVariants({ variant: 'accent', size: 'sm' })} href="/v1/onboarding/applications/view-all">
               <UserPlus aria-hidden="true" />New customer
@@ -122,9 +134,18 @@ export default function CustomersPage() {
                   <Td className="text-ink-muted">{c.email}</Td>
                   <Td><StatusBadge status={c.status} /></Td>
                   <Td className="text-right">
-                    <Button variant="secondary" size="sm" onClick={() => startOnboarding(c)}>
-                      Start onboarding<ArrowRight aria-hidden="true" />
-                    </Button>
+                    {onboardingState(c.status) === 'can-start' && (
+                      <Button variant="secondary" size="sm" onClick={() => startOnboarding(c)}>
+                        Start onboarding<ArrowRight aria-hidden="true" />
+                      </Button>
+                    )}
+                    {onboardingState(c.status) === 'in-progress' && (
+                      <span className="inline-flex items-center gap-1.5 text-[13px] text-ink-muted"><Hourglass className="size-4" aria-hidden="true" />Application in progress</span>
+                    )}
+                    {onboardingState(c.status) === 'onboarded' && (
+                      <span className="inline-flex items-center gap-1.5 text-[13px] text-success-700"><CheckCircle2 className="size-4" aria-hidden="true" />Onboarded</span>
+                    )}
+                    {onboardingState(c.status) === 'unavailable' && <span className="text-[13px] text-ink-faint">—</span>}
                   </Td>
                 </tr>
               ))}

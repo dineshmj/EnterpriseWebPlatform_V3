@@ -34,7 +34,23 @@ public sealed record OpenKycCaseRequest(
     string? InitiatedByUserId,
     Guid? WorkflowId,
     Guid? CorrelationId,
-    Guid CausationId);
+    Guid CausationId,
+    ApplicantContract? Applicant,
+    IReadOnlyList<EvidenceDocumentContract>? EvidenceDocuments);
+
+/// <summary>The applicant as submitted to Customer Onboarding (name and residential address).</summary>
+public sealed record ApplicantContract(string? FirstName, string? LastName, AddressContract? ResidentialAddress);
+
+public sealed record AddressContract(
+    string? AddressLine1,
+    string? AddressLine2,
+    string? City,
+    string? State,
+    string? PostalCode,
+    string? CountryCode);
+
+/// <summary>A Documents Management document submitted as evidence (DocumentType KYCProof / TaxProof).</summary>
+public sealed record EvidenceDocumentContract(Guid DocumentId, string? DocumentType);
 
 public static class KycVerificationStageMapping
 {

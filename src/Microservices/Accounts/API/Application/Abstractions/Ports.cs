@@ -64,7 +64,7 @@ public sealed class UniqueConstraintViolationException(string message, Exception
 /// onboarding ApplicationRef) makes a repeated request return the SAME account, so a
 /// retry after a timeout can never open a second account.
 /// </summary>
-public sealed record OpenAccountRequest(Guid IdempotencyKey, string CustomerNumber, string BranchCode, AccountProduct Product);
+public sealed record OpenAccountRequest(Guid IdempotencyKey, string CustomerNumber, string AccountName, string BranchCode, AccountProduct Product);
 
 /// <summary>The account the core-banking system opened.</summary>
 public sealed record OpenAccountResponse(string AccountNumber, string Bsb, string CoreBankingReference);

@@ -95,6 +95,13 @@ public sealed class DocumentsManagementDbContext(DbContextOptions<DocumentsManag
                 .HasColumnName("invalidation_reason")
                 .HasMaxLength(Document.MaxInvalidationReasonLength);
 
+            entity.Property(x => x.AttachedAt)
+                .HasColumnName("attached_at");
+
+            entity.Property(x => x.AttachedTo)
+                .HasColumnName("attached_to")
+                .HasMaxLength(Document.MaxAttachedToLength);
+
             entity.Property(x => x.DocumentType)
                 .HasColumnName("document_type")
                 .HasMaxLength(100);

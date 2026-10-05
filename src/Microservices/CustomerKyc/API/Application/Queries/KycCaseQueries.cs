@@ -41,7 +41,9 @@ public sealed record KycCaseListItem(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     string BranchCode,
-    string? AssignedOfficerUserId);
+    string? AssignedOfficerUserId,
+    string CustomerName,
+    ApplicantAddress ResidentialAddress);
 
 public sealed record PagedKycCasesResponse(
     IReadOnlyList<KycCaseListItem> Items,
@@ -69,4 +71,17 @@ public sealed record KycCaseDetail(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     string BranchCode,
-    string? AssignedOfficerUserId);
+    string? AssignedOfficerUserId,
+    string CustomerName,
+    ApplicantAddress ResidentialAddress,
+    Guid IdentityProofDocumentId,
+    Guid TaxProofDocumentId);
+
+/// <summary>The applicant's residential address as submitted (snapshot).</summary>
+public sealed record ApplicantAddress(
+    string? AddressLine1,
+    string? AddressLine2,
+    string? City,
+    string? State,
+    string? PostalCode,
+    string? CountryCode);

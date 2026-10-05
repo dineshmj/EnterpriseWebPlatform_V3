@@ -8,6 +8,7 @@ using EnterpriseWebPlatform.DocumentsManagement.Application.Abstractions.Storage
 using EnterpriseWebPlatform.DocumentsManagement.Application.Documents.Commands.UploadDocument;
 using EnterpriseWebPlatform.DocumentsManagement.Application.Documents.Queries.GetDocument;
 using EnterpriseWebPlatform.DocumentsManagement.Application.Documents.Queries.GetDocuments;
+using EnterpriseWebPlatform.DocumentsManagement.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.DocumentsManagement.API.Controllers;
 
@@ -138,12 +139,13 @@ public sealed class DocumentsController(
         if (!resourceAuthorization.CanDelete(document, User, Request))
             return Forbid();
 
-        // Retention over deletion: an invalidated document is kept for audit.
+        // Retention over deletion: evidence of a submitted application, and any
+        // invalidated document, is kept for audit (AML/CTF record keeping).
         if (!document.CanBeRemoved)
             return Problem(
                 statusCode: StatusCodes.Status409Conflict,
                 title: "Document is retained",
-                detail: "An invalidated document is retained for audit and cannot be deleted.");
+                detail: $"The document is {document.Status.ToCode()}: it is retained for audit and cannot be deleted.");
 
         repository.Remove(document);
         await repository.SaveChangesAsync(cancellationToken);

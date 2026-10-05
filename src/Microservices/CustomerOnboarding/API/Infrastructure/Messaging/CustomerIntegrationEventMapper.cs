@@ -68,11 +68,26 @@ internal sealed class CustomerIntegrationEventMapper(CustomerDbContext db)
                     var causationId = ResolveCausationId(
                         submitted.ApplicationId, context.CausationId, lastMessageIdByAggregate);
 
-                    var customerNumber = await db.Customers
+                    var customer = await db.Customers
                         .AsNoTracking()
                         .Where(x => x.Id == submitted.CustomerId)
-                        .Select(x => x.CustomerNumber.Value)
+                        .Select(x => new { CustomerNumber = x.CustomerNumber.Value, x.Name.FirstName, x.Name.LastName })
                         .SingleAsync(cancellationToken);
+                    var customerNumber = customer.CustomerNumber;
+
+                    // The primary residential address: the one KYC verifies and Compliance screens.
+                    var address = await db.CustomerAddresses
+                        .AsNoTracking()
+                        .Where(x => x.CustomerId == submitted.CustomerId && x.AddressType == AddressType.Residential)
+                        .OrderByDescending(x => x.IsPrimary)
+                        .Select(x => new AddressReference(
+                            x.Address.AddressLine1,
+                            x.Address.AddressLine2,
+                            x.Address.City,
+                            x.Address.State,
+                            x.Address.PostalCode,
+                            x.Address.CountryCode))
+                        .FirstOrDefaultAsync(cancellationToken);
 
                     var integrationEvent = new OnboardingApplicationSubmittedIntegrationEvent(
                         submitted.ApplicationId,
@@ -80,7 +95,9 @@ internal sealed class CustomerIntegrationEventMapper(CustomerDbContext db)
                         submitted.CustomerId,
                         submitted.ApplicationNumber,
                         customerNumber,
-                        submitted.BranchCode);
+                        submitted.BranchCode,
+                        [.. submitted.EvidenceDocuments.Select(x => new EvidenceDocumentReference(x.DocumentId, x.DocumentType))],
+                        new ApplicantReference(customer.FirstName, customer.LastName, address));
 
                     messages.Add(Envelope(
                         messageId, "OnboardingApplication", submitted.ApplicationId,

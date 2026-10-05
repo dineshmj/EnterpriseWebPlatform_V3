@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Persistence;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Aggregates;
+using EnterpriseWebPlatform.CustomerOnboarding.Domain.Enums;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence.Repositories;
 
@@ -50,6 +51,16 @@ public sealed class OnboardingApplicationRepository
             .OrderByDescending(x => x.CreatedAt)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
+    }
+
+    public Task<OnboardingApplication?> GetDraftForCustomerAsync(
+        long customerId,
+        CancellationToken cancellationToken = default)
+    {
+        return _dbContext.OnboardingApplications
+            .Where(x => x.CustomerId == customerId && x.Status == OnboardingApplicationStatus.Draft)
+            .OrderByDescending(x => x.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     public async Task AddAsync(

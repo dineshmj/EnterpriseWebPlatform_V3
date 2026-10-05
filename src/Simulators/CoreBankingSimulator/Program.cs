@@ -84,8 +84,8 @@ app.MapPost("/v1/accounts", async (HttpContext http, OpenAccountRequest request,
         request.Product ?? "EVERYDAY_TRANSACTION",
         DateTimeOffset.UtcNow));
 
-    log.LogInformation("Opened account {Bsb} {Account} ({Product}) for {Customer}, branch {Branch}.",
-        account.Bsb, account.AccountNumber, account.Product, request.CustomerNumber, request.BranchCode);
+    log.LogInformation("Opened account {Bsb} {Account} ({Product}) for {Customer} in the name of {AccountName}, branch {Branch}.",
+        account.Bsb, account.AccountNumber, account.Product, request.CustomerNumber, request.AccountName, request.BranchCode);
     return Results.Created($"/v1/accounts/{account.AccountNumber}", account);
 });
 
@@ -116,7 +116,7 @@ sealed record SimulatorState(Behaviour Behaviour, int SlowDelaySeconds);
 
 sealed record BehaviourChange(Behaviour Behaviour);
 
-sealed record OpenAccountRequest(string CustomerNumber, string? BranchCode, string? Product);
+sealed record OpenAccountRequest(string CustomerNumber, string? AccountName, string? BranchCode, string? Product);
 
 sealed record OpenedAccount(
     string AccountNumber,

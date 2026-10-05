@@ -19,7 +19,8 @@ public sealed record OpenAccountApplicationCommand(
     string? ComplianceApprovedByUserId,
     Guid? WorkflowId,
     Guid? CorrelationId,
-    Guid CausationId);
+    Guid CausationId,
+    HolderName HolderName);
 
 public sealed record OpenAccountApplicationResult(long AccountApplicationId, string Status, bool Created);
 
@@ -53,6 +54,7 @@ public sealed class OpenAccountApplicationCommandHandler(
                 command.CustomerNumber,
                 command.ComplianceCaseId,
                 BranchCode.Create(command.BranchCode),
+                command.HolderName,
                 command.InitiatedByUserId,
                 command.ComplianceApprovedByUserId,
                 clock.GetUtcNow());
