@@ -29,6 +29,21 @@ public static class KafkaTopicNames
 
     public const string ComplianceCaseRejected = "compliance.case.rejected";
 
+    public const string AccountApplicationCreated = "accounts.application.created";
+
+    public const string AccountApplicationRejected = "accounts.application.rejected";
+
+    public const string AccountOpened = "accounts.account.opened";
+
+    public const string AccountOpeningFailed = "accounts.account.opening.failed";
+
+    /// <summary>
+    /// Dead-letter topic of the Account Application Opening Subscriber (Accounts):
+    /// compliance.case.approved messages that can never open an account application.
+    /// </summary>
+    public const string AccountApplicationOpeningSubscriberDeadLetter =
+        "accounts.application-opening-subscriber.dlq";
+
     /// <summary>
     /// Dead-letter topic of the Compliance Case Opening Subscriber (Compliance):
     /// kyc.case.approved messages that can never open a compliance case.

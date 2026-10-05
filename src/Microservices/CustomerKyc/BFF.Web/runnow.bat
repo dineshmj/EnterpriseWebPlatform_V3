@@ -45,14 +45,14 @@ REM ============================================================
 
 set "KYC_BFF_PORT=33800"
 
-set "KYC_IDP_AUTHORITY=https://idp.dev.localhost:44392"
+set "KYC_IDP_AUTHORITY=https://idp.dev.localhost:46392"
 set "KYC_BFF_CLIENT_ID=CustomerKYC.Microservice.BFF.ClientID"
 set "KYC_BFF_CLIENT_SECRET=3ac91ab3-7ba0-4727-b4f7-36120bec10c5"
 
 set "KYC_BFF_CALLBACK_URL=https://kyc.dev.localhost:33800/api/auth/callback"
 set "KYC_BFF_POST_LOGOUT_REDIRECT_URI=https://kyc.dev.localhost:33800/signout-callback-oidc"
 
-set "KYC_API_BASE_URL=https://kyc-api.dev.localhost:44305"
+set "KYC_API_BASE_URL=https://kyc-api.dev.localhost:46305"
 
 set "KYC_BFF_SESSION_SECRET=8091a396-fdf8-4a2c-8535-18d8b3483fba"
 
@@ -60,7 +60,7 @@ REM ============================================================
 REM Documents Management M2M
 REM ============================================================
 
-set "KYC_DOCUMENTS_MANAGEMENT_IDP_AUTHORITY=https://idp.dev.localhost:44392"
+set "KYC_DOCUMENTS_MANAGEMENT_IDP_AUTHORITY=https://idp.dev.localhost:46392"
 set "KYC_DOCUMENTS_MANAGEMENT_M2M_CLIENT_ID=Kyc.BFF.To.DocumentsManagement.M2M.ClientID"
 set "KYC_DOCUMENTS_MANAGEMENT_M2M_CLIENT_SECRET=d1f3e5a2-7c4b-4e8f-9b6d-1a2c3e4f5b6a"
 set "KYC_DOCUMENTS_MANAGEMENT_API_BASE_URL=https://documents-management-api.dev.localhost:49486"

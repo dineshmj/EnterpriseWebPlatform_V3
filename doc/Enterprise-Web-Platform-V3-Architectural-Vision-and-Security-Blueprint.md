@@ -83,8 +83,8 @@ Used by every EWP V3 document:
 └───────┬──────────────────────────────┬─────────────────────────────┬───────────────────┘
         │ iframe                       │ iframe                      │ iframe
 ┌───────▼──────────────┐      ┌────────▼─────────────┐      ┌────────▼────────────────────┐
-│ Customer Onboarding  │      │ Customer KYC         │      │ Compliance MFE + BFF (.NET) │
-│ MFE + BFF (.NET)     │      │ MFE + BFF (NestJS)   │      │ Accounts · Payments (plan.) │
+│ Customer Onboarding  │      │ Customer KYC         │      │ Compliance, Accounts        │
+│ MFE + BFF (.NET)     │      │ MFE + BFF (NestJS)   │      │ MFE + BFF (.NET) · Payments │
 │   │ user token       │      │   │ user token       │      └─────────────────────────────┘
 │ CO API ─ EwpCustomerDb      │ KYC API ─ EwpKycDb   │
 │   │ Outbox            │      │   │ Outbox (in-proc) │
@@ -104,7 +104,7 @@ CustomerOutboxPublisher ──► Kafka ◄── KYC Outbox relay
                      OnboardingOutcomeSubscriber ──M2M──► CO API     (Compliance screening ──► external
                               │                                       provider, simulated)
                               ▼ (planned)
-              Accounts · Notifications (SignalR)
+              Notifications (SignalR)
 ```
 
 ---
@@ -116,7 +116,7 @@ CustomerOutboxPublisher ──► Kafka ◄── KYC Outbox relay
 | Customer Onboarding | Core | Present | [CustomerOnboarding-Requirements.md](../src/Microservices/CustomerOnboarding/doc/CustomerOnboarding-Requirements.md) |
 | Customer KYC | Core | Present (first slice) | [CustomerKyc-Requirements.md](../src/Microservices/CustomerKyc/doc/CustomerKyc-Requirements.md) |
 | Compliance | Core | Present | [Compliance-Requirements.md](../src/Microservices/Compliance/doc/Compliance-Requirements.md) |
-| Accounts | Core (simplified) | Planned | [Accounts-Requirements.md](../src/Microservices/Accounts/doc/Accounts-Requirements.md) |
+| Accounts | Core (simplified) | Present | [Accounts-Requirements.md](../src/Microservices/Accounts/doc/Accounts-Requirements.md) |
 | Payments | Core | Planned | [Payments-Requirements.md](../src/Microservices/Payments/doc/Payments-Requirements.md) |
 | Documents Management | Generic / supporting | Present | [DocumentsManagement-Requirements.md](../src/Microservices/DocumentsManagement/doc/DocumentsManagement-Requirements.md) |
 | Identity and access | Generic | Present | [IDP-Requirements.md](../src/IDP/doc/IDP-Requirements.md) |
@@ -208,7 +208,11 @@ The domain layer has no knowledge of HTTP, EF Core, Kafka or the IDP.
 | ComplianceCaseOpeningSubscriber | Compliance | .NET worker | — | Present |
 | Compliance BFF + MFE | Compliance | ASP.NET Core 10 + Next.js | — | Present |
 | Screening Provider Simulator | (external system stand-in) | ASP.NET Core 10 minimal API | — | Present |
-| Accounts, Payments, Notifications | — | — | own databases | Planned |
+| Accounts API (+ in-process Outbox relay, account-opening worker) | Accounts | ASP.NET Core 10 | `EwpAccountsDb` | Present |
+| AccountApplicationOpeningSubscriber | Accounts | .NET worker | — | Present |
+| Accounts BFF + MFE | Accounts | ASP.NET Core 10 + Next.js | — | Present |
+| Core Banking Simulator | (external system stand-in) | ASP.NET Core 10 minimal API | — | Present |
+| Payments, Notifications | — | — | own databases | Planned |
 
 An MFE and its BFF are one deployable: the MFE is a static export served by its BFF.
 
@@ -394,7 +398,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | M2M Client Credentials (pinned clients) | Present |
 | RBAC | Present |
 | ABAC | Present (department and clearance on KYC and Compliance actions; Compliance approval clearance by case risk; branch scope in CO, KYC, Compliance and DM; stage-specific KYC permissions) |
-| ReBAC | Present (owned by the contexts: CO managing agent, KYC and Compliance assigned officer; Accounts relationships planned with that context) |
+| ReBAC | Present (owned by the contexts: CO managing agent, KYC, Compliance and Accounts assigned officer) |
 | Separation of Duties | Present across contexts (initiator excluded from KYC and Compliance; KYC stage deciders excluded from Compliance; enforced in the aggregates, failing closed); Partial (four-eyes per KYC stage planned) |
 | Workflow-state authorization | Partial (CO aggregate transitions; KYC stages) |
 | Object-level authorization | Present (CO and DM: branch scope); Planned (KYC) |
@@ -406,7 +410,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Timeouts | Partial (Onboarding Outcome Subscriber: per attempt and total) |
 | Circuit breakers | Present on every subscriber (→ CO, KYC and Compliance APIs) and on the Compliance API → external screening provider (failure is never a pass; cases wait in SCREENING with back-off); Partial platform-wide (BFF → API calls not yet) |
 | Dead-letter / poison-message handling | Present (every subscriber, one shared consume loop: `AsyncWorkflows.Infrastructure.Subscribers`) |
-| Saga choreography | Partial (CO ⇄ KYC ⇄ Compliance, all directions; Accounts planned) |
+| Saga choreography | Present (CO ⇄ KYC ⇄ Compliance ⇄ Accounts: submission to a COMPLETED onboarding) |
 | Compensation | Partial (onboarding rejection: CO names the evidence, DM invalidates and retains it; later-failure compensation planned) |
 | Saga orchestration (Payments) | Planned |
 | User-specific SignalR notifications | Planned |
@@ -462,7 +466,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [x] KYC triggered per application
 - [x] CO reacts to KYC outcomes
 - [x] Compliance (backend and officer UI)
-- [ ] Account opening
+- [x] Account opening (backend and officer UI)
 - [x] Compensation on rejection (DM document invalidation)
 - [ ] Failure recovery
 - [ ] Workflow audit history

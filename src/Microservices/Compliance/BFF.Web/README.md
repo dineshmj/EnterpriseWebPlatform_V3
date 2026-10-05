@@ -2,7 +2,7 @@
 
 The Compliance officer's front end: a **Next.js** micro-frontend (static export) served by an **ASP.NET Core 10** BFF (Duende BFF). The Shell embeds it as the **Compliance Monitor** menu item. Business requirements: [Compliance-Requirements.md](../doc/Compliance-Requirements.md).
 
-URL: `https://compliance.dev.localhost:44399` (launch profile `https`).
+URL: `https://compliance.dev.localhost:46399` (launch profile `https`).
 
 ## Screens
 

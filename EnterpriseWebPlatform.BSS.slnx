@@ -12,6 +12,9 @@
     <Project Path="src/AsyncWorkflows/Publishers/CustomerOnboarding/CustomerOutboxPublisher/CustomerOutboxPublisher.csproj" />
   </Folder>
   <Folder Name="/AsyncWorkflows/Subscribers/" />
+  <Folder Name="/AsyncWorkflows/Subscribers/Accounts/">
+    <Project Path="src/AsyncWorkflows/Subscribers/Accounts/AccountApplicationOpeningSubscriber/AccountApplicationOpeningSubscriber.csproj" />
+  </Folder>
   <Folder Name="/AsyncWorkflows/Subscribers/Compliance/">
     <Project Path="src/AsyncWorkflows/Subscribers/Compliance/ComplianceCaseOpeningSubscriber/ComplianceCaseOpeningSubscriber.csproj" />
   </Folder>
@@ -33,7 +36,10 @@
     <Project Path="src/IDP/EnterpriseWebPlatform.IdentityServer.csproj" />
   </Folder>
   <Folder Name="/Microservices/" />
-  <Folder Name="/Microservices/Accounts/" />
+  <Folder Name="/Microservices/Accounts/">
+    <Project Path="src/Microservices/Accounts/API/EnterpriseWebPlatform.Accounts.Api.csproj" />
+    <Project Path="src/Microservices/Accounts/BFF.Web/EnterpriseWebPlatform.Accounts.Bff.Web.csproj" />
+  </Folder>
   <Folder Name="/Microservices/Compliance/">
     <Project Path="src/Microservices/Compliance/API/EnterpriseWebPlatform.Compliance.Api.csproj" />
     <Project Path="src/Microservices/Compliance/BFF.Web/EnterpriseWebPlatform.Compliance.Bff.Web.csproj" />
@@ -53,6 +59,7 @@
     <Project Path="src/Shell/EnterpriseWebPlatform.BSS.BFFWeb.csproj" />
   </Folder>
   <Folder Name="/Simulators/">
+    <Project Path="src/Simulators/CoreBankingSimulator/EnterpriseWebPlatform.Simulators.CoreBanking.csproj" />
     <Project Path="src/Simulators/ScreeningProviderSimulator/EnterpriseWebPlatform.Simulators.ScreeningProvider.csproj" />
   </Folder>
   <Folder Name="/Solution Items/">

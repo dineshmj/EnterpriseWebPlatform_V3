@@ -27,6 +27,7 @@ The document answers *how the platform is built and protected*, not *which busin
 | How do you stop a user from opening someone else's record by changing an ID (IDOR / BOLA)? | [2.2.3](#223-object-level-authorization) |
 | Is authorization only role-based? | [2.2](#22-authorization-beyond-rbac) |
 | How do you stop one person from both initiating and approving? | [2.2.6](#226-separation-of-duties-makerchecker) |
+| Is it safe to retry a POST to an external system? Could a timeout open two bank accounts? | [1.6.3](#163-timeouts-retries-and-circuit-breakers) |
 | Can a junior officer approve a high-risk customer? | [2.2.4](#224-abac-department-clearance-and-stage-permissions) |
 | How do services authenticate to each other? | [2.1.2](#212-separate-human-and-machine-identities) |
 | Does signing out of one application sign the user out everywhere? | [2.1.4](#214-single-sign-out) |
@@ -61,7 +62,7 @@ The document answers *how the platform is built and protected*, not *which busin
     - [1.3.5 Ordering guarantees](#135-ordering-guarantees)
     - [1.3.6 Tolerant readers and contract evolution](#136-tolerant-readers-and-contract-evolution)
   - [1.4 Saga pattern](#14-saga-pattern)
-    - [1.4.1 Choreography across Customer Onboarding, KYC and Compliance](#141-choreography-across-customer-onboarding-kyc-and-compliance)
+    - [1.4.1 Choreography across Customer Onboarding, KYC, Compliance and Accounts](#141-choreography-across-customer-onboarding-kyc-compliance-and-accounts)
     - [1.4.2 Compensation on rejection: retain, don't delete](#142-compensation-on-rejection-retain-dont-delete)
   - [1.5 Front-end composition](#15-front-end-composition)
     - [1.5.1 Micro-frontends hosted by a business-neutral Shell](#151-micro-frontends-hosted-by-a-business-neutral-shell)
@@ -123,21 +124,21 @@ The document answers *how the platform is built and protected*, not *which busin
 
 #### 1.1.1 Bounded contexts, each with its own database
 
-Each business capability (Customer Onboarding, Customer KYC, Compliance, Documents Management) is a bounded context with its own model, language and PostgreSQL database. No context reads or writes another context's tables, and there are no cross-database foreign keys. Contexts refer to each other's records by business identifier only, for example an application's never-repeating `ApplicationRef` (UUID v7) and its `ApplicationNumber`, never by another context's database ID. Collaboration happens only through published events or explicit APIs, so each context can change its schema without coordinating with the others.
+Each business capability (Customer Onboarding, Customer KYC, Compliance, Accounts, Documents Management) is a bounded context with its own model, language and PostgreSQL database. No context reads or writes another context's tables, and there are no cross-database foreign keys. Contexts refer to each other's records by business identifier only, for example an application's never-repeating `ApplicationRef` (UUID v7) and its `ApplicationNumber`, never by another context's database ID. Collaboration happens only through published events or explicit APIs, so each context can change its schema without coordinating with the others.
 
 **Where to look at:**
 
-- Database scripts, one per context: [EwpCustomerDb.sql](../src/Microservices/CustomerOnboarding/API/CustomerDB/EwpCustomerDb.sql), [EwpKycDb.sql](../src/Microservices/CustomerKyc/API/KycDb/EwpKycDb.sql), [EwpComplianceDb.sql](../src/Microservices/Compliance/API/ComplianceDb/EwpComplianceDb.sql), [EwpDocumentsManagementDb.sql](../src/Microservices/DocumentsManagement/API/DocumentMgmtDB/EwpDocumentsManagementDb.sql)
+- Database scripts, one per context: [EwpCustomerDb.sql](../src/Microservices/CustomerOnboarding/API/CustomerDB/EwpCustomerDb.sql), [EwpKycDb.sql](../src/Microservices/CustomerKyc/API/KycDb/EwpKycDb.sql), [EwpComplianceDb.sql](../src/Microservices/Compliance/API/ComplianceDb/EwpComplianceDb.sql), [EwpAccountsDb.sql](../src/Microservices/Accounts/API/AccountsDb/EwpAccountsDb.sql), [EwpDocumentsManagementDb.sql](../src/Microservices/DocumentsManagement/API/DocumentMgmtDB/EwpDocumentsManagementDb.sql)
 - Cross-context reference by business identifier: `ApplicationRef` in the [`KycCase`](../src/Microservices/CustomerKyc/API/Domain/Aggregates/KycCase.cs) aggregate
 - Context map: [Blueprint §5](Enterprise-Web-Platform-V3-Architectural-Vision-and-Security-Blueprint.md#5-bounded-contexts-and-context-map)
 
 #### 1.1.2 Independently deployable components
 
-Every API, BFF, worker and front end is its own deployable with its own configuration and secrets. A micro-frontend and its BFF ship together: the Next.js app is exported as static files and served by its BFF, so the pair can be released and rolled back as one unit without touching the Shell or other contexts. Contexts can even use different stacks: the Customer Onboarding and Compliance BFFs are ASP.NET Core, the Customer KYC BFF is NestJS. All sit behind the same Shell and the same protocol. (KYC remains the one NestJS reference; new BFFs and APIs are ASP.NET Core 10.)
+Every API, BFF, worker and front end is its own deployable with its own configuration and secrets. A micro-frontend and its BFF ship together: the Next.js app is exported as static files and served by its BFF, so the pair can be released and rolled back as one unit without touching the Shell or other contexts. Contexts can even use different stacks: the Customer Onboarding, Compliance and Accounts BFFs are ASP.NET Core, the Customer KYC BFF is NestJS. All sit behind the same Shell and the same protocol. (KYC remains the one NestJS reference; new BFFs and APIs are ASP.NET Core 10.)
 
 **Where to look at:**
 
-- .NET BFFs serving their exported MFEs: [CustomerOnboarding/BFF.Web](../src/Microservices/CustomerOnboarding/BFF.Web), [Compliance/BFF.Web](../src/Microservices/Compliance/BFF.Web/README.md)
+- .NET BFFs serving their exported MFEs: [CustomerOnboarding/BFF.Web](../src/Microservices/CustomerOnboarding/BFF.Web), [Compliance/BFF.Web](../src/Microservices/Compliance/BFF.Web/README.md), [Accounts/BFF.Web](../src/Microservices/Accounts/BFF.Web/README.md)
 - NestJS BFF serving its exported MFE: [CustomerKyc/BFF.Web](../src/Microservices/CustomerKyc/BFF.Web)
 - Build and export of all front ends: [CompileAndExportBFFClients_V3.ps1](../CompileAndExportBFFClients_V3.ps1)
 - Rules and release checklist: [Blueprint §7](Enterprise-Web-Platform-V3-Architectural-Vision-and-Security-Blueprint.md#7-independent-deployability)
@@ -146,12 +147,12 @@ Every API, BFF, worker and front end is its own deployable with its own configur
 
 #### 1.1.3 Context-owned asynchronous workers
 
-Kafka relays and subscribers belong to the bounded context whose database or API they use, and are versioned and deployed with it. `src/AsyncWorkflows` is a folder, not a shared layer. Each worker is named after its owner and purpose: `KycCaseOpeningSubscriber` (Customer KYC) opens KYC cases from onboarding events, `ComplianceCaseOpeningSubscriber` (Compliance) opens Compliance cases from KYC approvals, and `OnboardingOutcomeSubscriber` (Customer Onboarding) records KYC and Compliance outcomes on applications. A worker never writes to a database directly. It calls its own context's API, so every business rule stays in one place.
+Kafka relays and subscribers belong to the bounded context whose database or API they use, and are versioned and deployed with it. `src/AsyncWorkflows` is a folder, not a shared layer. Each worker is named after its owner and purpose: `KycCaseOpeningSubscriber` (Customer KYC) opens KYC cases from onboarding events, `ComplianceCaseOpeningSubscriber` (Compliance) opens Compliance cases from KYC approvals, `AccountApplicationOpeningSubscriber` (Accounts) opens account applications from Compliance approvals, and `OnboardingOutcomeSubscriber` (Customer Onboarding) records KYC and Compliance outcomes on applications. A worker never writes to a database directly. It calls its own context's API, so every business rule stays in one place.
 
 **Where to look at:**
 
-- [KycCaseOpeningSubscriber](../src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/README.md), [ComplianceCaseOpeningSubscriber](../src/AsyncWorkflows/Subscribers/Compliance/ComplianceCaseOpeningSubscriber/README.md), [OnboardingOutcomeSubscriber](../src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/README.md)
-- Internal, M2M-only endpoints the workers call: [InternalKycCasesController.cs](../src/Microservices/CustomerKyc/API/Controllers/InternalKycCasesController.cs), [InternalComplianceCasesController.cs](../src/Microservices/Compliance/API/Controllers/InternalComplianceCasesController.cs), [InternalOnboardingApplicationsController.cs](../src/Microservices/CustomerOnboarding/API/API/Controllers/InternalOnboardingApplicationsController.cs)
+- [KycCaseOpeningSubscriber](../src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/README.md), [ComplianceCaseOpeningSubscriber](../src/AsyncWorkflows/Subscribers/Compliance/ComplianceCaseOpeningSubscriber/README.md), [AccountApplicationOpeningSubscriber](../src/AsyncWorkflows/Subscribers/Accounts/AccountApplicationOpeningSubscriber/README.md), [OnboardingOutcomeSubscriber](../src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/README.md)
+- Internal, M2M-only endpoints the workers call: [InternalKycCasesController.cs](../src/Microservices/CustomerKyc/API/Controllers/InternalKycCasesController.cs), [InternalComplianceCasesController.cs](../src/Microservices/Compliance/API/Controllers/InternalComplianceCasesController.cs), [InternalAccountApplicationsController.cs](../src/Microservices/Accounts/API/Controllers/InternalAccountApplicationsController.cs), [InternalOnboardingApplicationsController.cs](../src/Microservices/CustomerOnboarding/API/API/Controllers/InternalOnboardingApplicationsController.cs)
 
 ### 1.2 Domain-Driven Design
 
@@ -267,17 +268,17 @@ Consumers read only the fields they need into their own message models and ignor
 
 ### 1.4 Saga pattern
 
-#### 1.4.1 Choreography across Customer Onboarding, KYC and Compliance
+#### 1.4.1 Choreography across Customer Onboarding, KYC, Compliance and Accounts
 
-Customer onboarding is a long-running, choreographed saga with no central coordinator. Each context performs its own local transaction, publishes the fact through its Outbox and reacts to other contexts' facts. Submitting an application causes KYC to open a case. The case being opened moves the application to `KYC_IN_PROGRESS`. The KYC decision moves it to `KYC_COMPLETED` or `REJECTED`. A KYC approval opens a Compliance case, which moves the application to `COMPLIANCE_IN_PROGRESS`; the Compliance decision moves it to `COMPLIANCE_COMPLETED` or `REJECTED`. Human review is a persisted state, not a waiting process: nothing stays in memory while an officer is away for days. The officer's decision is a new transaction that resumes the workflow. Each context changes only the state it owns.
+Customer onboarding is a long-running, choreographed saga with no central coordinator. Each context performs its own local transaction, publishes the fact through its Outbox and reacts to other contexts' facts. Submitting an application causes KYC to open a case. The case being opened moves the application to `KYC_IN_PROGRESS`. The KYC decision moves it to `KYC_COMPLETED` or `REJECTED`. A KYC approval opens a Compliance case, which moves the application to `COMPLIANCE_IN_PROGRESS`; the Compliance decision moves it to `COMPLIANCE_COMPLETED` or `REJECTED`. A Compliance approval opens an account application (`ACCOUNT_OPENING_IN_PROGRESS`); when the account officer approves and the core-banking system opens the account, the onboarding is `COMPLETED` — the saga ends. Human review is a persisted state, not a waiting process: nothing stays in memory while an officer is away for days. The officer's decision is a new transaction that resumes the workflow. Each context changes only the state it owns.
 
 **Where to look at:**
 
 - Design and rules: [EWP-V3-Saga-Choreography-and-Orchestration-Plans.md](EWP-V3-Saga-Choreography-and-Orchestration-Plans.md)
-- Forward hops: [KycCaseOpeningSubscriber](../src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/README.md), [ComplianceCaseOpeningSubscriber](../src/AsyncWorkflows/Subscribers/Compliance/ComplianceCaseOpeningSubscriber/README.md); return hop for both: [OnboardingOutcomeSubscriber](../src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/README.md)
-- Live evidence: the CO, KYC and Compliance Outbox tables of one onboarding, linked by `causation_id`
+- Forward hops: [KycCaseOpeningSubscriber](../src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/README.md), [ComplianceCaseOpeningSubscriber](../src/AsyncWorkflows/Subscribers/Compliance/ComplianceCaseOpeningSubscriber/README.md), [AccountApplicationOpeningSubscriber](../src/AsyncWorkflows/Subscribers/Accounts/AccountApplicationOpeningSubscriber/README.md); return hop for all three: [OnboardingOutcomeSubscriber](../src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/README.md)
+- Live evidence: the CO, KYC, Compliance and Accounts Outbox tables of one onboarding, linked by `causation_id`
 
-**Not yet:** the Accounts participant and the orchestrated Payments saga.
+**Not yet:** compensation after a failed account opening (3c) and the orchestrated Payments saga.
 
 #### 1.4.2 Compensation on rejection: retain, don't delete
 
@@ -378,7 +379,12 @@ Every call from a worker to an API runs through a resilience pipeline: a 10-seco
 - Provider pipeline and anti-corruption mapping: [Compliance API Program.cs](../src/Microservices/Compliance/API/Program.cs), [ScreeningProviderClient.cs](../src/Microservices/Compliance/API/Infrastructure/Screening/ScreeningProviderClient.cs)
 - Demo: ReadMe.txt section 4, step g2
 
-The Compliance BFF also puts its calls to the Compliance API behind timeouts and a circuit breaker, retrying GETs only; when the API is down, the officer sees "temporarily unavailable" at once instead of a hanging page ([Compliance BFF Program.cs](../src/Microservices/Compliance/BFF.Web/Program.cs)).
+**Retrying a POST without opening two accounts.** Accounts asks the bank's core-banking system (simulated by the [Core Banking Simulator](../src/Simulators/CoreBankingSimulator/README.md)) to open the account, through the same kind of worker, back-off and circuit breaker. Unlike a screening, opening an account is **not** naturally repeatable: if the answer to a successful request is lost in a timeout, a blind retry could open a second account. Every request therefore carries an **`Idempotency-Key`** (the onboarding's `ApplicationRef`), and core banking returns the same account for a repeated key — which is the only reason this POST may be retried at all. A refusal (HTTP 422) is a business answer: no retry, the application is FAILED. Too many technical failures end the same way, and compensation follows.
+
+- Idempotent client and pipeline: [CoreBankingClient.cs](../src/Microservices/Accounts/API/Infrastructure/CoreBanking/CoreBankingClient.cs), [Accounts API Program.cs](../src/Microservices/Accounts/API/Program.cs); worker: [OpenDueAccount.cs](../src/Microservices/Accounts/API/Application/Commands/OpenDueAccount.cs)
+- Retry vs give up vs refusal: `RecordOpeningFailure` / `RecordOpeningRefused` in [AccountApplication.cs](../src/Microservices/Accounts/API/Domain/Aggregates/AccountApplication.cs)
+
+The Compliance and Accounts BFFs also put their calls to their APIs behind timeouts and a circuit breaker, retrying GETs only; when the API is down, the officer sees "temporarily unavailable" at once instead of a hanging page ([Compliance BFF Program.cs](../src/Microservices/Compliance/BFF.Web/Program.cs)).
 
 **Not yet:** circuit breakers on the Customer Onboarding BFF's calls (it retries GETs only).
 
@@ -530,7 +536,7 @@ In Compliance the required clearance depends on the **case's risk**, not only on
 
 #### 2.2.5 ReBAC: relationships owned by each context
 
-Some decisions depend on the relationship between a user and a specific record, not on the user's role alone. These relationships are stored and enforced by the context that owns the record, not by the IDP. In Customer Onboarding, each customer has a **managing agent**: only that agent may update the customer and open or submit applications for them. In Customer KYC and in Compliance, each case has an **assigned officer**. The first decision, or an explicit claim, assigns the case; only the assignee may decide it, and the assignee may release it. The rule is enforced in the API and the aggregate, so hiding a button in the UI is never what protects the record.
+Some decisions depend on the relationship between a user and a specific record, not on the user's role alone. These relationships are stored and enforced by the context that owns the record, not by the IDP. In Customer Onboarding, each customer has a **managing agent**: only that agent may update the customer and open or submit applications for them. In Customer KYC, Compliance and Accounts, each case has an **assigned officer**. The first decision, or an explicit claim, assigns the case; only the assignee may decide it, and the assignee may release it. The rule is enforced in the API and the aggregate, so hiding a button in the UI is never what protects the record.
 
 **Where to look at:**
 
@@ -544,12 +550,12 @@ Some decisions depend on the relationship between a user and a specific record, 
 
 The person who starts a workflow can never approve it. The agent who submits an onboarding application can neither take nor decide its KYC case. The rule lives inside the `KycCase` aggregate, so no code path can bypass it. It also fails closed: if the initiator is unknown, every decision is denied rather than allowed.
 
-The rule also spans contexts. A Compliance case may not be handled by the initiator **nor by either officer who decided the KYC stages** of the same application, so one person can never both verify a customer and clear them for financial crime. KYC publishes who decided each stage on `kyc.case.approved`; Compliance stores them on the case and checks them in the aggregate.
+The rule also spans contexts. A Compliance case may not be handled by the initiator **nor by either officer who decided the KYC stages** of the same application, so one person can never both verify a customer and clear them for financial crime. KYC publishes who decided each stage on `kyc.case.approved`; Compliance stores them on the case and checks them in the aggregate. In the same way, the account officer may be neither the initiator nor the Compliance officer who approved the application (the approver travels on `compliance.case.approved`).
 
 **Where to look at:**
 
 - `EnsureSeparationOfDuties` in [KycCase.cs](../src/Microservices/CustomerKyc/API/Domain/Aggregates/KycCase.cs)
-- Cross-context SoD: `EnsureOfficerMayAct` in [ComplianceCase.cs](../src/Microservices/Compliance/API/Domain/Aggregates/ComplianceCase.cs); the stage deciders on the event: [KycIntegrationEvents.cs](../src/Microservices/CustomerKyc/API/Infrastructure/Messaging/KycIntegrationEvents.cs)
+- Cross-context SoD: `EnsureOfficerMayAct` in [ComplianceCase.cs](../src/Microservices/Compliance/API/Domain/Aggregates/ComplianceCase.cs) and [AccountApplication.cs](../src/Microservices/Accounts/API/Domain/Aggregates/AccountApplication.cs); the stage deciders on the event: [KycIntegrationEvents.cs](../src/Microservices/CustomerKyc/API/Infrastructure/Messaging/KycIntegrationEvents.cs)
 - The initiator captured at the source and carried through Kafka: `initiated_by` in the Outbox tables, see [1.3.4](#134-workflow-correlation-and-causation-identity)
 
 **Not yet:** four-eyes per stage (a different officer for each stage).

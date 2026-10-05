@@ -3,7 +3,7 @@
     "https": {
       "commandName": "Project",
       "launchBrowser": false,
-      "applicationUrl": "https://compliance-api.dev.localhost:44306",
+      "applicationUrl": "https://compliance-api.dev.localhost:46306",
       "environmentVariables": { "ASPNETCORE_ENVIRONMENT": "Development" }
     }
   }

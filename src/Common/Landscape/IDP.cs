@@ -2,5 +2,5 @@
 
 public static class IDP
 {
-	public const string AUTHORITY = "https://idp.dev.localhost:44392";
+	public const string AUTHORITY = "https://idp.dev.localhost:46392";
 }

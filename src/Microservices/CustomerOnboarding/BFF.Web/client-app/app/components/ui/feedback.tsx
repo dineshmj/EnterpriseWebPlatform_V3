@@ -44,10 +44,10 @@ export function statusLabel(status: string | null | undefined) {
 export function StatusBadge({ status }: { status: string | null | undefined }) {
   const code = (status ?? '').toUpperCase();
   const tone =
-    ['APPROVED', 'COMPLETED', 'KYC_COMPLETED', 'COMPLIANCE_COMPLETED', 'ACTIVE'].includes(code) ? 'success'
-      : ['REJECTED', 'CANCELLED', 'COMPENSATION_FAILED', 'SUSPENDED', 'CLOSED'].includes(code) ? 'danger'
+    ['APPROVED', 'COMPLETED', 'KYC_COMPLETED', 'COMPLIANCE_COMPLETED', 'ACTIVE', 'OPENED'].includes(code) ? 'success'
+      : ['REJECTED', 'CANCELLED', 'COMPENSATION_FAILED', 'SUSPENDED', 'CLOSED', 'FAILED'].includes(code) ? 'danger'
         : ['PENDING_REVIEW', 'UNDER_REVIEW', 'ON_HOLD', 'SUBMITTED', 'DRAFT', 'PROSPECT'].includes(code) ? 'warning'
-          : code.endsWith('_IN_PROGRESS') || code === 'ONBOARDING' || code === 'SCREENING' ? 'info'
+          : code.endsWith('_IN_PROGRESS') || code === 'ONBOARDING' || code === 'SCREENING' || code === 'OPENING' ? 'info'
             : 'neutral';
 
   return <Badge tone={tone} dot>{statusLabel(code)}</Badge>;

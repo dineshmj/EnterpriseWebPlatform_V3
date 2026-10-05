@@ -18,7 +18,10 @@ public sealed class OnboardingOutcomeSubscriberOptions : ISubscriberSettings, IM
         KafkaTopicNames.KycCaseRejected,
         KafkaTopicNames.ComplianceCaseCreated,
         KafkaTopicNames.ComplianceCaseApproved,
-        KafkaTopicNames.ComplianceCaseRejected
+        KafkaTopicNames.ComplianceCaseRejected,
+        KafkaTopicNames.AccountApplicationCreated,
+        KafkaTopicNames.AccountOpened,
+        KafkaTopicNames.AccountApplicationRejected
     ];
 
     public string GroupId { get; init; } = "customer-onboarding.outcome-subscriber";

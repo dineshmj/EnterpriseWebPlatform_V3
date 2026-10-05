@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 44399",
+    "dev": "next dev -p 46399",
     "build": "next build",
-    "start": "next start -p 44399",
+    "start": "next start -p 46399",
     "export": "next build && powershell -NoProfile -ExecutionPolicy Bypass -File ./export-to-bff.ps1",
     "type-check": "tsc --noEmit"
   },

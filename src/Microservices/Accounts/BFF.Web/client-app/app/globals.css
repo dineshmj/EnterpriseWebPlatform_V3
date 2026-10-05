@@ -1,0 +1,4 @@
+@import "tailwindcss";
+
+/* Platform design tokens (brand, typography, radii) - shared by every front end. */
+@import "../../../../../Common/DesignSystem/ewp-theme.css";

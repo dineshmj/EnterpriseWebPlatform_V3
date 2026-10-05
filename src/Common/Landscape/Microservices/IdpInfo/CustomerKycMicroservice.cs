@@ -17,5 +17,5 @@ public static class CustomerKycMicroservice
 
     public const string BFF_CLIENT_BASE_URL = "https://kyc.dev.localhost:33800";
 
-	public const string MICROSERVICE_API_BASE_URL = "https://kyc-api.dev.localhost:44305";
+	public const string MICROSERVICE_API_BASE_URL = "https://kyc-api.dev.localhost:46305";
 }

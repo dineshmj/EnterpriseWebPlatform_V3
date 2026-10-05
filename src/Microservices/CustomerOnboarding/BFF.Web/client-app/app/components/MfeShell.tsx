@@ -50,7 +50,7 @@ let latestWorkspaceContext: WorkspaceContext = EMPTY_WORKSPACE_CONTEXT;
 // it. A static allow-list (set at build time), never document.referrer and
 // never '*': a page that frames the MFE must not become its "trusted parent".
 const SHELL_ORIGIN =
-  process.env.NEXT_PUBLIC_SHELL_ORIGIN ?? 'https://shell.dev.localhost:44367';
+  process.env.NEXT_PUBLIC_SHELL_ORIGIN ?? 'https://shell.dev.localhost:46367';
 
 function getParentOrigin(): string {
   return SHELL_ORIGIN;

@@ -2,7 +2,7 @@
 
 Enterprise Web Platform V3 (EWP V3) is a demonstration banking-services platform. It is built as an **architectural reference**: a working example of how enterprise concerns compose without sliding into a distributed monolith.
 
-- **Bounded contexts.** Customer Onboarding, Customer KYC, Compliance and Documents Management are implemented; Accounts and Payments are planned. Each is governed by **Domain-Driven Design**, owns its own database, and is independently deployable.
+- **Bounded contexts.** Customer Onboarding, Customer KYC, Compliance, Accounts and Documents Management are implemented; Payments is planned. Each is governed by **Domain-Driven Design**, owns its own database, and is independently deployable.
 - **Micro-frontends.** Each business context has its own MFE, hosted in iframes by a business-neutral **Shell** that provides branding, navigation and the Application Workspace.
 - **Security boundaries.** Each MFE sits behind its own **BFF**. A BFF calls its own domain API with the **user's access token**, and other contexts' APIs with **M2M tokens**, keeping human identity and service identity separate.
 - **Identity.** **Duende IdentityServer 8** provides OpenID Connect and OAuth 2.1 (Authorization Code + PKCE, Client Credentials).
@@ -26,7 +26,9 @@ Enterprise Web Platform V3 (EWP V3) is a demonstration banking-services platform
 | Documents Management (API, Document Invalidation Subscriber) | `src/Microservices/DocumentsManagement`, `src/AsyncWorkflows/Subscribers/DocumentsManagement` | ASP.NET Core 10, .NET worker | Present |
 | Compliance (MFE/BFF, API, Compliance Case Opening Subscriber) | `src/Microservices/Compliance`, `src/AsyncWorkflows/Subscribers/Compliance` | Next.js, ASP.NET Core 10, .NET worker | Present |
 | Screening Provider Simulator (stand-in for an external AML vendor) | `src/Simulators/ScreeningProviderSimulator` | ASP.NET Core 10 | Present |
-| Accounts, Payments | `src/Microservices/…` | — | Planned |
+| Accounts (MFE/BFF, API, Account Application Opening Subscriber) | `src/Microservices/Accounts`, `src/AsyncWorkflows/Subscribers/Accounts` | Next.js, ASP.NET Core 10, .NET worker | Present |
+| Core Banking Simulator (stand-in for the core-banking system) | `src/Simulators/CoreBankingSimulator` | ASP.NET Core 10 | Present |
+| Payments | `src/Microservices/Payments` | — | Planned |
 | Infrastructure | PostgreSQL 18 and Kafka 4 (KRaft) installed natively; Kafka secured with [kafka/Setup-KafkaSecurity.ps1](kafka/README.md) | SCRAM-SHA-512 users, per-topic ACLs, Kafka UI (read-only) | Present |
 | Observability | `src/Common/Observability` | OpenTelemetry traces across HTTP and Kafka (OTLP, e.g. Jaeger); `/health/live` and `/health/ready` on every component | Present |
 

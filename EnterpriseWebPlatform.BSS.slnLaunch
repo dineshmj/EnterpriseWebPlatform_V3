@@ -28,6 +28,11 @@
         "DebugTarget": "https"
       },
       {
+        "Path": "src\\Microservices\\Accounts\\API\\EnterpriseWebPlatform.Accounts.Api.csproj",
+        "Action": "Start",
+        "DebugTarget": "https"
+      },
+      {
         "Path": "src\\AsyncWorkflows\\Publishers\\CustomerOnboarding\\CustomerOutboxPublisher\\CustomerOutboxPublisher.csproj",
         "Action": "Start",
         "DebugTarget": "CustomerOutboxPublisher"
@@ -53,7 +58,17 @@
         "DebugTarget": "DocumentInvalidationSubscriber"
       },
       {
+        "Path": "src\\AsyncWorkflows\\Subscribers\\Accounts\\AccountApplicationOpeningSubscriber\\AccountApplicationOpeningSubscriber.csproj",
+        "Action": "Start",
+        "DebugTarget": "AccountApplicationOpeningSubscriber"
+      },
+      {
         "Path": "src\\Simulators\\ScreeningProviderSimulator\\EnterpriseWebPlatform.Simulators.ScreeningProvider.csproj",
+        "Action": "Start",
+        "DebugTarget": "https"
+      },
+      {
+        "Path": "src\\Simulators\\CoreBankingSimulator\\EnterpriseWebPlatform.Simulators.CoreBanking.csproj",
         "Action": "Start",
         "DebugTarget": "https"
       },
@@ -69,6 +84,11 @@
       },
       {
         "Path": "src\\Microservices\\Compliance\\BFF.Web\\EnterpriseWebPlatform.Compliance.Bff.Web.csproj",
+        "Action": "Start",
+        "DebugTarget": "https"
+      },
+      {
+        "Path": "src\\Microservices\\Accounts\\BFF.Web\\EnterpriseWebPlatform.Accounts.Bff.Web.csproj",
         "Action": "Start",
         "DebugTarget": "https"
       }

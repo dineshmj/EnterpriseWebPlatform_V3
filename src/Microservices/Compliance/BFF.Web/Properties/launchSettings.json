@@ -5,7 +5,7 @@
       "commandName": "Project",
       "launchBrowser": false,
       "dotnetRunMessages": true,
-      "applicationUrl": "https://compliance.dev.localhost:44399",
+      "applicationUrl": "https://compliance.dev.localhost:46399",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       }

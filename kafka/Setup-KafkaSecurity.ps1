@@ -54,6 +54,8 @@ $Users = [ordered]@{
     'ewp-compliance-api'                = 'ewp-compliance-api-kafka-dev'     # Compliance API (in-process relay)
     'ewp-compliance-case-opening-subscriber' = 'ewp-compliance-case-opening-kafka-dev' # ComplianceCaseOpeningSubscriber
     'ewp-dm-invalidation-subscriber'    = 'ewp-dm-invalidation-kafka-dev'    # DocumentInvalidationSubscriber
+    'ewp-accounts-api'                  = 'ewp-accounts-api-kafka-dev'       # Accounts API (in-process relay)
+    'ewp-accounts-application-opening-subscriber' = 'ewp-accounts-application-opening-kafka-dev' # AccountApplicationOpeningSubscriber
     'ewp-kafka-ui'                      = 'ewp-kafka-ui-dev'                 # Kafka UI (read-only)
 }
 
@@ -75,7 +77,12 @@ $Topics = @(
     'compliance.case.approved',
     'compliance.case.rejected',
     'compliance.case-opening-subscriber.dlq',
-    'documents-management.invalidation-subscriber.dlq'
+    'documents-management.invalidation-subscriber.dlq',
+    'accounts.application.created',
+    'accounts.application.rejected',
+    'accounts.account.opened',
+    'accounts.account.opening.failed',
+    'accounts.application-opening-subscriber.dlq'
 )
 
 # Consumer groups introduced with these security settings, and the topics they read.
@@ -84,6 +91,7 @@ $NewGroups = [ordered]@{
     'customer-onboarding.outcome-subscriber' = @('kyc.case.created', 'kyc.case.approved', 'kyc.case.rejected')
     'compliance.case-opening-subscriber'     = @('kyc.case.approved')
     'documents-management.invalidation-subscriber' = @('onboarding.application.rejected')
+    'accounts.application-opening-subscriber' = @('compliance.case.approved')
 }
 
 $Bootstrap   = 'localhost:9092'
@@ -250,7 +258,8 @@ switch ($Phase) {
     Grant 'ewp-kyc-case-opening-subscriber' '--operation Write --operation Describe --topic customer-kyc.case-opening-subscriber.dlq'
 
     Write-Host 'OnboardingOutcomeSubscriber: read its topics and group; write its dead-letter topic' -ForegroundColor Cyan
-    foreach ($t in 'kyc.case.created', 'kyc.case.approved', 'kyc.case.rejected', 'compliance.case.created', 'compliance.case.approved', 'compliance.case.rejected') {
+    foreach ($t in 'kyc.case.created', 'kyc.case.approved', 'kyc.case.rejected', 'compliance.case.created', 'compliance.case.approved', 'compliance.case.rejected',
+                   'accounts.application.created', 'accounts.account.opened', 'accounts.application.rejected') {
         Grant 'ewp-onboarding-outcome-subscriber' "--operation Read --operation Describe --topic $t"
     }
     Grant 'ewp-onboarding-outcome-subscriber' '--operation Read --group customer-onboarding.outcome-subscriber'
@@ -268,6 +277,15 @@ switch ($Phase) {
     Grant 'ewp-dm-invalidation-subscriber' '--operation Read --operation Describe --topic onboarding.application.rejected'
     Grant 'ewp-dm-invalidation-subscriber' '--operation Read --group documents-management.invalidation-subscriber'
     Grant 'ewp-dm-invalidation-subscriber' '--operation Write --operation Describe --topic documents-management.invalidation-subscriber.dlq'
+
+    Write-Host 'Accounts API (in-process relay): write accounts.application.* and accounts.account.* only' -ForegroundColor Cyan
+    Grant 'ewp-accounts-api' '--operation Write --operation Describe --resource-pattern-type prefixed --topic accounts.application.'
+    Grant 'ewp-accounts-api' '--operation Write --operation Describe --resource-pattern-type prefixed --topic accounts.account.'
+
+    Write-Host 'AccountApplicationOpeningSubscriber: read compliance.case.approved and its group; write its dead-letter topic' -ForegroundColor Cyan
+    Grant 'ewp-accounts-application-opening-subscriber' '--operation Read --operation Describe --topic compliance.case.approved'
+    Grant 'ewp-accounts-application-opening-subscriber' '--operation Read --group accounts.application-opening-subscriber'
+    Grant 'ewp-accounts-application-opening-subscriber' '--operation Write --operation Describe --topic accounts.application-opening-subscriber.dlq'
 
     # Clean-up of an earlier run where "*" was expanded to ".git" (see Invoke-KafkaTool).
     Invoke-KafkaTool 'kafka-acls.bat' "--bootstrap-server $Bootstrap --command-config `"$AdminProps`" --remove --force --topic .git" -AllowFailure | Out-Null

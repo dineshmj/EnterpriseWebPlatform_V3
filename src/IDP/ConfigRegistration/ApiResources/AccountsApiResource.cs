@@ -18,11 +18,18 @@ public sealed class AccountsApiResource : IDuendeApiResource
                     AccountsApiScopesRequired.ACCOUNTS_WRITE
                 },
 
+            // The ABAC attributes the Accounts API authorizes on (branch scope, officer department, clearance).
             UserClaims =
                 {
                     "role",
                     "name",
-                    "email"
+                    "email",
+                    "permission",
+                    "department",
+                    "branch",
+                    "region",
+                    "clearance_level",
+                    "employment_type"
                 }
         };
 }

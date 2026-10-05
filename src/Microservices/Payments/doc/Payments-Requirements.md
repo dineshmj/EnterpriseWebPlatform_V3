@@ -106,4 +106,4 @@ Payments commands and events (`payments.*`) and the Accounts reservation command
 
 ## 8. Reserved Topology
 
-- Local URLs (reserved): BFF `https://payments.dev.localhost:44388`, API `https://payments-api.dev.localhost:44488`. The Shell menu seed uses the same BFF URL.
+- Local URLs (reserved): BFF `https://payments.dev.localhost:46388`, API `https://payments-api.dev.localhost:44488`. The Shell menu seed uses the same BFF URL.

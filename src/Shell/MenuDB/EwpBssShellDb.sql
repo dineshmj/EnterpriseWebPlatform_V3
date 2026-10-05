@@ -146,11 +146,11 @@ CREATE INDEX ix_menu_items_and_roles_menu_item_id
 
 INSERT INTO microservices (name, base_url)
 VALUES
-    ('Customer Onboarding', 'https://customer.dev.localhost:44311'),
+    ('Customer Onboarding', 'https://customer.dev.localhost:46311'),
     ('Customer KYC',        'https://kyc.dev.localhost:33800'),
-    ('Compliance',          'https://compliance.dev.localhost:44399'),
+    ('Compliance',          'https://compliance.dev.localhost:46399'),
     ('Accounts',            'https://accounts.dev.localhost:45456'),
-    ('Payments',            'https://payments.dev.localhost:44388');
+    ('Payments',            'https://payments.dev.localhost:46388');
 
 -- ============================================================
 -- Seed: Management Areas

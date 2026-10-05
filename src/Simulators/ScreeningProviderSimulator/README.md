@@ -2,7 +2,7 @@
 
 Stands in for an **external AML / sanctions / PEP screening vendor**, so the Compliance context can show how the platform survives a third party that is slow, failing or down. It is not part of any bounded context and holds no data.
 
-URL: `https://localhost:44366` (launch profile `https`).
+URL: `https://localhost:46366` (launch profile `https`).
 
 ## API
 
@@ -29,7 +29,7 @@ On any failure the case **stays in SCREENING** and is retried later with back-of
 Deterministic from the customer number's last digit, so a demo can pick the risk: `9` → `MATCH` (HIGH risk), `7` or `8` → `POTENTIAL_MATCH` (MEDIUM), otherwise `CLEAR` (LOW). `forcedOutcome` (`CLEAR`, `POTENTIAL_MATCH`, `MATCH`) overrides it until set back to `null`.
 
 ```powershell
-$sim = 'https://localhost:44366/admin/behaviour'
+$sim = 'https://localhost:46366/admin/behaviour'
 Invoke-RestMethod $sim -Method Put -ContentType 'application/json' -Body '{"behaviour":"Down"}'
 Invoke-RestMethod $sim -Method Put -ContentType 'application/json' -Body '{"behaviour":"Healthy","forcedOutcome":"MATCH"}'
 Invoke-RestMethod $sim

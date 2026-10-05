@@ -6,8 +6,8 @@ NestJS BFF for the Customer KYC Next.js MFE.
 
 - BFF: `https://kyc.dev.localhost:33800`
 - MFE route: `/v1/kyc/cases/view-all/`
-- Customer KYC API: `https://kyc-api.dev.localhost:44305`
-- IdentityServer: `https://idp.dev.localhost:44392`
+- Customer KYC API: `https://kyc-api.dev.localhost:46305`
+- IdentityServer: `https://idp.dev.localhost:46392`
 
 The browser never receives the KYC API access token. The BFF keeps the OIDC session and forwards the access token server-to-server to the KYC API.
 

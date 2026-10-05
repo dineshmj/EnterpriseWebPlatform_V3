@@ -385,7 +385,7 @@ FROM (VALUES
     ('sophie.cs','EMP-10042','CUSTOMER_SERVICE','SYD001','FULL_TIME',2),
     ('liam.kyc','EMP-10043','KYC','SYD001','FULL_TIME',3),
     ('olivia.compliance','EMP-10044','COMPLIANCE','SYD001','FULL_TIME',4),
-    ('jack.accounts','EMP-10045','ACCOUNTS','SYD002','FULL_TIME',3),
+    ('jack.accounts','EMP-10045','ACCOUNTS','SYD001','FULL_TIME',3),
     ('emily.payments','EMP-10046','PAYMENTS','SYD002','FULL_TIME',4),
     ('daniel.ops','EMP-10047','OPERATIONS','BNE001','FULL_TIME',4),
     ('sarah.audit','EMP-10048','AUDIT','ADL001','FULL_TIME',5),

@@ -66,26 +66,32 @@ What the platform is, how it is designed and what each component must do are doc
 
 	Live:
 
-		IDP								https://idp.dev.localhost:44392
-		Shell BFF (serves Shell SPA)	https://shell.dev.localhost:44367
-		Customer Onboarding BFF (MFE)	https://customer.dev.localhost:44311
-		Customer Onboarding API			https://customer-api.dev.localhost:44363
+		IDP								https://idp.dev.localhost:46392
+		Shell BFF (serves Shell SPA)	https://shell.dev.localhost:46367
+		Customer Onboarding BFF (MFE)	https://customer.dev.localhost:46311
+		Customer Onboarding API			https://customer-api.dev.localhost:46363
 		Customer KYC BFF (MFE)			https://kyc.dev.localhost:33800
-		Customer KYC API				https://kyc-api.dev.localhost:44305
+		Customer KYC API				https://kyc-api.dev.localhost:46305
 		Documents Management API		https://documents-management-api.dev.localhost:49486
-		Compliance BFF (MFE)			https://compliance.dev.localhost:44399
-		Compliance API					https://compliance-api.dev.localhost:44306
-		Screening Provider Simulator	https://localhost:44366   (stands in for an external AML / sanctions vendor)
+		Compliance BFF (MFE)			https://compliance.dev.localhost:46399
+		Compliance API					https://compliance-api.dev.localhost:46306
+		Screening Provider Simulator	https://localhost:46366   (stands in for an external AML / sanctions vendor)
+		Accounts BFF (MFE)				https://accounts.dev.localhost:45456
+		Accounts API					https://accounts-api.dev.localhost:48486
+		Core Banking Simulator			https://localhost:46376   (stands in for the bank's core-banking system)
 		Kafka UI						http://localhost:8080
 
 	Reserved (not implemented yet):
 
-		Accounts BFF					https://accounts.dev.localhost:45456
-		Accounts API					https://accounts-api.dev.localhost:48486
-		Payments BFF					https://payments.dev.localhost:44388
+		Payments BFF					https://payments.dev.localhost:46388
 		Payments API					https://payments-api.dev.localhost:44488
 
 	The Shell Menu DB seed registers these same URLs.
+
+	PORTS: never use 44300-44399. Visual Studio 2026 reserves ports from that range (the IIS Express SSL pool) for its
+	web tooling, e.g. Browser Link, through Windows HTTP.sys - a different one at each start - and Kestrel then fails with
+	"An attempt was made to access a socket in a way forbidden by its access permissions". The platform's ports were moved
+	from 443xx to 463xx for this reason. Check a suspect port with:  netsh http show servicestate view=requestq | Select-String <port>
 
 
 3) First-Time Setup:
@@ -127,6 +133,7 @@ What the platform is, how it is designed and what each component must do are doc
 			EwpKycDb					src\Microservices\CustomerKyc\API\KycDb\EwpKycDb.sql
 			EwpDocumentsManagementDb	src\Microservices\DocumentsManagement\API\DocumentMgmtDB\EwpDocumentsManagementDb.sql
 			EwpComplianceDb				src\Microservices\Compliance\API\ComplianceDb\EwpComplianceDb.sql
+			EwpAccountsDb				src\Microservices\Accounts\API\AccountsDb\EwpAccountsDb.sql
 
 		WARNING:
 			Running a script erases that database's data. Each script must run while connected to ITS OWN database.
@@ -168,11 +175,11 @@ What the platform is, how it is designed and what each component must do are doc
 
 	f2) Content-Security-Policy and dependency scanning.
 
-		The Shell, CO BFF, KYC BFF and Compliance BFF send a strict CSP: scripts only from the BFF itself plus the SHA-256 hashes of the
+		The Shell, CO BFF, KYC BFF, Compliance BFF and Accounts BFF send a strict CSP: scripts only from the BFF itself plus the SHA-256 hashes of the
 		exported pages' inline scripts, computed at startup from the files served. After re-exporting the MFEs
 		(CompileAndExportBFFClients_V3.ps1), restart the BFFs so the hashes are recomputed.
 		If a page is blocked by CSP, switch to report-only (violations appear in the browser console) while investigating:
-			Shell / CO BFF / Compliance BFF:  appsettings: "Security": { "CspReportOnly": true }
+			Shell / CO BFF / Compliance BFF / Accounts BFF:  appsettings: "Security": { "CspReportOnly": true }
 			KYC BFF:         environment variable KYC_BFF_CSP_REPORT_ONLY=true
 
 		Known-vulnerability scan of all .NET and npm dependencies (fails only on deployed dependencies):
@@ -200,17 +207,18 @@ What the platform is, how it is designed and what each component must do are doc
 
 			.\CompileAndExportBFFClients_V3.ps1
 
-		This builds the Shell SPA, the Customer Onboarding MFE, the Customer KYC MFE, the KYC NestJS BFF and the Compliance MFE, and copies each
+		This builds the Shell SPA, the Customer Onboarding MFE, the Customer KYC MFE, the KYC NestJS BFF, the Compliance MFE and the Accounts MFE, and copies each
 		static export to where its BFF serves it.
-		Restart the Shell, CO BFF, KYC BFF and Compliance BFF afterwards (the KYC BFF runs outside Visual Studio - easy to forget): their Content-Security-Policy hashes are computed at startup from the exported pages.
+		Restart the Shell, CO BFF, KYC BFF, Compliance BFF and Accounts BFF afterwards (the KYC BFF runs outside Visual Studio - easy to forget): their Content-Security-Policy hashes are computed at startup from the exported pages.
 
 	h) Configure the Customer KYC BFF: its environment variables and PFX certificate are described in src\Microservices\CustomerKyc\BFF.Web\README.md (runnow.bat sets them and starts the BFF).
 
 	NOTE - secrets:
 		Each component reads its own client secrets from its own configuration; nothing is compiled into Common.Landscape any more.
-		Development values: appsettings.Development.json of the IDP, Shell BFF, Customer Onboarding BFF, Compliance BFF, KycCaseOpeningSubscriber,
-		ComplianceCaseOpeningSubscriber, DocumentInvalidationSubscriber, Compliance API (screening API key) and Screening Provider
-		Simulator, and runnow.bat of the KYC BFF.
+		Development values: appsettings.Development.json of the IDP, Shell BFF, Customer Onboarding BFF, Compliance BFF, Accounts BFF, KycCaseOpeningSubscriber,
+		ComplianceCaseOpeningSubscriber, DocumentInvalidationSubscriber, AccountApplicationOpeningSubscriber, Compliance API
+		(screening API key), Accounts API (core-banking API key), Screening Provider Simulator and Core Banking Simulator, and
+		runnow.bat of the KYC BFF.
 		A component refuses to start when a secret is missing. Outside Development, supply them as environment variables or from a secret store.
 
 	i) Open EnterpriseWebPlatform.BSS.slnx in Visual Studio and restore the NuGet packages.
@@ -223,8 +231,9 @@ What the platform is, how it is designed and what each component must do are doc
 	a) Visual Studio: use the multi-project launch profile in EnterpriseWebPlatform.BSS.slnLaunch. It starts:
 
 		IDP, Documents Management API, Customer Onboarding API, Customer KYC API, CustomerOutboxPublisher, KycCaseOpeningSubscriber,
-		OnboardingOutcomeSubscriber, Compliance API, ComplianceCaseOpeningSubscriber, DocumentInvalidationSubscriber, Screening Provider
-		Simulator, Shell BFF, Customer Onboarding BFF and Compliance BFF.
+		OnboardingOutcomeSubscriber, Compliance API, ComplianceCaseOpeningSubscriber, DocumentInvalidationSubscriber, Accounts API,
+		AccountApplicationOpeningSubscriber, Screening Provider Simulator, Core Banking Simulator, Shell BFF, Customer Onboarding BFF,
+		Compliance BFF and Accounts BFF.
 
 		Every publisher and subscriber is a console (generic host) application. Several instances of each may run in parallel:
 		publishers claim Outbox rows with FOR UPDATE SKIP LOCKED, subscribers share one Kafka consumer group per subscriber (one
@@ -236,7 +245,7 @@ What the platform is, how it is designed and what each component must do are doc
 			cd src\Microservices\CustomerKyc\BFF.Web
 			pnpm run start
 
-	c) Browse to https://shell.dev.localhost:44367 and sign in. The demo users, their roles and the password convention are listed in src\IDP\doc\IDP-Requirements.md (section 6).
+	c) Browse to https://shell.dev.localhost:46367 and sign in. The demo users, their roles and the password convention are listed in src\IDP\doc\IDP-Requirements.md (section 6).
 
 	d) A typical end-to-end check:
 
@@ -257,10 +266,17 @@ What the platform is, how it is designed and what each component must do are doc
 		- Compensation: when KYC or Compliance REJECTS an application, its two evidence documents become INVALIDATED in
 		  EwpDocumentsManagementDb.documents (status, invalidated_at, invalidation_reason) - retained, not deleted - via the
 		  onboarding.application.rejected topic and the DocumentInvalidationSubscriber.
+		- Compliance approval opens an ACCOUNT APPLICATION (AccountApplicationOpeningSubscriber): the application moves to
+		  ACCOUNT_OPENING_IN_PROGRESS and EwpAccountsDb.account_applications has a PENDING_REVIEW row. jack.accounts (SYD001) decides
+		  it in the Shell: Account Applications -> open the application -> choose the product -> Approve and open account.
+		  (Through the API with Bruno, section 6, scope accounts.read accounts.write: POST .../v1/accounts/applications/{id}/approve.)
+		  He is neither the initiator nor the Compliance approver (separation of duties). On approval the core-banking system
+		  opens the account within seconds (EwpAccountsDb.accounts: BSB 062-000 + account number) and the onboarding is COMPLETED.
+		  A rejection (with remarks) ends it REJECTED and invalidates the evidence, as above.
 
 	g2) Demonstrating an unreliable external provider (Screening Provider Simulator, localhost only):
 
-			$sim = 'https://localhost:44366/admin/behaviour'
+			$sim = 'https://localhost:46366/admin/behaviour'
 			Invoke-RestMethod $sim -Method Put -ContentType 'application/json' -Body '{"behaviour":"Down"}'      # or Failing / Slow / Healthy
 			Invoke-RestMethod $sim -Method Put -ContentType 'application/json' -Body '{"behaviour":"Healthy","forcedOutcome":"MATCH"}'
 			Invoke-RestMethod $sim                                                                              # current behaviour
@@ -270,6 +286,16 @@ What the platform is, how it is designed and what each component must do are doc
 		"circuit open"), and /health/ready of the Compliance API reports Degraded once a case waits more than 2 minutes.
 		Set it back to Healthy and the waiting cases are screened automatically.
 
+	g3) Demonstrating an unreliable core-banking system (Core Banking Simulator, localhost only):
+
+			$cbs = 'https://localhost:46376/admin/behaviour'
+			Invoke-RestMethod $cbs -Method Put -ContentType 'application/json' -Body '{"behaviour":"Down"}'      # or Failing / Slow / Refusing / Healthy
+
+		While Down / Failing / Slow, approved account applications stay OPENING and are retried with back-off; every request
+		carries an Idempotency-Key (the ApplicationRef), so a retry after a lost answer never opens a second account. After 6
+		failures - or at once when Refusing (HTTP 422) - the application is FAILED and AccountOpeningFailed is published (its
+		compensation in Customer Onboarding arrives in 3c). Back to Healthy, waiting accounts are opened automatically.
+
 	e) Health endpoints (as used by Kubernetes liveness / readiness probes):
 
 			APIs, BFFs, IDP:              https://<host>/health/live   and   https://<host>/health/ready
@@ -278,6 +304,7 @@ What the platform is, how it is designed and what each component must do are doc
 			OnboardingOutcomeSubscriber:  http://localhost:5103/health/live | /health/ready
 			ComplianceCaseOpeningSubscriber: http://localhost:5104/health/live | /health/ready
 			DocumentInvalidationSubscriber:  http://localhost:5105/health/live | /health/ready
+			AccountApplicationOpeningSubscriber: http://localhost:5106/health/live | /health/ready
 
 		live  = the process (and its background loop) is working; 503 means "restart it".
 		ready = its dependencies are reachable (database; for a subscriber, its Kafka consumer group). "Degraded" (still 200)
@@ -368,8 +395,8 @@ What the platform is, how it is designed and what each component must do are doc
 
 	b) Bruno OAuth settings:
 
-		Authorization URL:	https://idp.dev.localhost:44392/connect/authorize
-		Access Token URL:	https://idp.dev.localhost:44392/connect/token
+		Authorization URL:	https://idp.dev.localhost:46392/connect/authorize
+		Access Token URL:	https://idp.dev.localhost:46392/connect/token
 		Client ID:			BSS.ApiTesting.Bruno.ClientID
 		Client Secret:		(empty)
 		Use PKCE:			enabled
@@ -391,7 +418,7 @@ What the platform is, how it is designed and what each component must do are doc
 
 	f) Before debugging an API, decode the token and check:
 
-			iss		https://idp.dev.localhost:44392
+			iss		https://idp.dev.localhost:46392
 			aud		the API resource (e.g. customer-onboarding-api)
 			scope	the requested API scope
 			role	a role the endpoint accepts

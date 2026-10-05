@@ -1,6 +1,6 @@
 # Enterprise Web Platform V3 — Saga Plans
 
-**Status:** Living document. Customer Onboarding choreography is implemented from submission through the KYC and Compliance decisions and back to CO; Accounts is planned; Payments orchestration is planned.
+**Status:** Living document. Customer Onboarding choreography is implemented end to end, from submission through the KYC, Compliance and Accounts decisions to a COMPLETED onboarding (compensation of a failed account opening: 3c); Payments orchestration is planned.
 
 ---
 
@@ -43,8 +43,8 @@ There is no central coordinator. Each participating context:
 | 4 | Human KYC review of two stages (may take days) | KYC officers | KYC → stage events, then `KycCaseApproved` / `KycCaseRejected` | Present |
 | 5 | CO records the KYC outcome (KYC_COMPLETED or REJECTED) | `kyc.case.approved` / `rejected` | CO → status changed | Present |
 | 6 | Compliance case opened, external screening (asynchronous, retried), human decision | `kyc.case.approved` | Compliance → `ComplianceCaseCreated`, then `ComplianceCaseApproved` / `Rejected`; CO → COMPLIANCE_IN_PROGRESS / COMPLETED / REJECTED | Present |
-| 7 | Account application, human approval, account opened | `compliance.case.approved` | Accounts → `AccountOpened` / `AccountOpeningFailed` | Planned |
-| 8 | Onboarding completes or compensates | Accounts outcome | CO → status changed | Planned |
+| 7 | Account application, human approval, account opened by the core-banking system (asynchronous, retried, idempotent) | `compliance.case.approved` | Accounts → `AccountApplicationCreated`, then `AccountOpened` / `AccountApplicationRejected` / `AccountOpeningFailed`; CO → ACCOUNT_OPENING_IN_PROGRESS | Present |
+| 8 | Onboarding completes (or compensates after a failed opening) | Accounts outcome | CO → COMPLETED (present) / COMPENSATING → REJECTED (3c) | Partial |
 | 9 | Initiator and other entitled users notified | status-change events | Notifications → SignalR | Planned |
 
 **Why KYC is triggered by submission.** A customer may have more than one application over time. KYC belongs to an *application*, and only submission means the evidence is complete.
@@ -164,7 +164,7 @@ Retry, timeout and circuit breaker protect **individual technical interactions**
 - [x] Timeout, retry, circuit breaker and dead-letter handling in the CO consumer
 - [x] The same Inbox and dead-letter handling in `KycCaseOpeningSubscriber` (both workers share one consume loop: `AsyncWorkflows.Infrastructure.Subscribers`)
 - [x] Compliance participant (`ComplianceCaseOpeningSubscriber`; outcomes via `OnboardingOutcomeSubscriber`)
-- [ ] Accounts participant
+- [x] Accounts participant (`AccountApplicationOpeningSubscriber`; outcomes via `OnboardingOutcomeSubscriber`)
 - [x] Compensation on rejection: DM document invalidation (`DocumentInvalidationSubscriber`)
 - [ ] Compensation of later failures (account opening; COMPENSATING)
 - [ ] Notifications to the initiator and other entitled users

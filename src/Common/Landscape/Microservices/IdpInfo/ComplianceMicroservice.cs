@@ -12,7 +12,7 @@ public static class ComplianceMicroservice
 
     public const string CLIENT_ID_FOR_IDP_FOR_COMPLIANCE_CASE_OPENING_SUBSCRIBER_TO_COMPLIANCE_API_M2M = "Compliance.CaseOpeningSubscriber.To.ComplianceApi.M2M.ClientID";
 
-    public const string BFF_CLIENT_BASE_URL = "https://compliance.dev.localhost:44399";
+    public const string BFF_CLIENT_BASE_URL = "https://compliance.dev.localhost:46399";
 
-    public const string MICROSERVICE_API_BASE_URL = "https://compliance-api.dev.localhost:44306";
+    public const string MICROSERVICE_API_BASE_URL = "https://compliance-api.dev.localhost:46306";
 }

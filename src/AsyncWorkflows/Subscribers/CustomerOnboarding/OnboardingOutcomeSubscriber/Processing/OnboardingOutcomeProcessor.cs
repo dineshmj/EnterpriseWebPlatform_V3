@@ -10,8 +10,8 @@ using EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboarding.On
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboarding.OnboardingOutcomeSubscriber.Processing;
 
 /// <summary>
-/// Turns one KYC or Compliance case event into a call to the Customer Onboarding API
-/// (kyc-outcomes / compliance-outcomes endpoint, by event type) and
+/// Turns one KYC, Compliance or Accounts event into a call to the Customer Onboarding API
+/// (kyc-outcomes / compliance-outcomes / account-outcomes endpoint, by event type) and
 /// classifies the result:
 ///  - Processed   : the API recorded it (Applied / NoChange / Duplicate).
 ///  - Dead letter : the message can never succeed (malformed, unknown type,
@@ -39,7 +39,10 @@ public sealed class OnboardingOutcomeProcessor(
         ["KycCaseRejected"] = "kyc-outcomes",
         ["ComplianceCaseCreated"] = "compliance-outcomes",
         ["ComplianceCaseApproved"] = "compliance-outcomes",
-        ["ComplianceCaseRejected"] = "compliance-outcomes"
+        ["ComplianceCaseRejected"] = "compliance-outcomes",
+        ["AccountApplicationCreated"] = "account-outcomes",
+        ["AccountOpened"] = "account-outcomes",
+        ["AccountApplicationRejected"] = "account-outcomes"
     };
 
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };

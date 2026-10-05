@@ -6,7 +6,7 @@
 .DESCRIPTION
     EwpServiceDbUsers.sql creates one login role per deployable (ewp_idp, ewp_shell,
     ewp_customer_onboarding_api, ewp_customer_outbox_relay, ewp_kyc_api, ewp_documents_api,
-    ewp_compliance_api) and grants each one data access to ITS OWN database only.
+    ewp_compliance_api, ewp_accounts_api) and grants each one data access to ITS OWN database only.
 
     It must run with psql, not pgAdmin's Query Tool: it uses psql commands (\set, \connect)
     to move from database to database. This script finds psql.exe, checks that every
@@ -56,7 +56,8 @@ $requiredDatabases = @(
     'EwpCustomerDb',
     'EwpKycDb',
     'EwpDocumentsManagementDb',
-    'EwpComplianceDb'
+    'EwpComplianceDb',
+    'EwpAccountsDb'
 )
 
 # ---------------------------------------------------------------------------------------

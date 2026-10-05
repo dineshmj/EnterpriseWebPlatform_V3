@@ -217,9 +217,51 @@ public sealed class OnboardingApplication : AggregateRoot
         return true;
     }
 
+    // ------------------------------------------------------------------
+    // Reactions to Accounts facts (saga choreography): as tolerant as the others. An
+    // Accounts fact implies that Compliance approved, so a fact that overtakes
+    // "compliance approved" first applies the outstanding transitions.
+    // ------------------------------------------------------------------
+
+    /// <summary>Accounts opened an account application: (… →) COMPLIANCE_COMPLETED → ACCOUNT_OPENING_IN_PROGRESS.</summary>
+    public bool RecordAccountApplicationCreated(DateTimeOffset now)
+    {
+        var changed = RecordComplianceApproved(now);
+
+        if (Status != OnboardingApplicationStatus.ComplianceCompleted)
+            return changed;
+
+        StartAccountOpening(now);
+        return true;
+    }
+
+    /// <summary>The account was opened: (… →) ACCOUNT_OPENING_IN_PROGRESS → COMPLETED. The saga ends here.</summary>
+    public bool RecordAccountOpened(DateTimeOffset now)
+    {
+        var changed = RecordAccountApplicationCreated(now);
+
+        if (Status != OnboardingApplicationStatus.AccountOpeningInProgress)
+            return changed;
+
+        Complete(now);
+        return true;
+    }
+
+    /// <summary>The account officer rejected the opening: (… →) ACCOUNT_OPENING_IN_PROGRESS → REJECTED (terminal).</summary>
+    public bool RecordAccountApplicationRejected(DateTimeOffset now)
+    {
+        var changed = RecordAccountApplicationCreated(now);
+
+        if (Status != OnboardingApplicationStatus.AccountOpeningInProgress)
+            return changed;
+
+        Reject(OnboardingRejectionStage.Accounts, now);
+        return true;
+    }
+
     /// <summary>
     /// A verifying context rejected the application. Only possible while a decision
-    /// is pending (submitted, in KYC or in compliance) - never from a draft.
+    /// is pending (submitted, in KYC, in compliance or in account opening) - never from a draft.
     /// The rejection is a business failure of the saga: it is announced with the
     /// evidence documents, so that Documents Management can invalidate them.
     /// </summary>
@@ -227,7 +269,8 @@ public sealed class OnboardingApplication : AggregateRoot
     {
         if (Status is not (OnboardingApplicationStatus.Submitted or
                            OnboardingApplicationStatus.KycInProgress or
-                           OnboardingApplicationStatus.ComplianceInProgress))
+                           OnboardingApplicationStatus.ComplianceInProgress or
+                           OnboardingApplicationStatus.AccountOpeningInProgress))
         {
             throw new DomainRuleViolationException(
                 $"An application can only be rejected while a decision is pending, not in status '{Status.ToCode()}'.");

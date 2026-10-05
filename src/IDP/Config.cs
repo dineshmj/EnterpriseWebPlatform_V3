@@ -84,6 +84,7 @@ public static class Config
             OnboardingOutcomeSubscriberToCustomerOnboardingApiM2M.Client,
             ComplianceCaseOpeningSubscriberToComplianceApiM2M.Client,
             DocumentInvalidationSubscriberToDocumentsManagementApiM2M.Client,
+            AccountApplicationOpeningSubscriberToAccountsApiM2M.Client,
             KycBFFToDocumentsManagementM2M.Client
         ];
 }

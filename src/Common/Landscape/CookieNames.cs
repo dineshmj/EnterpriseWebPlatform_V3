@@ -8,7 +8,9 @@ public static class CookieNames
 
 	public const string MICROSERVICE_COMPLIANCE_HOST_BFF = "__Host-Microservice-Compliance-bff";
 
+	public const string MICROSERVICE_ACCOUNTS_HOST_BFF = "__Host-Microservice-Accounts-bff";
+
 	// Only the .NET BFFs read these constants. The KYC BFF is NestJS and names its own
-	// session cookie (__Host-KYC-BFF-SESSION, see its main.ts). Accounts and Payments
-	// add theirs here when their BFFs are built.
+	// session cookie (__Host-KYC-BFF-SESSION, see its main.ts). Payments adds its
+	// own here when its BFF is built.
 }

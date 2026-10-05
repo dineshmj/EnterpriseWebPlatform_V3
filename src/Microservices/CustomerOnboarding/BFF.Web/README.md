@@ -93,7 +93,7 @@ pnpm run export
 
 The export script copies Next.js `out` into the BFF's `wwwroot` directory.
 
-For source-only development, `pnpm run dev` starts a standalone Next.js development server. For the Shell-integrated flow, use the exported SPA served by the ASP.NET Core BFF at `https://customer.dev.localhost:44311`.
+For source-only development, `pnpm run dev` starts a standalone Next.js development server. For the Shell-integrated flow, use the exported SPA served by the ASP.NET Core BFF at `https://customer.dev.localhost:46311`.
 
 ## Security notes
 

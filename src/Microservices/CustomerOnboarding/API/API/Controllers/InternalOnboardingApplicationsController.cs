@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
+using EnterpriseWebPlatform.CustomerOnboarding.Application.Onboarding.Commands.RecordAccountOutcome;
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Onboarding.Commands.RecordComplianceOutcome;
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Onboarding.Commands.RecordKycOutcome;
 
@@ -123,6 +124,56 @@ public sealed class InternalOnboardingApplicationsController(
                     detail: $"Application {applicationRef} is not '{request.ApplicationNumber}'. The Compliance fact is stale or misrouted."),
             _ =>
                 Problem(statusCode: StatusCodes.Status422UnprocessableEntity, title: $"Unsupported Compliance event type '{request.EventType}'")
+        };
+    }
+
+    /// <summary>
+    /// Records an Accounts outcome (AccountApplicationCreated / AccountOpened /
+    /// AccountApplicationRejected). Same contract and guarantees as the KYC endpoint:
+    /// idempotent per Accounts MessageId, workflow metadata in the X-* headers.
+    /// </summary>
+    [HttpPost("{applicationRef:guid}/account-outcomes")]
+    [Authorize(Policy = "OnboardingOutcomeSubscriberWrite")]
+    public async Task<IActionResult> RecordAccountOutcome(
+        Guid applicationRef,
+        [FromBody] RecordKycOutcomeRequest request,
+        [FromServices] RecordAccountOutcomeCommandHandler handler,
+        CancellationToken cancellationToken)
+    {
+        if (request.MessageId == Guid.Empty
+            || string.IsNullOrWhiteSpace(request.EventType)
+            || string.IsNullOrWhiteSpace(request.ApplicationNumber))
+        {
+            return ValidationProblem("MessageId, EventType and ApplicationNumber are required.");
+        }
+
+        RecordKycOutcomeResult result;
+        try
+        {
+            result = await handler.HandleAsync(
+                new RecordAccountOutcomeCommand(applicationRef, request.ApplicationNumber, request.MessageId, request.EventType),
+                cancellationToken);
+        }
+        catch (DbUpdateException ex) when (IsInboxDuplicate(ex))
+        {
+            result = RecordKycOutcomeResult.Duplicate;
+        }
+
+        logger.LogInformation(
+            "Accounts outcome {EventType} (MessageId={MessageId}) for application {ApplicationRef}: {Result}.",
+            request.EventType, request.MessageId, applicationRef, result);
+
+        return result switch
+        {
+            RecordKycOutcomeResult.Applied or RecordKycOutcomeResult.NoChange or RecordKycOutcomeResult.Duplicate =>
+                Ok(new { applicationRef, messageId = request.MessageId, result = result.ToString() }),
+            RecordKycOutcomeResult.NotFound =>
+                Problem(statusCode: StatusCodes.Status404NotFound, title: "Onboarding application not found"),
+            RecordKycOutcomeResult.ApplicationMismatch =>
+                Problem(statusCode: StatusCodes.Status409Conflict, title: "Application number mismatch",
+                    detail: $"Application {applicationRef} is not '{request.ApplicationNumber}'. The Accounts fact is stale or misrouted."),
+            _ =>
+                Problem(statusCode: StatusCodes.Status422UnprocessableEntity, title: $"Unsupported Accounts event type '{request.EventType}'")
         };
     }
 

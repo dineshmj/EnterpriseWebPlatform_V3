@@ -3,10 +3,10 @@ using System.Text.Json;
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboarding.OnboardingOutcomeSubscriber.Messages;
 
 /// <summary>
-/// Tolerant-reader view of the KYC and Compliance case events (kyc.case.* and
-/// compliance.case.*): only the fields Customer Onboarding needs. Unknown fields
+/// Tolerant-reader view of the KYC, Compliance and Accounts events (kyc.case.*,
+/// compliance.case.* and accounts.*): only the fields Customer Onboarding needs. Unknown fields
 /// are ignored, so producers can add fields without breaking this consumer.
-/// KycCaseId carries the producing case's ID (KycCaseId or ComplianceCaseId), for logs.
+/// KycCaseId carries the producing case's ID (KycCaseId, ComplianceCaseId or AccountApplicationId), for logs.
 /// </summary>
 public sealed record OutcomeMessage(
     Guid MessageId,
@@ -33,7 +33,7 @@ public sealed record OutcomeMessage(
         return new OutcomeMessage(
             wire.MessageId,
             wire.EventType ?? string.Empty,
-            body?.KycCaseId ?? body?.ComplianceCaseId ?? wire.KycCaseId ?? 0,
+            body?.KycCaseId ?? body?.ComplianceCaseId ?? body?.AccountApplicationId ?? wire.KycCaseId ?? 0,
             body?.ApplicationRef ?? wire.ApplicationRef ?? Guid.Empty,
             body?.ApplicationNumber ?? wire.ApplicationNumber,
             wire.WorkflowId,
@@ -56,6 +56,7 @@ public sealed record OutcomeMessage(
     private sealed record Body(
         long? KycCaseId,
         long? ComplianceCaseId,
+        long? AccountApplicationId,
         Guid? ApplicationRef,
         string? ApplicationNumber);
 }

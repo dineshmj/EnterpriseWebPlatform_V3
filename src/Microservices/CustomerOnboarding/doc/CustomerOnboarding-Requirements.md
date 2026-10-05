@@ -156,7 +156,10 @@ Any non-terminal ──StartCompensation──► COMPENSATING ──► COMPENS
 | `KycCaseRejected` | SUBMITTED / KYC_IN_PROGRESS → REJECTED; ignored after KYC_COMPLETED | Present |
 | `ComplianceCaseCreated` | (… →) KYC_COMPLETED → COMPLIANCE_IN_PROGRESS | Present |
 | `ComplianceCaseApproved` / `Rejected` | → COMPLIANCE_COMPLETED / REJECTED | Present |
-| `AccountOpened` / `AccountOpeningFailed` | → COMPLETED / COMPENSATING | Planned |
+| `AccountApplicationCreated` | (… →) COMPLIANCE_COMPLETED → ACCOUNT_OPENING_IN_PROGRESS | Present |
+| `AccountOpened` | (… →) ACCOUNT_OPENING_IN_PROGRESS → COMPLETED (the onboarding saga ends) | Present |
+| `AccountApplicationRejected` | ACCOUNT_OPENING_IN_PROGRESS → REJECTED (+ `OnboardingApplicationRejected`, stage `ACCOUNTS`) | Present |
+| `AccountOpeningFailed` | → COMPENSATING → REJECTED (reason: account opening failed) | Planned (3c) |
 
 Event contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Event-Catalogue.md). Overall workflow: [Saga plan](../../../../doc/EWP-V3-Saga-Choreography-and-Orchestration-Plans.md).
 

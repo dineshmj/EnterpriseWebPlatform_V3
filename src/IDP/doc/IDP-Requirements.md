@@ -99,7 +99,7 @@ Demo identities are fictitious and for local development only. **Password conven
 | `noah.kyc` | Noah Hughes | `kyc_officer` | KYC | SYD001 | 3 |
 | `olivia.compliance` | Olivia Bennett | `compliance_officer` | COMPLIANCE | SYD001 | 4 |
 | `grace.compliance` | Grace Walsh | `compliance_officer` (senior) | COMPLIANCE | SYD001 | 5 |
-| `jack.accounts` | Jack Wilson | `account_officer` | ACCOUNTS | SYD002 | 3 |
+| `jack.accounts` | Jack Wilson | `account_officer` | ACCOUNTS | SYD001 | 3 |
 | `emily.payments` | Emily Carter | `payments_officer` | PAYMENTS | SYD002 | 4 |
 | `daniel.ops` | Daniel Cooper | `operations_administrator` | OPERATIONS | BNE001 | 4 |
 | `sarah.audit` | Sarah Collins | `auditor` | AUDIT | ADL001 | 5 |

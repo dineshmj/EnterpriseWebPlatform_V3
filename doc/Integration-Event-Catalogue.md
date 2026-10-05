@@ -96,7 +96,7 @@ The body remains the source of truth for consumers; headers are a copy for infra
 | `CustomerCreated` | `customer.created` | Customer ID | `CustomerId`, `CustomerNumber`, `SubjectId`, `CustomerType`, `Status` | — | Published; no consumer |
 | `OnboardingApplicationSubmitted` | `onboarding.application.submitted` | Application ID | `ApplicationRef`, `ApplicationNumber`, `CustomerNumber`, `BranchCode` (branch the application was opened in), plus `ApplicationId` / `CustomerId` (information only) | `KycCaseOpeningSubscriber` → Customer KYC opens one case per `ApplicationRef` | Present |
 | `OnboardingApplicationStatusChanged` | `onboarding.application.status.changed` | Application ID | `ApplicationRef`, `PreviousStatus`, `NewStatus`, plus `ApplicationId` / `CustomerId` | Notifications (planned) | Published; no consumer yet |
-| `OnboardingApplicationRejected` | `onboarding.application.rejected` | Application ID | `ApplicationRef`, `ApplicationNumber`, `CustomerNumber`, `BranchCode`, `RejectedBy` (`KYC` / `COMPLIANCE`), `PreviousStatus`, `EvidenceDocuments` (`DocumentId`, `DocumentType`: the evidence recorded at submission) | `DocumentInvalidationSubscriber` → Documents Management invalidates exactly those documents (saga compensation; retained, not deleted) | Present |
+| `OnboardingApplicationRejected` | `onboarding.application.rejected` | Application ID | `ApplicationRef`, `ApplicationNumber`, `CustomerNumber`, `BranchCode`, `RejectedBy` (`KYC` / `COMPLIANCE` / `ACCOUNTS`), `PreviousStatus`, `EvidenceDocuments` (`DocumentId`, `DocumentType`: the evidence recorded at submission) | `DocumentInvalidationSubscriber` → Documents Management invalidates exactly those documents (saga compensation; retained, not deleted) | Present |
 
 ### 4.2 Customer KYC (producer: Customer KYC API, in-process Outbox relay)
 
@@ -121,25 +121,36 @@ Every KYC payload (under `Payload`) carries `KycCaseId`, `ApplicationRef`, `Appl
 | Event type | Topic | Key | Consumers | Status |
 |---|---|---|---|---|
 | `ComplianceCaseCreated` | `compliance.case.created` | Compliance case ID | `OnboardingOutcomeSubscriber` (application → COMPLIANCE_IN_PROGRESS) | Present |
-| `ComplianceCaseApproved` | `compliance.case.approved` | Compliance case ID | `OnboardingOutcomeSubscriber` (application → COMPLIANCE_COMPLETED); Accounts (planned) | Present |
+| `ComplianceCaseApproved` | `compliance.case.approved` | Compliance case ID | `OnboardingOutcomeSubscriber` (application → COMPLIANCE_COMPLETED); `AccountApplicationOpeningSubscriber` → Accounts opens one account application per `ApplicationRef` (uses `DecisionByUserId`, the Compliance approver, for separation of duties) | Present |
 | `ComplianceCaseRejected` | `compliance.case.rejected` | Compliance case ID | `OnboardingOutcomeSubscriber` (application → REJECTED) | Present |
 
 Every Compliance payload carries `ComplianceCaseId`, `ApplicationRef`, `ApplicationNumber`, `CustomerNumber` and `BranchCode`. `ComplianceCaseCreated` adds `KycCaseId` and `Status`; the decision events add `PreviousStatus` / `NewStatus`, `ScreeningOutcome`, `RiskRating`, `DecisionByUserId`, `DecisionAt` and `DecisionRemarks`. Screening progress (provider attempts, retries, assignment, holds) stays inside Compliance and is not published.
 
-### 4.4 Dead-letter topics
+### 4.4 Accounts (producer: Accounts API, in-process Outbox relay)
+
+| Event type | Topic | Key | Consumers | Status |
+|---|---|---|---|---|
+| `AccountApplicationCreated` | `accounts.application.created` | Account application ID | `OnboardingOutcomeSubscriber` (application → ACCOUNT_OPENING_IN_PROGRESS) | Present |
+| `AccountOpened` | `accounts.account.opened` | Account application ID | `OnboardingOutcomeSubscriber` (application → **COMPLETED**: the onboarding saga ends) | Present |
+| `AccountApplicationRejected` | `accounts.application.rejected` | Account application ID | `OnboardingOutcomeSubscriber` (application → REJECTED, then `OnboardingApplicationRejected` → document invalidation) | Present |
+| `AccountOpeningFailed` | `accounts.account.opening.failed` | Account application ID | Compensation of the onboarding (increment 3c) | Published; consumer planned (3c) |
+
+Every Accounts payload carries `AccountApplicationId`, `ApplicationRef`, `ApplicationNumber`, `CustomerNumber` and `BranchCode`. `AccountApplicationCreated` adds `ComplianceCaseId` and `Status`; `AccountOpened` adds `AccountNumber`, `Bsb`, `Product`, `ApprovedByUserId` and `OpenedAt`; `AccountApplicationRejected` adds `PreviousStatus` / `NewStatus`, `DecisionByUserId`, `DecisionAt` and `DecisionRemarks`; `AccountOpeningFailed` adds `Reason`, `Attempts` and `FailedAt`. `AccountOpened`'s `CausationId` is the account officer's approval command, even though a background worker opened the account later. Assignment, holds and the approval itself stay internal.
+
+### 4.5 Dead-letter topics
 
 | Topic | Owner | Contents |
 |---|---|---|
 | `customer-kyc.case-opening-subscriber.dlq` | `KycCaseOpeningSubscriber` | `onboarding.application.submitted` messages that can never open a case (malformed, wrong type, required fields missing, rejected with 4xx), with the same `dlq-*` headers. Transient failures are never dead-lettered. |
 | `compliance.case-opening-subscriber.dlq` | `ComplianceCaseOpeningSubscriber` | `kyc.case.approved` messages that can never open a Compliance case (malformed, wrong type, required fields such as `BranchCode` missing, rejected with 4xx), with the same `dlq-*` headers. Transient failures are never dead-lettered. |
 | `documents-management.invalidation-subscriber.dlq` | `DocumentInvalidationSubscriber` | `onboarding.application.rejected` messages that can never be compensated (malformed, wrong type, required fields missing, rejected with 4xx), with the same `dlq-*` headers. Transient failures are never dead-lettered. |
+| `accounts.application-opening-subscriber.dlq` | `AccountApplicationOpeningSubscriber` | `compliance.case.approved` messages that can never open an account application (malformed, wrong type, required fields missing, rejected with 4xx), with the same `dlq-*` headers. Transient failures are never dead-lettered. |
 | `customer-onboarding.outcome-subscriber.dlq` | `OnboardingOutcomeSubscriber` | Messages that can never be processed (malformed, unknown type, no application, rejected with 4xx), copied unchanged with headers `dlq-reason`, `dlq-original-topic`, `dlq-original-partition`, `dlq-original-offset`, `dlq-consumer-group`, `dlq-failed-at`. Transient failures are never dead-lettered. |
 
-### 4.5 Planned events
+### 4.6 Planned events
 
 | Event type | Topic | Producer | Consumers | Status |
 |---|---|---|---|---|
-| `AccountOpened` / `AccountOpeningFailed` | `accounts.account.opened` / `accounts.account.opening.failed` | Accounts | Customer Onboarding | Planned |
 | Payment saga commands and events | `payments.*` | Payments orchestrator and participants | Payments, Accounts | Planned — defined in [Payments-Requirements.md](../src/Microservices/Payments/doc/Payments-Requirements.md) |
 
 ---
