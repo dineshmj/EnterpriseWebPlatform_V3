@@ -451,7 +451,6 @@ CROSS JOIN
 (
     VALUES
         ('kyc_officer'),
-        ('compliance_officer'),
         ('operations_administrator'),
         ('auditor'),
         ('platform_administrator')
@@ -466,7 +465,6 @@ CROSS JOIN
 (
     VALUES
         ('kyc_officer'),
-        ('compliance_officer'),
         ('operations_administrator'),
         ('auditor'),
         ('platform_administrator')
@@ -481,7 +479,6 @@ CROSS JOIN
 (
     VALUES
         ('kyc_officer'),
-        ('compliance_officer'),
         ('operations_administrator'),
         ('auditor'),
         ('platform_administrator')

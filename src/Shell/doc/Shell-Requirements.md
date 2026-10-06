@@ -36,6 +36,17 @@ The Shell is **deliberately business-neutral**:
 - The Shell shows only the items mapped to the user's role claims. **This is a convenience, not security.** Every MFE, BFF and API authorizes independently.
 - Role codes in `menu_items_and_roles` must match the IDP role codes exactly.
 
+### Welcome screen
+
+Until the person opens a page, the Shell shows a welcome screen instead of an empty frame; a **Home** button in the workspace bar returns to it (after the MFE in the frame agrees, as for any navigation). It stays business-neutral and calls no business API:
+
+- **Who you are**, from the token: name, roles, branch and LAN ID (the Shell requests the `organization` scope for display only).
+- **Unread notifications** (latest three), each with **Open ›** when it can be opened (§7).
+- **Resume where you left off**: the last page opened from the menu, kept in this browser per user (`localStorage`). Shown only if that page is still in the person's menu; if storage is unavailable, the tile is simply absent.
+- **Your workspaces**: one card per microservice in the person's menu, listing its pages. Every link uses the menu's navigation.
+
+Deliberately absent: opening a page automatically, and business figures such as queue sizes (those would need business APIs; a dashboard belongs in an MFE).
+
 ---
 
 ## 3. Application Workspace
@@ -109,9 +120,10 @@ Cookies stay isolated per host name (`*.dev.localhost` locally), and a logout mu
 
 ## 7. Workflow Notifications
 
-- A separate **Notifications** context (the [NotificationsSubscriber](../../AsyncWorkflows/Subscribers/Notifications/NotificationsSubscriber/README.md) plus the [Notifications API](../../Microservices/Notifications/API/README.md) with its SignalR hub, outside the Shell) maps business events to **neutral notifications**: audience, title, text and a stored target for a later deep link. It applies the notification-audience policy of [Authorization-Model §11](../../../doc/Authorization-Model.md#11-notification-authorization).
+- A separate **Notifications** context (the [NotificationsSubscriber](../../AsyncWorkflows/Subscribers/Notifications/NotificationsSubscriber/README.md) plus the [Notifications API](../../Microservices/Notifications/API/README.md) with its SignalR hub, outside the Shell) maps business events to **neutral notifications**: audience, title, text and a stored target (the path a click opens). It applies the notification-audience policy of [Authorization-Model §11](../../../doc/Authorization-Model.md#11-notification-authorization).
 - **Present (4a):** the Shell BFF proxies `/bff/notifications` (REST: list, mark read) and `/hubs/notifications` (SignalR) to the Notifications API with the person's access token. It holds no notification logic and no Kafka connection. The hub route skips Duende's anti-forgery header (a browser cannot send it on a WebSocket) and checks the request `Origin` instead.
-- **Present (4b):** the bell with the unread count, a panel with the latest 50 (mark one or all read) and live toasts in the profile area; the workspace bar shows whether live updates are connected. The Shell holds the **only** live connection per browser (`@microsoft/signalr`, reconnecting forever with back-off; unread notifications are reloaded after every reconnect) and relays each live notification to the MFE in the frame as `BSS_NOTIFICATION` (to that MFE's origin only). The MFE decides what to do: the KYC, Compliance and Accounts work queues reload on new work for them, and the CO application list reloads on progress. **Later (4c):** opening the stored target (deep link).
+- **Present (4b):** the bell with the unread count, a panel with the latest 50 (mark one or all read) and live toasts in the profile area; the workspace bar shows whether live updates are connected. The Shell holds the **only** live connection per browser (`@microsoft/signalr`, reconnecting forever with back-off; unread notifications are reloaded after every reconnect) and relays each live notification to the MFE in the frame as `BSS_NOTIFICATION` (to that MFE's origin only). The MFE decides what to do: the KYC, Compliance and Accounts work queues reload on new work for them, and the CO application list reloads on progress.
+- **Present (4c): deep links.** A notification stores a path (`/v1/kyc/cases/view-details?caseId=3`; progress opens the initiator's application list). The notification never names a server: the Shell checks the path's format and finds the server in the person's **own menu**, as the microservice with a page in the same area (`/v1/kyc`); if none, the notification is shown but opens nothing. A click goes through the same navigation as a menu click: the current MFE is asked first and may keep the person on a screen with unsaved changes; then silent sign-in, where the target BFF checks the path against its allow-list (a detail page may carry exactly one numeric id), and the MFE and API authorize the record again.
 - The Shell opens an authenticated connection for the signed-in user and **only renders** what it receives. It never inspects business payloads and never broadcasts to all users.
 - A deep link uses the normal menu navigation and MFE sign-in, so the target MFE authorizes again.
 
@@ -129,4 +141,4 @@ Cookies stay isolated per host name (`*.dev.localhost` locally), and a logout mu
 | Middleware order `UseBff()` before `UseAuthorization()` | Present |
 | Server-side sessions (tokens not carried in the cookie) | Present in the Shell and CO BFF (Duende in-memory store; a persistent store is needed for multiple instances). The NestJS KYC BFF uses the in-memory `express-session` store. |
 | Logout propagation to every MFE BFF | Present via IDP front-channel logout (each BFF's `/signout-oidc`) |
-| Notification display | Present: bell, toasts, mark read; relayed to the MFE in the frame. Deep links later (4c) |
+| Notification display | Present: bell, toasts, mark read; relayed to the MFE in the frame; a click opens the record (4c) |

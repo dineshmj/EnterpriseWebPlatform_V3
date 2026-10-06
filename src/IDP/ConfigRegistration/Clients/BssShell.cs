@@ -56,6 +56,10 @@ public sealed class BssClient
                         IdentityServerConstants.StandardScopes.Email,
                         "roles",
 
+                        // Welcome screen: the person's branch and LAN ID (display only; the Shell makes no
+                        // authorization decision with them).
+                        "organization",
+
                         // Notifications: the Shell shows the person's notifications (bell, live via SignalR).
                         NotificationsApiScopesRequired.NOTIFICATIONS_READ,
                         NotificationsApiScopesRequired.NOTIFICATIONS_WRITE

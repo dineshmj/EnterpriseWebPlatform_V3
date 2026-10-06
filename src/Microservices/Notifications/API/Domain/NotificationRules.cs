@@ -37,52 +37,52 @@ public static class NotificationRules
             "KycCaseCreated" => NewWork("kyc_officer",
                 "New KYC case",
                 $"{Str(p, "ApplicantName") ?? Str(p, "CustomerNumber")} · {app} is waiting for KYC review.",
-                Target("kyc", "cases/view-details", Long(p, "KycCaseId"))),
+                Record("kyc", "/v1/kyc/cases/view-details", "caseId", Long(p, "KycCaseId"))),
 
             "KycCaseApproved" => Progress(
                 "KYC approved",
                 $"{By(p, "DecisionByLanId")} approved KYC for {Applicant(p)} ({app}). Compliance review is next.",
-                null),
+                Applications),
 
             "KycCaseRejected" => Progress(
                 "KYC rejected",
                 $"{By(p, "DecisionByLanId")} rejected KYC for {Applicant(p)} ({app}){Reason(p, "DecisionRemarks")}",
-                null),
+                Applications),
 
             "ComplianceCaseScreened" => NewWork("compliance_officer",
                 Str(p, "ScreeningOutcome") == "CLEAR" ? "New compliance case" : "New compliance case - screening alert",
                 $"{Str(p, "ApplicantName") ?? Str(p, "CustomerNumber")} · {app} was screened {Screening(p)} and awaits a compliance decision{Clearance(p)}.",
-                Target("compliance", "cases/view-details", Long(p, "ComplianceCaseId"))),
+                Record("compliance", "/v1/compliance/cases/view-details", "caseId", Long(p, "ComplianceCaseId"))),
 
             "ComplianceCaseApproved" => Progress(
                 "Compliance approved",
                 $"{By(p, "DecisionByLanId")} cleared {Applicant(p)} ({app}) for compliance{Risk(p)}. Account opening is next.",
-                null),
+                Applications),
 
             "ComplianceCaseRejected" => Progress(
                 "Compliance rejected",
                 $"{By(p, "DecisionByLanId")} rejected {Applicant(p)} ({app}) in compliance{Reason(p, "DecisionRemarks")}",
-                null),
+                Applications),
 
             "AccountApplicationCreated" => NewWork("account_officer",
                 "New account application",
                 $"{Str(p, "HolderName") ?? Str(p, "CustomerNumber")} · {app} is waiting for an account decision.",
-                Target("accounts", "applications/view-details", Long(p, "AccountApplicationId"))),
+                Record("accounts", "/v1/accounts/applications/view-details", "applicationId", Long(p, "AccountApplicationId"))),
 
             "AccountApplicationRejected" => Progress(
                 "Account opening rejected",
                 $"{By(p, "DecisionByLanId")} rejected the account for {Str(p, "HolderName") ?? "the customer"} ({app}){Reason(p, "DecisionRemarks")}",
-                null),
+                Applications),
 
             "AccountOpened" => Progress(
                 "Account opened",
                 $"Account {Str(p, "Bsb")} {Str(p, "AccountNumber")} is open for {Str(p, "HolderName") ?? "the customer"} ({app}). Onboarding is complete.",
-                null),
+                Applications),
 
             "AccountOpeningFailed" => Progress(
                 "Account could not be opened",
                 $"Core banking could not open the account for {Str(p, "HolderName") ?? "the customer"} ({app}). The onboarding has ended and can be started again.",
-                null),
+                Applications),
 
             _ => null
         };
@@ -113,8 +113,16 @@ public static class NotificationRules
     private static string Clearance(JsonElement p) =>
         Long(p, "RequiredClearance") is >= 5 ? " - approval needs clearance level 5" : string.Empty;
 
-    private static string? Target(string mfe, string page, long? recordId) =>
-        recordId is null ? null : JsonSerializer.Serialize(new { mfe, page, recordId });
+    /// <summary>
+    /// What a click opens: a path of the owning MFE (the Shell opens it only through a
+    /// microservice in the person's own menu, and the MFE's BFF checks it against its
+    /// allow-list). New work opens the record; progress opens the initiator's application list.
+    /// </summary>
+    private static string? Record(string mfe, string page, string idParameter, long? recordId) =>
+        recordId is null ? null : JsonSerializer.Serialize(new { mfe, path = $"{page}?{idParameter}={recordId}", recordId });
+
+    private static readonly string Applications =
+        JsonSerializer.Serialize(new { mfe = "customer-onboarding", path = "/v1/onboarding/applications/view-all" });
 
     private static string? Str(JsonElement element, string name) =>
         element.ValueKind == JsonValueKind.Object &&

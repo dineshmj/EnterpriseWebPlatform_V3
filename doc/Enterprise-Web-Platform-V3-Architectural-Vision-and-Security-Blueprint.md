@@ -121,7 +121,7 @@ CustomerOutboxPublisher ──► Kafka ◄── KYC Outbox relay
 | Documents Management | Generic / supporting | Present | [DocumentsManagement-Requirements.md](../src/Microservices/DocumentsManagement/doc/DocumentsManagement-Requirements.md) |
 | Identity and access | Generic | Present | [IDP-Requirements.md](../src/IDP/doc/IDP-Requirements.md) |
 | Composition (not a business context) | — | Present | [Shell-Requirements.md](../src/Shell/doc/Shell-Requirements.md) |
-| Notifications | Generic / supporting | Present (deep links from a notification: 4c) | [Notifications API README](../src/Microservices/Notifications/API/README.md), [Shell-Requirements.md §7](../src/Shell/doc/Shell-Requirements.md#7-workflow-notifications) |
+| Notifications | Generic / supporting | Present (including deep links from a notification) | [Notifications API README](../src/Microservices/Notifications/API/README.md), [Shell-Requirements.md §7](../src/Shell/doc/Shell-Requirements.md#7-workflow-notifications) |
 
 ### Context map
 
@@ -415,7 +415,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Saga choreography | Present (CO ⇄ KYC ⇄ Compliance ⇄ Accounts: submission to a COMPLETED onboarding) |
 | Compensation | Present (a rejection at any stage, and a failed account opening after approval: CO COMPENSATING → REJECTED; DM invalidates and retains the evidence; the customer returns to PROSPECT) |
 | Saga orchestration (Payments) | Planned |
-| User-specific SignalR notifications | Present (Notifications API stores and pushes to `user:{sub}` / `staff:{role}:{branch}` audiences derived from the token; the Shell proxies REST and the hub and shows a bell and toasts; connections close at token expiry). Deep links (4c) and a backplane for several instances are planned |
+| User-specific SignalR notifications | Present (Notifications API stores and pushes to `user:{sub}` / `staff:{role}:{branch}` audiences derived from the token; the Shell proxies REST and the hub and shows a bell and toasts; connections close at token expiry). A click opens the record through the menu-owned microservice and the normal navigation (4c). A backplane for several instances is planned |
 | Centralized audit trail | Planned |
 | OpenTelemetry / distributed tracing | Present (.NET components: one trace across HTTP, the Outbox and Kafka via `traceparent`; OTLP export when configured); Partial (KYC NestJS BFF not instrumented; no metrics yet) |
 | Security headers / CSP | Present: strict CSP on the Shell and the CO, KYC, Compliance and Accounts BFFs (hashed inline scripts, `frame-ancestors` / `frame-src`, `object-src 'none'`); IDP CSP on its pages; `nosniff`; Referrer-Policy |

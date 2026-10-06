@@ -28,7 +28,7 @@ Shell BFF  ── proxies /bff/notifications and /hubs/notifications with the pe
 | `ComplianceCaseApproved` / `Rejected` | The initiator | "olben cleared Camilla Parkers (APP-…001) for compliance (risk low)." |
 | `AccountApplicationRejected`, `AccountOpened`, `AccountOpeningFailed` | The initiator | "Account 062-000 10000001 is open for Camilla Parkers (APP-…001). Onboarding is complete." |
 
-The rules live in [Domain/NotificationRules.cs](Domain/NotificationRules.cs). People are named by LAN ID, customers by name; every notification also stores a **target** (e.g. `{"mfe":"kyc","page":"cases/view-details","recordId":3}`) that the Shell will open in a later increment (deep links).
+The rules live in [Domain/NotificationRules.cs](Domain/NotificationRules.cs). People are named by LAN ID, customers by name; every notification also stores a **target**, the page a click opens: new work opens the record (e.g. `{"mfe":"kyc","path":"/v1/kyc/cases/view-details?caseId=3","recordId":3}`), progress opens the initiator's application list (`/v1/onboarding/applications/view-all`). It holds no server name: the Shell opens the path only through a microservice in the person's own menu, and that BFF checks it against its allow-list.
 
 ## Endpoints
 

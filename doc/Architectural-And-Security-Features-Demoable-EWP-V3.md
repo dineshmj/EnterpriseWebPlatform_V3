@@ -342,7 +342,9 @@ When the workflow moves, the right people are told at once: the agent who starte
 
 In the Shell, a bell with the unread count and live toasts show them; the Shell holds the only connection per browser and relays each notification to the MFE in the frame, so an officer's work queue reloads by itself when new work arrives. A connection never outlives its access token: the hub closes it at expiry and the client reconnects through the BFF with a fresh one.
 
-**Not yet:** opening the record from a notification (deep links, 4c), and a SignalR backplane for more than one API instance.
+Clicking a notification opens the record (4c): new work opens the case or application, progress opens the application list. The Shell finds the server in the person's own menu (the notification holds only a path), asks the current MFE first so unsaved changes are protected, and the target BFF accepts the path only from its allow-list.
+
+**Not yet:** a SignalR backplane for more than one API instance.
 
 ### 1.6 Resilience and scale-out
 

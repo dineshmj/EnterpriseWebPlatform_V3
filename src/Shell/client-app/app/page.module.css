@@ -19,13 +19,16 @@
 .brandSubtitle { margin-top: 3px; color: rgba(255,255,255,.68); font-size: .76rem; letter-spacing: .03em; }
 .workspace { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .main { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; padding: 14px 18px 18px; }
-.workspaceBar { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.connectionStatus { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 7px; color: #475467; font-size: .74rem; white-space: nowrap; }
+.workspaceBar { min-height: 44px; display: flex; align-items: center; gap: 14px; }
+.connectionStatus { margin-left: auto; display: inline-flex; flex: 0 0 auto; align-items: center; gap: 7px; color: #475467; font-size: .74rem; white-space: nowrap; }
 .connectionDot { width: 7px; height: 7px; border-radius: 50%; background: #12b76a; box-shadow: 0 0 0 3px rgba(18,183,106,.12); }
 .connectionDotPending { width: 7px; height: 7px; border-radius: 50%; background: #f79009; box-shadow: 0 0 0 3px rgba(247,144,9,.14); }
 .headerActions { display: flex; align-items: center; gap: 6px; }
 .error { margin-bottom: 10px; padding: 10px 14px; border: 1px solid #fecaca; border-radius: 9px; color: #991b1b; background: #fff7f7; font-size: .84rem; }
 .frameShell { flex: 1; min-height: 0; overflow: hidden; border: 1px solid var(--shell-border); border-radius: 12px; background: #fff; box-shadow: 0 8px 24px rgba(16,42,67,.08); }
+.frameShell[hidden] { display: none; }
+.homeButton { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--shell-border); border-radius: 8px; background: #fff; color: var(--shell-text); font-size: .8rem; font-weight: 600; cursor: pointer; }
+.homeButton:hover { border-color: #bfd4fe; background: var(--shell-blue-soft); color: #175cd3; }
 .iframe { display: block; width: 100%; height: 100%; border: 0; background: #fff; }
 @media (max-width:760px) {
   .brandHeader { grid-template-columns: auto 1fr; padding: 10px 14px; }

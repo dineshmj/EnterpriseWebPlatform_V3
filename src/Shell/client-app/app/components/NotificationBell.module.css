@@ -24,6 +24,8 @@
 .itemTitle { display: flex; align-items: center; gap: 6px; font-size: .8rem; font-weight: 650; }
 .itemBody { color: #344054; font-size: .76rem; line-height: 1.35; }
 .itemTime { color: #98a2b3; font-size: .68rem; }
+.openHint { margin-left: 8px; color: #175cd3; font-weight: 650; }
+.openable:hover .openHint { text-decoration: underline; }
 .unreadDot { width: 7px; height: 7px; border-radius: 50%; background: var(--shell-blue); }
 
 .toastStack { position: fixed; right: 18px; bottom: 18px; z-index: 200; display: flex; flex-direction: column; gap: 10px; width: min(380px, calc(100vw - 36px)); pointer-events: none; }
@@ -33,6 +35,8 @@
 .toastText { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; color: var(--shell-text); }
 .toastText strong { font-size: .8rem; }
 .toastText span { color: #344054; font-size: .76rem; line-height: 1.35; }
+.toastOpen { padding: 0; border: 0; background: none; font: inherit; text-align: left; cursor: pointer; }
+.toastOpen:hover strong { color: #175cd3; text-decoration: underline; }
 .toastClose { flex: 0 0 auto; width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: #667085; font-size: 1.1rem; line-height: 1; cursor: pointer; }
 .toastClose:hover { background: #f2f4f7; }
 @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }

@@ -11,6 +11,10 @@ interface NotificationBellProps {
   status: LiveStatus;
   onMarkRead: (id: number) => void;
   onMarkAllRead: () => void;
+  /** Whether a notification opens a record the person can reach from their menu. */
+  canOpen: (notification: ShellNotification) => boolean;
+  /** Marks it read and opens it (through the Shell's normal navigation). */
+  onOpen: (notification: ShellNotification) => void;
 }
 
 function BellIcon() {
@@ -27,7 +31,7 @@ function BellIcon() {
  * latest notifications. The Shell only renders them; who receives what was decided by
  * the Notifications API from the person's token.
  */
-export function NotificationBell({ items, unreadCount, status, onMarkRead, onMarkAllRead }: NotificationBellProps) {
+export function NotificationBell({ items, unreadCount, status, onMarkRead, onMarkAllRead, canOpen, onOpen }: NotificationBellProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -72,10 +76,13 @@ export function NotificationBell({ items, unreadCount, status, onMarkRead, onMar
             <p className={styles.empty}>You&apos;re all caught up.</p>
           ) : (
             <ul className={styles.list}>
-              {items.map(n => (
+              {items.map(n => {
+                const openable = canOpen(n);
+                return (
                 <li key={n.id}>
-                  <button type="button" className={`${styles.item} ${n.read ? styles.read : ''}`} onClick={() => onMarkRead(n.id)}
-                    title={n.read ? undefined : 'Mark as read'}>
+                  <button type="button" className={`${styles.item} ${n.read ? styles.read : ''} ${openable ? styles.openable : ''}`}
+                    onClick={() => { if (openable) { setOpen(false); onOpen(n); } else { onMarkRead(n.id); } }}
+                    title={openable ? 'Open' : n.read ? undefined : 'Mark as read'}>
                     <span className={n.category === 'NEW_WORK' ? styles.kindWork : styles.kindProgress} aria-hidden="true" />
                     <span className={styles.itemText}>
                       <span className={styles.itemTitle}>
@@ -83,11 +90,15 @@ export function NotificationBell({ items, unreadCount, status, onMarkRead, onMar
                         {!n.read && <span className={styles.unreadDot} aria-label="unread" />}
                       </span>
                       <span className={styles.itemBody}>{n.body}</span>
-                      <span className={styles.itemTime}>{timeAgo(n.createdAt)}</span>
+                      <span className={styles.itemTime}>
+                        {timeAgo(n.createdAt)}
+                        {openable && <span className={styles.openHint}>Open ›</span>}
+                      </span>
                     </span>
                   </button>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </div>
@@ -97,15 +108,21 @@ export function NotificationBell({ items, unreadCount, status, onMarkRead, onMar
 }
 
 /** Live toasts, bottom right; each closes itself after a few seconds. */
-export function NotificationToasts({ toasts, onDismiss }: { toasts: ShellNotification[]; onDismiss: (id: number) => void }) {
+interface ToastProps {
+  onDismiss: (id: number) => void;
+  canOpen: (notification: ShellNotification) => boolean;
+  onOpen: (notification: ShellNotification) => void;
+}
+
+export function NotificationToasts({ toasts, ...props }: ToastProps & { toasts: ShellNotification[] }) {
   return (
     <div className={styles.toastStack} role="status" aria-live="polite">
-      {toasts.map(t => <Toast key={t.id} toast={t} onDismiss={onDismiss} />)}
+      {toasts.map(t => <Toast key={t.id} toast={t} {...props} />)}
     </div>
   );
 }
 
-function Toast({ toast, onDismiss }: { toast: ShellNotification; onDismiss: (id: number) => void }) {
+function Toast({ toast, onDismiss, canOpen, onOpen }: ToastProps & { toast: ShellNotification }) {
   useEffect(() => {
     const timer = window.setTimeout(() => onDismiss(toast.id), 7_000);
     return () => window.clearTimeout(timer);
@@ -113,10 +130,18 @@ function Toast({ toast, onDismiss }: { toast: ShellNotification; onDismiss: (id:
 
   return (
     <div className={`${styles.toast} ${toast.category === 'NEW_WORK' ? styles.toastWork : styles.toastProgress}`}>
-      <div className={styles.toastText}>
-        <strong>{toast.title}</strong>
-        <span>{toast.body}</span>
-      </div>
+      {canOpen(toast) ? (
+        <button type="button" className={`${styles.toastText} ${styles.toastOpen}`} title="Open"
+          onClick={() => { onDismiss(toast.id); onOpen(toast); }}>
+          <strong>{toast.title}</strong>
+          <span>{toast.body}</span>
+        </button>
+      ) : (
+        <div className={styles.toastText}>
+          <strong>{toast.title}</strong>
+          <span>{toast.body}</span>
+        </div>
+      )}
       <button type="button" className={styles.toastClose} onClick={() => onDismiss(toast.id)} aria-label="Dismiss">×</button>
     </div>
   );

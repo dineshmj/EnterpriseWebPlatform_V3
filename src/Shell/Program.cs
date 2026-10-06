@@ -143,6 +143,9 @@ builder.Services
 			// 🡡__ IF NOT: The handler will remap claim names to Microsoft-centric names which may break authorization logic expecting raw claim types.
         
         options.ClaimActions.MapJsonKey("role", "role", "role");
+        options.ClaimActions.MapJsonKey("branch", "branch");
+        options.ClaimActions.MapJsonKey("branch_city", "branch_city");
+        options.ClaimActions.MapJsonKey("lan_id", "lan_id");
 			// 🡡__ WHY   : Ensures the "role" claim from the UserInfo JSON payload or token is mapped into the principal so Role-based
 			//              authorization works as expected within ASP.NET (and so TokenValidationParameters.RoleClaimType aligns).
 			// 🡡__ IF NOT: Role information may be omitted from the created ClaimsPrincipal, causing role-based checks to fail.
@@ -157,6 +160,8 @@ builder.Services
         options.Scope.Add("profile");
         options.Scope.Add("email");
         options.Scope.Add("roles");
+        // Branch and LAN ID for the welcome screen (display only).
+        options.Scope.Add("organization");
         options.Scope.Add("offline_access");
         // Notifications API: the person's bell (REST) and live channel (SignalR), proxied below.
         options.Scope.Add(NotificationsApiScopesRequired.NOTIFICATIONS_READ);

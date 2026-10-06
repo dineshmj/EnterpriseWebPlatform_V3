@@ -7,8 +7,8 @@ export interface ShellNotification {
   category: 'PROGRESS' | 'NEW_WORK' | string;
   title: string;
   body: string;
-  /** The record it is about; opened by a later increment (deep links). */
-  target?: { mfe?: string; page?: string; recordId?: number } | null;
+  /** What a click opens: a path in the MFE that owns the record (see openablePath). */
+  target?: { mfe?: string; path?: string; recordId?: number } | null;
   createdAt: string;
   read: boolean;
 }
@@ -56,6 +56,25 @@ export function createNotificationConnection(): HubConnection {
     })
     .configureLogging(LogLevel.Warning)
     .build();
+}
+
+// A notification may only name a page path: "/v1/<area>/<page...>", optionally with one
+// numeric id parameter. No scheme, host, "//", "..", encoded characters or fragments.
+const OPENABLE_PATH = /^\/v1\/[a-z0-9-]+(\/[a-z0-9-]+)*\/?(\?[A-Za-z]+=\d{1,18})?$/;
+
+/** The first two segments, e.g. "/v1/kyc" - how a path is matched to the microservice that owns it. */
+export function areaOf(path: string): string {
+  return path.split(/[/?]/).slice(0, 3).join('/');
+}
+
+/**
+ * The path a notification opens, or null if it opens nothing. The Shell stays business-neutral:
+ * it checks only the format here, and opens the path through a microservice of the person's own
+ * menu, whose BFF checks it again against its allow-list (and whose API authorizes the record).
+ */
+export function openablePath(notification: ShellNotification): string | null {
+  const path = notification.target?.path;
+  return typeof path === 'string' && OPENABLE_PATH.test(path) ? path : null;
 }
 
 /** "just now", "5 min ago", "2 h ago", otherwise the date and time. */

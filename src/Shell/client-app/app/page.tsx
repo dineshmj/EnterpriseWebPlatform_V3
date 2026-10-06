@@ -5,13 +5,16 @@ import { AuthGuard } from './components/AuthGuard';
 import { UserProfile } from './components/UserProfile';
 import { NotificationBell, NotificationToasts } from './components/NotificationBell';
 import { useNotifications } from './hooks/useNotifications';
-import type { ShellNotification } from './lib/notifications';
+import { type ShellNotification, areaOf, openablePath } from './lib/notifications';
 import { ApplicationWorkspace } from './components/ApplicationWorkspace';
+import { WelcomePanel } from './components/WelcomePanel';
 import Image from 'next/image';
 import { TopNavMenu } from './components/TopNavMenu';
 import { useAuth } from './hooks/useAuth';
 import { MenuResponse, MenuItem } from './types';
 import { addVisitedMicroservice, setDiscoveredMicroservices } from './lib/auth-utils';
+import { getClaimValue } from './lib/auth';
+import { type LastVisit, readLastVisit, saveLastVisit } from './lib/last-visit';
 import { EMPTY_WORKSPACE_CONTEXT, type WorkspaceContext } from './workspace-context';
 import styles from './page.module.css';
 
@@ -69,6 +72,11 @@ function HomeContent() {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [menuData, setMenuData] = useState<MenuResponse | null>(null);
+  // Until the person opens a page, the Shell shows its welcome screen instead of an empty frame.
+  const [frameActive, setFrameActive] = useState(false);
+  const userId = user ? getClaimValue(user, 'sub') : null;
+  const [lastVisit, setLastVisit] = useState<LastVisit | null>(null);
+  useEffect(() => { setLastVisit(readLastVisit(userId)); }, [userId]);
 
   const [workspaceContext, setWorkspaceContext] =
     useState<WorkspaceContext>(EMPTY_WORKSPACE_CONTEXT);
@@ -123,7 +131,8 @@ function HomeContent() {
     return () => window.removeEventListener('message', handleFrameMessage);
   }, []);
 
-  const handleMenuItemClick = async (item: MenuItem) => {
+  /** Menu navigation. A page opened from the menu or a workspace tile is remembered for "Resume". */
+  const handleMenuItemClick = async (item: MenuItem, remember = true) => {
     setError(null);
     setLoading(true);
 
@@ -159,6 +168,10 @@ function HomeContent() {
     }
 
     addVisitedMicroservice(item.baseURL);
+    setFrameActive(true);
+    if (remember && item.microserviceName) {
+      saveLastVisit(userId, { microserviceName: item.microserviceName, taskName: item.taskName, urlRelativePath: item.urlRelativePath });
+    }
 
     // The new MFE will announce BSS_MFE_READY. At that point the Shell
     // hands it the latest opaque workspace context.
@@ -171,6 +184,55 @@ function HomeContent() {
     iframe.src = silentLoginUrl;
     iframe.onload = () => setLoading(false);
   };
+
+  // Deep links: a notification opens only through a microservice in the person's own menu
+  // that owns the path's area (e.g. "/v1/kyc"); otherwise it is shown but opens nothing.
+  const ownerOf = (notification: ShellNotification) => {
+    const path = openablePath(notification);
+    if (!path || !menuData) return null;
+    const area = areaOf(path);
+    const owner = menuData.microservices.find(ms =>
+      ms.managementAreas.some(ma => ma.menuItems.some(mi => areaOf(mi.urlRelativePath) === area)));
+    return owner ? { path, baseURL: owner.baseURL, name: owner.name } : null;
+  };
+
+  const openNotification = (notification: ShellNotification) => {
+    void notifications.markRead(notification.id);
+    const owner = ownerOf(notification);
+    if (!owner) return;
+    void handleMenuItemClick({
+      taskName: notification.title,
+      urlRelativePath: owner.path,
+      iconName: '',
+      microserviceName: owner.name,
+      baseURL: owner.baseURL,
+    }, false);
+  };
+
+  // Back to the welcome screen - after the MFE in the frame agrees (unsaved changes).
+  const goHome = async () => {
+    const iframe = document.getElementById('microservice-frame') as HTMLIFrameElement | null;
+    const currentOrigin = currentFrameOriginRef.current;
+    if (iframe && currentOrigin && !(await requestNavigationPermission(iframe, currentOrigin))) return;
+    currentFrameOriginRef.current = null;
+    if (iframe) { iframe.onload = null; iframe.src = 'about:blank'; }
+    setError(null);
+    setLoading(false);
+    setLastVisit(readLastVisit(userId));
+    setFrameActive(false);
+  };
+
+  // "Resume" only if the remembered page is still in the person's menu (roles can change).
+  const resumeItem = (() => {
+    if (!lastVisit || !menuData) return null;
+    for (const ms of menuData.microservices) {
+      for (const area of ms.managementAreas) {
+        const item = area.menuItems.find(mi => mi.urlRelativePath === lastVisit.urlRelativePath);
+        if (item) return { ...item, managementAreaName: area.name, microserviceName: ms.name, baseURL: ms.baseURL };
+      }
+    }
+    return null;
+  })();
 
   const loadMenu = async () => {
     try {
@@ -229,6 +291,8 @@ function HomeContent() {
             status={notifications.status}
             onMarkRead={id => void notifications.markRead(id)}
             onMarkAllRead={() => void notifications.markAllRead()}
+            canOpen={n => ownerOf(n) !== null}
+            onOpen={openNotification}
           />
           <UserProfile claims={user} />
         </div>
@@ -245,6 +309,11 @@ function HomeContent() {
 
         <main className={styles.main}>
           <div className={styles.workspaceBar}>
+            {frameActive && (
+              <button type="button" className={styles.homeButton} onClick={() => void goHome()} title="Back to your welcome screen">
+                <span aria-hidden="true">⌂</span> Home
+              </button>
+            )}
             <ApplicationWorkspace context={workspaceContext} />
 
             <span className={styles.connectionStatus}>
@@ -259,9 +328,27 @@ function HomeContent() {
             </div>
           )}
 
-          <NotificationToasts toasts={notifications.toasts} onDismiss={notifications.dismissToast} />
+          <NotificationToasts
+            toasts={notifications.toasts}
+            onDismiss={notifications.dismissToast}
+            canOpen={n => ownerOf(n) !== null}
+            onOpen={openNotification}
+          />
 
-          <div className={styles.frameShell}>
+          {!frameActive && (
+            <WelcomePanel
+              claims={user}
+              microservices={menuData?.microservices ?? null}
+              notifications={notifications.items}
+              unreadCount={notifications.unreadCount}
+              canOpen={n => ownerOf(n) !== null}
+              onOpenNotification={openNotification}
+              resume={resumeItem}
+              onNavigate={item => void handleMenuItemClick(item)}
+            />
+          )}
+
+          <div className={styles.frameShell} hidden={!frameActive}>
             <iframe
               id="microservice-frame"
               className={styles.iframe}
