@@ -338,8 +338,11 @@ When the workflow moves, the right people are told at once: the agent who starte
 - Rules and audiences: [NotificationRules.cs](../src/Microservices/Notifications/API/Domain/NotificationRules.cs), [Notification.cs](../src/Microservices/Notifications/API/Domain/Notification.cs)
 - Hub and store-then-push: [NotificationsHub.cs](../src/Microservices/Notifications/API/Hubs/NotificationsHub.cs), [PublishFromEvent.cs](../src/Microservices/Notifications/API/Application/PublishFromEvent.cs)
 - The worker: [NotificationsSubscriber](../src/AsyncWorkflows/Subscribers/Notifications/NotificationsSubscriber/README.md); the proxy and Origin check: [Shell Program.cs](../src/Shell/Program.cs)
+- The Shell UI: [NotificationBell.tsx](../src/Shell/client-app/app/components/NotificationBell.tsx), [useNotifications.ts](../src/Shell/client-app/app/hooks/useNotifications.ts); the MFE side: `useShellNotifications` in each MFE's `MfeShell.tsx`
 
-**Not yet:** the bell and toasts in the Shell (4b), opening the record from a notification (4c), and a SignalR backplane for more than one API instance.
+In the Shell, a bell with the unread count and live toasts show them; the Shell holds the only connection per browser and relays each notification to the MFE in the frame, so an officer's work queue reloads by itself when new work arrives. A connection never outlives its access token: the hub closes it at expiry and the client reconnects through the BFF with a fresh one.
+
+**Not yet:** opening the record from a notification (deep links, 4c), and a SignalR backplane for more than one API instance.
 
 ### 1.6 Resilience and scale-out
 

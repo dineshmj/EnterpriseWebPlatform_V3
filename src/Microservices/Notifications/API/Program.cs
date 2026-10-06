@@ -112,7 +112,10 @@ app.UseAuthorization();
 
 // Deny by default: every endpoint needs an authenticated caller, on top of its own policy.
 app.MapControllers().RequireAuthorization();
-app.MapHub<NotificationsHub>(NotificationsHub.Path).RequireAuthorization("NotificationsRead");
+// A connection never outlives its access token: when the token expires the hub closes it,
+// and the client reconnects through the Shell BFF, which supplies a fresh token.
+app.MapHub<NotificationsHub>(NotificationsHub.Path, options => options.CloseOnAuthenticationExpiration = true)
+    .RequireAuthorization("NotificationsRead");
 app.MapEwpHealthEndpoints();
 
 await app.RunAsync();

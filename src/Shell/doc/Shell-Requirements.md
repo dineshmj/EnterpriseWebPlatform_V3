@@ -7,7 +7,7 @@
 
 ## 1. Purpose and Boundary
 
-The Shell is the **composition host** of the Banking Services System. It provides branding, sign-in, navigation, the Application Workspace and the notification display (backend in place since 4a; the bell and toasts arrive in 4b), and it hosts each bounded context's MFE in an iframe.
+The Shell is the **composition host** of the Banking Services System. It provides branding, sign-in, navigation, the Application Workspace and the notification display (bell, unread count, live toasts), and it hosts each bounded context's MFE in an iframe.
 
 The Shell is **deliberately business-neutral**:
 
@@ -16,7 +16,7 @@ The Shell is **deliberately business-neutral**:
 | Authenticate the user and hold the Shell session | Call business APIs or read business databases |
 | Render the role-aware menu from its own Menu DB | Resolve, interpret or validate business identifiers |
 | Host MFEs and relay opaque workspace context between them | Implement any business rule, or coordinate a saga |
-| Display notifications that are already addressed and authorized (4b) | Decide who should receive a business notification |
+| Display notifications that are already addressed and authorized | Decide who should receive a business notification |
 | Own the user-facing logout | Treat menu visibility as authorization |
 
 ### Deployable components
@@ -111,7 +111,7 @@ Cookies stay isolated per host name (`*.dev.localhost` locally), and a logout mu
 
 - A separate **Notifications** context (the [NotificationsSubscriber](../../AsyncWorkflows/Subscribers/Notifications/NotificationsSubscriber/README.md) plus the [Notifications API](../../Microservices/Notifications/API/README.md) with its SignalR hub, outside the Shell) maps business events to **neutral notifications**: audience, title, text and a stored target for a later deep link. It applies the notification-audience policy of [Authorization-Model §11](../../../doc/Authorization-Model.md#11-notification-authorization).
 - **Present (4a):** the Shell BFF proxies `/bff/notifications` (REST: list, mark read) and `/hubs/notifications` (SignalR) to the Notifications API with the person's access token. It holds no notification logic and no Kafka connection. The hub route skips Duende's anti-forgery header (a browser cannot send it on a WebSocket) and checks the request `Origin` instead.
-- **Planned (4b):** the bell with the unread count, live toasts and "mark read" in the profile area; new-work notifications passed to the MFE iframes so their work queues reload. **Later (4c):** opening the stored target (deep link).
+- **Present (4b):** the bell with the unread count, a panel with the latest 50 (mark one or all read) and live toasts in the profile area; the workspace bar shows whether live updates are connected. The Shell holds the **only** live connection per browser (`@microsoft/signalr`, reconnecting forever with back-off; unread notifications are reloaded after every reconnect) and relays each live notification to the MFE in the frame as `BSS_NOTIFICATION` (to that MFE's origin only). The MFE decides what to do: the KYC, Compliance and Accounts work queues reload on new work for them, and the CO application list reloads on progress. **Later (4c):** opening the stored target (deep link).
 - The Shell opens an authenticated connection for the signed-in user and **only renders** what it receives. It never inspects business payloads and never broadcasts to all users.
 - A deep link uses the normal menu navigation and MFE sign-in, so the target MFE authorizes again.
 
@@ -129,4 +129,4 @@ Cookies stay isolated per host name (`*.dev.localhost` locally), and a logout mu
 | Middleware order `UseBff()` before `UseAuthorization()` | Present |
 | Server-side sessions (tokens not carried in the cookie) | Present in the Shell and CO BFF (Duende in-memory store; a persistent store is needed for multiple instances). The NestJS KYC BFF uses the in-memory `express-session` store. |
 | Logout propagation to every MFE BFF | Present via IDP front-channel logout (each BFF's `/signout-oidc`) |
-| Notification display | Partial: REST and SignalR proxied (4a); bell and toasts in 4b |
+| Notification display | Present: bell, toasts, mark read; relayed to the MFE in the frame. Deep links later (4c) |

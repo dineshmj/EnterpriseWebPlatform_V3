@@ -1,8 +1,8 @@
 'use client';
 
 import { ClipboardList, RefreshCw } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { MfeShell, publishSelection } from '../../../../components/MfeShell';
+import { useCallback, useEffect, useState } from 'react';
+import { MfeShell, publishSelection, useShellNotifications } from '../../../../components/MfeShell';
 import { CustomerOnboardingForm } from '../../../../components/CustomerOnboardingForm';
 import { Button } from '../../../../components/ui/button';
 import { Card, CardHeader } from '../../../../components/ui/card';
@@ -35,6 +35,9 @@ export default function ApplicationsPage() {
   useEffect(() => {
     void loadApplications();
   }, []);
+
+  // An application of yours moved (relayed by the Shell): show its new status.
+  useShellNotifications(useCallback(() => { void loadApplications(); }, []));
 
   // Picking an application tells the Shell, so the Application Workspace shows it.
   async function selectApplication(application: Application) {

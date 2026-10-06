@@ -2,8 +2,8 @@
 
 import { CheckCircle2, ChevronRight, Inbox } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { MfeShell } from './MfeShell';
+import { useCallback, useEffect, useState } from 'react';
+import { MfeShell, type ShellNotification, useShellNotifications } from './MfeShell';
 import { getJson } from '../lib/api';
 import { Card, CardHeader } from './ui/card';
 import { Table, Td, Th, formatDateTime } from './ui/data';
@@ -40,13 +40,18 @@ interface Props {
 
 export function KycCaseWorkQueue({ title, subtitle, description }: Props) {
   const [data, setData] = useState<PageResult | null>(null);
+  // New KYC work for this branch (relayed by the Shell) reloads the queue.
+  const [refresh, setRefresh] = useState(0);
+  useShellNotifications(useCallback((n: ShellNotification) => {
+    if (n.target?.mfe === 'kyc') setRefresh(r => r + 1);
+  }, []));
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     getJson<PageResult>('/bff/api/kyc/cases?pageNumber=1&pageSize=25&status=PENDING_REVIEW')
       .then(setData)
       .catch(error => setError(error instanceof Error ? error.message : 'Unable to load KYC cases.'));
-  }, []);
+  }, [refresh]);
 
   return (
     <MfeShell title={title} subtitle="Customer KYC">

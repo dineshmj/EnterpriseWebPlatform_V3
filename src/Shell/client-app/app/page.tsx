@@ -1,8 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { AuthGuard } from './components/AuthGuard';
 import { UserProfile } from './components/UserProfile';
+import { NotificationBell, NotificationToasts } from './components/NotificationBell';
+import { useNotifications } from './hooks/useNotifications';
+import type { ShellNotification } from './lib/notifications';
 import { ApplicationWorkspace } from './components/ApplicationWorkspace';
 import Image from 'next/image';
 import { TopNavMenu } from './components/TopNavMenu';
@@ -74,6 +77,17 @@ function HomeContent() {
 
   // The Shell is only a transport/rendering host for workspace context.
   const currentContextRef = useRef<WorkspaceContext>(EMPTY_WORKSPACE_CONTEXT);
+
+  // Notifications: the Shell holds the only live connection and relays each live
+  // notification to the MFE in the frame (its own origin only); the MFE decides
+  // whether to reload, e.g. a work queue on new work.
+  const relayToFrame = useCallback((notification: ShellNotification) => {
+    const iframe = document.getElementById('microservice-frame') as HTMLIFrameElement | null;
+    const origin = currentFrameOriginRef.current;
+    if (!iframe?.contentWindow || !origin) return;
+    iframe.contentWindow.postMessage({ type: 'BSS_NOTIFICATION', notification }, origin);
+  }, []);
+  const notifications = useNotifications(relayToFrame);
 
   useEffect(() => {
     function handleFrameMessage(event: MessageEvent) {
@@ -208,7 +222,16 @@ function HomeContent() {
           </p>
         </div>
 
-        <UserProfile claims={user} />
+        <div className={styles.headerActions}>
+          <NotificationBell
+            items={notifications.items}
+            unreadCount={notifications.unreadCount}
+            status={notifications.status}
+            onMarkRead={id => void notifications.markRead(id)}
+            onMarkAllRead={() => void notifications.markAllRead()}
+          />
+          <UserProfile claims={user} />
+        </div>
       </header>
 
       <div className={styles.workspace}>
@@ -225,8 +248,8 @@ function HomeContent() {
             <ApplicationWorkspace context={workspaceContext} />
 
             <span className={styles.connectionStatus}>
-              <span className={styles.connectionDot} />
-              Session active
+              <span className={notifications.status === 'live' ? styles.connectionDot : styles.connectionDotPending} />
+              {notifications.status === 'live' ? 'Session active · live updates' : 'Session active · reconnecting live updates'}
             </span>
           </div>
 
@@ -235,6 +258,8 @@ function HomeContent() {
               <strong>Error:</strong> {error}
             </div>
           )}
+
+          <NotificationToasts toasts={notifications.toasts} onDismiss={notifications.dismissToast} />
 
           <div className={styles.frameShell}>
             <iframe

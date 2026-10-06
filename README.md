@@ -28,7 +28,7 @@ Enterprise Web Platform V3 (EWP V3) is a demonstration banking-services platform
 | Screening Provider Simulator (stand-in for an external AML vendor) | `src/Simulators/ScreeningProviderSimulator` | ASP.NET Core 10 | Present |
 | Accounts (MFE/BFF, API, Account Application Opening Subscriber) | `src/Microservices/Accounts`, `src/AsyncWorkflows/Subscribers/Accounts` | Next.js, ASP.NET Core 10, .NET worker | Present |
 | Core Banking Simulator (stand-in for the core-banking system) | `src/Simulators/CoreBankingSimulator` | ASP.NET Core 10 | Present |
-| Notifications (API with SignalR hub, Notifications Subscriber; displayed by the Shell) | `src/Microservices/Notifications`, `src/AsyncWorkflows/Subscribers/Notifications` | ASP.NET Core 10, SignalR, .NET worker | Present (backend; Shell display in 4b) |
+| Notifications (API with SignalR hub, Notifications Subscriber; displayed by the Shell) | `src/Microservices/Notifications`, `src/AsyncWorkflows/Subscribers/Notifications` | ASP.NET Core 10, SignalR, .NET worker | Present |
 | Payments | `src/Microservices/Payments` | — | Planned |
 | Infrastructure | PostgreSQL 18 and Kafka 4 (KRaft) installed natively; Kafka secured with [kafka/Setup-KafkaSecurity.ps1](kafka/README.md) | SCRAM-SHA-512 users, per-topic ACLs, Kafka UI (read-only) | Present |
 | Observability | `src/Common/Observability` | OpenTelemetry traces across HTTP and Kafka (OTLP, e.g. Jaeger); `/health/live` and `/health/ready` on every component | Present |

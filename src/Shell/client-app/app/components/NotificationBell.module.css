@@ -1,0 +1,40 @@
+.bellArea { position: relative; display: flex; align-items: center; }
+.bellButton { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border: 1px solid transparent; border-radius: 10px; color: #fff; background: transparent; cursor: pointer; transition: background-color 160ms ease, border-color 160ms ease; }
+.bellButton:hover, .bellButton[aria-expanded="true"] { background: rgba(255,255,255,.09); border-color: rgba(255,255,255,.12); }
+.bellButton:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+.badge { position: absolute; top: 4px; right: 3px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; border: 2px solid var(--shell-navy-900); color: #fff; background: #e5484d; font-size: .62rem; font-weight: 700; line-height: 14px; text-align: center; }
+.offlineDot { position: absolute; bottom: 7px; right: 8px; width: 8px; height: 8px; border-radius: 50%; border: 2px solid var(--shell-navy-900); background: #f79009; }
+
+.panel { position: absolute; top: calc(100% + 10px); right: -4px; width: 360px; max-height: min(70vh, 520px); display: flex; flex-direction: column; z-index: 100; border: 1px solid var(--shell-border); border-radius: 12px; background: #fff; box-shadow: 0 16px 40px rgba(16,42,67,.18); color: var(--shell-text); overflow: hidden; }
+.panelHeader { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #edf0f4; font-size: .84rem; }
+.linkButton { border: 0; background: transparent; color: var(--shell-blue); font-size: .74rem; font-weight: 600; cursor: pointer; }
+.linkButton:disabled { color: #98a2b3; cursor: default; }
+.statusNote { margin: 0; padding: 8px 14px; color: #93370d; background: #fffaeb; font-size: .72rem; border-bottom: 1px solid #fef0c7; }
+.empty { padding: 28px 14px; color: var(--shell-muted); font-size: .8rem; text-align: center; }
+.list { list-style: none; margin: 0; padding: 4px; overflow-y: auto; }
+.item { width: 100%; display: flex; gap: 10px; padding: 10px; border: 0; border-radius: 9px; background: #f5f9ff; text-align: left; cursor: pointer; color: inherit; }
+.item:hover { background: #eaf2ff; }
+.item + .item { margin-top: 2px; }
+.read { background: transparent; }
+.read:hover { background: #f6f8fb; }
+.kindWork, .kindProgress { flex: 0 0 auto; width: 8px; margin-top: 4px; height: 30px; border-radius: 4px; }
+.kindWork { background: #f79009; }
+.kindProgress { background: var(--shell-blue); }
+.itemText { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.itemTitle { display: flex; align-items: center; gap: 6px; font-size: .8rem; font-weight: 650; }
+.itemBody { color: #344054; font-size: .76rem; line-height: 1.35; }
+.itemTime { color: #98a2b3; font-size: .68rem; }
+.unreadDot { width: 7px; height: 7px; border-radius: 50%; background: var(--shell-blue); }
+
+.toastStack { position: fixed; right: 18px; bottom: 18px; z-index: 200; display: flex; flex-direction: column; gap: 10px; width: min(380px, calc(100vw - 36px)); pointer-events: none; }
+.toast { pointer-events: auto; display: flex; gap: 10px; padding: 12px 12px 12px 14px; border: 1px solid var(--shell-border); border-left-width: 4px; border-radius: 10px; background: #fff; box-shadow: 0 12px 30px rgba(16,42,67,.18); animation: toastIn 180ms ease-out; }
+.toastWork { border-left-color: #f79009; }
+.toastProgress { border-left-color: var(--shell-blue); }
+.toastText { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; color: var(--shell-text); }
+.toastText strong { font-size: .8rem; }
+.toastText span { color: #344054; font-size: .76rem; line-height: 1.35; }
+.toastClose { flex: 0 0 auto; width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: #667085; font-size: 1.1rem; line-height: 1; cursor: pointer; }
+.toastClose:hover { background: #f2f4f7; }
+@keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
+@media (max-width:650px) { .panel { width: calc(100vw - 28px); right: -60px; } }

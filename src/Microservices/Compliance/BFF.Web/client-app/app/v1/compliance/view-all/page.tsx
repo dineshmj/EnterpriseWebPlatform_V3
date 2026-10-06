@@ -2,8 +2,8 @@
 
 import { CheckCircle2, ChevronRight, Inbox } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { MfeShell } from '../../../components/MfeShell';
+import { useCallback, useEffect, useState } from 'react';
+import { MfeShell, type ShellNotification, useShellNotifications } from '../../../components/MfeShell';
 import { RiskBadge } from '../../../components/RiskBadge';
 import { Card, CardHeader } from '../../../components/ui/card';
 import { cn } from '../../../components/ui/cn';
@@ -29,6 +29,12 @@ export default function ComplianceWorkQueuePage() {
     getOfficer().then(setOfficer).catch(() => setOfficer(null));
   }, []);
 
+  // New work for this branch (relayed by the Shell) reloads the queue.
+  const [refresh, setRefresh] = useState(0);
+  useShellNotifications(useCallback((n: ShellNotification) => {
+    if (n.target?.mfe === 'compliance') setRefresh(r => r + 1);
+  }, []));
+
   useEffect(() => {
     setData(null);
     setError(null);
@@ -36,7 +42,7 @@ export default function ComplianceWorkQueuePage() {
     getJson<ComplianceCasePage>(`/bff/api/compliance/cases?pageNumber=1&pageSize=50${status}`)
       .then(setData)
       .catch(e => setError(e instanceof Error ? e.message : 'Unable to load compliance cases.'));
-  }, [filter]);
+  }, [filter, refresh]);
 
   const assignee = (id?: string | null, lanId?: string | null) =>
     !id ? 'Unassigned' : id === officer?.sub ? 'You' : (lanId ?? shortId(id));

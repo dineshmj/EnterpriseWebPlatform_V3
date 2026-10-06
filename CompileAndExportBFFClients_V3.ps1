@@ -1,6 +1,81 @@
-cls
+﻿cls
 
 $ErrorActionPreference = "Stop"
+
+enum BoxPart {
+    BOX_STARTING
+    BOX_EMPTY_LINE
+    BOX_TEXT
+    BOX_ENDING
+}
+
+$BoxWidth   = 141
+$InnerWidth = $BoxWidth - 2
+
+function Write-Box {
+    param(
+        [Parameter(Mandatory)]
+        [BoxPart]$BoxPart,
+
+        [Parameter(Mandatory = $false)]
+        [string]$Text = "",
+
+        [Parameter(Mandatory = $false)]
+        [ConsoleColor]$Color = [ConsoleColor]::Cyan,
+
+        # Centre the text in the box (step banners); otherwise it is indented by four spaces.
+        [switch]$Center
+    )
+
+    switch ($BoxPart) {
+
+        ([BoxPart]::BOX_STARTING) {
+            Write-Host ("╔" + ("═" * $InnerWidth) + "╗") -ForegroundColor $Color
+        }
+
+        ([BoxPart]::BOX_EMPTY_LINE) {
+            Write-Host ("║" + (" " * $InnerWidth) + "║") -ForegroundColor $Color
+        }
+
+        ([BoxPart]::BOX_TEXT) {
+            if ($Center) {
+                $leftPadding = [Math]::Max(0, [Math]::Floor(($InnerWidth - $Text.Length) / 2))
+                $Text = (" " * $leftPadding) + $Text
+            }
+            else {
+                $Text = "    $Text"
+            }
+
+            if ($Text.Length -gt $InnerWidth) {
+                $Text = $Text.Substring(0, $InnerWidth)
+            }
+
+            Write-Host ("║" + $Text.PadRight($InnerWidth) + "║") -ForegroundColor $Color
+        }
+
+        ([BoxPart]::BOX_ENDING) {
+            Write-Host ("╚" + ("═" * $InnerWidth) + "╝") -ForegroundColor $Color
+        }
+    }
+}
+
+# A step or summary banner: a box with one centred title line.
+function Write-Banner {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Title,
+
+        [Parameter(Mandatory = $false)]
+        [ConsoleColor]$Color = [ConsoleColor]::Yellow
+    )
+
+    Write-Host ""
+    Write-Box BOX_STARTING -Color $Color
+    Write-Box BOX_EMPTY_LINE -Color $Color
+    Write-Box BOX_TEXT $Title -Color $Color -Center
+    Write-Box BOX_EMPTY_LINE -Color $Color
+    Write-Box BOX_ENDING -Color $Color
+}
 
 # In Windows PowerShell / PowerShell ISE, invoking `pnpm` can resolve to pnpm.ps1.
 # Use pnpm.cmd explicitly. PowerShell ISE surfaces native stderr as NativeCommandError
@@ -24,11 +99,17 @@ function Invoke-Pnpm {
         throw "Directory not found: '$Directory'"
     }
 
-    Write-Host "`r`n`t######################################################################################################################################################" -ForegroundColor Cyan
-    Write-Host "`t$Description" -ForegroundColor Cyan
-    Write-Host "`tDirectory: $Directory" -ForegroundColor Cyan
-    Write-Host "`tCommand: pnpm $($Arguments -join ' ')" -ForegroundColor Cyan
-    Write-Host "`t######################################################################################################################################################" -ForegroundColor Cyan
+    Write-Host "`r`n"
+
+    Write-Box BOX_STARTING
+    Write-Box BOX_EMPTY_LINE
+    Write-Box BOX_TEXT $Description
+    Write-Box BOX_TEXT "Directory: $Directory"
+    Write-Box BOX_EMPTY_LINE
+    Write-Box BOX_TEXT "Command: pnpm $($Arguments -join ' ')"
+    Write-Box BOX_EMPTY_LINE
+    Write-Box BOX_ENDING
+
     Write-Host "`r`n"
 
     Push-Location -LiteralPath $Directory
@@ -229,9 +310,7 @@ foreach ($folder in $requiredFolders) {
 # Step 1 - Shell Next.js SPA
 # ----------------------------------------------------------------------------------------------------------------------
 
-Write-Host "`r`n==================================================================================================================" -ForegroundColor Yellow
-Write-Host "==  Step #1: Shell Next.js client - PNPM install, build and export                                              ==" -ForegroundColor Yellow
-Write-Host "==================================================================================================================" -ForegroundColor Yellow
+Write-Banner "Step #1: Shell Next.js client - PNPM install, build and export"
 
 Build-NextJS-Client -Directory $shellSpaAppFolder
 
@@ -239,9 +318,7 @@ Build-NextJS-Client -Directory $shellSpaAppFolder
 # Step 2 - Customer Onboarding Next.js SPA
 # ----------------------------------------------------------------------------------------------------------------------
 
-Write-Host "`r`n==================================================================================================================" -ForegroundColor Yellow
-Write-Host "==  Step #2: Customer Onboarding Next.js client - PNPM install, build and export                                ==" -ForegroundColor Yellow
-Write-Host "==================================================================================================================" -ForegroundColor Yellow
+Write-Banner "Step #2: Customer Onboarding Next.js client - PNPM install, build and export"
 
 Build-NextJS-Client -Directory $customerOnboardingSpaAppFolder
 
@@ -249,9 +326,7 @@ Build-NextJS-Client -Directory $customerOnboardingSpaAppFolder
 # Step 3 - KYC Next.js SPA
 # ----------------------------------------------------------------------------------------------------------------------
 
-Write-Host "`r`n==================================================================================================================" -ForegroundColor Yellow
-Write-Host "==  Step #3: KYC Next.js client - PNPM install, build and export                                                ==" -ForegroundColor Yellow
-Write-Host "==================================================================================================================" -ForegroundColor Yellow
+Write-Banner "Step #3: KYC Next.js client - PNPM install, build and export"
 
 Build-NextJS-Client -Directory $kycSpaAppFolder
 
@@ -259,9 +334,7 @@ Build-NextJS-Client -Directory $kycSpaAppFolder
 # Step 4 - KYC NestJS BFF
 # ----------------------------------------------------------------------------------------------------------------------
 
-Write-Host "`r`n==================================================================================================================" -ForegroundColor Yellow
-Write-Host "==  Step #4: KYC NestJS BFF - PNPM install and build                                                            ==" -ForegroundColor Yellow
-Write-Host "==================================================================================================================" -ForegroundColor Yellow
+Write-Banner "Step #4: KYC NestJS BFF - PNPM install and build"
 
 Build-NestJS-BFF -Directory $kycBffFolder
 
@@ -269,9 +342,7 @@ Build-NestJS-BFF -Directory $kycBffFolder
 # Step 5 - Compliance Next.js SPA (served by the ASP.NET Core Compliance BFF)
 # ----------------------------------------------------------------------------------------------------------------------
 
-Write-Host "`r`n==================================================================================================================" -ForegroundColor Yellow
-Write-Host "==  Step #5: Compliance Next.js client - PNPM install, build and export                                         ==" -ForegroundColor Yellow
-Write-Host "==================================================================================================================" -ForegroundColor Yellow
+Write-Banner "Step #5: Compliance Next.js client - PNPM install, build and export"
 
 Build-NextJS-Client -Directory $complianceSpaAppFolder
 
@@ -279,9 +350,7 @@ Build-NextJS-Client -Directory $complianceSpaAppFolder
 # Step 6 - Accounts Next.js SPA (served by the ASP.NET Core Accounts BFF)
 # ----------------------------------------------------------------------------------------------------------------------
 
-Write-Host "`r`n==================================================================================================================" -ForegroundColor Yellow
-Write-Host "==  Step #6: Accounts Next.js client - PNPM install, build and export                                           ==" -ForegroundColor Yellow
-Write-Host "==================================================================================================================" -ForegroundColor Yellow
+Write-Banner "Step #6: Accounts Next.js client - PNPM install, build and export"
 
 Build-NextJS-Client -Directory $accountsSpaAppFolder
 
@@ -289,10 +358,9 @@ Build-NextJS-Client -Directory $accountsSpaAppFolder
 # Done
 # ----------------------------------------------------------------------------------------------------------------------
 
-Write-Host "`r`n==================================================================================================================" -ForegroundColor Green
-Write-Host "==  EWP V3 client/BFF compilation and export completed successfully.                                            ==" -ForegroundColor Green
-Write-Host "==================================================================================================================" -ForegroundColor Green
-Write-Host "`r`nBuilt/exported:" -ForegroundColor Green
+Write-Banner "EWP V3 client/BFF compilation and export completed successfully." -Color Green
+
+Write-Host "`r`nBuilt/exported:`r`n" -ForegroundColor Green
 Write-Host "  1. Shell Next.js client"
 Write-Host "  2. Customer Onboarding Next.js client"
 Write-Host "  3. KYC Next.js client"

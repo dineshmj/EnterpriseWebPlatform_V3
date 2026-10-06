@@ -265,7 +265,8 @@ kyc.case.created / compliance.case.created / accounts.application.created
 kyc.case.approved|rejected, compliance.case.*, accounts.application.rejected, accounts.account.opened|opening.failed
   → NotificationsSubscriber → Notifications API: "etpar approved KYC for Camilla Parkers …" for user:{initiator}
   → Inbox + notifications rows (one transaction) → pushed over SignalR to the audience's connections
-  → Shell BFF proxies the hub and /bff/notifications with the person's token (display: increment 4b)
+  → Shell BFF proxies the hub and /bff/notifications with the person's token
+  → Shell: bell + toast; relays BSS_NOTIFICATION to the MFE in the frame (work queues reload on new work)
 ```
 
 ## Where each authorization type is decided

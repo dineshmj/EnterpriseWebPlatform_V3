@@ -110,6 +110,30 @@ interface PendingNavigationRequest {
   origin: string;
 }
 
+/** A notification the Shell relays to the MFE (its own copy of what the bell received). */
+export interface ShellNotification {
+  id: number;
+  category: 'PROGRESS' | 'NEW_WORK' | string;
+  title: string;
+  body: string;
+  target?: { mfe?: string; page?: string; recordId?: number } | null;
+}
+
+/**
+ * Calls the listener for every notification the Shell relays to this MFE - e.g. a work
+ * queue reloads when new work for it arrives. The Shell only relays; the page decides.
+ */
+export function useShellNotifications(listener: (notification: ShellNotification) => void) {
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const notification = (event as CustomEvent<ShellNotification>).detail;
+      if (notification) listener(notification);
+    };
+    window.addEventListener('bss-notification', handler);
+    return () => window.removeEventListener('bss-notification', handler);
+  }, [listener]);
+}
+
 export function MfeShell({
   title = 'KYC review',
   subtitle = 'Customer KYC',
@@ -139,6 +163,14 @@ export function MfeShell({
         latestWorkspaceContext = nextContext;
         window.dispatchEvent(
           new CustomEvent('bss-context-handoff', { detail: nextContext }),
+        );
+        return;
+      }
+
+      // A notification relayed by the Shell (it holds the only live connection).
+      if (event.data?.type === 'BSS_NOTIFICATION') {
+        window.dispatchEvent(
+          new CustomEvent('bss-notification', { detail: event.data.notification }),
         );
         return;
       }
