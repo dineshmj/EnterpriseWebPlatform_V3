@@ -6,7 +6,7 @@ Kafka subscriber **owned by the Notifications context**. It reads the workflow's
 
 ```text
 kyc.case.created / approved / rejected
-compliance.case.created / approved / rejected
+compliance.case.screened / approved / rejected
 accounts.application.created / rejected, accounts.account.opened / opening.failed
         │  (consumer group: notifications.subscriber; Kafka user: ewp-notifications-subscriber)
         ▼

@@ -73,6 +73,11 @@ export function publishWorkspaceContext(context: WorkspaceContext) {
   );
 }
 
+/** The workspace context this MFE last published or received from the Shell. */
+export function getWorkspaceContext(): WorkspaceContext {
+  return latestWorkspaceContext;
+}
+
 const sameTitle = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
 /**

@@ -75,6 +75,7 @@ $Topics = @(
     'customer-kyc.case-opening-subscriber.dlq',
     'customer-onboarding.outcome-subscriber.dlq',
     'compliance.case.created',
+    'compliance.case.screened',
     'compliance.case.approved',
     'compliance.case.rejected',
     'compliance.case-opening-subscriber.dlq',
@@ -96,7 +97,7 @@ $NewGroups = [ordered]@{
     'accounts.application-opening-subscriber' = @('compliance.case.approved')
     # Starts at "latest": notifications are about what happens from now on, never a replay of history.
     'notifications.subscriber'                = @('kyc.case.created', 'kyc.case.approved', 'kyc.case.rejected',
-                                                  'compliance.case.created', 'compliance.case.approved', 'compliance.case.rejected',
+                                                  'compliance.case.screened', 'compliance.case.approved', 'compliance.case.rejected',
                                                   'accounts.application.created', 'accounts.application.rejected',
                                                   'accounts.account.opened', 'accounts.account.opening.failed')
 }
@@ -298,7 +299,7 @@ switch ($Phase) {
 
     Write-Host 'NotificationsSubscriber: read the workflow outcome / new-work topics and its group; write its dead-letter topic' -ForegroundColor Cyan
     foreach ($t in 'kyc.case.created', 'kyc.case.approved', 'kyc.case.rejected',
-                                                  'compliance.case.created', 'compliance.case.approved', 'compliance.case.rejected',
+                                                  'compliance.case.screened', 'compliance.case.approved', 'compliance.case.rejected',
                                                   'accounts.application.created', 'accounts.application.rejected',
                                                   'accounts.account.opened', 'accounts.account.opening.failed') {
         Grant 'ewp-notifications-subscriber' "--operation Read --operation Describe --topic $t"

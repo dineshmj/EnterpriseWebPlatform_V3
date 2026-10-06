@@ -260,7 +260,7 @@ KYC (Ethan), Compliance (Olivia / Grace) or Accounts (Jack) rejects
 ## Alongside every phase: notifications
 
 ```text
-kyc.case.created / compliance.case.created / accounts.application.created
+kyc.case.created / compliance.case.screened / accounts.application.created
   → NotificationsSubscriber → Notifications API: "New KYC case …" for staff:kyc_officer:SYD001 (and so on per team)
 kyc.case.approved|rejected, compliance.case.*, accounts.application.rejected, accounts.account.opened|opening.failed
   → NotificationsSubscriber → Notifications API: "etpar approved KYC for Camilla Parkers …" for user:{initiator}

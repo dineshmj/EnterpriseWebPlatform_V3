@@ -123,7 +123,8 @@ Every KYC payload (under `Payload`) carries `KycCaseId`, `ApplicationRef`, `Appl
 
 | Event type | Topic | Key | Consumers | Status |
 |---|---|---|---|---|
-| `ComplianceCaseCreated` | `compliance.case.created` | Compliance case ID | `OnboardingOutcomeSubscriber` (application → COMPLIANCE_IN_PROGRESS); `NotificationsSubscriber` (new work for the branch's compliance officers; payload adds `ApplicantName`) | Present |
+| `ComplianceCaseCreated` | `compliance.case.created` | Compliance case ID | `OnboardingOutcomeSubscriber` (application → COMPLIANCE_IN_PROGRESS); payload adds `ApplicantName` | Present |
+| `ComplianceCaseScreened` | `compliance.case.screened` | Compliance case ID | `NotificationsSubscriber` (new work for the branch's compliance officers, sent when the case is ready for a decision). Payload: `ComplianceCaseId`, `ApplicationRef`, `ApplicationNumber`, `CustomerNumber`, `BranchCode`, `Status` (UNDER_REVIEW), `ScreeningOutcome`, `RiskRating`, `RequiredClearance`, `ApplicantName` | Present |
 | `ComplianceCaseApproved` | `compliance.case.approved` | Compliance case ID | `OnboardingOutcomeSubscriber` (application → COMPLIANCE_COMPLETED); `AccountApplicationOpeningSubscriber` → Accounts opens one account application per `ApplicationRef` (uses `DecisionByUserId`, the Compliance approver, for separation of duties) | Present |
 | `ComplianceCaseRejected` | `compliance.case.rejected` | Compliance case ID | `OnboardingOutcomeSubscriber` (application → REJECTED) | Present |
 

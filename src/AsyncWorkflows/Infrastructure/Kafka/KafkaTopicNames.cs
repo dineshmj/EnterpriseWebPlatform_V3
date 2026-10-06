@@ -25,6 +25,9 @@ public static class KafkaTopicNames
 
     public const string ComplianceCaseCreated = "compliance.case.created";
 
+    /// <summary>Screening finished: the case now awaits a compliance officer's decision.</summary>
+    public const string ComplianceCaseScreened = "compliance.case.screened";
+
     public const string ComplianceCaseApproved = "compliance.case.approved";
 
     public const string ComplianceCaseRejected = "compliance.case.rejected";

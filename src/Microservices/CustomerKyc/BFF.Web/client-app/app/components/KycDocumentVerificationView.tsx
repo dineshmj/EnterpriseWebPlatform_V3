@@ -325,9 +325,11 @@ export function KycDocumentVerificationView({
 
       {deepLinkNotice && <Alert tone="info" className="mb-6">{deepLinkNotice}</Alert>}
 
-      <div className="grid items-start gap-6 xl:grid-cols-[300px_minmax(0,1fr)_380px]">
+      {/* Wide (xl): queue | evidence | decision. Medium (lg): queue on top, then evidence |
+          decision, with the decision panel kept in view. Narrow: one column. */}
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[300px_minmax(0,1fr)_380px]">
         {/* 1. Work queue */}
-        <Card className="xl:sticky xl:top-6">
+        <Card className="lg:col-span-2 xl:col-span-1 xl:sticky xl:top-6">
           <CardHeader
             icon={<Inbox />}
             title="Awaiting review"
@@ -338,7 +340,7 @@ export function KycDocumentVerificationView({
             <EmptyState icon={<CheckCircle2 />} title="Queue is clear">No cases are awaiting {stageName.toLowerCase()}.</EmptyState>
           )}
           {cases.length > 0 && (
-            <ul className="max-h-[calc(100vh-14rem)] divide-y divide-line overflow-y-auto" role="listbox" aria-label="KYC cases awaiting review">
+            <ul className="max-h-56 divide-y divide-line overflow-y-auto xl:max-h-[calc(100vh-14rem)]" role="listbox" aria-label="KYC cases awaiting review">
               {cases.map(item => {
                 const active = item.kycCaseId === selectedCaseId;
                 return (
@@ -387,18 +389,19 @@ export function KycDocumentVerificationView({
           {selectedCaseId === null && !loading && (
             <EmptyState icon={<FileText />} title="No case selected">Select a case from the queue to review its evidence.</EmptyState>
           )}
-          {loadingDocument && <Skeleton className="m-6 h-[calc(100vh-16rem)] min-h-[520px]" />}
+          {loadingDocument && <Skeleton className="m-6 h-[55vh] min-h-[380px] lg:h-[calc(100vh-16rem)] lg:min-h-[520px]" />}
           {document && !loadingDocument && selectedCaseId !== null && (
             <iframe
               title={`${documentLabel} PDF`}
               src={`/bff/api/kyc/cases/${selectedCaseId}/${documentRoute}/content`}
-              className="block h-[calc(100vh-12rem)] min-h-[560px] w-full bg-subtle"
+              className="block h-[60vh] min-h-[420px] w-full bg-subtle lg:h-[calc(100vh-12rem)] lg:min-h-[560px]"
             />
           )}
         </Card>
 
-        {/* 3. Decision */}
-        <div className="flex flex-col gap-6 xl:sticky xl:top-6">
+        {/* 3. Decision - sticky, with its own scroll, so Approve / Reject are always reachable
+            (a PDF viewer captures the mouse wheel while the pointer is over it). */}
+        <div className="flex flex-col gap-6 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto">
           {error && <Alert tone="danger">{error}</Alert>}
 
           <Card>

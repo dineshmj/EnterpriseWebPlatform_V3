@@ -34,6 +34,23 @@ public sealed record ComplianceCaseCreatedPayload(
     string Status,
     string ApplicantName);
 
+/// <summary>
+/// Screening finished and the case awaits an officer's decision (UNDER_REVIEW). Notifications
+/// tells the branch's compliance officers now - not at creation, when they cannot act yet.
+/// RequiredClearance is the clearance needed to approve (a sanctions MATCH needs 5).
+/// </summary>
+public sealed record ComplianceCaseScreenedPayload(
+    long ComplianceCaseId,
+    Guid ApplicationRef,
+    string ApplicationNumber,
+    string CustomerNumber,
+    string BranchCode,
+    string Status,
+    string ScreeningOutcome,
+    string RiskRating,
+    int? RequiredClearance,
+    string ApplicantName);
+
 public sealed record ComplianceCaseDecisionPayload(
     long ComplianceCaseId,
     Guid ApplicationRef,
@@ -65,6 +82,7 @@ internal static class ComplianceIntegrationEventMapper
 {
     public const string AggregateType = "ComplianceCase";
     public const string ComplianceCaseCreated = "ComplianceCaseCreated";
+    public const string ComplianceCaseScreened = "ComplianceCaseScreened";
     public const string ComplianceCaseApproved = "ComplianceCaseApproved";
     public const string ComplianceCaseRejected = "ComplianceCaseRejected";
 
@@ -121,8 +139,23 @@ internal static class ComplianceIntegrationEventMapper
                         lanOf(decided.DecidedByUserId)));
                 break;
 
+            case ScreeningCompletedDomainEvent screened:
+                eventType = ComplianceCaseScreened;
+                payload = Envelope(messageId, eventType, screened.OccurredAt, workflowId, correlationId, causationId, complianceCase, lanOf,
+                    new ComplianceCaseScreenedPayload(
+                        complianceCase.Id,
+                        complianceCase.ApplicationRef,
+                        complianceCase.ApplicationNumber,
+                        complianceCase.CustomerNumber,
+                        complianceCase.BranchCode.Value,
+                        complianceCase.Status.ToCode(),
+                        screened.Outcome.ToCode(),
+                        screened.Risk.ToCode(),
+                        complianceCase.RequiredClearance,
+                        complianceCase.Applicant.FullName));
+                break;
+
             // Internal facts. Listed explicitly so that a NEW, unmapped event still fails loudly.
-            case ScreeningCompletedDomainEvent:
             case ComplianceCaseAssignedDomainEvent:
             case ComplianceCaseReleasedDomainEvent:
             case ComplianceCaseHoldChangedDomainEvent:

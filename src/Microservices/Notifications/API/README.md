@@ -7,7 +7,7 @@ URL: `https://notifications-api.dev.localhost:46377` (launch profile `https`). D
 ## Flow
 
 ```text
-kyc.case.*, compliance.case.*, accounts.*  (Kafka)
+kyc.case.*, compliance.case.screened / approved / rejected, accounts.*  (Kafka)
         │  NotificationsSubscriber (shared consume loop: retries, DLQ; M2M token)
         ▼
 POST internal/v1/notifications/events      Inbox ─► NotificationRules ─► notifications rows   (one transaction)
@@ -22,7 +22,7 @@ Shell BFF  ── proxies /bff/notifications and /hubs/notifications with the pe
 | Event | Audience | Example |
 |---|---|---|
 | `KycCaseCreated` | KYC officers of the branch (`staff:kyc_officer:SYD001`) | "New KYC case — Jason Millers · APP-…002 is waiting for KYC review." |
-| `ComplianceCaseCreated` | Compliance officers of the branch | "New compliance case …" |
+| `ComplianceCaseScreened` | Compliance officers of the branch, when screening is done | "New compliance case — Camilla Parkers · APP-…001 was screened clear (risk low) and awaits a compliance decision." A screening alert says so, and notes when approval needs clearance level 5 |
 | `AccountApplicationCreated` | Account officers of the branch | "New account application …" |
 | `KycCaseApproved` / `Rejected` | The initiator (`user:{sub}`) | "etpar approved KYC for Camilla Parkers (APP-…001). Compliance review is next." |
 | `ComplianceCaseApproved` / `Rejected` | The initiator | "olben cleared Camilla Parkers (APP-…001) for compliance (risk low)." |

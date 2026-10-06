@@ -47,6 +47,7 @@ public sealed class ComplianceOutboxPublisher(
     private static readonly Dictionary<string, string> TopicByEventType = new(StringComparer.Ordinal)
     {
         [ComplianceIntegrationEventMapper.ComplianceCaseCreated] = KafkaTopicNames.ComplianceCaseCreated,
+        [ComplianceIntegrationEventMapper.ComplianceCaseScreened] = KafkaTopicNames.ComplianceCaseScreened,
         [ComplianceIntegrationEventMapper.ComplianceCaseApproved] = KafkaTopicNames.ComplianceCaseApproved,
         [ComplianceIntegrationEventMapper.ComplianceCaseRejected] = KafkaTopicNames.ComplianceCaseRejected
     };

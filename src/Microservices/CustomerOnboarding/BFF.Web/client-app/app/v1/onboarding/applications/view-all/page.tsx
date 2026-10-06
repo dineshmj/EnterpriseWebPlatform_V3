@@ -2,7 +2,7 @@
 
 import { ClipboardList, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { MfeShell, publishSelection, useShellNotifications } from '../../../../components/MfeShell';
+import { MfeShell, getWorkspaceContext, publishSelection, publishWorkspaceContext, useShellNotifications } from '../../../../components/MfeShell';
 import { CustomerOnboardingForm } from '../../../../components/CustomerOnboardingForm';
 import { Button } from '../../../../components/ui/button';
 import { Card, CardHeader } from '../../../../components/ui/card';
@@ -14,6 +14,29 @@ import { getJson } from '../../../../lib/api';
 interface Application { applicationId: number; applicationNumber: string; customerId: number; status: string; createdAt: string; version: number; }
 interface Page { items: Application[]; pageNumber: number; pageSize: number; totalCount: number; }
 interface CustomerSummary { customerId: number; customerNumber: string; }
+
+/**
+ * Keeps the Application Workspace honest: when the application shown there has moved on
+ * (e.g. a live notification reloaded this list), its Status chip is updated too.
+ */
+function syncWorkspaceStatus(items: Application[]) {
+  const context = getWorkspaceContext();
+  const byTitle = (title: string) => context.currentContext.find(x => x.title.toLowerCase() === title);
+  const applicationId = byTitle('application id');
+  const status = byTitle('status');
+  if (!applicationId || !status) return;
+
+  const application = items.find(a => a.applicationId === Number(applicationId.value));
+  if (!application) return;
+
+  const label = statusLabel(application.status);
+  if (String(status.value) === label || String(status.value) === application.status) return;
+
+  publishWorkspaceContext({
+    ...context,
+    currentContext: context.currentContext.map(x => (x === status ? { ...x, value: label } : x)),
+  });
+}
 
 export default function ApplicationsPage() {
   const [data, setData] = useState<Page | null>(null);
@@ -27,6 +50,7 @@ export default function ApplicationsPage() {
         '/bff/api/onboarding/applications?pageNumber=1&pageSize=25',
       );
       setData(page);
+      syncWorkspaceStatus(page.items);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unable to load applications.');
     }

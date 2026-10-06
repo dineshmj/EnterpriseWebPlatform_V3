@@ -103,7 +103,7 @@ export default function ComplianceCaseDetailsPage() {
       {!data && !error && <Skeleton className="h-64" />}
 
       {data && (
-        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_420px]">
           <div className="flex flex-col gap-6">
             <Card>
               <CardHeader icon={<FileSearch />} title="Case details" description="Authoritative information from the Compliance API." actions={<StatusBadge status={data.status} />} />

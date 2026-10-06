@@ -10,7 +10,8 @@ namespace EnterpriseWebPlatform.Notifications.Api.Domain;
 ///
 ///   new work (the branch's officers of the next step)
 ///     KycCaseCreated            → staff:kyc_officer:{branch}
-///     ComplianceCaseCreated     → staff:compliance_officer:{branch}
+///     ComplianceCaseScreened    → staff:compliance_officer:{branch}   (when screening is done:
+///                                 the case is ready for a decision; at creation nobody can act yet)
 ///     AccountApplicationCreated → staff:account_officer:{branch}
 ///   progress (the person who started the onboarding)
 ///     KycCaseApproved / Rejected, ComplianceCaseApproved / Rejected,
@@ -48,9 +49,9 @@ public static class NotificationRules
                 $"{By(p, "DecisionByLanId")} rejected KYC for {Applicant(p)} ({app}){Reason(p, "DecisionRemarks")}",
                 null),
 
-            "ComplianceCaseCreated" => NewWork("compliance_officer",
-                "New compliance case",
-                $"{Str(p, "ApplicantName") ?? Str(p, "CustomerNumber")} · {app} is being screened and will need a compliance decision.",
+            "ComplianceCaseScreened" => NewWork("compliance_officer",
+                Str(p, "ScreeningOutcome") == "CLEAR" ? "New compliance case" : "New compliance case - screening alert",
+                $"{Str(p, "ApplicantName") ?? Str(p, "CustomerNumber")} · {app} was screened {Screening(p)} and awaits a compliance decision{Clearance(p)}.",
                 Target("compliance", "cases/view-details", Long(p, "ComplianceCaseId"))),
 
             "ComplianceCaseApproved" => Progress(
@@ -101,6 +102,16 @@ public static class NotificationRules
 
     private static string Risk(JsonElement p) =>
         Str(p, "RiskRating") is { } risk ? $" (risk {risk.ToLowerInvariant()})" : string.Empty;
+
+    private static string Screening(JsonElement p) =>
+        (Str(p, "ScreeningOutcome"), Str(p, "RiskRating")) switch
+        {
+            ("CLEAR", var risk) => $"clear (risk {risk?.ToLowerInvariant() ?? "unknown"})",
+            (var outcome, var risk) => $"with a {outcome?.ToLowerInvariant().Replace('_', ' ') ?? "result"} (risk {risk?.ToLowerInvariant() ?? "unknown"})"
+        };
+
+    private static string Clearance(JsonElement p) =>
+        Long(p, "RequiredClearance") is >= 5 ? " - approval needs clearance level 5" : string.Empty;
 
     private static string? Target(string mfe, string page, long? recordId) =>
         recordId is null ? null : JsonSerializer.Serialize(new { mfe, page, recordId });

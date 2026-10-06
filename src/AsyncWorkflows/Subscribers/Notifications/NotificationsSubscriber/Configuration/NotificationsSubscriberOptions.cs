@@ -12,14 +12,15 @@ public sealed class NotificationsSubscriberOptions : ISubscriberSettings, IM2MCl
 
     /// <summary>
     /// Fixed in code: the topics are part of this worker's contract, not configuration.
-    /// New work for the next team ("created") and outcomes for the initiator.
+    /// New work for the next team ("created"; for Compliance "screened", when the case is
+    /// ready for a decision) and outcomes for the initiator.
     /// </summary>
     public IReadOnlyList<string> Topics { get; } =
     [
         KafkaTopicNames.KycCaseCreated,
         KafkaTopicNames.KycCaseApproved,
         KafkaTopicNames.KycCaseRejected,
-        KafkaTopicNames.ComplianceCaseCreated,
+        KafkaTopicNames.ComplianceCaseScreened,
         KafkaTopicNames.ComplianceCaseApproved,
         KafkaTopicNames.ComplianceCaseRejected,
         KafkaTopicNames.AccountApplicationCreated,
