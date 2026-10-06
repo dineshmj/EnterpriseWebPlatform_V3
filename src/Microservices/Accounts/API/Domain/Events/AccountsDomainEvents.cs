@@ -40,3 +40,17 @@ public sealed record AccountOpeningFailedDomainEvent(
     string Reason,
     int Attempts,
     DateTimeOffset OccurredAt) : IDomainEvent;
+
+// ------------------------------------------------------------------ Funds (replies to Payments' commands)
+
+/// <summary>The funds are reserved for the payment. Published as the reply FundsReserved.</summary>
+public sealed record FundsReservedDomainEvent(DateTimeOffset OccurredAt) : IDomainEvent;
+
+/// <summary>The funds could not be reserved. Published as the reply FundsReservationFailed.</summary>
+public sealed record FundsReservationRefusedDomainEvent(FundsRefusalReason Reason, DateTimeOffset OccurredAt) : IDomainEvent;
+
+/// <summary>The held funds were debited. Published as the reply FundsSettled.</summary>
+public sealed record FundsSettledDomainEvent(DateTimeOffset OccurredAt) : IDomainEvent;
+
+/// <summary>The hold was undone (or there was nothing to undo). Published as the reply FundsReleased.</summary>
+public sealed record FundsReleasedDomainEvent(bool NothingWasHeld, DateTimeOffset OccurredAt) : IDomainEvent;

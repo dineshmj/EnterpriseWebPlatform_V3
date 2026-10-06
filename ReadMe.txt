@@ -58,7 +58,7 @@ What the platform is, how it is designed and what each component must do are doc
 	d) Node.js applications need the development certificate exported as a PFX file:
 
 		- Customer KYC BFF (NestJS)  - see src\Microservices\CustomerKyc\BFF.Web\README.md
-		- Payments BFF (NestJS)      - when implemented
+		- Payments BFF (ASP.NET Core) - step 5b
 
 	NOTE:
 		Kestrel is used deliberately in V3 so that the local topology is explicit and consistent. The IDP is self-hosted and opens its own console window.
@@ -82,12 +82,13 @@ What the platform is, how it is designed and what each component must do are doc
 		Accounts API					https://accounts-api.dev.localhost:48486
 		Core Banking Simulator			https://localhost:46376   (stands in for the bank's core-banking system)
 		Notifications API				https://notifications-api.dev.localhost:46377   (no UI of its own; the Shell proxies it)
+		Payments API					https://payments-api.dev.localhost:44488   (the payment saga ORCHESTRATOR lives here)
+		Payment Network Simulator		https://localhost:46386   (stands in for an NPP-style payment network)
 		Kafka UI						http://localhost:8080
 
 	Reserved (not implemented yet):
 
-		Payments BFF					https://payments.dev.localhost:46388
-		Payments API					https://payments-api.dev.localhost:44488
+		Payments BFF					https://payments.dev.localhost:46388   (step 5b)
 
 	The Shell Menu DB seed registers these same URLs.
 
@@ -138,6 +139,10 @@ What the platform is, how it is designed and what each component must do are doc
 			EwpComplianceDb				src\Microservices\Compliance\API\ComplianceDb\EwpComplianceDb.sql
 			EwpAccountsDb				src\Microservices\Accounts\API\AccountsDb\EwpAccountsDb.sql
 			EwpNotificationsDb			src\Microservices\Notifications\API\NotificationsDb\EwpNotificationsDb.sql
+			EwpPaymentsDb				src\Microservices\Payments\API\PaymentsDb\EwpPaymentsDb.sql
+
+		Upgrading an EXISTING EwpAccountsDb for Payments (keeps its accounts; adds balances and funds holds, and gives
+		existing accounts the demo opening deposit): src\Microservices\Accounts\API\AccountsDb\Upgrade-5a-Funds.sql
 
 		WARNING:
 			Running a script erases that database's data. Each script must run while connected to ITS OWN database.
@@ -169,7 +174,7 @@ What the platform is, how it is designed and what each component must do are doc
 		pgAdmin's Query Tool - it uses psql's \connect; pgAdmin's Tools > PSQL Tool with \i <path> works too.)
 
 		Each service connects with its own user (ewp_idp, ewp_shell, ewp_customer_onboarding_api, ewp_customer_outbox_relay,
-		ewp_kyc_api, ewp_documents_api, ewp_compliance_api) that may read and write ITS OWN database only: no DDL and no access to other
+		ewp_kyc_api, ewp_documents_api, ewp_compliance_api, ewp_accounts_api, ewp_notifications_api, ewp_payments_api) that may read and write ITS OWN database only: no DDL and no access to other
 		services' databases; the CO outbox relay may only read and update outbox_messages. The database scripts above
 		still run as postgres; the grants survive re-running them. Without this step the services cannot connect.
 
@@ -236,8 +241,9 @@ What the platform is, how it is designed and what each component must do are doc
 
 		IDP, Documents Management API, Customer Onboarding API, Customer KYC API, CustomerOutboxPublisher, KycCaseOpeningSubscriber,
 		OnboardingOutcomeSubscriber, Compliance API, ComplianceCaseOpeningSubscriber, DocumentInvalidationSubscriber, Accounts API,
-		AccountApplicationOpeningSubscriber, Notifications API, NotificationsSubscriber, Screening Provider Simulator,
-		Core Banking Simulator, Shell BFF, Customer Onboarding BFF, Compliance BFF and Accounts BFF.
+		AccountApplicationOpeningSubscriber, Notifications API, NotificationsSubscriber, Payments API, AccountsCommandSubscriber,
+		PaymentsSagaReplySubscriber, Screening Provider Simulator, Core Banking Simulator, Payment Network Simulator, Shell BFF,
+		Customer Onboarding BFF, Compliance BFF and Accounts BFF.
 
 		Every publisher and subscriber is a console (generic host) application. Several instances of each may run in parallel:
 		publishers claim Outbox rows with FOR UPDATE SKIP LOCKED, subscribers share one Kafka consumer group per subscriber (one
@@ -300,6 +306,17 @@ What the platform is, how it is designed and what each component must do are doc
 		failures - or at once when Refusing (HTTP 422) - the application is FAILED and AccountOpeningFailed is published;
 		Customer Onboarding compensates: COMPENSATING -> REJECTED (RejectedBy ACCOUNT_OPENING), evidence INVALIDATED, customer PROSPECT. Back to Healthy, waiting accounts are opened automatically.
 
+	g4) Payments - the ORCHESTRATED saga (step 5a: API only, through Bruno; the screens follow in 5b):
+
+		A new account starts with a demo balance of 5,000.00 AUD (Accounts:DemoOpeningDeposit). sophie.cs (payment.initiate) sends
+		POST https://payments-api.dev.localhost:44488/v1/payments with an Idempotency-Key header; the API answers 202 at once and the
+		PaymentSaga in the Payments API does the rest: ReserveFunds (Accounts) -> send to the Payment Network Simulator -> SettleFunds.
+		Follow it with GET /v1/payments/{id} (status + the saga's timeline). Details and ready-made requests:
+		src\Microservices\Payments\API\README.md. To see compensation, pay to a BSB starting with 999 (the network refuses it) or:
+
+			$pns = 'https://localhost:46386/admin/behaviour'
+			Invoke-RestMethod $pns -Method Put -ContentType 'application/json' -Body '{"behaviour":"Refusing"}'   # or Down / Failing / Slow / Healthy
+
 	e) Health endpoints (as used by Kubernetes liveness / readiness probes):
 
 			APIs, BFFs, IDP:              https://<host>/health/live   and   https://<host>/health/ready
@@ -310,6 +327,8 @@ What the platform is, how it is designed and what each component must do are doc
 			DocumentInvalidationSubscriber:  http://localhost:5105/health/live | /health/ready
 			AccountApplicationOpeningSubscriber: http://localhost:5106/health/live | /health/ready
 			NotificationsSubscriber:      http://localhost:5107/health/live | /health/ready
+			AccountsCommandSubscriber:    http://localhost:5108/health/live | /health/ready
+			PaymentsSagaReplySubscriber:  http://localhost:5109/health/live | /health/ready
 
 		live  = the process (and its background loop) is working; 503 means "restart it".
 		ready = its dependencies are reachable (database; for a subscriber, its Kafka consumer group). "Degraded" (still 200)

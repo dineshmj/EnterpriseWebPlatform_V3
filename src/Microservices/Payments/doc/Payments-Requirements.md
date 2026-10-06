@@ -2,7 +2,7 @@
 
 **Bounded context:** Payments  
 **Subdomain type:** Core  
-**Status:** Planned — `API` and `BFF.Web` folders exist but contain no implementation yet
+**Status:** Backend present (step 5a: Payments API with the saga orchestrator, Accounts funds holds, payment network simulator, two courier workers). The BFF and screens, human approval and notifications follow in step 5b; the operations "Retry release" in 5c.
 
 Platform-wide rules are not repeated here. See [doc/](../../../../doc/). Payments is the **orchestrated-saga** demonstration; the orchestration pattern itself is described in the [Saga plan](../../../../doc/EWP-V3-Saga-Choreography-and-Orchestration-Plans.md).
 
@@ -10,7 +10,7 @@ Platform-wide rules are not repeated here. See [doc/](../../../../doc/). Payment
 
 ## 1. Purpose and Boundary
 
-Payments accepts payment instructions, validates them, obtains any required approval and executes them, coordinating with Accounts through an explicit saga orchestrator.
+Payments accepts payment instructions captured by bank staff for a customer (an **assisted channel**, not internet banking), validates them, obtains any required approval and executes them, coordinating with Accounts and the external payment network through an explicit saga orchestrator.
 
 | Owns | Does not own |
 |---|---|
@@ -19,15 +19,18 @@ Payments accepts payment instructions, validates them, obtains any required appr
 | Payment attempts and processing state | |
 | The Payment saga orchestrator and its persisted saga state | |
 
-### Planned deployable components
+### Deployable components
 
-| Component | Location | Technology |
-|---|---|---|
-| Payments MFE | `BFF.Web/client-app` | Next.js |
-| Payments BFF | `BFF.Web` | NestJS |
-| Payments API | `API` | ASP.NET Core 10, EF Core, PostgreSQL |
-| Payment saga orchestrator | Inside the Payments context | Persisted state machine |
-| Database | `EwpPaymentsDb` | PostgreSQL |
+| Component | Location | Technology | Status |
+|---|---|---|---|
+| Payments MFE | `BFF.Web/client-app` | Next.js static export | 5b |
+| Payments BFF | `BFF.Web` | ASP.NET Core 10 + Duende BFF | 5b |
+| Payments API | `API` | ASP.NET Core 10, EF Core, PostgreSQL | Present |
+| Payment saga orchestrator | `PaymentSaga` inside the Payments API, with its step runner | Persisted state machine | Present |
+| PaymentsSagaReplySubscriber | `src/AsyncWorkflows/Subscribers/Payments` | .NET worker (courier) | Present |
+| Database | `EwpPaymentsDb` | PostgreSQL | Present |
+
+Accounts adds funds holds and the `AccountsCommandSubscriber` courier; the Payment Network Simulator (`src/Simulators/PaymentNetworkSimulator`) stands in for the external NPP-style network.
 
 ---
 
@@ -35,7 +38,8 @@ Payments accepts payment instructions, validates them, obtains any required appr
 
 | Persona | May | Must not |
 |---|---|---|
-| Customer | Initiate eligible payments; view their own payments | Approve payments; view others' payments |
+| Customer Service Agent | Capture a payment for a customer at the counter or on the phone (assisted channel); follow it | Approve payments; see another branch's payments |
+| Customer | (Self-service: later) Initiate eligible payments; view their own payments | Approve payments; view others' payments |
 | Payments Officer | Review, validate, approve, reject, hold and release payments; review processing failures; retry eligible processing | Approve a payment they initiated; approve beyond their authorized amount |
 | Compliance Officer | Review exception and high-risk payments (via Compliance) | Approve the payment itself |
 | Auditor | View payment history | Change anything |
@@ -44,11 +48,13 @@ Payments accepts payment instructions, validates them, obtains any required appr
 
 ## 3. Permissions
 
-| Permission | Customer | Payments Officer | Auditor |
-|---|:-:|:-:|:-:|
-| `customer.payment.create` / `customer.payment.view_own` | ✓ | | |
-| `payment.view` / `.validate` / `.approve` / `.reject` / `.hold` / `.release` / `.retry` | | ✓ | |
-| `payment.history.view` | | | ✓ |
+| Permission | Customer | Customer Service Agent | Payments Officer | Auditor |
+|---|:-:|:-:|:-:|:-:|
+| `customer.payment.create` / `customer.payment.view_own` | ✓ | | | |
+| `payment.initiate` | | ✓ | | |
+| `payment.view` | | ✓ | ✓ | |
+| `payment.validate` / `.approve` / `.reject` / `.hold` / `.release` / `.retry` | | | ✓ | |
+| `payment.history.view` | | | | ✓ |
 
 API scopes: `payments.read`, `payments.write`.
 
@@ -60,21 +66,22 @@ API scopes: `payments.read`, `payments.write`.
 - **`Beneficiary`** aggregate: owned by a customer.
 - **Payment saga state:** owned by this context's orchestrator. Its fields, steps, compensation and compensation-failure handling are specified in the [Saga plan §2](../../../../doc/EWP-V3-Saga-Choreography-and-Orchestration-Plans.md#2-orchestration--payments).
 
-### Payment states
+### Payment states (implemented)
 
 ```text
-INITIATED ──► VALIDATING ──► PENDING_APPROVAL ──approve──► APPROVED ──► PROCESSING ──► COMPLETED
-                                              ──reject───► REJECTED
-Any active state ──► ON_HOLD ──release──► previous state
-PROCESSING ──failure──► FAILED
-INITIATED / PENDING_APPROVAL ──cancel──► CANCELLED
+INITIATED → RESERVING_FUNDS → (PENDING_APPROVAL) → SENDING_TO_NETWORK → SETTLING_FUNDS → COMPLETED
+RESERVING_FUNDS ✗ (no funds)                  → REJECTED                (nothing reserved, nothing to undo)
+after the reservation ✗ (network, approver)  → COMPENSATING → FAILED / REJECTED (funds released)
+COMPENSATING ✗✗✗ (release not confirmed)     → COMPENSATION_FAILED     (operations retry the release)
 ```
+
+Planned with 5b/5c: approve / reject from PENDING_APPROVAL, hold and release, cancel before sending.
 
 ---
 
 ## 5. Business Rules
 
-1. **Approval tiers.** The thresholds are configuration, never UI constants:
+1. **Approval tiers.** The thresholds are configuration, never UI constants (`Payments:ApprovalThreshold`, default 1,000.00 AUD; above it a payments officer approves):
 
    | Tier | Path |
    |---|---|
@@ -93,17 +100,21 @@ INITIATED / PENDING_APPROVAL ──cancel──► CANCELLED
 
 | Operation | Rule |
 |---|---|
+| Initiate | `payments.write` + `payment.initiate` + a branch; the payment belongs to the staff member's branch; the request's `Idempotency-Key` belongs to the person who used it first |
+| View | `payments.read` + `payment.view` or `payment.initiate`; own branch only (another branch's payment is 404) |
+| Funds | Accounts reserves only on an ACTIVE account of the customer named in the payment, in AUD, within the available balance |
 | Approve | `payments_officer` + `payment.approve` + PENDING_APPROVAL + amount within the user's limit + branch / organizational scope + SoD |
 | Customer view | `customer.payment.view_own` + `owns` the payment |
 
 ---
 
-## 7. Integration (planned)
+## 7. Integration
 
-Payments commands and events (`payments.*`) and the Accounts reservation commands will be added to the [Integration-Event-Catalogue.md](../../../../doc/Integration-Event-Catalogue.md) when they are designed.
+Commands to Accounts (`accounts.commands`), Accounts' replies (`accounts.funds.replies`) and the payments' outcomes (`payments.payment.events`): [Integration-Event-Catalogue.md §4.5](../../../../doc/Integration-Event-Catalogue.md). The payment network is called directly over HTTP with the PaymentRef as Idempotency-Key.
 
 ---
 
 ## 8. Reserved Topology
 
-- Local URLs (reserved): BFF `https://payments.dev.localhost:46388`, API `https://payments-api.dev.localhost:44488`. The Shell menu seed uses the same BFF URL.
+- Local URLs: API `https://payments-api.dev.localhost:44488`; Payment Network Simulator `https://localhost:46386`; BFF (5b) `https://payments.dev.localhost:46388` - the Shell menu seed uses the same BFF URL.
+- Workers: AccountsCommandSubscriber (health 5108), PaymentsSagaReplySubscriber (health 5109).

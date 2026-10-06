@@ -49,7 +49,13 @@ public sealed class AccountsOutboxPublisher(
         [AccountsIntegrationEventMapper.AccountApplicationCreated] = KafkaTopicNames.AccountApplicationCreated,
         [AccountsIntegrationEventMapper.AccountApplicationRejected] = KafkaTopicNames.AccountApplicationRejected,
         [AccountsIntegrationEventMapper.AccountOpened] = KafkaTopicNames.AccountOpened,
-        [AccountsIntegrationEventMapper.AccountOpeningFailed] = KafkaTopicNames.AccountOpeningFailed
+        [AccountsIntegrationEventMapper.AccountOpeningFailed] = KafkaTopicNames.AccountOpeningFailed,
+
+        // Replies to the Payments saga orchestrator's funds commands.
+        [FundsIntegrationEventMapper.FundsReserved] = KafkaTopicNames.AccountsFundsReplies,
+        [FundsIntegrationEventMapper.FundsReservationFailed] = KafkaTopicNames.AccountsFundsReplies,
+        [FundsIntegrationEventMapper.FundsSettled] = KafkaTopicNames.AccountsFundsReplies,
+        [FundsIntegrationEventMapper.FundsReleased] = KafkaTopicNames.AccountsFundsReplies
     };
 
     public static async Task<OutboxBacklog> GetBacklogAsync(AccountsDbContext db, CancellationToken ct)

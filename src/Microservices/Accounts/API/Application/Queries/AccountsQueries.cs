@@ -60,7 +60,11 @@ public sealed record AccountDetail(
     string Status,
     string CoreBankingReference,
     DateTimeOffset OpenedAt,
-    string HolderName);
+    string HolderName,
+    string Currency,
+    decimal Balance,
+    decimal HeldAmount,
+    decimal Available);
 
 public sealed record PagedResponse<T>(
     IReadOnlyList<T> Items,

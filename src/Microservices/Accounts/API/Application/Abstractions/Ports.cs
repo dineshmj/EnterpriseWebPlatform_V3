@@ -20,11 +20,29 @@ public interface IAccountApplicationRepository
     void Add(AccountApplication application);
 }
 
-/// <summary>Adds Account aggregates.</summary>
+/// <summary>Adds and locks Account aggregates.</summary>
 public interface IAccountRepository
 {
     void Add(Account account);
+
+    /// <summary>Loads the account by BSB and number and locks its row until the transaction ends.</summary>
+    Task<Account?> GetForUpdateAsync(string bsb, string accountNumber, CancellationToken cancellationToken);
+
+    /// <summary>Loads the account by ID and locks its row until the transaction ends.</summary>
+    Task<Account?> GetForUpdateAsync(long accountId, CancellationToken cancellationToken);
 }
+
+/// <summary>Loads (locked) and adds FundsHold aggregates.</summary>
+public interface IFundsHoldRepository
+{
+    /// <summary>The payment's hold, locked until the transaction ends; null when Accounts has not seen the payment.</summary>
+    Task<FundsHold?> GetForUpdateAsync(Guid paymentRef, CancellationToken cancellationToken);
+
+    void Add(FundsHold hold);
+}
+
+/// <summary>The demo deposit credited when an account is opened (configuration; 0 outside demos).</summary>
+public sealed record AccountOpeningDeposit(decimal Amount);
 
 /// <summary>Workflow metadata of the command being handled (see the Event Catalogue).</summary>
 public sealed record WorkflowContext(Guid? WorkflowId, Guid? CorrelationId, Guid CausationId);
@@ -43,6 +61,9 @@ public interface IAccountsUnitOfWork
     /// Outbox, in order, in the current transaction.
     /// </summary>
     Task SaveChangesAsync(WorkflowContext context, CancellationToken cancellationToken);
+
+    /// <summary>Forgets every pending change (after a failed transaction, before trying again).</summary>
+    void DiscardChanges();
 }
 
 /// <summary>Inbox (idempotent consumer): recorded in the same transaction as the change it caused.</summary>

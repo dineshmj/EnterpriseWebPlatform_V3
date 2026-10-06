@@ -46,6 +46,38 @@ public sealed class AccountApplicationRepository(AccountsDbContext db) : IAccoun
 public sealed class AccountRepository(AccountsDbContext db) : IAccountRepository
 {
     public void Add(Account account) => db.Accounts.Add(account);
+
+    public async Task<Account?> GetForUpdateAsync(string bsb, string accountNumber, CancellationToken cancellationToken)
+    {
+        var b = bsb.Trim();
+        var n = accountNumber.Trim();
+        var ids = await db.Database
+            .SqlQuery<long>($"SELECT id AS \"Value\" FROM accounts WHERE bsb = {b} AND account_number = {n} FOR UPDATE")
+            .ToListAsync(cancellationToken);
+        return ids.Count == 0 ? null : await db.Accounts.SingleAsync(x => x.Id == ids[0], cancellationToken);
+    }
+
+    public async Task<Account?> GetForUpdateAsync(long accountId, CancellationToken cancellationToken)
+    {
+        var ids = await db.Database
+            .SqlQuery<long>($"SELECT id AS \"Value\" FROM accounts WHERE id = {accountId} FOR UPDATE")
+            .ToListAsync(cancellationToken);
+        return ids.Count == 0 ? null : await db.Accounts.SingleAsync(x => x.Id == accountId, cancellationToken);
+    }
+}
+
+public sealed class FundsHoldRepository(AccountsDbContext db) : IFundsHoldRepository
+{
+    public async Task<FundsHold?> GetForUpdateAsync(Guid paymentRef, CancellationToken cancellationToken)
+    {
+        // One payment's commands are serialised here (a resent command waits for the first).
+        var ids = await db.Database
+            .SqlQuery<long>($"SELECT id AS \"Value\" FROM funds_holds WHERE payment_ref = {paymentRef} FOR UPDATE")
+            .ToListAsync(cancellationToken);
+        return ids.Count == 0 ? null : await db.FundsHolds.SingleAsync(x => x.Id == ids[0], cancellationToken);
+    }
+
+    public void Add(FundsHold hold) => db.FundsHolds.Add(hold);
 }
 
 public sealed class AccountsQueries(AccountsDbContext db) : IAccountsQueries
@@ -124,5 +156,9 @@ public sealed class AccountsQueries(AccountsDbContext db) : IAccountsQueries
             x.Status.ToCode(),
             x.CoreBankingReference,
             x.OpenedAt,
-            x.HolderName.FirstName + " " + x.HolderName.LastName));
+            x.HolderName.FirstName + " " + x.HolderName.LastName,
+            x.Currency,
+            x.Balance,
+            x.HeldAmount,
+            x.Balance - x.HeldAmount));
 }

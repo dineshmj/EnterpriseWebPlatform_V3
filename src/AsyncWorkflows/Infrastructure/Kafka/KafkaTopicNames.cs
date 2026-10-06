@@ -41,6 +41,24 @@ public static class KafkaTopicNames
     public const string AccountOpeningFailed = "accounts.account.opening.failed";
 
     /// <summary>
+    /// Commands TO Accounts (ReserveFunds, SettleFunds, ReleaseFunds), written by the
+    /// Payments saga orchestrator. Key: the PaymentRef, so one payment's commands stay in order.
+    /// </summary>
+    public const string AccountsCommands = "accounts.commands";
+
+    /// <summary>
+    /// Accounts' replies to funds commands (FundsReserved, FundsReservationFailed,
+    /// FundsSettled, FundsReleased). Owned and written by Accounts; read by Payments.
+    /// </summary>
+    public const string AccountsFundsReplies = "accounts.funds.replies";
+
+    /// <summary>
+    /// Public facts about payments (PaymentCompleted, PaymentRejected, PaymentFailed,
+    /// PaymentCompensationFailed), for anyone interested (e.g. Notifications).
+    /// </summary>
+    public const string PaymentEvents = "payments.payment.events";
+
+    /// <summary>
     /// Dead-letter topic of the Account Application Opening Subscriber (Accounts):
     /// compliance.case.approved messages that can never open an account application.
     /// </summary>
@@ -75,6 +93,20 @@ public static class KafkaTopicNames
     /// </summary>
     public const string DocumentInvalidationSubscriberDeadLetter =
         "documents-management.invalidation-subscriber.dlq";
+
+    /// <summary>
+    /// Dead-letter topic of the Accounts Command Subscriber (Accounts): funds commands that
+    /// can never be applied (malformed, or permanently refused by the Accounts API).
+    /// </summary>
+    public const string AccountsCommandSubscriberDeadLetter =
+        "accounts.command-subscriber.dlq";
+
+    /// <summary>
+    /// Dead-letter topic of the Payments Saga Reply Subscriber (Payments): replies that can
+    /// never reach the orchestrator (malformed, or permanently refused by the Payments API).
+    /// </summary>
+    public const string PaymentsSagaReplySubscriberDeadLetter =
+        "payments.saga-reply-subscriber.dlq";
 
     /// <summary>
     /// Dead-letter topic of the Notifications Subscriber: workflow events that can never

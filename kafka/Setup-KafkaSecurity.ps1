@@ -57,6 +57,9 @@ $Users = [ordered]@{
     'ewp-accounts-api'                  = 'ewp-accounts-api-kafka-dev'       # Accounts API (in-process relay)
     'ewp-accounts-application-opening-subscriber' = 'ewp-accounts-application-opening-kafka-dev' # AccountApplicationOpeningSubscriber
     'ewp-notifications-subscriber'      = 'ewp-notifications-kafka-dev'      # NotificationsSubscriber
+    'ewp-accounts-command-subscriber'   = 'ewp-accounts-command-subscriber-kafka-dev'    # AccountsCommandSubscriber
+    'ewp-payments-api'                  = 'ewp-payments-api-kafka-dev'       # Payments API (in-process relay: saga commands + payment events)
+    'ewp-payments-saga-reply-subscriber' = 'ewp-payments-saga-reply-subscriber-kafka-dev' # PaymentsSagaReplySubscriber
     'ewp-kafka-ui'                      = 'ewp-kafka-ui-dev'                 # Kafka UI (read-only)
 }
 
@@ -85,7 +88,12 @@ $Topics = @(
     'accounts.account.opened',
     'accounts.account.opening.failed',
     'accounts.application-opening-subscriber.dlq',
-    'notifications.subscriber.dlq'
+    'notifications.subscriber.dlq',
+    'accounts.commands',
+    'accounts.funds.replies',
+    'payments.payment.events',
+    'accounts.command-subscriber.dlq',
+    'payments.saga-reply-subscriber.dlq'
 )
 
 # Consumer groups introduced with these security settings, and the topics they read.
@@ -100,6 +108,9 @@ $NewGroups = [ordered]@{
                                                   'compliance.case.screened', 'compliance.case.approved', 'compliance.case.rejected',
                                                   'accounts.application.created', 'accounts.application.rejected',
                                                   'accounts.account.opened', 'accounts.account.opening.failed')
+    # Payments saga (orchestration): commands to Accounts, and Accounts' replies to the orchestrator.
+    'accounts.command-subscriber'             = @('accounts.commands')
+    'payments.saga-reply-subscriber'          = @('accounts.funds.replies')
 }
 
 $Bootstrap   = 'localhost:9092'
@@ -292,10 +303,27 @@ switch ($Phase) {
     Grant 'ewp-accounts-api' '--operation Write --operation Describe --resource-pattern-type prefixed --topic accounts.application.'
     Grant 'ewp-accounts-api' '--operation Write --operation Describe --resource-pattern-type prefixed --topic accounts.account.'
 
+    Write-Host 'Accounts API (in-process relay): also write accounts.funds.replies (replies to the Payments saga)' -ForegroundColor Cyan
+    Grant 'ewp-accounts-api' '--operation Write --operation Describe --topic accounts.funds.replies'
+
     Write-Host 'AccountApplicationOpeningSubscriber: read compliance.case.approved and its group; write its dead-letter topic' -ForegroundColor Cyan
     Grant 'ewp-accounts-application-opening-subscriber' '--operation Read --operation Describe --topic compliance.case.approved'
     Grant 'ewp-accounts-application-opening-subscriber' '--operation Read --group accounts.application-opening-subscriber'
     Grant 'ewp-accounts-application-opening-subscriber' '--operation Write --operation Describe --topic accounts.application-opening-subscriber.dlq'
+
+    Write-Host 'AccountsCommandSubscriber: read accounts.commands and its group; write its dead-letter topic' -ForegroundColor Cyan
+    Grant 'ewp-accounts-command-subscriber' '--operation Read --operation Describe --topic accounts.commands'
+    Grant 'ewp-accounts-command-subscriber' '--operation Read --group accounts.command-subscriber'
+    Grant 'ewp-accounts-command-subscriber' '--operation Write --operation Describe --topic accounts.command-subscriber.dlq'
+
+    Write-Host 'Payments API (in-process relay): write the saga commands (accounts.commands) and payments.payment.events only' -ForegroundColor Cyan
+    Grant 'ewp-payments-api' '--operation Write --operation Describe --topic accounts.commands'
+    Grant 'ewp-payments-api' '--operation Write --operation Describe --topic payments.payment.events'
+
+    Write-Host 'PaymentsSagaReplySubscriber: read accounts.funds.replies and its group; write its dead-letter topic' -ForegroundColor Cyan
+    Grant 'ewp-payments-saga-reply-subscriber' '--operation Read --operation Describe --topic accounts.funds.replies'
+    Grant 'ewp-payments-saga-reply-subscriber' '--operation Read --group payments.saga-reply-subscriber'
+    Grant 'ewp-payments-saga-reply-subscriber' '--operation Write --operation Describe --topic payments.saga-reply-subscriber.dlq'
 
     Write-Host 'NotificationsSubscriber: read the workflow outcome / new-work topics and its group; write its dead-letter topic' -ForegroundColor Cyan
     foreach ($t in 'kyc.case.created', 'kyc.case.approved', 'kyc.case.rejected',

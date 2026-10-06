@@ -6,6 +6,7 @@
 -- The CHECK constraints mirror the AccountApplication and Account aggregates' invariants.
 -- =============================================================================
 
+DROP TABLE IF EXISTS funds_holds CASCADE;
 DROP TABLE IF EXISTS accounts CASCADE;
 DROP TABLE IF EXISTS account_applications CASCADE;
 DROP TABLE IF EXISTS outbox_messages CASCADE;
@@ -120,6 +121,13 @@ CREATE TABLE accounts (
     product VARCHAR(30) NOT NULL,
     status VARCHAR(20) NOT NULL,
     core_banking_reference VARCHAR(100) NOT NULL,
+
+    -- Funds: the ledger balance and what payments in progress have reserved (funds_holds).
+    -- Available = balance - held_amount, never negative.
+    currency CHAR(3) NOT NULL DEFAULT 'AUD',
+    balance NUMERIC(18,2) NOT NULL DEFAULT 0,
+    held_amount NUMERIC(18,2) NOT NULL DEFAULT 0,
+
     opened_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
     version BIGINT NOT NULL,
@@ -130,11 +138,51 @@ CREATE TABLE accounts (
     CONSTRAINT ck_accounts_bsb CHECK (bsb ~ '^[0-9]{3}-[0-9]{3}$'),
     CONSTRAINT ck_accounts_product CHECK (product IN ('EVERYDAY_TRANSACTION', 'SAVINGS')),
     CONSTRAINT ck_accounts_status CHECK (status IN ('ACTIVE', 'FROZEN', 'CLOSED')),
+    CONSTRAINT ck_accounts_funds CHECK (held_amount >= 0 AND balance >= held_amount),
     CONSTRAINT ck_accounts_version CHECK (version > 0)
 );
 
 CREATE INDEX ix_accounts_branch_opened ON accounts (branch_code, opened_at);
 CREATE INDEX ix_accounts_customer_number ON accounts (customer_number);
+
+-- Funds reserved for ONE payment (Payments' PaymentRef, by value). The payment saga
+-- orchestrator sends ReserveFunds / SettleFunds / ReleaseFunds; every command for the
+-- same payment is idempotent and answered on accounts.funds.replies.
+CREATE TABLE funds_holds (
+    id BIGSERIAL PRIMARY KEY,
+    payment_ref UUID NOT NULL,
+    payment_number VARCHAR(30) NOT NULL,
+
+    -- NULL when the account was not found, or for a release that arrived before any reservation.
+    account_id BIGINT NULL REFERENCES accounts (id),
+    bsb VARCHAR(7) NOT NULL,
+    account_number VARCHAR(30) NOT NULL,
+    customer_number VARCHAR(100) NOT NULL,
+
+    amount NUMERIC(18,2) NOT NULL,
+    currency CHAR(3) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    refusal_reason VARCHAR(40) NULL,
+    initiated_by_user_id VARCHAR(200) NULL,
+
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
+    settled_at TIMESTAMPTZ NULL,
+    released_at TIMESTAMPTZ NULL,
+    version BIGINT NOT NULL,
+
+    CONSTRAINT uq_funds_holds_payment_ref UNIQUE (payment_ref),
+    CONSTRAINT ck_funds_holds_status CHECK (status IN ('HELD', 'REFUSED', 'SETTLED', 'RELEASED')),
+    CONSTRAINT ck_funds_holds_amount CHECK (amount >= 0),
+    -- A refusal always says why; only a refusal does.
+    CONSTRAINT ck_funds_holds_refusal CHECK ((status = 'REFUSED') = (refusal_reason IS NOT NULL)),
+    -- Funds are held, settled or released only on a known account.
+    CONSTRAINT ck_funds_holds_account CHECK (status NOT IN ('HELD', 'SETTLED') OR (account_id IS NOT NULL AND amount > 0)),
+    CONSTRAINT ck_funds_holds_settled CHECK ((status = 'SETTLED') = (settled_at IS NOT NULL)),
+    CONSTRAINT ck_funds_holds_version CHECK (version > 0)
+);
+
+CREATE INDEX ix_funds_holds_account_status ON funds_holds (account_id, status);
 
 -- Transactional Outbox (same shape as the other contexts).
 CREATE TABLE outbox_messages (
@@ -186,7 +234,7 @@ CREATE TABLE inbox_messages (
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ewp_accounts_api') THEN
-        GRANT SELECT, INSERT, UPDATE, DELETE ON account_applications, accounts, outbox_messages, inbox_messages, staff_members TO ewp_accounts_api;
+        GRANT SELECT, INSERT, UPDATE, DELETE ON account_applications, accounts, funds_holds, outbox_messages, inbox_messages, staff_members TO ewp_accounts_api;
         GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_accounts_api;
     ELSE
         RAISE WARNING 'Role ewp_accounts_api does not exist yet: run db\Apply-EwpServiceDbUsers.ps1, then this script again.';

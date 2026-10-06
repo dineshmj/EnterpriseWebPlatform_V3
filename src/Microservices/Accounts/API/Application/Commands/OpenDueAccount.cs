@@ -33,6 +33,7 @@ public sealed class OpenDueAccountCommandHandler(
     ICoreBankingSystem coreBanking,
     IOpeningTrace openingTrace,
     OpeningRetryPolicy retryPolicy,
+    AccountOpeningDeposit openingDeposit,
     TimeProvider clock,
     ILogger<OpenDueAccountCommandHandler> logger)
 {
@@ -56,7 +57,7 @@ public sealed class OpenDueAccountCommandHandler(
 
             var now = clock.GetUtcNow();
             application.RecordAccountOpened(response.AccountNumber, response.Bsb, now);
-            accounts.Add(Account.Open(response.AccountNumber, response.Bsb, response.CoreBankingReference, application, now));
+            accounts.Add(Account.Open(response.AccountNumber, response.Bsb, response.CoreBankingReference, application, openingDeposit.Amount, now));
             outcome = OpeningRunOutcome.Opened;
 
             logger.LogInformation(

@@ -35,8 +35,11 @@ To undo: stop Kafka and run `.\kafka\Setup-KafkaSecurity.ps1 -Revert` (restores 
 | `ewp-kyc-api` | Customer KYC API (in-process relay) | Write `kyc.*` (prefixed) |
 | `ewp-compliance-api` | Compliance API (in-process relay) | Write `compliance.case.*` (prefixed) |
 | `ewp-compliance-case-opening-subscriber` | ComplianceCaseOpeningSubscriber | Read `kyc.case.approved` and group `compliance.case-opening-subscriber`; write `compliance.case-opening-subscriber.dlq` |
-| `ewp-accounts-api` | Accounts API (in-process relay) | Write `accounts.application.*` and `accounts.account.*` (prefixed) |
+| `ewp-accounts-api` | Accounts API (in-process relay) | Write `accounts.application.*` and `accounts.account.*` (prefixed), and `accounts.funds.replies` (replies to the Payments saga) |
 | `ewp-accounts-application-opening-subscriber` | AccountApplicationOpeningSubscriber | Read `compliance.case.approved` and group `accounts.application-opening-subscriber`; write `accounts.application-opening-subscriber.dlq` |
+| `ewp-payments-api` | Payments API (in-process relay) | Write `accounts.commands` (the saga's commands) and `payments.payment.events` |
+| `ewp-accounts-command-subscriber` | AccountsCommandSubscriber | Read `accounts.commands` and group `accounts.command-subscriber`; write `accounts.command-subscriber.dlq` |
+| `ewp-payments-saga-reply-subscriber` | PaymentsSagaReplySubscriber | Read `accounts.funds.replies` and group `payments.saga-reply-subscriber`; write `payments.saga-reply-subscriber.dlq` |
 | `ewp-notifications-subscriber` | NotificationsSubscriber | Read `kyc.case.created/approved/rejected`, `compliance.case.screened/approved/rejected`, `accounts.application.created/rejected`, `accounts.account.opened/opening.failed` and group `notifications.subscriber` (starts at latest); write `notifications.subscriber.dlq` |
 | `ewp-dm-invalidation-subscriber` | DocumentInvalidationSubscriber | Read `onboarding.application.submitted`, `onboarding.application.rejected` and group `documents-management.invalidation-subscriber`; write `documents-management.invalidation-subscriber.dlq` |
 | `ewp-kyc-case-opening-subscriber` | KycCaseOpeningSubscriber | Read `onboarding.application.submitted` and group `customer-kyc.case-opening-subscriber`; write `customer-kyc.case-opening-subscriber.dlq` |

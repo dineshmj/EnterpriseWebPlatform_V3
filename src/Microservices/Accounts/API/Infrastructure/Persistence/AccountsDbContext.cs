@@ -23,12 +23,15 @@ public sealed class AccountsDbContext(DbContextOptions<AccountsDbContext> option
 
     public DbSet<AccountApplication> AccountApplications => Set<AccountApplication>();
     public DbSet<Account> Accounts => Set<Account>();
+    public DbSet<FundsHold> FundsHolds => Set<FundsHold>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
     public DbSet<StaffMember> StaffMembers => Set<StaffMember>();
 
     public async Task<IUnitOfWorkTransaction> BeginTransactionAsync(CancellationToken cancellationToken) =>
         new EfUnitOfWorkTransaction(await Database.BeginTransactionAsync(cancellationToken));
+
+    public void DiscardChanges() => ChangeTracker.Clear();
 
     public Task<bool> HasProcessedAsync(Guid messageId, string consumer, CancellationToken cancellationToken) =>
         InboxMessages.AsNoTracking().AnyAsync(x => x.MessageId == messageId && x.Consumer == consumer, cancellationToken);
@@ -46,6 +49,10 @@ public sealed class AccountsDbContext(DbContextOptions<AccountsDbContext> option
         var changed = ChangeTracker.Entries<AccountApplication>()
             .Select(e => e.Entity)
             .Where(a => a.DomainEvents.Count > 0)
+            .ToList();
+        var changedHolds = ChangeTracker.Entries<FundsHold>()
+            .Select(e => e.Entity)
+            .Where(h => h.DomainEvents.Count > 0)
             .ToList();
 
         // An approval hands the account to the background opening: remember its trace.
@@ -81,6 +88,20 @@ public sealed class AccountsDbContext(DbContextOptions<AccountsDbContext> option
                 OutboxMessages.Add(message);
                 await SaveTranslatingErrorsAsync(cancellationToken);
                 previousMessageId = message.Id;
+            }
+        }
+
+        // 3. Replies to funds commands: they continue the command's workflow and are caused by it.
+        foreach (var hold in changedHolds)
+        {
+            var events = hold.DomainEvents.ToList();
+            hold.ClearDomainEvents();
+
+            foreach (var domainEvent in events)
+            {
+                OutboxMessages.Add(FundsIntegrationEventMapper.ToOutboxMessage(
+                    hold, domainEvent, context.WorkflowId, context.CorrelationId, context.CausationId));
+                await SaveTranslatingErrorsAsync(cancellationToken);
             }
         }
     }
@@ -194,8 +215,39 @@ public sealed class AccountsDbContext(DbContextOptions<AccountsDbContext> option
             e.Property(x => x.Status).HasColumnName("status").HasMaxLength(20)
                 .HasConversion(v => v.ToCode(), v => AccountsCodes.ParseAccountStatus(v)).IsRequired();
             e.Property(x => x.CoreBankingReference).HasColumnName("core_banking_reference").HasMaxLength(100).IsRequired();
+            e.Property(x => x.Currency).HasColumnName("currency").HasMaxLength(3).IsRequired();
+            e.Property(x => x.Balance).HasColumnName("balance").HasPrecision(18, 2).IsRequired();
+            e.Property(x => x.HeldAmount).HasColumnName("held_amount").HasPrecision(18, 2).IsRequired();
+            e.Ignore(x => x.Available);
             e.Property(x => x.OpenedAt).HasColumnName("opened_at").IsRequired();
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at").IsRequired();
+            e.Property(x => x.Version).HasColumnName("version").IsConcurrencyToken().IsRequired();
+        });
+
+        modelBuilder.Entity<FundsHold>(e =>
+        {
+            e.ToTable("funds_holds");
+            e.HasKey(x => x.Id);
+            e.Ignore(x => x.DomainEvents);
+            e.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
+            e.Property(x => x.PaymentRef).HasColumnName("payment_ref").IsRequired();
+            e.HasIndex(x => x.PaymentRef).IsUnique().HasDatabaseName("uq_funds_holds_payment_ref");
+            e.Property(x => x.PaymentNumber).HasColumnName("payment_number").HasMaxLength(30).IsRequired();
+            e.Property(x => x.AccountId).HasColumnName("account_id");
+            e.Property(x => x.Bsb).HasColumnName("bsb").HasMaxLength(7).IsRequired();
+            e.Property(x => x.AccountNumber).HasColumnName("account_number").HasMaxLength(30).IsRequired();
+            e.Property(x => x.CustomerNumber).HasColumnName("customer_number").HasMaxLength(100).IsRequired();
+            e.Property(x => x.Amount).HasColumnName("amount").HasPrecision(18, 2).IsRequired();
+            e.Property(x => x.Currency).HasColumnName("currency").HasMaxLength(3).IsRequired();
+            e.Property(x => x.Status).HasColumnName("status").HasMaxLength(20)
+                .HasConversion(v => v.ToCode(), v => FundsCodes.ParseHoldStatus(v)).IsRequired();
+            e.Property(x => x.RefusalReason).HasColumnName("refusal_reason").HasMaxLength(40)
+                .HasConversion(v => v!.Value.ToCode(), v => FundsCodes.ParseRefusalReason(v));
+            e.Property(x => x.InitiatedByUserId).HasColumnName("initiated_by_user_id").HasMaxLength(200);
+            e.Property(x => x.CreatedAt).HasColumnName("created_at").IsRequired();
+            e.Property(x => x.UpdatedAt).HasColumnName("updated_at").IsRequired();
+            e.Property(x => x.SettledAt).HasColumnName("settled_at");
+            e.Property(x => x.ReleasedAt).HasColumnName("released_at");
             e.Property(x => x.Version).HasColumnName("version").IsConcurrencyToken().IsRequired();
         });
 

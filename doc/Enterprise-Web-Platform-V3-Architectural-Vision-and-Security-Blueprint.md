@@ -117,7 +117,7 @@ CustomerOutboxPublisher ──► Kafka ◄── KYC Outbox relay
 | Customer KYC | Core | Present (first slice) | [CustomerKyc-Requirements.md](../src/Microservices/CustomerKyc/doc/CustomerKyc-Requirements.md) |
 | Compliance | Core | Present | [Compliance-Requirements.md](../src/Microservices/Compliance/doc/Compliance-Requirements.md) |
 | Accounts | Core (simplified) | Present | [Accounts-Requirements.md](../src/Microservices/Accounts/doc/Accounts-Requirements.md) |
-| Payments | Core | Planned | [Payments-Requirements.md](../src/Microservices/Payments/doc/Payments-Requirements.md) |
+| Payments | Core | Backend present (5a: orchestrated saga); screens and approval in 5b | [Payments-Requirements.md](../src/Microservices/Payments/doc/Payments-Requirements.md) |
 | Documents Management | Generic / supporting | Present | [DocumentsManagement-Requirements.md](../src/Microservices/DocumentsManagement/doc/DocumentsManagement-Requirements.md) |
 | Identity and access | Generic | Present | [IDP-Requirements.md](../src/IDP/doc/IDP-Requirements.md) |
 | Composition (not a business context) | — | Present | [Shell-Requirements.md](../src/Shell/doc/Shell-Requirements.md) |
@@ -214,7 +214,11 @@ The domain layer has no knowledge of HTTP, EF Core, Kafka or the IDP.
 | Core Banking Simulator | (external system stand-in) | ASP.NET Core 10 minimal API | — | Present |
 | Notifications API (SignalR hub, REST) | Notifications | ASP.NET Core 10 | `EwpNotificationsDb` | Present |
 | NotificationsSubscriber | Notifications | .NET worker | — | Present |
-| Payments | — | — | own database | Planned |
+| Payments API (+ saga orchestrator, step runner, in-process Outbox relay) | Payments | ASP.NET Core 10 | `EwpPaymentsDb` | Present |
+| PaymentsSagaReplySubscriber | Payments | .NET worker | — | Present |
+| AccountsCommandSubscriber | Accounts | .NET worker | — | Present |
+| Payment Network Simulator | (external system stand-in) | ASP.NET Core 10 minimal API | — | Present |
+| Payments BFF + MFE | Payments | ASP.NET Core 10 + Next.js | — | Planned (5b) |
 
 An MFE and its BFF are one deployable: the MFE is a static export served by its BFF.
 
@@ -414,7 +418,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Dead-letter / poison-message handling | Present (every subscriber, one shared consume loop: `AsyncWorkflows.Infrastructure.Subscribers`) |
 | Saga choreography | Present (CO ⇄ KYC ⇄ Compliance ⇄ Accounts: submission to a COMPLETED onboarding) |
 | Compensation | Present (a rejection at any stage, and a failed account opening after approval: CO COMPENSATING → REJECTED; DM invalidates and retains the evidence; the customer returns to PROSPECT) |
-| Saga orchestration (Payments) | Planned |
+| Saga orchestration (Payments) | Present for the backend (5a): persisted `PaymentSaga` state machine in the Payments API, commands / replies over Kafka with Outbox + Inbox, timeouts and resends, compensation (release funds), COMPENSATION_FAILED as a recoverable state; approval and screens in 5b |
 | User-specific SignalR notifications | Present (Notifications API stores and pushes to `user:{sub}` / `staff:{role}:{branch}` audiences derived from the token; the Shell proxies REST and the hub and shows a bell and toasts; connections close at token expiry). A click opens the record through the menu-owned microservice and the normal navigation (4c). A backplane for several instances is planned |
 | Centralized audit trail | Planned |
 | OpenTelemetry / distributed tracing | Present (.NET components: one trace across HTTP, the Outbox and Kafka via `traceparent`; OTLP export when configured); Partial (KYC NestJS BFF not instrumented; no metrics yet) |

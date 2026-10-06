@@ -143,7 +143,21 @@ Every Accounts payload carries `AccountApplicationId`, `ApplicationRef`, `Applic
 
 **Notifications.** `NotificationsSubscriber` also reads every KYC, Compliance and Accounts decision / outcome topic above and tells the initiator. For this the Accounts payloads add `HolderName` (all events), `DecisionByLanId` (`AccountApplicationRejected`) and `ApprovedByLanId` (`AccountOpened`) — additively, same SchemaVersion.
 
-### 4.5 Dead-letter topics
+### 4.5 Payments saga (orchestration)
+
+Unlike the onboarding events above, these messages are **commands and replies** between an orchestrator and a participant, plus the payment's public outcome. The `PaymentSaga` in the Payments API decides every step; Accounts only does what it is asked. All use the standard envelope; for a command, `EventType` holds the command name. Every message of one payment has the same key (the `PaymentRef`) and the payment's own `WorkflowId` / `CorrelationId`; `CausationId` is the message that led to it (a reply's `CausationId` is the command's `MessageId`).
+
+| Message | Topic | Producer → consumer | Payload | Status |
+|---|---|---|---|---|
+| `ReserveFunds` (command) | `accounts.commands` | Payments API (orchestrator) → `AccountsCommandSubscriber` → Accounts API | `PaymentRef`, `PaymentNumber`, `CustomerNumber`, `Bsb`, `AccountNumber`, `Amount`, `Currency` | Present |
+| `SettleFunds` (command) | `accounts.commands` | as above | as above | Present |
+| `ReleaseFunds` (command, the compensation) | `accounts.commands` | as above | as above | Present |
+| `FundsReserved` / `FundsReservationFailed` / `FundsSettled` / `FundsReleased` (replies) | `accounts.funds.replies` | Accounts API → `PaymentsSagaReplySubscriber` → Payments API (saga) | `PaymentRef`, `PaymentNumber`, `HoldStatus` (HELD / REFUSED / SETTLED / RELEASED), `Bsb`, `AccountNumber`, `Amount`, `Currency`; failures add `Reason` (`INSUFFICIENT_FUNDS`, `ACCOUNT_NOT_FOUND`, `ACCOUNT_NOT_OWNED`, `ACCOUNT_NOT_ACTIVE`, `CURRENCY_NOT_SUPPORTED`, `ALREADY_RELEASED`) and `ReasonText`; `FundsReleased` adds `NothingWasHeld` | Present |
+| `PaymentCompleted` / `PaymentRejected` / `PaymentFailed` / `PaymentCompensationFailed` | `payments.payment.events` | Payments API → (Notifications in step 5b) | `PaymentId`, `PaymentRef`, `PaymentNumber`, `CustomerNumber`, `BranchCode`, `Status`, `Amount`, `Currency`, `FromBsb`, `FromAccountNumber`, `PayeeName`, `ToBsb`, `ToAccountNumber`, `NetworkReference`, `ReasonCode`, `Reason` | Present |
+
+Every command is idempotent per `PaymentRef` in Accounts (one funds hold per payment; a repeated command repeats the reply), so the orchestrator may resend after a timeout. A `ReleaseFunds` for a payment Accounts never saw is recorded, so a late `ReserveFunds` is then refused (`ALREADY_RELEASED`) instead of holding funds nobody would release. The payment network is called over HTTP, not through Kafka.
+
+### 4.6 Dead-letter topics
 
 | Topic | Owner | Contents |
 |---|---|---|
@@ -153,12 +167,8 @@ Every Accounts payload carries `AccountApplicationId`, `ApplicationRef`, `Applic
 | `accounts.application-opening-subscriber.dlq` | `AccountApplicationOpeningSubscriber` | `compliance.case.approved` messages that can never open an account application (malformed, wrong type, required fields missing, rejected with 4xx), with the same `dlq-*` headers. Transient failures are never dead-lettered. |
 | `customer-onboarding.outcome-subscriber.dlq` | `OnboardingOutcomeSubscriber` | Messages that can never be processed (malformed, unknown type, no application, rejected with 4xx), copied unchanged with headers `dlq-reason`, `dlq-original-topic`, `dlq-original-partition`, `dlq-original-offset`, `dlq-consumer-group`, `dlq-failed-at`. Transient failures are never dead-lettered. |
 | `notifications.subscriber.dlq` | `NotificationsSubscriber` | Workflow events that can never become notifications (malformed, no MessageId / EventType, refused with 4xx), with the same `dlq-*` headers. Transient failures are never dead-lettered. |
-
-### 4.6 Planned events
-
-| Event type | Topic | Producer | Consumers | Status |
-|---|---|---|---|---|
-| Payment saga commands and events | `payments.*` | Payments orchestrator and participants | Payments, Accounts | Planned — defined in [Payments-Requirements.md](../src/Microservices/Payments/doc/Payments-Requirements.md) |
+| `accounts.command-subscriber.dlq` | `AccountsCommandSubscriber` | Funds commands that can never be applied (malformed, unknown command, required fields missing, refused with 400 / 409), with the same `dlq-*` headers. Transient failures are never dead-lettered. |
+| `payments.saga-reply-subscriber.dlq` | `PaymentsSagaReplySubscriber` | Replies that can never reach the saga (malformed, unknown reply, no PaymentRef, refused with 4xx), with the same `dlq-*` headers. Transient failures are never dead-lettered. |
 
 ---
 

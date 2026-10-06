@@ -65,6 +65,16 @@ builder.Services.AddAuthorization(options =>
             AccountsMicroservice.CLIENT_ID_FOR_IDP_FOR_ACCOUNT_APPLICATION_OPENING_SUBSCRIBER_TO_ACCOUNTS_API_M2M);
     });
 
+    // The command courier's pinned machine identity: only it may apply funds commands
+    // (sent by the Payments saga orchestrator through accounts.commands).
+    options.AddPolicy("AccountsCommandSubscriberWrite", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireClaim("scope", AccountsApiScopesRequired.ACCOUNTS_WRITE);
+        policy.RequireClaim("client_id",
+            AccountsMicroservice.CLIENT_ID_FOR_IDP_FOR_ACCOUNTS_COMMAND_SUBSCRIBER_TO_ACCOUNTS_API_M2M);
+    });
+
     // Officer policies: scope for the kind of operation + role, department, clearance
     // and the operation's permission. Application-level rules live in the aggregate.
     void AddOfficerPolicy(string name, string scope, params string[] permissions) =>
@@ -92,10 +102,19 @@ builder.Services.AddScoped<IStaffDirectory, StaffDirectory>();
 builder.Services.AddScoped<IOpeningTrace>(sp => sp.GetRequiredService<AccountsDbContext>());
 builder.Services.AddScoped<IAccountApplicationRepository, AccountApplicationRepository>();
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
+builder.Services.AddScoped<IFundsHoldRepository, FundsHoldRepository>();
 builder.Services.AddScoped<IAccountsQueries, AccountsQueries>();
 builder.Services.AddScoped<OpenAccountApplicationCommandHandler>();
 builder.Services.AddScoped<OfficerActionCommandHandler>();
 builder.Services.AddScoped<OpenDueAccountCommandHandler>();
+builder.Services.AddScoped<FundsCommandHandler>();
+
+// Demo only: a new account starts with this balance so payments can be shown at once
+// (Accounts:DemoOpeningDeposit; 0 when not configured).
+var openingDeposit = builder.Configuration.GetValue<decimal?>("Accounts:DemoOpeningDeposit") ?? 0m;
+if (openingDeposit < 0 || decimal.Round(openingDeposit, 2) != openingDeposit)
+    throw new InvalidOperationException("Accounts:DemoOpeningDeposit must be zero or a positive amount in cents.");
+builder.Services.AddSingleton(new AccountOpeningDeposit(openingDeposit));
 
 // ---------------------------------------------------------------- Core banking (external)
 builder.Services.AddOptions<CoreBankingOptions>()

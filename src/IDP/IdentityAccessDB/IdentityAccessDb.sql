@@ -265,6 +265,7 @@ INSERT INTO permissions (name, code, description) VALUES
 ('Reject Account Application','account.application.reject','Reject an account application'),
 ('Hold Account Application','account.application.hold','Place an account application on hold'),
 ('View Account Lifecycle','account.lifecycle.view','View account lifecycle information'),
+('Initiate Payment','payment.initiate','Capture and send a payment for a customer (assisted channel)'),
 ('View Payment','payment.view','View payment instructions'),
 ('Validate Payment','payment.validate','Validate payment instructions'),
 ('Approve Payment','payment.approve','Approve a payment subject to amount, risk, ABAC and SoD rules'),
@@ -392,7 +393,8 @@ FROM (VALUES
     ('liam.kyc','EMP-10043','liand','KYC','SYD001','FULL_TIME',3),
     ('olivia.compliance','EMP-10044','olben','COMPLIANCE','SYD001','FULL_TIME',4),
     ('jack.accounts','EMP-10045','jawil','ACCOUNTS','SYD001','FULL_TIME',3),
-    ('emily.payments','EMP-10046','emcar','PAYMENTS','SYD002','FULL_TIME',4),
+    -- Payments officer of SYD001: approves the branch's payments above the tier (step 5b).
+    ('emily.payments','EMP-10046','emcar','PAYMENTS','SYD001','FULL_TIME',4),
     ('daniel.ops','EMP-10047','dacoo','OPERATIONS','BNE001','FULL_TIME',4),
     ('sarah.audit','EMP-10048','sacol','AUDIT','ADL001','FULL_TIME',5),
     ('platform.admin','EMP-10049','mitur','IT','PER001','FULL_TIME',5),
@@ -499,6 +501,9 @@ JOIN permissions p ON p.code IN (
     'customer.onboarding.assist',
     'customer.profile.view',
     'customer.profile.update',
+    -- Assisted channel: capture a customer's payment and follow it (never approve it).
+    'payment.initiate',
+    'payment.view',
     'workflow.status.view'
 )
 WHERE r.code = 'customer_service_agent';

@@ -38,6 +38,11 @@
         "DebugTarget": "https"
       },
       {
+        "Path": "src\\Microservices\\Payments\\API\\EnterpriseWebPlatform.Payments.Api.csproj",
+        "Action": "Start",
+        "DebugTarget": "https"
+      },
+      {
         "Path": "src\\AsyncWorkflows\\Publishers\\CustomerOnboarding\\CustomerOutboxPublisher\\CustomerOutboxPublisher.csproj",
         "Action": "Start",
         "DebugTarget": "CustomerOutboxPublisher"
@@ -73,12 +78,27 @@
         "DebugTarget": "NotificationsSubscriber"
       },
       {
+        "Path": "src\\AsyncWorkflows\\Subscribers\\Accounts\\AccountsCommandSubscriber\\AccountsCommandSubscriber.csproj",
+        "Action": "Start",
+        "DebugTarget": "AccountsCommandSubscriber"
+      },
+      {
+        "Path": "src\\AsyncWorkflows\\Subscribers\\Payments\\PaymentsSagaReplySubscriber\\PaymentsSagaReplySubscriber.csproj",
+        "Action": "Start",
+        "DebugTarget": "PaymentsSagaReplySubscriber"
+      },
+      {
         "Path": "src\\Simulators\\ScreeningProviderSimulator\\EnterpriseWebPlatform.Simulators.ScreeningProvider.csproj",
         "Action": "Start",
         "DebugTarget": "https"
       },
       {
         "Path": "src\\Simulators\\CoreBankingSimulator\\EnterpriseWebPlatform.Simulators.CoreBanking.csproj",
+        "Action": "Start",
+        "DebugTarget": "https"
+      },
+      {
+        "Path": "src\\Simulators\\PaymentNetworkSimulator\\EnterpriseWebPlatform.Simulators.PaymentNetwork.csproj",
         "Action": "Start",
         "DebugTarget": "https"
       },

@@ -82,7 +82,7 @@ Identity scopes: `openid`, `profile`, `email`, `roles`, `organization`.
 | `permission` | `role_permissions` → `permissions.code` (one claim per permission) |
 | `employee_id`, `lan_id`, `department`, `branch`, `branch_city`, `branch_country_code`, `region`, `employment_type`, `clearance_level` | `user_employment_profiles` (+ `branches`) |
 
-**Staff identity.** Every staff user has a random subject ID (`sub`, a version 4 GUID: the identity that records and every rule use) and a **LAN ID** (`lan_id`, the label screens show). LAN IDs follow the "filas" rule: two letters of the first name and three of the last, lowercase letters only, with a digit appended on a collision (Sophie Mitchell → `somit`, Ethan Parker → `etpar`, Grace Walsh → `grwal`). The IDP issues them; nothing else derives them. In production the LAN ID is the directory (Active Directory / Entra ID) sign-in name; the demo signs in with role-named user names (`sophie.cs`, `ethan.kyc`, …) so an audience can follow the personas, and those stay `preferred_username`. The Customer Onboarding, KYC, Compliance and Accounts API resources carry `lan_id` in their access tokens.
+**Staff identity.** Every staff user has a random subject ID (`sub`, a version 4 GUID: the identity that records and every rule use) and a **LAN ID** (`lan_id`, the label screens show). LAN IDs follow the "filas" rule: two letters of the first name and three of the last, lowercase letters only, with a digit appended on a collision (Sophie Mitchell → `somit`, Ethan Parker → `etpar`, Grace Walsh → `grwal`). The IDP issues them; nothing else derives them. In production the LAN ID is the directory (Active Directory / Entra ID) sign-in name; the demo signs in with role-named user names (`sophie.cs`, `ethan.kyc`, …) so an audience can follow the personas, and those stay `preferred_username`. The Customer Onboarding, KYC, Compliance, Accounts and Payments API resources carry `lan_id` in their access tokens. Customer Service Agents hold `payment.initiate` and `payment.view` (they capture payments for customers; payments officers approve them).
 
 Identity resources: `openid`, `profile`, `email`, `roles` and **`organization`** (`employee_id`, `lan_id`, `department`, `branch`, `branch_city`, `branch_country_code`, `region`, `clearance_level`, `employment_type`). The CO and KYC BFF clients request `organization` so they know the acting user's branch. The Customer Onboarding API resource also carries `branch`, `branch_city` and `branch_country_code` in its access tokens (branch-scoped customer access).
 
@@ -102,7 +102,7 @@ Demo identities are fictitious and for local development only. **Password conven
 | `olivia.compliance` | Olivia Bennett | `compliance_officer` | COMPLIANCE | SYD001 | 4 |
 | `grace.compliance` | Grace Walsh | `compliance_officer` (senior) | COMPLIANCE | SYD001 | 5 |
 | `jack.accounts` | Jack Wilson | `account_officer` | ACCOUNTS | SYD001 | 3 |
-| `emily.payments` | Emily Carter | `payments_officer` | PAYMENTS | SYD002 | 4 |
+| `emily.payments` | Emily Carter | `payments_officer` | PAYMENTS | SYD001 | 4 |
 | `daniel.ops` | Daniel Cooper | `operations_administrator` | OPERATIONS | BNE001 | 4 |
 | `sarah.audit` | Sarah Collins | `auditor` | AUDIT | ADL001 | 5 |
 | `platform.admin` | Michael Turner | `platform_administrator` + `operations_administrator` | IT | PER001 | 5 |

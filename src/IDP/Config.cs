@@ -91,6 +91,8 @@ public static class Config
             DocumentInvalidationSubscriberToDocumentsManagementApiM2M.Client,
             AccountApplicationOpeningSubscriberToAccountsApiM2M.Client,
             NotificationsSubscriberToNotificationsApiM2M.Client,
+            AccountsCommandSubscriberToAccountsApiM2M.Client,
+            PaymentsSagaReplySubscriberToPaymentsApiM2M.Client,
             KycBFFToDocumentsManagementM2M.Client
         ];
 }

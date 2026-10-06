@@ -18,11 +18,20 @@ public sealed class PaymentsApiResource : IDuendeApiResource
                     PaymentsApiScopesRequired.PAYMENTS_WRITE
                 },
 
+            // The ABAC attributes the Payments API authorizes on (permission, branch scope;
+            // department and clearance for the approval tiers in 5b), and the LAN ID it shows.
             UserClaims =
                 {
                     "role",
                     "name",
-                    "email"
+                    "email",
+                    "permission",
+                    "department",
+                    "branch",
+                    "region",
+                    "clearance_level",
+                    "lan_id",
+                    "employment_type"
                 }
         };
 }

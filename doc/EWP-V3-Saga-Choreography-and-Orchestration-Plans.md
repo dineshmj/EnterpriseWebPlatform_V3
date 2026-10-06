@@ -1,6 +1,6 @@
 # Enterprise Web Platform V3 — Saga Plans
 
-**Status:** Living document. Customer Onboarding choreography is implemented end to end, from submission through the KYC, Compliance and Accounts decisions to a COMPLETED onboarding, including compensation of a failed account opening; Payments orchestration is planned.
+**Status:** Living document. Customer Onboarding choreography is implemented end to end, from submission through the KYC, Compliance and Accounts decisions to a COMPLETED onboarding, including compensation of a failed account opening; Payments orchestration is implemented for the backend (step 5a: reserve, send, settle, compensation, timeouts, compensation failure); its screens, human approval and notifications follow in step 5b.
 
 ---
 
@@ -88,40 +88,77 @@ No context rolls back another context's database.
 
 ## 2.1 Intent
 
-A **Payment Saga Orchestrator**, owned by the Payments context, persists the workflow state and decides the next step. Participants (Payments, Accounts) own their data and perform their own state changes. The orchestrator never touches their databases. Commands and replies may still travel over Kafka:
+A **Payment Saga Orchestrator**, owned by the Payments context, persists the workflow state and decides every next step. The participant (Accounts) and the external payment network only do what they are asked; the orchestrator never touches their databases. Commands and replies still travel over Kafka:
 
 > **Kafka does not imply choreography.** The difference is where the workflow decision lives.
 
-## 2.2 Persisted saga state
+The difference in one sentence: in choreography everyone reacts to news; in orchestration one owner gives instructions and waits for answers.
+
+| | Choreography (onboarding) | Orchestration (payments) |
+|---|---|---|
+| Who knows the sequence? | Nobody as a whole: each context knows its own cue ("when KYC approves, I open a case") | Only the orchestrator (`PaymentSaga`) |
+| Messages | **Events**, facts in the past tense: `KycCaseApproved` | **Commands** (`ReserveFunds`) and **replies** (`FundsReserved`) |
+| Where the workflow state lives | Pieced together from each context (CO mirrors it by listening) | One row in `payment_sagas` |
+| Compensation | Each context reacts to a rejection event on its own | The orchestrator sends an explicit undo command: `ReleaseFunds` |
+| Adding a step | A new subscriber somewhere | A change to the orchestrator |
+| "Where is payment 42?" | Ask several contexts | Read one row (and its timeline) |
+
+The infrastructure is the same in both: Outbox, Inbox, Kafka, and courier workers that read Kafka and call an API with an M2M token. The couriers decide nothing in either style.
+
+## 2.2 Who does what (implemented, step 5a)
+
+![Payment saga orchestration](Payment%20Saga%20Orchestration%20(corrected).png)
+
+| Piece | Runs in | Role |
+|---|---|---|
+| `PaymentSaga` | Payments API | The orchestrator: a persisted state machine, the ONLY place decisions are made. |
+| `Payment` | Payments API | The business state people see; changed only by its saga. |
+| `SagaStepRunner` | Payments API (background service) | The saga's timer: calls the payment network (direct HTTP, Idempotency-Key, timeout, retry, circuit breaker) and wakes sagas whose reply is overdue. Decides nothing. |
+| Outbox publisher | Payments API (background service) | Commands to `accounts.commands`, outcomes to `payments.payment.events`. |
+| `AccountsCommandSubscriber` | console worker (Accounts) | Courier: commands → Accounts API. |
+| Accounts API | participant | Reserves, settles or releases in ONE local transaction (`funds_holds` + the account's balance), replies through its own Outbox on `accounts.funds.replies`. Knows nothing about the saga. |
+| `PaymentsSagaReplySubscriber` | console worker (Payments) | Courier: replies → the Payments API's internal endpoint → the saga. |
+| Payment Network Simulator | external | Accepts, refuses (422) or fails like a real third party. |
+
+`POST /v1/payments` saves the payment, the saga and the first command in one transaction and answers **202 Accepted** at once. Each later step is a short, separate piece of work (a reply arrived, a timer is due) that locks the saga row, decides, and saves the new state with the next command in one transaction. Nothing waits in memory; a restart resumes from the saved step.
+
+## 2.3 Persisted saga state
 
 ```text
-SagaId, PaymentId, CurrentStep, Status, WorkflowId, CorrelationId, CausationId, InitiatedByUserId, CreatedAt, UpdatedAt
+payment_sagas:        Id (SagaId), PaymentId, PaymentRef, Step, Status, Attempts, NextCheckAt, LastError,
+                      CurrentCommandId, LastMessageId (the next message's CausationId), WorkflowId, CorrelationId,
+                      InitiatedByUserId, trace_parent, CreatedAt, UpdatedAt, Version
+payment_saga_history: every command sent, reply received / ignored, timeout, network call and decision (the timeline)
 ```
 
-## 2.3 Successful path
+## 2.4 Successful path
 
 ```text
-Payment initiated ─► Validate ─► Reserve funds (Accounts) ─► Human approval (if the tier requires it) ─► Execute ─► Completed
+RESERVE_FUNDS ─FundsReserved─► (AWAIT_APPROVAL) ─► SEND_TO_NETWORK ─accepted─► SETTLE_FUNDS ─FundsSettled─► DONE (COMPLETED)
 ```
 
-When approval is required, the orchestrator persists `PAYMENT_APPROVAL_PENDING` and stops. The officer's decision event resumes it, possibly days later.
+Above the approval tier (`Payments:ApprovalThreshold`) the saga stops at `AWAIT_APPROVAL` (payment `PENDING_APPROVAL`) with no timer; the officer's decision resumes it, possibly days later (step 5b). The reservation comes BEFORE the approval, so the money is still there when the officer approves.
 
-## 2.4 Compensation
+## 2.5 Compensation
 
 ```text
-Execute fails ─► Compensation required ─► Release reserved funds (Accounts) ─► Funds released ─► Payment FAILED
+RESERVE_FUNDS ─FundsReservationFailed─► DONE (REJECTED: nothing reserved, nothing to undo)
+SEND_TO_NETWORK ─refused / unavailable after N tries─► RELEASE_FUNDS ─FundsReleased─► DONE (FAILED: funds released)
 ```
 
-## 2.5 Compensation failure
+## 2.6 Timeouts and compensation failure
 
 ```text
-Release funds ─✗─► retry #1 ─✗─► retry #2 ─✗─► retry #3 ─✗─► circuit breaker OPEN
-              ─► COMPENSATION_REQUIRED / COMPENSATION_FAILED ─► operations recovery
+no reply in time ─► resend the same command (Accounts is idempotent per PaymentRef); timeout doubles 30 s → 5 min
+RESERVE not confirmed after N tries ─► release to be sure ─► FAILED
+SETTLE not confirmed               ─► keep trying (the money already left through the network)
+RELEASE not confirmed after N tries ─► STUCK, payment COMPENSATION_FAILED ─► operations "Retry release" (step 5c)
+                                       a late FundsReleased still resolves it
 ```
 
-The saga must never claim a rollback that did not happen. It records the truth and exposes a recoverable operational state.
+The saga never claims a rollback that did not happen. It records the truth, publishes `PaymentCompensationFailed`, turns `/health/ready` Degraded, and exposes a recoverable operational state.
 
-Payment business states, approval tiers and rules: [Payments-Requirements.md](../src/Microservices/Payments/doc/Payments-Requirements.md).
+Payment business states, approval tiers and rules: [Payments-Requirements.md](../src/Microservices/Payments/doc/Payments-Requirements.md). How to run it: [Payments API README](../src/Microservices/Payments/API/README.md).
 
 ---
 
@@ -169,18 +206,18 @@ Retry, timeout and circuit breaker protect **individual technical interactions**
 - [x] Compensation of later failures (account opening; COMPENSATING)
 - [x] Notifications to the initiator and the next team (stored, pushed and shown in the Shell)
 
-**Payments — orchestration** (after the choreography is stable)
+**Payments — orchestration**
 
-1. Payment state machine and saga state
-2. Commands and events, added to the Event Catalogue
-3. Orchestrator with Outbox and Inbox
-4. Retry, timeout and circuit breaker
-5. Successful scenario
-6. Business failure with compensation
-7. Deliberate compensation failure and recovery
-8. Human approval as a long-running state
-9. Notifications
-10. End-to-end observability by WorkflowId, CorrelationId and CausationId
+- [x] Payment state machine and saga state (5a)
+- [x] Commands, replies and events, added to the Event Catalogue (5a)
+- [x] Orchestrator with Outbox and Inbox (5a)
+- [x] Retry, timeout and circuit breaker (5a)
+- [x] Successful scenario (5a)
+- [x] Business failure with compensation (5a)
+- [ ] Deliberate compensation failure and recovery: the failure state is present (5a); the operations "Retry release" action follows (5c)
+- [ ] Human approval as a long-running state: the saga waits (5a); the officer's decision and screens follow (5b)
+- [ ] Notifications (5b)
+- [x] End-to-end observability by WorkflowId, CorrelationId, CausationId and one trace per payment (5a)
 
 ---
 
