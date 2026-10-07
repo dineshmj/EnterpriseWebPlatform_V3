@@ -1,7 +1,8 @@
+// After a silent sign-in the user comes back to the same page, query included (e.g. ?caseId=).
 export async function getJson<T>(url: string): Promise<T> {
   const response = await fetch(url, { credentials: 'include', cache: 'no-store' });
   if (response.status === 401) {
-    window.location.href = `/api/auth/silent-login?returnUrl=${encodeURIComponent(window.location.pathname)}`;
+    window.location.href = `/api/auth/silent-login?returnUrl=${encodeURIComponent(window.location.pathname + window.location.search)}`;
     throw new Error('Authentication required.');
   }
   if (!response.ok) {
@@ -31,7 +32,7 @@ export async function postJson<T>(url: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
   if (response.status === 401) {
-    window.location.href = `/api/auth/silent-login?returnUrl=${encodeURIComponent(window.location.pathname)}`;
+    window.location.href = `/api/auth/silent-login?returnUrl=${encodeURIComponent(window.location.pathname + window.location.search)}`;
     throw new Error('Authentication required.');
   }
   const text = await response.text();

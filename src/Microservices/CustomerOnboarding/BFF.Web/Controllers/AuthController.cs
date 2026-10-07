@@ -10,12 +10,14 @@ using EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.Configu
 
 namespace EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.Controllers;
 
+// Anonymous only where it must be (signing in, "who am I?"): a class-level
+// [AllowAnonymous] would silently cancel [Authorize] on csrf and logout.
 [ApiController]
-[AllowAnonymous]
 [Route("api/auth")]
 public sealed class AuthController : ControllerBase
 {
     [HttpGet("silent-login")]
+    [AllowAnonymous]
     public IActionResult SilentLogin([FromQuery] string returnUrl = BffRouteCatalog.Customers)
     {
         if (!BffRouteCatalog.IsAllowedSpaRoute(returnUrl))
@@ -38,6 +40,7 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpGet("user")]
+    [AllowAnonymous]
     public IActionResult UserInfo()
     {
         if (User.Identity?.IsAuthenticated != true)

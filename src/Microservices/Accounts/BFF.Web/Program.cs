@@ -113,6 +113,16 @@ builder.Services
 
         options.Events.OnRedirectToIdentityProvider = context =>
         {
+            // An API call (fetch) cannot follow a redirect to the IDP ("Failed to fetch"):
+            // answer 401 instead, and the MFE signs in again silently and comes back -
+            // e.g. after a restart cleared the in-memory server-side sessions.
+            if (context.Request.Path.StartsWithSegments("/bff/api"))
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                context.HandleResponse();
+                return Task.CompletedTask;
+            }
+
             if (context.Properties.Items.TryGetValue("prompt", out var prompt))
             {
                 context.ProtocolMessage.Prompt = prompt;

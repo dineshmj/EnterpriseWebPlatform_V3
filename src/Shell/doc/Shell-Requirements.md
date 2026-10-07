@@ -141,4 +141,5 @@ Cookies stay isolated per host name (`*.dev.localhost` locally), and a logout mu
 | Middleware order `UseBff()` before `UseAuthorization()` | Present |
 | Server-side sessions (tokens not carried in the cookie) | Present in the Shell and CO BFF (Duende in-memory store; a persistent store is needed for multiple instances). The NestJS KYC BFF uses the in-memory `express-session` store. |
 | Logout propagation to every MFE BFF | Present via IDP front-channel logout (each BFF's `/signout-oidc`) |
+| An MFE's API call with an expired or lost session | Present: the .NET MFE BFFs answer **401** on `/bff/api` (never a redirect the browser cannot follow); the MFE signs in again silently and returns to the same page. Only `silent-login` and `user` are anonymous; `csrf` and `logout` require a session |
 | Notification display | Present: bell, toasts, mark read; relayed to the MFE in the frame; a click opens the record (4c) |
