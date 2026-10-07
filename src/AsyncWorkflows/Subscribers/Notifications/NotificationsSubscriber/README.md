@@ -8,6 +8,7 @@ Kafka subscriber **owned by the Notifications context**. It reads the workflow's
 kyc.case.created / approved / rejected
 compliance.case.screened / approved / rejected
 accounts.application.created / rejected, accounts.account.opened / opening.failed
+payments.payment.events (PaymentApprovalRequired, PaymentCompleted / Rejected / Failed / CompensationFailed)
         │  (consumer group: notifications.subscriber; Kafka user: ewp-notifications-subscriber)
         ▼
 validate (MessageId, EventType) ── invalid ──► notifications.subscriber.dlq  (+ headers), commit

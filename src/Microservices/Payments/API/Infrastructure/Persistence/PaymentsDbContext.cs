@@ -59,14 +59,18 @@ public sealed class PaymentsDbContext(DbContextOptions<PaymentsDbContext> option
         {
             var payment = payments.SingleOrDefault(p => p.Id == saga.PaymentId)
                 ?? await Payments.SingleAsync(p => p.Id == saga.PaymentId, cancellationToken);
-            var initiatorLanId = await StaffMembers.AsNoTracking()
-                .Where(x => x.UserId == saga.InitiatedByUserId).Select(x => x.LanId).FirstOrDefaultAsync(cancellationToken);
+            // LAN IDs of the people the messages name (this context's staff directory).
+            var people = new[] { saga.InitiatedByUserId, payment.DecisionByUserId }.Where(x => x is not null).Distinct().ToList();
+            var lanIds = await StaffMembers.AsNoTracking()
+                .Where(x => people.Contains(x.UserId))
+                .ToDictionaryAsync(x => x.UserId, x => x.LanId, cancellationToken);
+            string? LanOf(string? userId) => userId is not null && lanIds.TryGetValue(userId, out var lan) ? lan : null;
 
             var commands = saga.DomainEvents.ToList();
             saga.ClearDomainEvents();
             foreach (var command in commands)
             {
-                OutboxMessages.Add(PaymentsMessageMapper.ToOutboxMessage(saga, payment, command, initiatorLanId));
+                OutboxMessages.Add(PaymentsMessageMapper.ToOutboxMessage(saga, payment, command, LanOf));
                 await SaveTranslatingErrorsAsync(cancellationToken);
             }
 
@@ -74,7 +78,7 @@ public sealed class PaymentsDbContext(DbContextOptions<PaymentsDbContext> option
             payment.ClearDomainEvents();
             foreach (var fact in facts)
             {
-                OutboxMessages.Add(PaymentsMessageMapper.ToOutboxMessage(saga, payment, fact, initiatorLanId));
+                OutboxMessages.Add(PaymentsMessageMapper.ToOutboxMessage(saga, payment, fact, LanOf));
                 await SaveTranslatingErrorsAsync(cancellationToken);
             }
         }
@@ -139,6 +143,9 @@ public sealed class PaymentsDbContext(DbContextOptions<PaymentsDbContext> option
             e.Property(x => x.OutcomeCode).HasColumnName("outcome_code").HasMaxLength(40);
             e.Property(x => x.OutcomeReason).HasColumnName("outcome_reason").HasMaxLength(1000);
             e.Property(x => x.NetworkReference).HasColumnName("network_reference").HasMaxLength(100);
+            e.Property(x => x.DecisionByUserId).HasColumnName("decision_by_user_id").HasMaxLength(200);
+            e.Property(x => x.DecisionAt).HasColumnName("decision_at");
+            e.Property(x => x.DecisionRemarks).HasColumnName("decision_remarks").HasMaxLength(1000);
             e.Property(x => x.CreatedAt).HasColumnName("created_at").IsRequired();
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at").IsRequired();
             e.Property(x => x.EndedAt).HasColumnName("ended_at");

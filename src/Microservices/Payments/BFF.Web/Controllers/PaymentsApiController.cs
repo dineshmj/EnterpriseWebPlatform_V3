@@ -13,6 +13,8 @@ namespace EnterpriseWebPlatform.Payments.Bff.Web.Controllers;
 
 public sealed record PayeeConfirmationBody(string? Bsb, string? AccountNumber, string? AccountName);
 
+public sealed record PaymentDecisionBody(string? Remarks);
+
 /// <summary>
 /// The Payments MFE's API. A thin, explicit facade: the BFF forwards each request with the
 /// staff member's own access token and relays the API's answer. It holds no business
@@ -64,6 +66,19 @@ public sealed class PaymentsApiController(
         var message = new HttpRequestMessage(HttpMethod.Post, "/v1/payments") { Content = JsonContent.Create(payment) };
         message.Headers.Add("Idempotency-Key", key.ToString());
         return SendAsync(PaymentsBffOptions.PaymentsApiClient, message, cancellationToken);
+    }
+
+    /// <summary>A payments officer's decision; the Payments API checks the role, branch, clearance limit and SoD.</summary>
+    [HttpPost("payments/{paymentId:long}/{decision}")]
+    [ValidateAntiForgeryToken]
+    public Task<IActionResult> Decide(long paymentId, string decision, [FromBody] PaymentDecisionBody? body, CancellationToken cancellationToken = default)
+    {
+        if (decision is not ("approve" or "reject"))
+            return Task.FromResult<IActionResult>(NotFound());
+
+        return SendAsync(PaymentsBffOptions.PaymentsApiClient,
+            new HttpRequestMessage(HttpMethod.Post, $"/v1/payments/{paymentId}/{decision}") { Content = JsonContent.Create(new PaymentDecisionBody(body?.Remarks)) },
+            cancellationToken);
     }
 
     [HttpGet("payments/policy")]

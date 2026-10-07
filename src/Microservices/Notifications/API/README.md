@@ -27,6 +27,9 @@ Shell BFF  ── proxies /bff/notifications and /hubs/notifications with the pe
 | `KycCaseApproved` / `Rejected` | The initiator (`user:{sub}`) | "etpar approved KYC for Camilla Parkers (APP-…001). Compliance review is next." |
 | `ComplianceCaseApproved` / `Rejected` | The initiator | "olben cleared Camilla Parkers (APP-…001) for compliance (risk low)." |
 | `AccountApplicationRejected`, `AccountOpened`, `AccountOpeningFailed` | The initiator | "Account 062-000 10000001 is open for Camilla Parkers (APP-…001). Onboarding is complete." |
+| `PaymentApprovalRequired` | Payments officers of the branch (`staff:payments_officer:SYD001`) | "Payment awaiting approval — $4,750.00 to Jane Citizen (PAY-…) for CUST-100001 needs a payments officer's approval. The funds are reserved." |
+| `PaymentCompleted` / `PaymentRejected` / `PaymentFailed` | The initiator | "Payment completed — $4,750.00 to Jane Citizen (PAY-…) was sent (approved by emcar)." |
+| `PaymentCompensationFailed` | The initiator and the branch's payments officers | "Payment needs attention — … the release of the reserved funds is not confirmed." |
 
 The rules live in [Domain/NotificationRules.cs](Domain/NotificationRules.cs). People are named by LAN ID, customers by name; every notification also stores a **target**, the page a click opens: new work opens the record (e.g. `{"mfe":"kyc","path":"/v1/kyc/cases/view-details?caseId=3","recordId":3}`), progress opens the initiator's application list (`/v1/onboarding/applications/view-all`). It holds no server name: the Shell opens the path only through a microservice in the person's own menu, and that BFF checks it against its allow-list.
 

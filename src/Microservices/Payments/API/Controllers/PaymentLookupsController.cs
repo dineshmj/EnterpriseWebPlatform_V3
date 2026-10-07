@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 using EnterpriseWebPlatform.Payments.Api.Application.Abstractions;
-using EnterpriseWebPlatform.Payments.Api.Application.Commands;
 using EnterpriseWebPlatform.Payments.Api.Domain.Exceptions;
 using EnterpriseWebPlatform.Payments.Api.Domain.ValueObjects;
 
@@ -19,16 +18,8 @@ public sealed record PayeeConfirmationRequest(string? Bsb, string? AccountNumber
 [ApiController]
 [Route("v1/payments")]
 [Authorize(Policy = "PaymentInitiate")]
-public sealed class PaymentLookupsController(
-    IPaymentNetwork network,
-    ApprovalTier approvalTier,
-    ILogger<PaymentLookupsController> logger) : ControllerBase
+public sealed class PaymentLookupsController(IPaymentNetwork network, ILogger<PaymentLookupsController> logger) : ControllerBase
 {
-    /// <summary>The limits the screen explains up front (the API enforces them on every payment).</summary>
-    [HttpGet("policy")]
-    public IActionResult GetPolicy() =>
-        Ok(new { currency = PaymentRules.Aud, approvalThreshold = approvalTier.Threshold, maxAmount = PaymentRules.MaxAmount, referenceMaxLength = PaymentRules.ReferenceMaxLength });
-
     [HttpGet("bsb/{bsb}")]
     public async Task<IActionResult> LookupBsb(string bsb, CancellationToken cancellationToken)
     {

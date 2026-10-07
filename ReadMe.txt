@@ -309,6 +309,9 @@ What the platform is, how it is designed and what each component must do are doc
 		find the customer, pick the paying account, enter the payee (BSB, account, name - Confirmation of Payee checks it), the amount, then
 		Transfer. The status page follows the PaymentSaga live: ReserveFunds (Accounts) -> send to the Payment Network Simulator -> SettleFunds.
 		Confirmation of Payee (simulator): an account number ending in 0 = no match, in 9 = close match, otherwise match.
+		Above 1,000.00 the payment waits for approval: emily.payments (SYD001, clearance 4) is notified, opens Payments -> Payment
+		Approvals and approves (sent, completed) or rejects with remarks (funds released, REJECTED). Nobody approves their own payment;
+		clearance 4 approves up to 100,000.
 		Details: src\Microservices\Payments\API\README.md. To see compensation, pay to a BSB starting with 999 (the network refuses it) or:
 
 			$pns = 'https://localhost:46386/admin/behaviour'

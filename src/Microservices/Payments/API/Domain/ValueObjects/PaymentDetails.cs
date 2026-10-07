@@ -72,6 +72,23 @@ public sealed partial record BankAccountRef
     private static partial Regex AccountNumberPattern();
 }
 
+/// <summary>
+/// ABAC: how much a payments officer may approve, by clearance level (configuration
+/// Payments:ApprovalLimits). A level without a limit approves any amount; below the lowest
+/// configured level nothing may be approved.
+/// </summary>
+public sealed record ApprovalLimits(IReadOnlyDictionary<int, decimal?> ByClearance)
+{
+    /// <summary>The highest amount this clearance may approve; null = no limit; 0 = may not approve.</summary>
+    public decimal? MaxFor(int clearance)
+    {
+        var level = ByClearance.Keys.Where(k => k <= clearance).DefaultIfEmpty(int.MinValue).Max();
+        return level == int.MinValue ? 0m : ByClearance[level];
+    }
+
+    public bool Allows(int clearance, decimal amount) => MaxFor(clearance) is not { } max || amount <= max;
+}
+
 /// <summary>Validation of the remaining payment details.</summary>
 public static partial class PaymentRules
 {
@@ -82,10 +99,15 @@ public static partial class PaymentRules
     /// <summary>The assisted channel's per-payment limit (a sanity limit; approval tiers are configuration).</summary>
     public const decimal MaxAmount = 1_000_000m;
 
+    private static readonly System.Globalization.CultureInfo Australia = System.Globalization.CultureInfo.GetCultureInfo("en-AU");
+
+    /// <summary>An AUD amount for people: 100,000.00 - whatever the server's regional settings are.</summary>
+    public static string Format(decimal amount) => amount.ToString("N2", Australia);
+
     public static decimal ValidAmount(decimal amount)
     {
         if (amount <= 0 || amount > MaxAmount || decimal.Round(amount, 2) != amount)
-            throw new DomainRuleViolationException($"The amount must be more than 0 and at most {MaxAmount:N0} AUD, in whole cents.");
+            throw new DomainRuleViolationException($"The amount must be more than 0 and at most {Format(MaxAmount)} AUD, in whole cents.");
         return amount;
     }
 

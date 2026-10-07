@@ -28,9 +28,10 @@ Nothing waits in memory. `POST /v1/payments` saves the payment, the saga and the
 ## The saga
 
 ```text
-RESERVE_FUNDS ─FundsReserved─► (AWAIT_APPROVAL) ─► SEND_TO_NETWORK ─accepted─► SETTLE_FUNDS ─FundsSettled─► DONE   payment COMPLETED
+RESERVE_FUNDS ─FundsReserved─► (AWAIT_APPROVAL ─approved─►) SEND_TO_NETWORK ─accepted─► SETTLE_FUNDS ─FundsSettled─► DONE   payment COMPLETED
 RESERVE_FUNDS ─FundsReservationFailed─► DONE                                                                     payment REJECTED (nothing to undo)
 SEND_TO_NETWORK ─refused / gave up─► RELEASE_FUNDS ─FundsReleased─► DONE                                         payment FAILED (funds released)
+AWAIT_APPROVAL ─rejected by the officer─► RELEASE_FUNDS ─FundsReleased─► DONE                                     payment REJECTED (funds released)
 RELEASE_FUNDS ─no reply after N tries─► STUCK                                                                    payment COMPENSATION_FAILED
 ```
 
@@ -55,7 +56,9 @@ Limits are configuration (`Payments:ApprovalThreshold`, default 1,000.00; `Payme
 | `POST /v1/payments` | `payments.write` + `payment.initiate` + branch | Start a payment. Header **`Idempotency-Key`** (a GUID, one per payment form): the same key returns the same payment (200 instead of 202); another person's key is refused (409). |
 | `GET /v1/payments?status=&pageNumber=&pageSize=` | `payments.read` + `payment.view` or `payment.initiate` | The branch's payments, newest first. |
 | `GET /v1/payments/{id}` | as above | The payment, its saga (step, status, attempts, next check, last error, WorkflowId) and the timeline. Another branch's payment is 404. |
-| `GET /v1/payments/policy` | `payments.write` + `payment.initiate` | The limits the screen explains up front: currency, approval threshold, maximum amount, reference length. |
+| `GET /v1/payments/policy` | `payments.read` + `payment.view` or `payment.initiate` | The limits the screens explain up front: currency, approval threshold, maximum amount, reference length, and what the caller's clearance may approve. |
+| `POST /v1/payments/{id}/approve` | `payments.write` + `payment.approve` + branch | A payments officer approves a PENDING_APPROVAL payment: never one they started (SoD, 403), within their clearance's limit (`Payments:ApprovalLimits`: 3 → 10,000, 4 → 100,000, 5 → any; 403 above it). The saga resumes and sends it. |
+| `POST /v1/payments/{id}/reject` | `payments.write` + `payment.reject` + branch | Rejects with remarks (required): the saga releases the funds and the payment ends REJECTED (`APPROVAL_REJECTED`). |
 | `GET /v1/payments/bsb/{bsb}` | as above | BSB directory (answered by the payment network): bank, branch, state; 404 when unknown. |
 | `POST /v1/payments/payee-confirmations` | as above | Confirmation of Payee: `MATCH`, `CLOSE_MATCH` (with the name the bank holds) or `NO_MATCH`. A warning for the staff member, never a decision. |
 | `POST /internal/v1/payment-sagas/replies` | pinned M2M client of the PaymentsSagaReplySubscriber | Replies from Accounts. |
@@ -93,7 +96,7 @@ Content-Type: application/json
 | `toBsb` starting with `999` | The network refuses: COMPENSATING → **FAILED**, hold `RELEASED`, balance unchanged. |
 | Simulator `Down`, then a payment | Network retries in the timeline, then compensation → FAILED. |
 | Stop the AccountsCommandSubscriber, then a payment | TIMEOUT / resend lines every 30 s+; start it again and the saga continues. |
-| Amount above 1,000.00 | Stops at **PENDING_APPROVAL** (the approval screen is step 5b-2). |
+| Amount above 1,000.00 | Stops at **PENDING_APPROVAL**; the branch's payments officers are notified. emily.payments (Payment Approvals) approves → sent and completed, or rejects → funds released, REJECTED. Sophie cannot decide her own payment. |
 
 ## Messages
 

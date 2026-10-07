@@ -13,7 +13,7 @@ public sealed class NotificationsSubscriberOptions : ISubscriberSettings, IM2MCl
     /// <summary>
     /// Fixed in code: the topics are part of this worker's contract, not configuration.
     /// New work for the next team ("created"; for Compliance "screened", when the case is
-    /// ready for a decision) and outcomes for the initiator.
+    /// ready for a decision; for Payments "approval required") and outcomes for the initiator.
     /// </summary>
     public IReadOnlyList<string> Topics { get; } =
     [
@@ -26,7 +26,8 @@ public sealed class NotificationsSubscriberOptions : ISubscriberSettings, IM2MCl
         KafkaTopicNames.AccountApplicationCreated,
         KafkaTopicNames.AccountApplicationRejected,
         KafkaTopicNames.AccountOpened,
-        KafkaTopicNames.AccountOpeningFailed
+        KafkaTopicNames.AccountOpeningFailed,
+        KafkaTopicNames.PaymentEvents
     ];
 
     /// <summary>The Kafka ACLs grant this worker's user READ on this group only.</summary>

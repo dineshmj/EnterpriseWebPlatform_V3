@@ -9,6 +9,9 @@ using EnterpriseWebPlatform.Payments.Api.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.Payments.Api.Controllers;
 
+/// <summary>A payments officer's decision: remarks are optional to approve, required to reject.</summary>
+public sealed record PaymentDecisionRequest(string? Remarks);
+
 /// <summary>A payment as the assisted-channel screen captures it.</summary>
 public sealed record InitiatePaymentRequest(
     string? CustomerNumber,
@@ -29,9 +32,78 @@ public sealed record InitiatePaymentRequest(
 [Route("v1/payments")]
 public sealed class PaymentsController(
     InitiatePaymentCommandHandler initiateHandler,
-    IPaymentsQueries queries) : ControllerBase
+    DecidePaymentCommandHandler decideHandler,
+    IPaymentsQueries queries,
+    ApprovalTier approvalTier,
+    ApprovalLimits approvalLimits) : ControllerBase
 {
     private const int MaxPageSize = 100;
+
+    /// <summary>
+    /// The limits the screens explain up front (the API enforces them on every payment and
+    /// decision): currency, approval threshold, maximum amount, reference length, and what
+    /// the caller's clearance may approve (null = no limit).
+    /// </summary>
+    [HttpGet("policy")]
+    [Authorize(Policy = "PaymentView")]
+    public IActionResult GetPolicy() =>
+        Ok(new
+        {
+            currency = PaymentRules.Aud,
+            approvalThreshold = approvalTier.Threshold,
+            maxAmount = PaymentRules.MaxAmount,
+            referenceMaxLength = PaymentRules.ReferenceMaxLength,
+            yourApprovalLimit = approvalLimits.MaxFor(ClearanceOf(User))
+        });
+
+    /// <summary>A payments officer approves a payment awaiting approval: the saga sends it.</summary>
+    [HttpPost("{paymentId:long}/approve")]
+    [Authorize(Policy = "PaymentApprove")]
+    public Task<IActionResult> Approve(long paymentId, [FromBody] PaymentDecisionRequest? request, CancellationToken cancellationToken) =>
+        DecideAsync(paymentId, approve: true, request?.Remarks, cancellationToken);
+
+    /// <summary>A payments officer rejects a payment awaiting approval: the saga releases the funds.</summary>
+    [HttpPost("{paymentId:long}/reject")]
+    [Authorize(Policy = "PaymentReject")]
+    public Task<IActionResult> Reject(long paymentId, [FromBody] PaymentDecisionRequest? request, CancellationToken cancellationToken) =>
+        DecideAsync(paymentId, approve: false, request?.Remarks, cancellationToken);
+
+    private async Task<IActionResult> DecideAsync(long paymentId, bool approve, string? remarks, CancellationToken cancellationToken)
+    {
+        var branch = PaymentsStaffAuthorizationHandler.BranchOf(User);
+        var userId = User.FindFirst("sub")?.Value;
+        if (branch is null || string.IsNullOrWhiteSpace(userId))
+            return Forbid();
+
+        try
+        {
+            var result = await decideHandler.HandleAsync(
+                new DecidePaymentCommand(paymentId, approve, remarks, userId,
+                    User.FindFirst("lan_id")?.Value ?? "a payments officer", ClearanceOf(User), branch),
+                cancellationToken);
+
+            return result is null ? NotFound() : Ok(new { status = result.Status, sagaStep = result.SagaStep });
+        }
+        catch (DomainRuleViolationException ex)
+        {
+            return ValidationProblem(ex.Message);
+        }
+        catch (Exception ex) when (ex is SeparationOfDutiesViolationException or ApprovalLimitExceededException)
+        {
+            return Problem(ex.Message, statusCode: StatusCodes.Status403Forbidden, title: "Not permitted");
+        }
+        catch (DomainConflictException ex)
+        {
+            return Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, title: "Not awaiting approval");
+        }
+    }
+
+    /// <summary>The highest clearance_level claim; 0 when absent (fail closed).</summary>
+    private static int ClearanceOf(System.Security.Claims.ClaimsPrincipal user) =>
+        user.Claims.Where(c => c.Type == "clearance_level")
+            .Select(c => int.TryParse(c.Value, out var v) ? v : 0)
+            .DefaultIfEmpty(0)
+            .Max();
 
     /// <summary>
     /// Starts a payment. The Idempotency-Key header (a GUID the screen creates once per

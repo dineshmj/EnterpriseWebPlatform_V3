@@ -9,6 +9,9 @@ public interface IPaymentRepository
 
     Task<Payment> GetAsync(long paymentId, CancellationToken cancellationToken);
 
+    /// <summary>The payment's PaymentRef when it exists in this branch; null otherwise.</summary>
+    Task<Guid?> GetRefInBranchAsync(long paymentId, Domain.ValueObjects.BranchCode branch, CancellationToken cancellationToken);
+
     void Add(Payment payment);
 }
 

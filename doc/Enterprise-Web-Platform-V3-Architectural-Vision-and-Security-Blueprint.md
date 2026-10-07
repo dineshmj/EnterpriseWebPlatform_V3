@@ -117,7 +117,7 @@ CustomerOutboxPublisher ──► Kafka ◄── KYC Outbox relay
 | Customer KYC | Core | Present (first slice) | [CustomerKyc-Requirements.md](../src/Microservices/CustomerKyc/doc/CustomerKyc-Requirements.md) |
 | Compliance | Core | Present | [Compliance-Requirements.md](../src/Microservices/Compliance/doc/Compliance-Requirements.md) |
 | Accounts | Core (simplified) | Present | [Accounts-Requirements.md](../src/Microservices/Accounts/doc/Accounts-Requirements.md) |
-| Payments | Core | Present (orchestrated saga, assisted-channel screens); approval and notifications in 5b-2 | [Payments-Requirements.md](../src/Microservices/Payments/doc/Payments-Requirements.md) |
+| Payments | Core | Present (orchestrated saga, assisted-channel screens, approval by tier and clearance, notifications) | [Payments-Requirements.md](../src/Microservices/Payments/doc/Payments-Requirements.md) |
 | Documents Management | Generic / supporting | Present | [DocumentsManagement-Requirements.md](../src/Microservices/DocumentsManagement/doc/DocumentsManagement-Requirements.md) |
 | Identity and access | Generic | Present | [IDP-Requirements.md](../src/IDP/doc/IDP-Requirements.md) |
 | Composition (not a business context) | — | Present | [Shell-Requirements.md](../src/Shell/doc/Shell-Requirements.md) |
@@ -218,7 +218,7 @@ The domain layer has no knowledge of HTTP, EF Core, Kafka or the IDP.
 | PaymentsSagaReplySubscriber | Payments | .NET worker | — | Present |
 | AccountsCommandSubscriber | Accounts | .NET worker | — | Present |
 | Payment Network Simulator | (external system stand-in) | ASP.NET Core 10 minimal API | — | Present |
-| Payments BFF + MFE | Payments | ASP.NET Core 10 + Next.js | — | Present (approval queue: 5b-2) |
+| Payments BFF + MFE | Payments | ASP.NET Core 10 + Next.js | — | Present |
 
 An MFE and its BFF are one deployable: the MFE is a static export served by its BFF.
 

@@ -1,16 +1,16 @@
 'use client';
 
-import { ArrowRightLeft, CheckCircle2, ChevronRight, Plus } from 'lucide-react';
+import { ArrowRightLeft, CheckCircle2, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { MfeShell, type ShellNotification, useShellNotifications } from '../../../components/MfeShell';
+import { PaymentsTable } from '../../../components/PaymentsTable';
 import { buttonVariants } from '../../../components/ui/button';
 import { Card, CardHeader } from '../../../components/ui/card';
 import { cn } from '../../../components/ui/cn';
-import { Table, Td, Th, formatDateTime } from '../../../components/ui/data';
-import { Alert, EmptyState, StatusBadge } from '../../../components/ui/feedback';
+import { Alert, EmptyState } from '../../../components/ui/feedback';
 import { getJson } from '../../../lib/api';
-import { type Page, type PaymentSummary, type StaffUser, formatMoney, getStaffUser, personLabel } from '../../../lib/payments';
+import { type Page, type PaymentSummary, type StaffUser, getStaffUser } from '../../../lib/payments';
 
 const FILTERS = [
   { key: '', label: 'All', empty: 'Your branch has no payments yet.' },
@@ -80,54 +80,8 @@ export default function PaymentsPage() {
 
         {error && <div className="p-6"><Alert tone="danger">{error}</Alert></div>}
         {!data && !error && <p className="px-6 py-8 text-sm text-ink-muted">Loading payments…</p>}
-
-        {data && data.items.length === 0 && (
-          <EmptyState icon={<CheckCircle2 />} title="Nothing here">{filter.empty}</EmptyState>
-        )}
-
-        {data && data.items.length > 0 && (
-          <Table>
-            <thead>
-              <tr>
-                <Th>Payment</Th>
-                <Th>Customer</Th>
-                <Th>Payee</Th>
-                <Th className="text-right">Amount</Th>
-                <Th>Status</Th>
-                <Th>Started by</Th>
-                <Th>Started</Th>
-                <Th><span className="sr-only">Open</span></Th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.items.map(item => {
-                const href = `/v1/payments/view-details/?paymentId=${item.paymentId}`;
-                return (
-                  <tr key={item.paymentId} className="group hover:bg-subtle/70">
-                    <Td>
-                      <Link className="font-mono text-[13px] font-semibold text-brand-700 hover:underline" href={href}>{item.paymentNumber}</Link>
-                    </Td>
-                    <Td className="font-mono text-[13px] text-ink-muted">{item.customerNumber}</Td>
-                    <Td>
-                      <div className="font-medium text-ink">{item.payeeName}</div>
-                      <div className="font-mono text-xs text-ink-faint">{item.toBsb} {item.toAccountNumber}</div>
-                    </Td>
-                    <Td className="text-right font-semibold">{formatMoney(item.amount)}</Td>
-                    <Td><StatusBadge status={item.status} /></Td>
-                    <Td className="text-ink-muted">{personLabel(item.initiatedByUserId, item.initiatedByLanId, user?.sub)}</Td>
-                    <Td className="text-ink-muted">{formatDateTime(item.createdAt)}</Td>
-                    <Td className="text-right">
-                      <Link aria-label={`Open payment ${item.paymentNumber}`} href={href}
-                        className="inline-flex size-8 items-center justify-center rounded-md text-ink-faint group-hover:text-brand-700">
-                        <ChevronRight className="size-4" aria-hidden="true" />
-                      </Link>
-                    </Td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </Table>
-        )}
+        {data && data.items.length === 0 && <EmptyState icon={<CheckCircle2 />} title="Nothing here">{filter.empty}</EmptyState>}
+        {data && data.items.length > 0 && <PaymentsTable items={data.items} me={user?.sub} />}
       </Card>
     </MfeShell>
   );

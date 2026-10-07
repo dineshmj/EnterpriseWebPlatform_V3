@@ -107,7 +107,8 @@ $NewGroups = [ordered]@{
     'notifications.subscriber'                = @('kyc.case.created', 'kyc.case.approved', 'kyc.case.rejected',
                                                   'compliance.case.screened', 'compliance.case.approved', 'compliance.case.rejected',
                                                   'accounts.application.created', 'accounts.application.rejected',
-                                                  'accounts.account.opened', 'accounts.account.opening.failed')
+                                                  'accounts.account.opened', 'accounts.account.opening.failed',
+                                                  'payments.payment.events')
     # Payments saga (orchestration): commands to Accounts, and Accounts' replies to the orchestrator.
     'accounts.command-subscriber'             = @('accounts.commands')
     'payments.saga-reply-subscriber'          = @('accounts.funds.replies')
@@ -329,7 +330,8 @@ switch ($Phase) {
     foreach ($t in 'kyc.case.created', 'kyc.case.approved', 'kyc.case.rejected',
                                                   'compliance.case.screened', 'compliance.case.approved', 'compliance.case.rejected',
                                                   'accounts.application.created', 'accounts.application.rejected',
-                                                  'accounts.account.opened', 'accounts.account.opening.failed') {
+                                                  'accounts.account.opened', 'accounts.account.opening.failed',
+                                                  'payments.payment.events') {
         Grant 'ewp-notifications-subscriber' "--operation Read --operation Describe --topic $t"
     }
     Grant 'ewp-notifications-subscriber' '--operation Read --group notifications.subscriber'

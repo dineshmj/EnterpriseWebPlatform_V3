@@ -51,6 +51,12 @@ CREATE TABLE payments (
     outcome_reason VARCHAR(1000) NULL,
     network_reference VARCHAR(100) NULL,
 
+    -- The payments officer's decision (approval tier): never the initiator (SoD), within the
+    -- officer's clearance limit (ABAC). Remarks are required for a rejection.
+    decision_by_user_id VARCHAR(200) NULL,
+    decision_at TIMESTAMPTZ NULL,
+    decision_remarks VARCHAR(1000) NULL,
+
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
     ended_at TIMESTAMPTZ NULL,
@@ -74,6 +80,10 @@ CREATE TABLE payments (
                                           OR (outcome_code IS NOT NULL AND outcome_reason IS NOT NULL)),
     -- The network accepted the payment exactly before settling / completing.
     CONSTRAINT ck_payments_network_reference CHECK (status NOT IN ('SETTLING_FUNDS', 'COMPLETED') OR network_reference IS NOT NULL),
+
+    CONSTRAINT ck_payments_decision CHECK ((decision_by_user_id IS NULL) = (decision_at IS NULL)),
+    CONSTRAINT ck_payments_decider_not_initiator CHECK (decision_by_user_id IS NULL OR decision_by_user_id <> initiated_by_user_id),
+    CONSTRAINT ck_payments_decision_only_when_required CHECK (decision_by_user_id IS NULL OR approval_required),
 
     CONSTRAINT ck_payments_version CHECK (version > 0)
 );

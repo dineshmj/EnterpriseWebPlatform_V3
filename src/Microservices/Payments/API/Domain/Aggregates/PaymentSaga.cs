@@ -141,7 +141,7 @@ public sealed class PaymentSaga : AggregateRoot
             Version = 1
         };
 
-        saga.Record(now, "STARTED", $"Payment {payment.PaymentNumber}: {payment.Amount:N2} {payment.Currency} from {payment.From} to {payment.To}." +
+        saga.Record(now, "STARTED", $"Payment {payment.PaymentNumber}: {PaymentRules.Format(payment.Amount)} {payment.Currency} from {payment.From} to {payment.To}." +
             (payment.ApprovalRequired ? " Above the approval tier: a payments officer must approve." : " Within the tier: no approval needed."), requestId);
         payment.StartReservingFunds(now);
         saga.SendFundsCommand(ReserveFundsCommand, payment, policy, now);
@@ -211,6 +211,40 @@ public sealed class PaymentSaga : AggregateRoot
         payment.CompensationCompleted(now);
         LastMessageId = messageId;
         Finish(now, $"Ended {payment.Status.ToCode()} after compensation.");
+    }
+
+    // ------------------------------------------------------------------ the payments officer's decision (approval tier)
+
+    /// <summary>
+    /// A payments officer approved: the saga resumes (possibly days later) and sends the
+    /// payment. The funds were reserved before the approval, so they are still there.
+    /// </summary>
+    public void OnApproved(Payment payment, string officerUserId, string officerLabel, int clearance, ApprovalLimits limits,
+        string? remarks, Guid decisionId, DateTimeOffset now)
+    {
+        EnsureAwaitingApproval();
+        payment.Approve(officerUserId, clearance, limits, remarks, now);
+        LastMessageId = decisionId;
+        Record(now, "APPROVED", $"Approved by {officerLabel}{(string.IsNullOrWhiteSpace(remarks) ? "." : $": {remarks.Trim()}")}", decisionId);
+        MoveTo(SagaStep.SendToNetwork, SagaStatus.Running, nextCheckAt: now, now);
+        Record(now, "DECIDED", "Approved: send to the payment network.", null);
+    }
+
+    /// <summary>A payments officer rejected: the reserved funds are released (compensation) and the payment ends REJECTED.</summary>
+    public void OnApprovalRejected(Payment payment, string officerUserId, string officerLabel, string remarks,
+        Guid decisionId, SagaPolicy policy, DateTimeOffset now)
+    {
+        EnsureAwaitingApproval();
+        payment.RecordRejection(officerUserId, remarks, now);
+        LastMessageId = decisionId;
+        Record(now, "REJECTED_BY_APPROVER", $"Rejected by {officerLabel}: {remarks.Trim()}", decisionId);
+        BeginCompensation(payment, PaymentStatus.Rejected, "APPROVAL_REJECTED", $"Rejected by the payments officer: {remarks.Trim()}", policy, now);
+    }
+
+    private void EnsureAwaitingApproval()
+    {
+        if (Step != SagaStep.AwaitApproval || Status != SagaStatus.WaitingForPerson)
+            throw new DomainConflictException("The payment is not waiting for an approval decision.");
     }
 
     // ------------------------------------------------------------------ the payment network (called by the step runner)

@@ -53,6 +53,7 @@ public sealed class PaymentsOutboxPublisher(
         [PaymentsMessageMapper.ReleaseFunds] = KafkaTopicNames.AccountsCommands,
 
         // Public facts about payments.
+        [PaymentsMessageMapper.PaymentApprovalRequired] = KafkaTopicNames.PaymentEvents,
         [PaymentsMessageMapper.PaymentCompleted] = KafkaTopicNames.PaymentEvents,
         [PaymentsMessageMapper.PaymentRejected] = KafkaTopicNames.PaymentEvents,
         [PaymentsMessageMapper.PaymentFailed] = KafkaTopicNames.PaymentEvents,

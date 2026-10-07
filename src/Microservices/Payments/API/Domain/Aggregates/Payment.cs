@@ -78,6 +78,13 @@ public sealed class Payment : AggregateRoot
     /// <summary>The payment network's reference once it accepted the payment.</summary>
     public string? NetworkReference { get; private set; }
 
+    /// <summary>The payments officer's decision (approval tier): who, when, and their remarks.</summary>
+    public string? DecisionByUserId { get; private set; }
+
+    public DateTimeOffset? DecisionAt { get; private set; }
+
+    public string? DecisionRemarks { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
 
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -135,8 +142,56 @@ public sealed class Payment : AggregateRoot
 
     internal void StartReservingFunds(DateTimeOffset now) => Move(PaymentStatus.Initiated, PaymentStatus.ReservingFunds, now);
 
-    internal void FundsReserved(DateTimeOffset now) =>
+    internal void FundsReserved(DateTimeOffset now)
+    {
         Move(PaymentStatus.ReservingFunds, ApprovalRequired ? PaymentStatus.PendingApproval : PaymentStatus.SendingToNetwork, now);
+        if (ApprovalRequired)
+            RaiseDomainEvent(new PaymentApprovalRequiredDomainEvent(now));
+    }
+
+    /// <summary>
+    /// A payments officer approves: never the person who started the payment (Separation of
+    /// Duties), and only within their clearance's approval limit (ABAC).
+    /// </summary>
+    internal void Approve(string officerUserId, int clearance, ApprovalLimits limits, string? remarks, DateTimeOffset now)
+    {
+        EnsureMayDecide(officerUserId);
+        if (!limits.Allows(clearance, Amount))
+        {
+            var max = limits.MaxFor(clearance);
+            throw new ApprovalLimitExceededException(max is 0m
+                ? "Your clearance level does not allow you to approve payments."
+                : $"Your clearance level allows you to approve payments up to {PaymentRules.Format(max ?? 0m)} {Currency}; this one is {PaymentRules.Format(Amount)} {Currency}.");
+        }
+
+        Move(PaymentStatus.PendingApproval, PaymentStatus.SendingToNetwork, now);
+        RecordDecision(officerUserId, remarks, now);
+    }
+
+    /// <summary>A payments officer rejects (any approver may say no; remarks required). The saga then releases the funds.</summary>
+    internal void RecordRejection(string officerUserId, string remarks, DateTimeOffset now)
+    {
+        EnsureMayDecide(officerUserId);
+        if (string.IsNullOrWhiteSpace(remarks))
+            throw new DomainRuleViolationException("Say why the payment is rejected (remarks are required).");
+        RecordDecision(officerUserId, remarks, now);
+    }
+
+    private void EnsureMayDecide(string officerUserId)
+    {
+        if (Status != PaymentStatus.PendingApproval)
+            throw new DomainConflictException($"Payment {PaymentNumber} is {Status.ToCode()}: only a payment awaiting approval can be decided.");
+        if (string.Equals(officerUserId, InitiatedByUserId, StringComparison.Ordinal))
+            throw new SeparationOfDutiesViolationException("You started this payment, so you cannot decide it (separation of duties).");
+    }
+
+    private void RecordDecision(string officerUserId, string? remarks, DateTimeOffset now)
+    {
+        var text = remarks?.Trim();
+        DecisionByUserId = officerUserId;
+        DecisionAt = now;
+        DecisionRemarks = string.IsNullOrEmpty(text) ? null : text[..Math.Min(text.Length, 1000)];
+    }
 
     /// <summary>The funds could not be reserved: nothing to undo.</summary>
     internal void RejectWithoutFunds(string code, string reason, DateTimeOffset now)

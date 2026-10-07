@@ -2,7 +2,7 @@
 
 **Bounded context:** Payments  
 **Subdomain type:** Core  
-**Status:** Present: the Payments API with the saga orchestrator, Accounts funds holds, payment network simulator and two courier workers (5a); the Payments BFF and MFE - new payment, status page with the live timeline, payments list (5b-1). Human approval and notifications follow in 5b-2; the operations "Retry release" in 5c.
+**Status:** Present: the Payments API with the saga orchestrator, Accounts funds holds, payment network simulator and two courier workers (5a); the Payments BFF and MFE - new payment, status page with the live timeline, payments list (5b-1); human approval by a payments officer and notifications (5b-2). The operations "Retry release" follows in 5c.
 
 Platform-wide rules are not repeated here. See [doc/](../../../../doc/). Payments is the **orchestrated-saga** demonstration; the orchestration pattern itself is described in the [Saga plan](../../../../doc/EWP-V3-Saga-Choreography-and-Orchestration-Plans.md).
 
@@ -23,7 +23,7 @@ Payments accepts payment instructions captured by bank staff for a customer (an 
 
 | Component | Location | Technology | Status |
 |---|---|---|---|
-| Payments MFE | [BFF.Web/client-app](../BFF.Web/README.md) — new payment, status page, payments list | Next.js static export | Present (approval queue: 5b-2) |
+| Payments MFE | [BFF.Web/client-app](../BFF.Web/README.md) — new payment, status page, payments list, approval queue | Next.js static export | Present |
 | Payments BFF | [BFF.Web](../BFF.Web/README.md) — `https://payments.dev.localhost:46388` | ASP.NET Core 10 + Duende BFF | Present |
 | Payments API | `API` | ASP.NET Core 10, EF Core, PostgreSQL | Present |
 | Payment saga orchestrator | `PaymentSaga` inside the Payments API, with its step runner | Persisted state machine | Present |
@@ -75,7 +75,7 @@ after the reservation ✗ (network, approver)  → COMPENSATING → FAILED / REJ
 COMPENSATING ✗✗✗ (release not confirmed)     → COMPENSATION_FAILED     (operations retry the release)
 ```
 
-Planned with 5b/5c: approve / reject from PENDING_APPROVAL, hold and release, cancel before sending.
+Approve / reject from PENDING_APPROVAL: present (5b-2). Planned: hold and release, cancel before sending.
 
 ---
 
@@ -102,6 +102,8 @@ Planned with 5b/5c: approve / reject from PENDING_APPROVAL, hold and release, ca
 |---|---|
 | Initiate | `payments.write` + `payment.initiate` + a branch; the payment belongs to the staff member's branch; the request's `Idempotency-Key` belongs to the person who used it first |
 | View | `payments.read` + `payment.view` or `payment.initiate`; own branch only (another branch's payment is 404) |
+| Approve | `payments.write` + `payment.approve` + own branch + PENDING_APPROVAL + **not the initiator** (SoD) + amount within the officer's clearance limit (`Payments:ApprovalLimits`: clearance 3 → 10,000; 4 → 100,000; 5 → any) |
+| Reject | `payments.write` + `payment.reject` + own branch + PENDING_APPROVAL + not the initiator; remarks required; the saga releases the reserved funds |
 | Funds | Accounts reserves only on an ACTIVE account of the customer named in the payment, in AUD, within the available balance |
 | Approve | `payments_officer` + `payment.approve` + PENDING_APPROVAL + amount within the user's limit + branch / organizational scope + SoD |
 | Customer view | `customer.payment.view_own` + `owns` the payment |

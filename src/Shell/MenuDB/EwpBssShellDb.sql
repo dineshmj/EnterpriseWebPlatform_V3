@@ -381,6 +381,16 @@ VALUES
                 WHERE name = 'Payments'))
     ),
     (
+        'Payment Approvals',
+        '/v1/payments/approvals/view-all',
+        'fa-stamp',
+        (SELECT id FROM management_areas
+         WHERE name = 'Payment Instructions'
+           AND microservice_id =
+               (SELECT id FROM microservices
+                WHERE name = 'Payments'))
+    ),
+    (
         'Manage Beneficiaries',
         '/v1/payments/beneficiaries/view-all',
         'fa-address-book',
@@ -562,6 +572,17 @@ CROSS JOIN
         ('customer_service_agent')
 ) AS r(role_short_name)
 WHERE mi.task_name = 'New Payment';
+
+-- Payment Approvals: the payments officer's queue (payments above the approval tier).
+INSERT INTO menu_items_and_roles (menu_item_id, role_short_name)
+SELECT mi.id, r.role_short_name
+FROM menu_items mi
+CROSS JOIN
+(
+    VALUES
+        ('payments_officer')
+) AS r(role_short_name)
+WHERE mi.task_name = 'Payment Approvals';
 
 -- Payments (the branch's payments and their status)
 INSERT INTO menu_items_and_roles (menu_item_id, role_short_name)

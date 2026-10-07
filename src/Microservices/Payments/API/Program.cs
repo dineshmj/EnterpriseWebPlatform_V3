@@ -17,6 +17,7 @@ using EnterpriseWebPlatform.Payments.Api.Application.Commands;
 using EnterpriseWebPlatform.Payments.Api.Application.Queries;
 using EnterpriseWebPlatform.Payments.Api.Authorization;
 using EnterpriseWebPlatform.Payments.Api.Domain.Aggregates;
+using EnterpriseWebPlatform.Payments.Api.Domain.ValueObjects;
 using EnterpriseWebPlatform.Payments.Api.Infrastructure.Messaging;
 using EnterpriseWebPlatform.Payments.Api.Infrastructure.PaymentNetwork;
 using EnterpriseWebPlatform.Payments.Api.Infrastructure.Persistence;
@@ -78,6 +79,8 @@ builder.Services.AddAuthorization(options =>
 
     AddStaffPolicy("PaymentInitiate", PaymentsApiScopesRequired.PAYMENTS_WRITE, "payment.initiate");
     AddStaffPolicy("PaymentView", PaymentsApiScopesRequired.PAYMENTS_READ, "payment.view", "payment.initiate");
+    AddStaffPolicy("PaymentApprove", PaymentsApiScopesRequired.PAYMENTS_WRITE, "payment.approve");
+    AddStaffPolicy("PaymentReject", PaymentsApiScopesRequired.PAYMENTS_WRITE, "payment.reject");
 });
 builder.Services.AddSingleton<IAuthorizationHandler, PaymentsStaffAuthorizationHandler>();
 
@@ -93,6 +96,7 @@ builder.Services.AddScoped<IPaymentsQueries, PaymentsQueries>();
 builder.Services.AddScoped<InitiatePaymentCommandHandler>();
 builder.Services.AddScoped<HandleSagaReplyCommandHandler>();
 builder.Services.AddScoped<RunDueSagaStepCommandHandler>();
+builder.Services.AddScoped<DecidePaymentCommandHandler>();
 
 // The approval tier and the saga's limits are configuration, never constants in a screen.
 var payments = builder.Configuration.GetSection("Payments");
@@ -100,6 +104,16 @@ var approvalThreshold = payments.GetValue<decimal?>("ApprovalThreshold") ?? 1_00
 if (approvalThreshold <= 0)
     throw new InvalidOperationException("Payments:ApprovalThreshold must be positive.");
 builder.Services.AddSingleton(new ApprovalTier(approvalThreshold));
+
+// ABAC: what each clearance level may approve (Payments:ApprovalLimits:{level}; empty = no limit).
+var limits = payments.GetSection("ApprovalLimits").GetChildren()
+    .ToDictionary(
+        level => int.TryParse(level.Key, out var l) ? l : throw new InvalidOperationException($"Payments:ApprovalLimits key '{level.Key}' is not a clearance level."),
+        level => string.IsNullOrWhiteSpace(level.Value) ? (decimal?)null
+            : decimal.Parse(level.Value, System.Globalization.CultureInfo.InvariantCulture));
+if (limits.Count == 0)
+    throw new InvalidOperationException("Payments:ApprovalLimits is not configured.");
+builder.Services.AddSingleton(new ApprovalLimits(limits));
 
 var saga = payments.GetSection("Saga");
 var sagaPolicy = new SagaPolicy(

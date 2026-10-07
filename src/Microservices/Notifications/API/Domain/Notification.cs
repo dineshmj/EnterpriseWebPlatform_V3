@@ -83,7 +83,7 @@ public static class NotificationAudiences
 {
     /// <summary>Roles whose staff receive their branch's new-work notifications.</summary>
     public static readonly IReadOnlySet<string> WorkQueueRoles =
-        new HashSet<string>(StringComparer.Ordinal) { "kyc_officer", "compliance_officer", "account_officer" };
+        new HashSet<string>(StringComparer.Ordinal) { "kyc_officer", "compliance_officer", "account_officer", "payments_officer" };
 
     public static string ForUser(string userId) => $"user:{userId.Trim().ToLowerInvariant()}";
 

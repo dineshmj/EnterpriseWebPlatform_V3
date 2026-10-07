@@ -16,6 +16,10 @@ namespace EnterpriseWebPlatform.Notifications.Api.Domain;
 ///   progress (the person who started the onboarding)
 ///     KycCaseApproved / Rejected, ComplianceCaseApproved / Rejected,
 ///     AccountApplicationRejected, AccountOpened, AccountOpeningFailed → user:{initiator}
+///   payments (orchestrated saga; the target opens the payment's status page)
+///     PaymentApprovalRequired   → staff:payments_officer:{branch}   (new work)
+///     PaymentCompleted / Rejected / Failed → user:{initiator}
+///     PaymentCompensationFailed → user:{initiator} and staff:payments_officer:{branch}
 /// </summary>
 public static class NotificationRules
 {
@@ -31,6 +35,9 @@ public static class NotificationRules
 
         NotificationDraft? NewWork(string role, string title, string body, string? target) =>
             branch is null ? null : new(NotificationAudiences.ForStaff(role, branch), NotificationCategory.NewWork, title, body, target);
+
+        if (eventType.StartsWith("Payment", StringComparison.Ordinal))
+            return ForPayment(eventType, p, Progress, NewWork);
 
         var draft = eventType switch
         {
@@ -89,6 +96,60 @@ public static class NotificationRules
 
         return draft is null ? [] : [draft];
     }
+
+    /// <summary>
+    /// The Payments saga's public facts. People are named by LAN ID; the amount, payee and
+    /// payment number identify the payment; the target opens its status page.
+    /// </summary>
+    private static IReadOnlyList<NotificationDraft> ForPayment(
+        string eventType, JsonElement p,
+        Func<string, string, string?, NotificationDraft?> progress,
+        Func<string, string, string, string?, NotificationDraft?> newWork)
+    {
+        var number = Str(p, "PaymentNumber") ?? "a payment";
+        var what = $"{Amount(p)} to {Str(p, "PayeeName") ?? "the payee"} ({number})";
+        var target = Record("payments", "/v1/payments/view-details", "paymentId", Long(p, "PaymentId"));
+        var reason = Str(p, "Reason");
+
+        IEnumerable<NotificationDraft?> drafts = eventType switch
+        {
+            "PaymentApprovalRequired" =>
+            [
+                newWork("payments_officer", "Payment awaiting approval",
+                    $"{what} for {Str(p, "CustomerNumber") ?? "a customer"} needs a payments officer's approval. The funds are reserved.", target)
+            ],
+            "PaymentCompleted" =>
+            [
+                progress("Payment completed",
+                    $"{what} was sent{(Str(p, "DecisionByLanId") is { } approver ? $" (approved by {approver})" : string.Empty)}.", target)
+            ],
+            "PaymentRejected" =>
+            [
+                progress("Payment rejected",
+                    $"{what} was not made{(reason is null ? "." : $": {reason}")}", target)
+            ],
+            "PaymentFailed" =>
+            [
+                progress("Payment failed - funds released",
+                    $"{what} could not be sent{(reason is null ? "." : $": {reason}")} The reserved funds are available again.", target)
+            ],
+            "PaymentCompensationFailed" =>
+            [
+                progress("Payment needs attention",
+                    $"{what} was not sent, but the release of the reserved funds is not confirmed. Operations must retry it.", target),
+                newWork("payments_officer", "Payment needs attention",
+                    $"{what}: the release of the reserved funds is not confirmed. Operations must retry it.", target)
+            ],
+            _ => []
+        };
+
+        return drafts.Where(d => d is not null).Select(d => d!).ToList();
+    }
+
+    private static string Amount(JsonElement p) =>
+        p.ValueKind == JsonValueKind.Object && p.TryGetProperty("Amount", out var a) && a.ValueKind == JsonValueKind.Number && a.TryGetDecimal(out var amount)
+            ? amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-AU"))
+            : "A payment";
 
     private static string Applicant(JsonElement p) =>
         p.ValueKind == JsonValueKind.Object && p.TryGetProperty("Applicant", out var a) && a.ValueKind == JsonValueKind.Object

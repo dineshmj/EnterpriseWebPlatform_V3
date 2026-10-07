@@ -4,6 +4,9 @@ namespace EnterpriseWebPlatform.Payments.Api.Domain.Events;
 
 // ------------------------------------------------------------------ Payment facts (published on payments.payment.events)
 
+/// <summary>The funds are reserved and the payment waits for a payments officer (new work). Published.</summary>
+public sealed record PaymentApprovalRequiredDomainEvent(DateTimeOffset OccurredAt) : IDomainEvent;
+
 /// <summary>The payment was sent and the funds debited. Published.</summary>
 public sealed record PaymentCompletedDomainEvent(string NetworkReference, DateTimeOffset OccurredAt) : IDomainEvent;
 

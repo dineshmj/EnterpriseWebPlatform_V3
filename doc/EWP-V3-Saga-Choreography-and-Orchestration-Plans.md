@@ -137,7 +137,7 @@ payment_saga_history: every command sent, reply received / ignored, timeout, net
 RESERVE_FUNDS ─FundsReserved─► (AWAIT_APPROVAL) ─► SEND_TO_NETWORK ─accepted─► SETTLE_FUNDS ─FundsSettled─► DONE (COMPLETED)
 ```
 
-Above the approval tier (`Payments:ApprovalThreshold`) the saga stops at `AWAIT_APPROVAL` (payment `PENDING_APPROVAL`) with no timer; the officer's decision resumes it, possibly days later (step 5b). The reservation comes BEFORE the approval, so the money is still there when the officer approves.
+Above the approval tier (`Payments:ApprovalThreshold`) the saga stops at `AWAIT_APPROVAL` (payment `PENDING_APPROVAL`) with no timer and publishes `PaymentApprovalRequired` (the branch's payments officers are notified). The officer's decision resumes it, possibly days later: approve → send to the network; reject → release the funds → REJECTED. The approver is never the initiator and approves only within their clearance's limit. The reservation comes BEFORE the approval, so the money is still there when the officer approves.
 
 ## 2.5 Compensation
 
@@ -215,8 +215,8 @@ Retry, timeout and circuit breaker protect **individual technical interactions**
 - [x] Successful scenario (5a)
 - [x] Business failure with compensation (5a)
 - [ ] Deliberate compensation failure and recovery: the failure state is present (5a); the operations "Retry release" action follows (5c)
-- [ ] Human approval as a long-running state: the saga waits (5a); the officer's decision and screens follow (5b)
-- [ ] Notifications (5b)
+- [x] Human approval as a long-running state: the saga waits with no timer; the payments officer's approve / reject resumes it (5b-2)
+- [x] Notifications: approval required → the branch's payments officers; outcomes → the initiator (5b-2)
 - [x] End-to-end observability by WorkflowId, CorrelationId, CausationId and one trace per payment (5a)
 
 ---

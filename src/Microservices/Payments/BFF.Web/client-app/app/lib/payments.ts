@@ -72,6 +72,11 @@ export interface PaymentDetail {
   initiatedByUserId: string;
   initiatedByLanId?: string | null;
   saga?: SagaView | null;
+  /** The payments officer's decision (approval tier). */
+  decisionByUserId?: string | null;
+  decisionByLanId?: string | null;
+  decisionAt?: string | null;
+  decisionRemarks?: string | null;
 }
 
 /** A customer's paying account (from Accounts), with what is available now. */
@@ -103,6 +108,8 @@ export interface PaymentPolicy {
   approvalThreshold: number;
   maxAmount: number;
   referenceMaxLength: number;
+  /** What the signed-in person's clearance may approve; null = no limit, 0 = may not approve. */
+  yourApprovalLimit?: number | null;
 }
 
 /** The signed-in staff member, from the BFF (display only: the APIs decide). */
@@ -112,6 +119,7 @@ export interface StaffUser {
   roles: string[];
   branch?: string;
   lanId?: string;
+  clearance: number;
 }
 
 export async function getStaffUser(): Promise<StaffUser> {
@@ -123,6 +131,7 @@ export async function getStaffUser(): Promise<StaffUser> {
     roles: claims.filter(c => c.type === 'role').map(c => c.value),
     branch: value('branch'),
     lanId: value('lan_id'),
+    clearance: Number(value('clearance_level') ?? 0) || 0,
   };
 }
 
@@ -162,6 +171,8 @@ export const TIMELINE_KIND: Record<string, string> = {
   TIMEOUT: 'No answer in time',
   COMPENSATION_FAILED: 'Release not confirmed',
   RETRY: 'Release retried',
+  APPROVED: 'Approved by a payments officer',
+  REJECTED_BY_APPROVER: 'Rejected by a payments officer',
   FINISHED: 'Finished',
 };
 

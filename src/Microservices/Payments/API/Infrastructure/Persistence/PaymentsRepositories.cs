@@ -17,6 +17,12 @@ public sealed class PaymentRepository(PaymentsDbContext db) : IPaymentRepository
     public Task<Payment> GetAsync(long paymentId, CancellationToken cancellationToken) =>
         db.Payments.SingleAsync(x => x.Id == paymentId, cancellationToken);
 
+    public async Task<Guid?> GetRefInBranchAsync(long paymentId, BranchCode branch, CancellationToken cancellationToken) =>
+        await db.Payments.AsNoTracking()
+            .Where(x => x.Id == paymentId && x.BranchCode == branch)
+            .Select(x => (Guid?)x.PaymentRef)
+            .SingleOrDefaultAsync(cancellationToken);
+
     public void Add(Payment payment) => db.Payments.Add(payment);
 }
 
@@ -94,8 +100,12 @@ public sealed class PaymentsQueries(PaymentsDbContext db) : IPaymentsQueries
         if (payment is null)
             return null;
 
-        var initiatorLanId = await db.StaffMembers.AsNoTracking()
-            .Where(m => m.UserId == payment.InitiatedByUserId).Select(m => m.LanId).FirstOrDefaultAsync(cancellationToken);
+        var people = new[] { payment.InitiatedByUserId, payment.DecisionByUserId }.Where(x => x is not null).ToList();
+        var lanIds = await db.StaffMembers.AsNoTracking()
+            .Where(m => people.Contains(m.UserId))
+            .ToDictionaryAsync(m => m.UserId, m => m.LanId, cancellationToken);
+        var initiatorLanId = lanIds.GetValueOrDefault(payment.InitiatedByUserId);
+        var deciderLanId = payment.DecisionByUserId is null ? null : lanIds.GetValueOrDefault(payment.DecisionByUserId);
 
         var saga = await db.PaymentSagas.AsNoTracking().SingleOrDefaultAsync(x => x.PaymentId == paymentId, cancellationToken);
         SagaView? sagaView = null;
@@ -116,7 +126,8 @@ public sealed class PaymentsQueries(PaymentsDbContext db) : IPaymentsQueries
             payment.From.Bsb, payment.From.AccountNumber, payment.PayeeName, payment.To.Bsb, payment.To.AccountNumber,
             payment.Amount, payment.Currency, payment.Reference, payment.BranchCode.Value, payment.Status.ToCode(),
             payment.ApprovalRequired, payment.OutcomeCode, payment.OutcomeReason, payment.NetworkReference,
-            payment.CreatedAt, payment.UpdatedAt, payment.EndedAt, payment.InitiatedByUserId, initiatorLanId, sagaView);
+            payment.CreatedAt, payment.UpdatedAt, payment.EndedAt, payment.InitiatedByUserId, initiatorLanId, sagaView,
+            payment.DecisionByUserId, deciderLanId, payment.DecisionAt, payment.DecisionRemarks);
     }
 }
 

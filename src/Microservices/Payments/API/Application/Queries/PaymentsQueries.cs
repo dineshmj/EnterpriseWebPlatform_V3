@@ -57,7 +57,11 @@ public sealed record PaymentDetail(
     DateTimeOffset? EndedAt,
     string InitiatedByUserId,
     string? InitiatedByLanId,
-    SagaView? Saga);
+    SagaView? Saga,
+    string? DecisionByUserId,
+    string? DecisionByLanId,
+    DateTimeOffset? DecisionAt,
+    string? DecisionRemarks);
 
 public sealed record PagedResponse<T>(
     IReadOnlyList<T> Items,

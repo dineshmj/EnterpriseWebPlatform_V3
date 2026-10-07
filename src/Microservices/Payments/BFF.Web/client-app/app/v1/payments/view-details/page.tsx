@@ -1,19 +1,21 @@
 'use client';
 
 import {
-  ArrowLeft, CheckCircle2, CircleAlert, CircleDot, Clock, Cog, FileText, Inbox, Send, Undo2, Workflow, XCircle,
+  ArrowLeft, CheckCircle2, CircleAlert, CircleDot, Clock, Cog, FileText, Gavel, Inbox, Send, Undo2, Workflow, XCircle,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { MfeShell, type ShellNotification, publishSelection, useShellNotifications } from '../../../components/MfeShell';
-import { buttonVariants } from '../../../components/ui/button';
-import { Card, CardContent, CardHeader } from '../../../components/ui/card';
+import { MfeShell, type ShellNotification, publishSelection, setUnsavedChanges, useShellNotifications } from '../../../components/MfeShell';
+import { Button, buttonVariants } from '../../../components/ui/button';
+import { Card, CardContent, CardFooter, CardHeader } from '../../../components/ui/card';
 import { cn } from '../../../components/ui/cn';
+import { ConfirmDialog } from '../../../components/ui/confirm-dialog';
 import { DescriptionList, formatDateTime } from '../../../components/ui/data';
 import { Alert, Skeleton, StatusBadge, statusLabel } from '../../../components/ui/feedback';
-import { getJson } from '../../../lib/api';
+import { Field, Textarea } from '../../../components/ui/form';
+import { getJson, postJson } from '../../../lib/api';
 import {
-  type PaymentDetail, type SagaTimelineEntry, type StaffUser,
+  type PaymentDetail, type PaymentPolicy, type SagaTimelineEntry, type StaffUser,
   STEP_LABEL, TIMELINE_KIND, formatMoney, getStaffUser, isInProgress, personLabel,
 } from '../../../lib/payments';
 
@@ -23,6 +25,7 @@ export default function PaymentDetailsPage() {
   const [paymentId, setPaymentId] = useState<number | null>(null);
   const [data, setData] = useState<PaymentDetail | null>(null);
   const [user, setUser] = useState<StaffUser | null>(null);
+  const [policy, setPolicy] = useState<PaymentPolicy | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback((id: number) =>
@@ -49,6 +52,7 @@ export default function PaymentDetailsPage() {
     setPaymentId(parsed);
     void load(parsed);
     getStaffUser().then(setUser).catch(() => setUser(null));
+    getJson<PaymentPolicy>('/bff/api/payments/policy').then(setPolicy).catch(() => setPolicy(null));
   }, [load]);
 
   // While the saga works on its own, follow it: re-read every 2 seconds until the payment
@@ -65,6 +69,7 @@ export default function PaymentDetailsPage() {
   }, [paymentId, load]));
 
   const saga = data?.saga;
+  const isOfficer = !!user?.roles.includes('payments_officer');
 
   return (
     <MfeShell title={data ? `Payment · ${data.paymentNumber}` : `Payment ${paymentId ?? ''}`} subtitle="Payments">
@@ -72,7 +77,9 @@ export default function PaymentDetailsPage() {
         <Link className={buttonVariants({ variant: 'ghost', size: 'sm' })} href="/v1/payments/view-all/">
           <ArrowLeft aria-hidden="true" />Back to payments
         </Link>
-        <Link className={buttonVariants({ variant: 'secondary', size: 'sm' })} href="/v1/payments/new/">New payment</Link>
+        {isOfficer
+          ? <Link className={buttonVariants({ variant: 'secondary', size: 'sm' })} href="/v1/payments/approvals/view-all/">Approval queue</Link>
+          : <Link className={buttonVariants({ variant: 'secondary', size: 'sm' })} href="/v1/payments/new/">New payment</Link>}
       </div>
 
       {error && <Alert tone="danger">{error}</Alert>}
@@ -82,6 +89,10 @@ export default function PaymentDetailsPage() {
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
           <div className="flex flex-col gap-6">
             <Outcome payment={data} />
+
+            {data.status === 'PENDING_APPROVAL' && isOfficer && user && (
+              <DecisionPanel payment={data} user={user} policy={policy} onDecided={() => void load(data.paymentId)} />
+            )}
 
             <Card>
               <CardHeader icon={<FileText />} title="Payment" actions={<StatusBadge status={data.status} />} />
@@ -100,6 +111,10 @@ export default function PaymentDetailsPage() {
                     { label: 'Branch', value: data.branchCode },
                     { label: 'Started', value: formatDateTime(data.createdAt) },
                     { label: 'Ended', value: formatDateTime(data.endedAt) },
+                    ...(data.decisionByUserId ? [
+                      { label: 'Decided by', value: `${personLabel(data.decisionByUserId, data.decisionByLanId, user?.sub)} · ${formatDateTime(data.decisionAt)}` },
+                      { label: 'Decision remarks', value: data.decisionRemarks ?? '—' },
+                    ] : []),
                   ]}
                 />
               </CardContent>
@@ -146,6 +161,81 @@ export default function PaymentDetailsPage() {
   );
 }
 
+/**
+ * The payments officer's decision. The screen explains the rules up front (never your own
+ * payment; within your clearance's limit); the Payments API enforces them either way.
+ */
+function DecisionPanel({ payment, user, policy, onDecided }: {
+  payment: PaymentDetail; user: StaffUser; policy: PaymentPolicy | null; onDecided: () => void;
+}) {
+  const [remarks, setRemarks] = useState('');
+  const [confirm, setConfirm] = useState<'approve' | 'reject' | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setUnsavedChanges(remarks.trim().length > 0);
+    return () => setUnsavedChanges(false);
+  }, [remarks]);
+
+  const ownPayment = payment.initiatedByUserId === user.sub;
+  const limit = policy?.yourApprovalLimit;
+  const aboveLimit = limit !== undefined && limit !== null && payment.amount > limit;
+  const mayApprove = !ownPayment && !aboveLimit;
+
+  const decide = async (decision: 'approve' | 'reject') => {
+    setConfirm(null);
+    setBusy(true);
+    setActionError(null);
+    try {
+      await postJson(`/bff/api/payments/${payment.paymentId}/${decision}`, { remarks: remarks.trim() || null });
+      setRemarks('');
+      setUnsavedChanges(false);
+      onDecided();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'The decision could not be recorded.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader icon={<Gavel />} title="Your decision" description="Approve to send the payment; reject to release the reserved funds." />
+      <CardContent className="space-y-4">
+        {ownPayment && <Alert tone="warning" title="Separation of duties">You started this payment, so another payments officer must decide it.</Alert>}
+        {!ownPayment && aboveLimit && (
+          <Alert tone="warning" title="Above your approval limit">
+            Your clearance may approve up to {formatMoney(limit)}; this payment is {formatMoney(payment.amount)}. You may still reject it.
+          </Alert>
+        )}
+        {actionError && <Alert tone="danger">{actionError}</Alert>}
+        <Field label="Remarks" htmlFor="decision-remarks" hint="Optional to approve; required to reject. The initiator sees them.">
+          <Textarea id="decision-remarks" value={remarks} maxLength={1000} onChange={e => setRemarks(e.target.value)} disabled={ownPayment || busy} />
+        </Field>
+      </CardContent>
+      <CardFooter>
+        <Button onClick={() => setConfirm('approve')} disabled={!mayApprove || busy}>Approve and send</Button>
+        <Button variant="danger-outline" onClick={() => setConfirm('reject')} disabled={ownPayment || busy || !remarks.trim()}>Reject</Button>
+        {!ownPayment && !remarks.trim() && <span className="text-xs text-ink-muted">Enter remarks to reject.</span>}
+      </CardFooter>
+
+      {confirm === 'approve' && (
+        <ConfirmDialog title="Approve this payment?" cancelLabel="Cancel" confirmLabel="Approve and send"
+          onCancel={() => setConfirm(null)} onConfirm={() => void decide('approve')}>
+          {formatMoney(payment.amount)} will be sent to {payment.payeeName} ({payment.toBsb} {payment.toAccountNumber}) at once.
+        </ConfirmDialog>
+      )}
+      {confirm === 'reject' && (
+        <ConfirmDialog title="Reject this payment?" cancelLabel="Cancel" confirmLabel="Reject"
+          onCancel={() => setConfirm(null)} onConfirm={() => void decide('reject')}>
+          The payment will not be made and the reserved {formatMoney(payment.amount)} becomes available to the customer again.
+        </ConfirmDialog>
+      )}
+    </Card>
+  );
+}
+
 function Outcome({ payment }: { payment: PaymentDetail }) {
   switch (payment.status) {
     case 'COMPLETED':
@@ -189,9 +279,11 @@ function timelineLook(kind: string) {
   switch (kind) {
     case 'FINISHED':
     case 'NETWORK_ACCEPTED':
+    case 'APPROVED':
       return { icon: CheckCircle2, tone: 'text-success-700' };
     case 'NETWORK_REFUSED':
     case 'COMPENSATION_FAILED':
+    case 'REJECTED_BY_APPROVER':
       return { icon: XCircle, tone: 'text-danger-700' };
     case 'NETWORK_UNAVAILABLE':
     case 'TIMEOUT':

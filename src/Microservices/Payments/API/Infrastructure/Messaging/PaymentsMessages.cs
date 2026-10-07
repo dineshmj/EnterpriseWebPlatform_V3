@@ -54,7 +54,11 @@ public sealed record PaymentOutcomePayload(
     string ToAccountNumber,
     string? NetworkReference,
     string? ReasonCode,
-    string? Reason);
+    string? Reason,
+    bool ApprovalRequired,
+    string? DecisionByUserId,
+    string? DecisionByLanId,
+    string? DecisionRemarks);
 
 /// <summary>
 /// Translates the saga's commands and the payment's facts into Outbox rows: the single
@@ -68,6 +72,7 @@ internal static class PaymentsMessageMapper
     public const string ReserveFunds = PaymentSaga.ReserveFundsCommand;
     public const string SettleFunds = PaymentSaga.SettleFundsCommand;
     public const string ReleaseFunds = PaymentSaga.ReleaseFundsCommand;
+    public const string PaymentApprovalRequired = "PaymentApprovalRequired";
     public const string PaymentCompleted = "PaymentCompleted";
     public const string PaymentRejected = "PaymentRejected";
     public const string PaymentFailed = "PaymentFailed";
@@ -76,8 +81,9 @@ internal static class PaymentsMessageMapper
     private const string Source = "payments";
     private const int SchemaVersion = 1;
 
-    public static OutboxMessage ToOutboxMessage(PaymentSaga saga, Payment payment, IDomainEvent domainEvent, string? initiatorLanId)
+    public static OutboxMessage ToOutboxMessage(PaymentSaga saga, Payment payment, IDomainEvent domainEvent, Func<string?, string?> lanOf)
     {
+        var initiatorLanId = lanOf(saga.InitiatedByUserId);
         Guid messageId;
         string eventType;
         string payload;
@@ -94,27 +100,32 @@ internal static class PaymentsMessageMapper
                         command.Bsb, command.AccountNumber, command.Amount, command.Currency));
                 break;
 
+            case PaymentApprovalRequiredDomainEvent waiting:
+                (messageId, eventType, causationId) = (Guid.NewGuid(), PaymentApprovalRequired, saga.LastMessageId);
+                payload = Envelope(messageId, eventType, waiting.OccurredAt, saga, causationId, initiatorLanId, Outcome(payment, null, null, lanOf));
+                break;
+
             case PaymentCompletedDomainEvent completed:
                 (messageId, eventType, causationId) = (Guid.NewGuid(), PaymentCompleted, saga.LastMessageId);
-                payload = Envelope(messageId, eventType, completed.OccurredAt, saga, causationId, initiatorLanId, Outcome(payment, null, null));
+                payload = Envelope(messageId, eventType, completed.OccurredAt, saga, causationId, initiatorLanId, Outcome(payment, null, null, lanOf));
                 break;
 
             case PaymentRejectedDomainEvent rejected:
                 (messageId, eventType, causationId) = (Guid.NewGuid(), PaymentRejected, saga.LastMessageId);
                 payload = Envelope(messageId, eventType, rejected.OccurredAt, saga, causationId, initiatorLanId,
-                    Outcome(payment, rejected.ReasonCode, rejected.Reason));
+                    Outcome(payment, rejected.ReasonCode, rejected.Reason, lanOf));
                 break;
 
             case PaymentFailedDomainEvent failed:
                 (messageId, eventType, causationId) = (Guid.NewGuid(), PaymentFailed, saga.LastMessageId);
                 payload = Envelope(messageId, eventType, failed.OccurredAt, saga, causationId, initiatorLanId,
-                    Outcome(payment, failed.ReasonCode, failed.Reason));
+                    Outcome(payment, failed.ReasonCode, failed.Reason, lanOf));
                 break;
 
             case PaymentCompensationFailedDomainEvent stuck:
                 (messageId, eventType, causationId) = (Guid.NewGuid(), PaymentCompensationFailed, saga.CurrentCommandId);
                 payload = Envelope(messageId, eventType, stuck.OccurredAt, saga, causationId, initiatorLanId,
-                    Outcome(payment, "COMPENSATION_FAILED", stuck.Reason));
+                    Outcome(payment, "COMPENSATION_FAILED", stuck.Reason, lanOf));
                 break;
 
             default:
@@ -137,10 +148,11 @@ internal static class PaymentsMessageMapper
         };
     }
 
-    private static PaymentOutcomePayload Outcome(Payment payment, string? reasonCode, string? reason) =>
+    private static PaymentOutcomePayload Outcome(Payment payment, string? reasonCode, string? reason, Func<string?, string?> lanOf) =>
         new(payment.Id, payment.PaymentRef, payment.PaymentNumber, payment.CustomerNumber, payment.BranchCode.Value,
             payment.Status.ToCode(), payment.Amount, payment.Currency, payment.From.Bsb, payment.From.AccountNumber,
-            payment.PayeeName, payment.To.Bsb, payment.To.AccountNumber, payment.NetworkReference, reasonCode, reason);
+            payment.PayeeName, payment.To.Bsb, payment.To.AccountNumber, payment.NetworkReference, reasonCode, reason,
+            payment.ApprovalRequired, payment.DecisionByUserId, lanOf(payment.DecisionByUserId), payment.DecisionRemarks);
 
     private static string Envelope<TPayload>(
         Guid messageId, string eventType, DateTimeOffset occurredAt, PaymentSaga saga, Guid? causationId,
