@@ -101,10 +101,14 @@ CustomerOutboxPublisher ──► Kafka ◄── KYC Outbox relay
                               ▼
                      KycCaseOpeningSubscriber ──M2M──► KYC API
                      ComplianceCaseOpeningSubscriber ──M2M──► Compliance API ─ EwpComplianceDb
-                     OnboardingOutcomeSubscriber ──M2M──► CO API     (Compliance screening ──► external
-                              │                                       provider, simulated)
-                              ▼ (planned)
-              Notifications (SignalR)
+                     AccountApplicationOpeningSubscriber ──M2M──► Accounts API ─ EwpAccountsDb
+                     OnboardingOutcomeSubscriber ──M2M──► CO API
+                     AccountsCommandSubscriber ──M2M──► Accounts API      (Payments saga: funds commands)
+                     PaymentsSagaReplySubscriber ──M2M──► Payments API ─ EwpPaymentsDb   (replies)
+                     NotificationsSubscriber ──M2M──► Notifications API ─ EwpNotificationsDb ──SignalR──► Shell
+
+External systems (simulated): screening provider ◄── Compliance API, core banking ◄── Accounts API,
+payment network ◄── Payments API. BFF sessions and keys: EwpBffStateDb (one schema per .NET BFF).
 ```
 
 ---
@@ -396,43 +400,43 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Capability | Status |
 |---|---|
 | Bounded contexts, database per context | Present |
-| DDD tactical model | Present (aggregates, value objects, domain events and invariants in CO, KYC, Compliance and DM) |
+| DDD tactical model | Present (aggregates, value objects, domain events and invariants in CO, KYC, Compliance, Accounts, Payments, Notifications and DM) |
 | Independent deployability | Partial (secrets now per deployable; service URLs still compiled into `Common.Landscape`) |
 | Next.js MFEs, Shell composition, Shell BFF, MFE BFFs (.NET and NestJS) | Present |
 | Application Workspace, opaque context exchange, navigation protocol | Present |
 | Duende IdentityServer 8, OIDC, Authorization Code + PKCE | Present |
 | M2M Client Credentials (pinned clients) | Present |
 | RBAC | Present |
-| ABAC | Present (department and clearance on KYC and Compliance actions; Compliance approval clearance by case risk; branch scope in CO, KYC, Compliance and DM; stage-specific KYC permissions) |
+| ABAC | Present (department and clearance on KYC, Compliance and Accounts actions; Compliance approval clearance by case risk; payment approval limit by clearance; branch scope in CO, KYC, Compliance, Accounts, Payments and DM; stage-specific KYC permissions) |
 | ReBAC | Present (owned by the contexts: CO managing agent, KYC, Compliance and Accounts assigned officer) |
-| Separation of Duties | Present across contexts (initiator excluded from KYC and Compliance; KYC stage deciders excluded from Compliance; enforced in the aggregates, failing closed); Partial (four-eyes per KYC stage planned) |
-| Workflow-state authorization | Partial (CO aggregate transitions; KYC stages) |
-| Object-level authorization | Present (CO and DM: branch scope); Planned (KYC) |
-| Transactional Outbox with `initiated_by` | Present (CO, KYC and Compliance) |
-| Standard event envelope; Workflow / Correlation / Causation IDs | Present (CO, KYC and Compliance, `SchemaVersion` 1; copies in Kafka headers) |
+| Separation of Duties | Present across contexts (initiator excluded from KYC, Compliance and Accounts; KYC stage deciders excluded from Compliance; the Compliance approver excluded from Accounts; a payment's initiator never approves it; enforced in the aggregates, failing closed); Partial (four-eyes per KYC stage planned) |
+| Workflow-state authorization | Present (each aggregate allows an action only in the right state: CO transitions, KYC stages, Compliance and Accounts decisions, a payment decided only while PENDING_APPROVAL, "Retry release" only when COMPENSATION_FAILED) |
+| Object-level authorization | Present (branch scope on every read and write in CO, KYC, Compliance, Accounts, Payments and DM; payment operations and auditors read all branches but cannot decide) |
+| Transactional Outbox with `initiated_by` | Present (CO, KYC, Compliance, Accounts and Payments) |
+| Standard event envelope; Workflow / Correlation / Causation IDs | Present (CO, KYC, Compliance, Accounts and Payments, `SchemaVersion` 1; copies in Kafka headers) |
 | Kafka backbone, at-least-once model | Present |
 | KYC Case Opening Subscriber (M2M, bounded retry) | Present |
-| Inbox / idempotent consumer | Present (CO, KYC, Compliance, Accounts, Documents Management and Notifications APIs: `inbox_messages`, written in the same transaction as the change) |
-| Timeouts | Partial (Onboarding Outcome Subscriber: per attempt and total) |
-| Circuit breakers | Present on every subscriber (→ CO, KYC and Compliance APIs) and on the Compliance API → external screening provider (failure is never a pass; cases wait in SCREENING with back-off); Accounts API → core banking (Idempotency-Key, so the POST is retried safely); Compliance and Accounts BFF → API calls (GET-only retries); Partial platform-wide (CO and KYC BFF → API calls not yet) |
+| Inbox / idempotent consumer | Present (CO, KYC, Compliance, Accounts, Payments, Documents Management and Notifications APIs: `inbox_messages`, written in the same transaction as the change) |
+| Timeouts | Present for every worker → API call (per attempt and total budget), the calls to external systems, and the Compliance, Accounts and Payments BFF → API calls; the Payments saga times out missing replies and resends. Partial (CO and KYC BFF → API calls use the default client timeout) |
+| Circuit breakers | Present on every subscriber (→ its own context's API) and on the Compliance API → external screening provider (failure is never a pass; cases wait in SCREENING with back-off); Accounts API → core banking (Idempotency-Key, so the POST is retried safely); Payments API → payment network; Compliance, Accounts and Payments BFF → API calls (GET-only retries); Partial platform-wide (CO and KYC BFF → API calls not yet) |
 | Dead-letter / poison-message handling | Present (every subscriber, one shared consume loop: `AsyncWorkflows.Infrastructure.Subscribers`) |
 | Saga choreography | Present (CO ⇄ KYC ⇄ Compliance ⇄ Accounts: submission to a COMPLETED onboarding) |
 | Compensation | Present (a rejection at any stage, and a failed account opening after approval: CO COMPENSATING → REJECTED; DM invalidates and retains the evidence; the customer returns to PROSPECT) |
-| Saga orchestration (Payments) | Present for the backend (5a): persisted `PaymentSaga` state machine in the Payments API, commands / replies over Kafka with Outbox + Inbox, timeouts and resends, compensation (release funds), COMPENSATION_FAILED as a recoverable state; approval and screens in 5b |
+| Saga orchestration (Payments) | Present: persisted `PaymentSaga` state machine in the Payments API, commands / replies over Kafka with Outbox + Inbox, timeouts and resends, compensation (release funds), approval by a payments officer above the tier, COMPENSATION_FAILED as a recoverable state (Payment Processing Monitor, operations "Retry release"); assisted-channel screens |
 | User-specific SignalR notifications | Present (Notifications API stores and pushes to `user:{sub}` / `staff:{role}:{branch}` audiences derived from the token; the Shell proxies REST and the hub and shows a bell and toasts; connections close at token expiry). A click opens the record through the menu-owned microservice and the normal navigation (4c). A backplane for several instances is planned |
-| Centralized audit trail | Planned |
+| Centralized audit trail | Planned (next: an Audit context in the customer's pattern - Next.js light BFF → NestJS Journey API → Domain API) |
 | OpenTelemetry / distributed tracing | Present (.NET components: one trace across HTTP, the Outbox and Kafka via `traceparent`; OTLP export when configured); Partial (KYC NestJS BFF not instrumented; no metrics yet) |
-| Security headers / CSP | Present: strict CSP on the Shell and the CO, KYC, Compliance and Accounts BFFs (hashed inline scripts, `frame-ancestors` / `frame-src`, `object-src 'none'`); IDP CSP on its pages; `nosniff`; Referrer-Policy |
+| Security headers / CSP | Present: strict CSP on the Shell and the CO, KYC, Compliance, Accounts and Payments BFFs (hashed inline scripts, `frame-ancestors` / `frame-src`, `object-src 'none'`); IDP CSP on its pages; `nosniff`; Referrer-Policy |
 | Cookie hardening | Present: session and anti-forgery cookies HttpOnly (session), Secure, `SameSite=Lax`; OIDC correlation / nonce cookies `None` for the login round trip only |
-| Logout propagation | Present: front-channel and back-channel logout on all three BFFs |
+| Logout propagation | Present: front-channel and back-channel logout on the Shell and every MFE BFF |
 | Error responses without internals | Present: problem details with `traceId` only; details logged |
-| Least-privilege database users | Present: one user per service, own database only, no DDL (`db/EwpServiceDbUsers.sql`) |
+| Least-privilege database users | Present: one user per service, own database only, no DDL (`db/EwpServiceDbUsers.sql`); each BFF only its own schema of `EwpBffStateDb` (`db/EwpBffStateDb.sql`) |
 | Dependency vulnerability scanning | Present: `Scan-Dependencies.ps1` (NuGet + pnpm); not yet wired into a CI pipeline |
-| Rate limiting | Partial (IDP login only) |
+| Rate limiting | Present: IDP login throttling and lockout; every .NET BFF and API limits per caller (person by subject ID, with a tighter budget for changes; machine client by client ID; anonymous by IP) and answers 429 with Retry-After. Shared code: `Common.WebUtilities/Security/RateLimiting.cs`, configuration `RateLimiting` |
 | Health checks | Present: `/health/live` and `/health/ready` on every .NET component (workers via a built-in listener); relay heartbeat and Outbox backlog (Degraded) checks |
 | Kafka authentication and authorization | Present: SCRAM-SHA-512 user per deployable, deny-by-default ACLs (own topics and consumer group only), no topic auto-creation; TLS (`SASL_SSL`) is a Production Concern |
 | IDP hardening (lockout, no enumeration, POST logout, front-channel logout, refresh-token rotation) | Present |
-| Server-side BFF sessions | Partial (.NET BFFs; in-memory stores) |
+| Server-side BFF sessions | Present for the .NET BFFs: Duende sessions and Data Protection keys in PostgreSQL (`EwpBffStateDb`, one schema and user per BFF), so restarts and several instances keep sessions; KYC (NestJS) BFF still in-memory |
 | Automated tests | Planned (none yet) |
 | Document content verification (allow-list + magic bytes) | Present |
 | Direct / pre-signed document upload, malware scanning | Planned / Target |
@@ -474,7 +478,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [x] Compliance (backend and officer UI)
 - [x] Account opening (backend and officer UI)
 - [x] Compensation on rejection (DM document invalidation)
-- [ ] Failure recovery
+- [ ] Failure recovery tooling (dead-letter replay; the Payments "Retry release" is present)
 - [ ] Workflow audit history
 
 **Phase 4 — Human workflow feedback**
@@ -488,13 +492,14 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [x] ABAC across all contexts (branch scope, department, clearance by risk)
 - [x] ReBAC (managing agent in CO; assigned officer in KYC, Compliance and Accounts)
 - [x] SoD that fails closed
-- [x] Object-level authorization (CO, DM)
+- [x] Object-level authorization (every context)
+- [x] Persistent server-side BFF sessions and Data Protection keys (.NET BFFs)
 - [ ] Audit trail
 - [ ] PII-aware logging
 - [ ] Secrets management
 - [ ] Key rotation
 - [x] CSP and security headers
-- [ ] Rate limiting
+- [x] Rate limiting
 - [ ] Delegated user context
 - [ ] Sender-constrained tokens where justified
 
@@ -517,7 +522,14 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [ ] Runbooks
 - [ ] Terraform / IaC for cloud environments
 
-**Phase 8 — Payments orchestration:** see the Saga plan.
+**Phase 8 — Payments orchestration**
+- [x] Orchestrated saga with funds holds, timeouts and compensation
+- [x] Approval by a payments officer (tier, clearance limit, separation of duties)
+- [x] Assisted-channel screens, live saga timeline, notifications with deep links
+- [x] Payment Processing Monitor and operations "Retry release"
+- [ ] Customer self-service channel, beneficiaries
+
+Details: [Saga plan §2](EWP-V3-Saga-Choreography-and-Orchestration-Plans.md#2-orchestration--payments), [Payments-Requirements.md](../src/Microservices/Payments/doc/Payments-Requirements.md).
 
 ---
 

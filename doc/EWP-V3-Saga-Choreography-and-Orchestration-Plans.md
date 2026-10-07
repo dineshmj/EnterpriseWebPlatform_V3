@@ -107,7 +107,7 @@ The infrastructure is the same in both: Outbox, Inbox, Kafka, and courier worker
 
 ## 2.2 Who does what (implemented, step 5a)
 
-![Payment saga orchestration](Payment%20Saga%20Orchestration%20(corrected).png)
+![Payment saga orchestration](Payment%20Saga%20Orchestration.png)
 
 | Piece | Runs in | Role |
 |---|---|---|

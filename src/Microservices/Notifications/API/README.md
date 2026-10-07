@@ -1,6 +1,6 @@
 # Notifications API
 
-The **Notifications** bounded context (generic subdomain): it decides who is told what when the onboarding workflow moves, stores it, and pushes it live over **SignalR**. It has no MFE; the Shell shows the notifications in its profile area (bell, unread count, live toasts) and relays them to the MFE in its frame, so work queues reload on new work.
+The **Notifications** bounded context (generic subdomain): it decides who is told what when the onboarding workflow or a payment moves, stores it, and pushes it live over **SignalR**. It has no MFE; the Shell shows the notifications in its profile area (bell, unread count, live toasts) and relays them to the MFE in its frame, so work queues reload on new work.
 
 URL: `https://notifications-api.dev.localhost:46377` (launch profile `https`). Database: `EwpNotificationsDb` ([NotificationsDb/EwpNotificationsDb.sql](NotificationsDb/EwpNotificationsDb.sql)).
 
@@ -44,7 +44,7 @@ The rules live in [Domain/NotificationRules.cs](Domain/NotificationRules.cs). Pe
 
 ## Security
 
-- **Audiences come from the token only.** The hub joins a connection to `user:{sub}` and to `staff:{role}:{branch}` for each work-queue role in the person's token; it exposes no method a client could use to join another group. The REST queries filter by the same audiences, and marking read checks that the notification is addressed to the caller.
+- **Audiences come from the token only.** The hub joins a connection to `user:{sub}` and to `staff:{role}:{branch}` for each work-queue role in the person's token (KYC, Compliance, account and payments officers), plus `staff:operations_administrator:*` for operations staff, whose work spans every branch; it exposes no method a client could use to join another group. The REST queries filter by the same audiences, and marking read checks that the notification is addressed to the caller.
 - **No token in the browser, none in a URL.** The Shell BFF proxies REST and the hub and adds the access token as an `Authorization` header, also on the WebSocket upgrade. Because a browser cannot add Duende's anti-forgery header to a WebSocket, the Shell checks the `Origin` of hub requests instead (cross-site WebSocket hijacking).
 - **A connection never outlives its token:** the hub closes it when the access token expires (`CloseOnAuthenticationExpiration`); the Shell reconnects through the BFF with a fresh token.
 - **Stored first, pushed second.** A failed push loses nothing: the Shell loads unread notifications over REST when it starts or reconnects.

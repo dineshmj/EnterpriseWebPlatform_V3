@@ -12,9 +12,10 @@ using OpenTelemetry.Trace;
 using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 using EnterpriseWebPlatform.Common.Observability;
+using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.CustomerOnboarding.API.Authorization;
-using EnterpriseWebPlatform.CustomerOnboarding.Application;
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Persistence;
+using EnterpriseWebPlatform.CustomerOnboarding.Application;
 using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -197,6 +198,9 @@ builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), tags: [HealthEndpoints.LiveTag])
     .AddDbContextCheck<CustomerDbContext>("database", tags: [HealthEndpoints.ReadyTag]);
 
+// OWASP API4: per-caller rate limits on the API surface (429 + Retry-After); configuration "RateLimiting".
+builder.Services.AddEwpRateLimiting(builder.Configuration, "/v1");
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -214,6 +218,7 @@ app.UseExceptionHandler();
 
 app.UseHttpsRedirection();
 app.UseAuthentication();
+app.UseEwpRateLimiting();
 
 // Remember the acting agent's LAN ID (named in published events; rules use "sub").
 app.Use(async (context, next) =>

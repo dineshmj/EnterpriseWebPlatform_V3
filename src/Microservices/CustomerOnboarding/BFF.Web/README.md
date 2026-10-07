@@ -99,7 +99,7 @@ For source-only development, `pnpm run dev` starts a standalone Next.js developm
 
 - The user access token is attached server-side by Duende Access Token Management; it is never exposed to browser JavaScript.
 - Both secrets of this BFF (`Oidc:ClientSecret`, `CustomerOnboardingBff:M2MClientSecret`) come from configuration. Development values are in `appsettings.Development.json`; elsewhere supply them from the environment or a secret store. The BFF refuses to start without the OIDC secret.
-- Sessions are server-side (Duende BFF, in-memory store); the cookie carries only a session reference.
+- Sessions are server-side (Duende BFF, stored in PostgreSQL `EwpBffStateDb`, schema `customer_onboarding_bff`, user `ewp_co_bff`); the cookie carries only a session reference. The Data Protection keys that encrypt the cookies are kept in the same schema, so a restart signs nobody out. An API call whose session has expired answers **401** (never a redirect), and the MFE signs in again silently. Requests are rate limited per person, machine client and IP (429 with `Retry-After`).
 - Responses carry `Content-Security-Policy: frame-ancestors <Shell> <IDP>`, `nosniff` and a referrer policy. `ShellOrigin` can be configured.
 - `POST /api/auth/logout` requires the anti-forgery token. The user-facing logout is owned by the Shell; the IDP's front-channel logout ends this session through `/signout-oidc`.
 - The silent-login return URL is an allow-listed path rather than an arbitrary redirect target.

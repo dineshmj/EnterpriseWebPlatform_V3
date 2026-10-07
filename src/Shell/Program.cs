@@ -6,9 +6,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 using Duende.AccessTokenManagement.OpenIdConnect;
-using Duende.Bff;
 using Duende.Bff.AccessTokenManagement;
+using Duende.Bff.EntityFramework;
 using Duende.Bff.Yarp;
+using Duende.Bff;
 using Npgsql;
 using OpenTelemetry.Trace;
 
@@ -50,17 +51,28 @@ builder.Services.AddSession(options =>
 builder.Services.AddDbContext<MenuDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("MenuDbConnection")));
 
+// Server-side sessions and the Data Protection keys (which encrypt the session and
+// anti-forgery cookies) live in PostgreSQL - EwpBffStateDb, schema shell_bff, used only by
+// this BFF's own database user - not in memory: a restart signs nobody out, several
+// instances share them, and back-channel logout still ends a session. Expired sessions
+// are removed by Duende's clean-up job.
+var bffStateDb = builder.Configuration.GetConnectionString("BffStateDbConnection")
+    ?? throw new InvalidOperationException("Connection string 'BffStateDbConnection' was not configured.");
+builder.Services.AddEwpPersistentDataProtection(bffStateDb, schema: "shell_bff", applicationName: "ewp-shell-bff");
+builder.Services.Configure<SessionStoreOptions>(options => options.DefaultSchema = "shell_bff");
+
 builder.Services.AddBff()
 	// 🡡__ WHY   : Registers the Duende BFF services which implement the Backend-For-Frontend pattern helpers,
 	//              such as secure cookie-based user sessions, CSRF protection, and the lightweight API proxy helpers.
 	// 🡡__ IF NOT: You would miss out on built-in BFF features (session handling, secure cookie patterns, anti-CSRF)
 	//              and have to implement these aspects manually which increases security and implementation risk.
-    .AddServerSideSessions()
+    .AddEntityFrameworkServerSideSessions(options => options.UseNpgsql(bffStateDb))
 		// 🡡__ WHY   : Keeps the authentication ticket (and its tokens) on the server; the browser cookie holds only a
 		//              session reference, and a session can be revoked server-side (e.g. on back-channel logout).
-		// 🡡__ IF NOT: The tokens travel inside the (encrypted) cookie on every request and cannot be revoked centrally.
-		//              NOTE: the default store is in-memory (sessions end when the BFF restarts); use a persistent store
-		//              (Duende EF store / distributed cache) when the BFF runs as more than one instance.
+		//              Stored in PostgreSQL (EwpBffStateDb), so sessions survive a restart and are shared by instances.
+		// 🡡__ IF NOT: The tokens travel inside the (encrypted) cookie on every request and cannot be revoked centrally;
+		//              with the in-memory store every restart signs everybody out.
+    .AddSessionCleanupBackgroundProcess()
     .AddRemoteApis();
 		// 🡡__ WHY   : Enables the BFF's remote API integration (YARP-backed) allowing the BFF to expose proxied endpoints
 		//              that securely call backend microservices on behalf of the authenticated user.
@@ -211,6 +223,9 @@ builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), tags: [HealthEndpoints.LiveTag])
     .AddDbContextCheck<MenuDbContext>("database", tags: [HealthEndpoints.ReadyTag]);
 
+// OWASP API4: per-caller rate limits on the API surface (429 + Retry-After); configuration "RateLimiting".
+builder.Services.AddEwpRateLimiting(builder.Configuration, "/bff");
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment ())
@@ -296,6 +311,7 @@ app.UseStaticFiles();
 
 app.UseRouting();
 app.UseAuthentication();
+app.UseEwpRateLimiting();
 // Duende BFF order: UseBff() after authentication and BEFORE authorization, so
 // the BFF anti-forgery and endpoint metadata are evaluated first.
 app.UseBff();

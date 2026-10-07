@@ -12,6 +12,7 @@ using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 using EnterpriseWebPlatform.Common.Observability;
+using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.Payments.Api.Application.Abstractions;
 using EnterpriseWebPlatform.Payments.Api.Application.Commands;
 using EnterpriseWebPlatform.Payments.Api.Application.Queries;
@@ -197,6 +198,9 @@ builder.Services.AddHealthChecks()
         sp => new SagaBacklogHealthCheck(sp.GetRequiredService<PaymentsDbContext>()),
         HealthStatus.Degraded, [HealthEndpoints.ReadyTag]));
 
+// OWASP API4: per-caller rate limits on the API surface (429 + Retry-After); configuration "RateLimiting".
+builder.Services.AddEwpRateLimiting(builder.Configuration, "/v1");
+
 var app = builder.Build();
 
 app.UseExceptionHandler();
@@ -205,6 +209,7 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseAuthentication();
+app.UseEwpRateLimiting();
 
 // Remember the acting person's LAN ID (shown on screens and in events; rules use "sub").
 app.Use(async (context, next) =>

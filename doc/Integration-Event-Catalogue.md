@@ -74,10 +74,12 @@ Meaning of the identifiers:
 | Customer Onboarding | Full envelope, `Source` = `customer-onboarding`, `SchemaVersion` 1; trace context in Kafka headers. |
 | Customer KYC | Full envelope, `Source` = `customer-kyc`, `SchemaVersion` 1; trace context in Kafka headers. (Before increment 1b KYC published a flat shape; its consumer still accepts both, so old messages remain readable.) |
 | Compliance | Full envelope, `Source` = `compliance`, `SchemaVersion` 1; trace context in Kafka headers. |
+| Accounts | Full envelope, `Source` = `accounts`, `SchemaVersion` 1 (account events and the funds replies); trace context in Kafka headers. |
+| Payments | Full envelope, `Source` = `payments`, `SchemaVersion` 1 (saga commands and payment events); trace context in Kafka headers. |
 
 ### 3.2 Kafka headers
 
-Both relays add these headers to every message, so infrastructure (tracing, routing, inspection tools) can work without parsing the body:
+Every relay adds these headers to every message, so infrastructure (tracing, routing, inspection tools) can work without parsing the body:
 
 | Header | Value |
 |---|---|

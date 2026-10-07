@@ -3,7 +3,7 @@
 The Payments bounded context, and the home of the platform's **orchestrated saga**. A staff member captures a payment for a customer (assisted channel); the API records it and starts a `PaymentSaga`, which carries the payment out in the background:
 
 ```text
-reserve funds (Accounts) → [approval, above the tier - step 5b] → send to the payment network → settle funds (Accounts) → COMPLETED
+reserve funds (Accounts) → [approval by a payments officer, above the tier] → send to the payment network → settle funds (Accounts) → COMPLETED
 ```
 
 If something fails after the funds were reserved, the saga **compensates**: it asks Accounts to release them. Business requirements: [Payments-Requirements.md](../doc/Payments-Requirements.md). The pattern and the comparison with onboarding's choreography: [Saga plan §2](../../../../doc/EWP-V3-Saga-Choreography-and-Orchestration-Plans.md#2-orchestration--payments).

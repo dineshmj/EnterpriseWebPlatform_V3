@@ -12,9 +12,10 @@ using OpenTelemetry.Trace;
 using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 using EnterpriseWebPlatform.Common.Observability;
+using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.DocumentsManagement.API.Authorization;
-using EnterpriseWebPlatform.DocumentsManagement.Application;
 using EnterpriseWebPlatform.DocumentsManagement.Application.Abstractions.Storage;
+using EnterpriseWebPlatform.DocumentsManagement.Application;
 using EnterpriseWebPlatform.DocumentsManagement.Infrastructure.Persistence;
 using EnterpriseWebPlatform.DocumentsManagement.Infrastructure.Storage;
 
@@ -158,6 +159,9 @@ builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), tags: [HealthEndpoints.LiveTag])
     .AddDbContextCheck<DocumentsManagementDbContext>("database", tags: [HealthEndpoints.ReadyTag]);
 
+// OWASP API4: per-caller rate limits on the API surface (429 + Retry-After); configuration "RateLimiting".
+builder.Services.AddEwpRateLimiting(builder.Configuration, "/v1");
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -175,6 +179,7 @@ app.UseExceptionHandler();
 
 app.UseHttpsRedirection();
 app.UseAuthentication();
+app.UseEwpRateLimiting();
 app.UseAuthorization();
 
 app.MapControllers()

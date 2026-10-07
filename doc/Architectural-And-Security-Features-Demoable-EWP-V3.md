@@ -19,6 +19,8 @@ The document answers *how the platform is built and protected*, not *which busin
 | What if a downstream API is down for an hour? | [1.6.3](#163-timeouts-retries-and-circuit-breakers), [1.3.3](#133-reliable-subscriber-pipeline) |
 | What if an external provider (e.g. sanctions screening) is slow or down? Does a case slip through? | [1.6.3](#163-timeouts-retries-and-circuit-breakers) |
 | How do you avoid losing an event when the database commit succeeds but Kafka is down? | [1.3.1](#131-transactional-outbox) |
+| What if a payment fails halfway, after the money was reserved? Can the money be lost? | [1.4.3](#143-orchestration-the-payments-saga) |
+| Can a double-click or a retried request send a payment twice? | [1.4.3](#143-orchestration-the-payments-saga) |
 | Are events processed in order? | [1.3.5](#135-ordering-guarantees) |
 | How do you trace one business transaction across services? | [1.3.4](#134-workflow-correlation-and-causation-identity), [1.7.1](#171-distributed-tracing-across-http-and-kafka) |
 | Can you follow one request through Kafka in a tracing tool? | [1.7.1](#171-distributed-tracing-across-http-and-kafka) |
@@ -29,7 +31,7 @@ The document answers *how the platform is built and protected*, not *which busin
 | Is authorization only role-based? | [2.2](#22-authorization-beyond-rbac) |
 | How do you stop one person from both initiating and approving? | [2.2.6](#226-separation-of-duties-makerchecker) |
 | Is it safe to retry a POST to an external system? Could a timeout open two bank accounts? | [1.6.3](#163-timeouts-retries-and-circuit-breakers) |
-| Can a junior officer approve a high-risk customer? | [2.2.4](#224-abac-department-clearance-and-stage-permissions) |
+| Can a junior officer approve a high-risk customer, or a large payment? | [2.2.4](#224-abac-department-clearance-and-stage-permissions) |
 | How do services authenticate to each other? | [2.1.2](#212-separate-human-and-machine-identities) |
 | Does signing out of one application sign the user out everywhere? | [2.1.4](#214-single-sign-out) |
 | How are XSS, clickjacking and CSRF handled? | [2.3](#23-browser-and-session-security) |
@@ -37,6 +39,8 @@ The document answers *how the platform is built and protected*, not *which busin
 | What does an attacker learn from an error response? | [2.4.1](#241-error-responses-that-leak-nothing) |
 | If one service is compromised, what can it reach in the database? | [2.4.3](#243-least-privilege-database-users) |
 | Is Kafka secured? Could someone publish a fake event? | [2.4.6](#246-kafka-authentication-and-per-topic-acls) |
+| Can one user or a script flood an API? | [2.4.7](#247-rate-limiting) |
+| Does restarting a BFF sign everybody out? | [2.3.4](#234-session-management), [1.6.1](#161-pod-replacement-and-horizontal-scaling) |
 | How does Kubernetes know a pod is healthy, or ready for traffic? | [1.7.2](#172-health-endpoints-for-liveness-and-readiness) |
 | How are vulnerable dependencies caught? | [2.5.1](#251-dependency-vulnerability-scanning) |
 
@@ -65,6 +69,7 @@ The document answers *how the platform is built and protected*, not *which busin
   - [1.4 Saga pattern](#14-saga-pattern)
     - [1.4.1 Choreography across Customer Onboarding, KYC, Compliance and Accounts](#141-choreography-across-customer-onboarding-kyc-compliance-and-accounts)
     - [1.4.2 Compensation on rejection: retain, don't delete](#142-compensation-on-rejection-retain-dont-delete)
+    - [1.4.3 Orchestration: the Payments saga](#143-orchestration-the-payments-saga)
   - [1.5 Front-end composition](#15-front-end-composition)
     - [1.5.1 Micro-frontends hosted by a business-neutral Shell](#151-micro-frontends-hosted-by-a-business-neutral-shell)
     - [1.5.2 Shell–MFE protocol and the Application Workspace](#152-shellmfe-protocol-and-the-application-workspace)
@@ -105,6 +110,7 @@ The document answers *how the platform is built and protected*, not *which busin
     - [2.4.4 File upload security](#244-file-upload-security)
     - [2.4.5 Secrets per deployable](#245-secrets-per-deployable)
     - [2.4.6 Kafka authentication and per-topic ACLs](#246-kafka-authentication-and-per-topic-acls)
+    - [2.4.7 Rate limiting](#247-rate-limiting)
   - [2.5 Supply chain](#25-supply-chain)
     - [2.5.1 Dependency vulnerability scanning](#251-dependency-vulnerability-scanning)
 - [3. Anti-patterns avoided](#3-anti-patterns-avoided)
@@ -126,17 +132,17 @@ The document answers *how the platform is built and protected*, not *which busin
 
 #### 1.1.1 Bounded contexts, each with its own database
 
-Each business capability (Customer Onboarding, Customer KYC, Compliance, Accounts, Documents Management) is a bounded context with its own model, language and PostgreSQL database. No context reads or writes another context's tables, and there are no cross-database foreign keys. Contexts refer to each other's records by business identifier only, for example an application's never-repeating `ApplicationRef` (UUID v7) and its `ApplicationNumber`, never by another context's database ID. Collaboration happens only through published events or explicit APIs, so each context can change its schema without coordinating with the others.
+Each business capability (Customer Onboarding, Customer KYC, Compliance, Accounts, Payments, Notifications, Documents Management) is a bounded context with its own model, language and PostgreSQL database. No context reads or writes another context's tables, and there are no cross-database foreign keys. Contexts refer to each other's records by business identifier only, for example an application's never-repeating `ApplicationRef` (UUID v7) and its `ApplicationNumber`, never by another context's database ID. Collaboration happens only through published events or explicit APIs, so each context can change its schema without coordinating with the others.
 
 **Where to look at:**
 
-- Database scripts, one per context: [EwpCustomerDb.sql](../src/Microservices/CustomerOnboarding/API/CustomerDB/EwpCustomerDb.sql), [EwpKycDb.sql](../src/Microservices/CustomerKyc/API/KycDb/EwpKycDb.sql), [EwpComplianceDb.sql](../src/Microservices/Compliance/API/ComplianceDb/EwpComplianceDb.sql), [EwpAccountsDb.sql](../src/Microservices/Accounts/API/AccountsDb/EwpAccountsDb.sql), [EwpDocumentsManagementDb.sql](../src/Microservices/DocumentsManagement/API/DocumentMgmtDB/EwpDocumentsManagementDb.sql)
+- Database scripts, one per context: [EwpCustomerDb.sql](../src/Microservices/CustomerOnboarding/API/CustomerDB/EwpCustomerDb.sql), [EwpKycDb.sql](../src/Microservices/CustomerKyc/API/KycDb/EwpKycDb.sql), [EwpComplianceDb.sql](../src/Microservices/Compliance/API/ComplianceDb/EwpComplianceDb.sql), [EwpAccountsDb.sql](../src/Microservices/Accounts/API/AccountsDb/EwpAccountsDb.sql), [EwpPaymentsDb.sql](../src/Microservices/Payments/API/PaymentsDb/EwpPaymentsDb.sql), [EwpNotificationsDb.sql](../src/Microservices/Notifications/API/NotificationsDb/EwpNotificationsDb.sql), [EwpDocumentsManagementDb.sql](../src/Microservices/DocumentsManagement/API/DocumentMgmtDB/EwpDocumentsManagementDb.sql)
 - Cross-context reference by business identifier: `ApplicationRef` in the [`KycCase`](../src/Microservices/CustomerKyc/API/Domain/Aggregates/KycCase.cs) aggregate
 - Context map: [Blueprint §5](Enterprise-Web-Platform-V3-Architectural-Vision-and-Security-Blueprint.md#5-bounded-contexts-and-context-map)
 
 #### 1.1.2 Independently deployable components
 
-Every API, BFF, worker and front end is its own deployable with its own configuration and secrets. A micro-frontend and its BFF ship together: the Next.js app is exported as static files and served by its BFF, so the pair can be released and rolled back as one unit without touching the Shell or other contexts. Contexts can even use different stacks: the Customer Onboarding, Compliance and Accounts BFFs are ASP.NET Core, the Customer KYC BFF is NestJS. All sit behind the same Shell and the same protocol. (KYC remains the one NestJS reference; new BFFs and APIs are ASP.NET Core 10.)
+Every API, BFF, worker and front end is its own deployable with its own configuration and secrets. A micro-frontend and its BFF ship together: the Next.js app is exported as static files and served by its BFF, so the pair can be released and rolled back as one unit without touching the Shell or other contexts. Contexts can even use different stacks: the Customer Onboarding, Compliance, Accounts and Payments BFFs are ASP.NET Core, the Customer KYC BFF is NestJS. All sit behind the same Shell and the same protocol. (The existing contexts stay as they are; a new context follows the customer's pattern: Next.js SPA with a light BFF → NestJS Journey API → ASP.NET Core Domain APIs.)
 
 **Where to look at:**
 
@@ -149,12 +155,12 @@ Every API, BFF, worker and front end is its own deployable with its own configur
 
 #### 1.1.3 Context-owned asynchronous workers
 
-Kafka relays and subscribers belong to the bounded context whose database or API they use, and are versioned and deployed with it. `src/AsyncWorkflows` is a folder, not a shared layer. Each worker is named after its owner and purpose: `KycCaseOpeningSubscriber` (Customer KYC) opens KYC cases from onboarding events, `ComplianceCaseOpeningSubscriber` (Compliance) opens Compliance cases from KYC approvals, `AccountApplicationOpeningSubscriber` (Accounts) opens account applications from Compliance approvals, and `OnboardingOutcomeSubscriber` (Customer Onboarding) records KYC and Compliance outcomes on applications. A worker never writes to a database directly. It calls its own context's API, so every business rule stays in one place.
+Kafka relays and subscribers belong to the bounded context whose database or API they use, and are versioned and deployed with it. `src/AsyncWorkflows` is a folder, not a shared layer. Each worker is named after its owner and purpose: `KycCaseOpeningSubscriber` (Customer KYC) opens KYC cases from onboarding events, `ComplianceCaseOpeningSubscriber` (Compliance) opens Compliance cases from KYC approvals, `AccountApplicationOpeningSubscriber` (Accounts) opens account applications from Compliance approvals, `OnboardingOutcomeSubscriber` (Customer Onboarding) records KYC and Compliance outcomes on applications, `AccountsCommandSubscriber` (Accounts) carries the Payments saga's funds commands to Accounts, `PaymentsSagaReplySubscriber` (Payments) carries Accounts' replies back to the saga, and `NotificationsSubscriber` (Notifications) turns workflow events into notifications. A worker never writes to a database directly. It calls its own context's API, so every business rule stays in one place.
 
 **Where to look at:**
 
-- [KycCaseOpeningSubscriber](../src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/README.md), [ComplianceCaseOpeningSubscriber](../src/AsyncWorkflows/Subscribers/Compliance/ComplianceCaseOpeningSubscriber/README.md), [AccountApplicationOpeningSubscriber](../src/AsyncWorkflows/Subscribers/Accounts/AccountApplicationOpeningSubscriber/README.md), [OnboardingOutcomeSubscriber](../src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/README.md)
-- Internal, M2M-only endpoints the workers call: [InternalKycCasesController.cs](../src/Microservices/CustomerKyc/API/Controllers/InternalKycCasesController.cs), [InternalComplianceCasesController.cs](../src/Microservices/Compliance/API/Controllers/InternalComplianceCasesController.cs), [InternalAccountApplicationsController.cs](../src/Microservices/Accounts/API/Controllers/InternalAccountApplicationsController.cs), [InternalOnboardingApplicationsController.cs](../src/Microservices/CustomerOnboarding/API/API/Controllers/InternalOnboardingApplicationsController.cs)
+- [KycCaseOpeningSubscriber](../src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/README.md), [ComplianceCaseOpeningSubscriber](../src/AsyncWorkflows/Subscribers/Compliance/ComplianceCaseOpeningSubscriber/README.md), [AccountApplicationOpeningSubscriber](../src/AsyncWorkflows/Subscribers/Accounts/AccountApplicationOpeningSubscriber/README.md), [OnboardingOutcomeSubscriber](../src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/README.md), [AccountsCommandSubscriber](../src/AsyncWorkflows/Subscribers/Accounts/AccountsCommandSubscriber/README.md), [PaymentsSagaReplySubscriber](../src/AsyncWorkflows/Subscribers/Payments/PaymentsSagaReplySubscriber/README.md), [NotificationsSubscriber](../src/AsyncWorkflows/Subscribers/Notifications/NotificationsSubscriber/README.md)
+- Internal, M2M-only endpoints the workers call: [InternalKycCasesController.cs](../src/Microservices/CustomerKyc/API/Controllers/InternalKycCasesController.cs), [InternalComplianceCasesController.cs](../src/Microservices/Compliance/API/Controllers/InternalComplianceCasesController.cs), [InternalAccountApplicationsController.cs](../src/Microservices/Accounts/API/Controllers/InternalAccountApplicationsController.cs), [InternalOnboardingApplicationsController.cs](../src/Microservices/CustomerOnboarding/API/API/Controllers/InternalOnboardingApplicationsController.cs), [InternalFundsCommandsController.cs](../src/Microservices/Accounts/API/Controllers/InternalFundsCommandsController.cs), [InternalPaymentSagaRepliesController.cs](../src/Microservices/Payments/API/Controllers/InternalPaymentSagaRepliesController.cs)
 
 ### 1.2 Domain-Driven Design
 
@@ -282,7 +288,7 @@ Customer onboarding is a long-running, choreographed saga with no central coordi
 - Forward hops: [KycCaseOpeningSubscriber](../src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/README.md), [ComplianceCaseOpeningSubscriber](../src/AsyncWorkflows/Subscribers/Compliance/ComplianceCaseOpeningSubscriber/README.md), [AccountApplicationOpeningSubscriber](../src/AsyncWorkflows/Subscribers/Accounts/AccountApplicationOpeningSubscriber/README.md); return hop for all three: [OnboardingOutcomeSubscriber](../src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/README.md)
 - Live evidence: the CO, KYC, Compliance and Accounts Outbox tables of one onboarding, linked by `causation_id`
 
-**Not yet:** the orchestrated Payments saga.
+Payments uses the other style, orchestration: see [1.4.3](#143-orchestration-the-payments-saga).
 
 #### 1.4.2 Compensation on rejection: retain, don't delete
 
@@ -298,6 +304,23 @@ A saga cannot roll back a distributed transaction; it **compensates** instead. E
 **Later failures are compensated too.** When the account cannot be opened after every officer approved (core banking refuses, or fails six times), Accounts publishes `AccountOpeningFailed`. Customer Onboarding records COMPENSATING and then REJECTED (`RejectedBy: ACCOUNT_OPENING`), so the same `OnboardingApplicationRejected` invalidates the evidence and the customer becomes a prospect again. No approval is "rolled back": each context keeps its decision on record; only the onboarding ends.
 
 **Not yet:** disposal after the retention period.
+
+#### 1.4.3 Orchestration: the Payments saga
+
+A payment touches money in two places that must agree: the customer's account (Accounts) and the payment network. Here one coordinator, the **Payments saga**, decides every step: reserve the funds in Accounts, wait for a payments officer's approval when the amount is above the tier, send the payment to the network, then settle the funds. The saga is an aggregate stored in the Payments database, not a process that waits in memory. `POST /v1/payments` saves the payment, the saga and the first command in one transaction and answers **202 Accepted** at once; every later step is a short, separate transaction (a reply arrived, a timer fell due, an officer decided). Commands travel to Accounts and replies come back through Kafka, using the same Outbox, Inbox and courier workers as the rest of the platform. Accounts never knows about the saga; it only keeps one idempotent **funds hold** per payment.
+
+**Nothing is lost when a step fails.** If the network refuses the payment, the saga **compensates**: it releases the hold, and the payment ends FAILED with the money back in the account. A missing reply is resent with a doubling timeout; Accounts answers a repeated command with the same result, so a resend never moves money twice. If even the release cannot be confirmed, the saga does not pretend: the payment becomes **COMPENSATION_FAILED**, readiness turns Degraded, operations staff are notified, and they can release it again from the Payment Processing Monitor. A late confirmation still resolves it.
+
+**One payment per request.** The screen creates one `Idempotency-Key` per payment form; a double-click or a retried POST returns the payment already started rather than a second one.
+
+**Where to look at:**
+
+- The state machine: [PaymentSaga.cs](../src/Microservices/Payments/API/Domain/Aggregates/PaymentSaga.cs) (`OnFundsReserved`, `OnNetworkRefused`, `OnReplyTimeout`, `RetryCompensation`, …); the payment: [Payment.cs](../src/Microservices/Payments/API/Domain/Aggregates/Payment.cs)
+- Timers and network calls: [SagaStepRunner.cs](../src/Microservices/Payments/API/Infrastructure/Saga/SagaStepRunner.cs), [RunDueSagaStep.cs](../src/Microservices/Payments/API/Application/Commands/RunDueSagaStep.cs)
+- The participant: [FundsHold.cs](../src/Microservices/Accounts/API/Domain/Aggregates/FundsHold.cs), [FundsCommand.cs](../src/Microservices/Accounts/API/Application/Commands/FundsCommand.cs)
+- One payment per key: `Idempotency-Key` in [PaymentsController.cs](../src/Microservices/Payments/API/Controllers/PaymentsController.cs) and [InitiatePayment.cs](../src/Microservices/Payments/API/Application/Commands/InitiatePayment.cs)
+- Live evidence: the payment's status page shows the saga timeline (`payment_saga_history`)
+- Design, diagram and failure table: [Saga plan §2](EWP-V3-Saga-Choreography-and-Orchestration-Plans.md#2-orchestration--payments); business rules: [Payments-Requirements.md](../src/Microservices/Payments/doc/Payments-Requirements.md)
 
 ### 1.5 Front-end composition
 
@@ -361,7 +384,7 @@ The asynchronous components assume that any instance can be killed at any moment
 | Two subscriber instances running | They share one consumer group; Kafka assigns each partition to one instance, and rebalances when an instance leaves. |
 | Graceful shutdown (SIGTERM) | The subscriber leaves the consumer group cleanly, so its partitions are reassigned at once; the producer flushes pending messages. |
 
-No step relies on in-memory state surviving a restart: workflow state lives in the databases and in Kafka offsets.
+No step relies on in-memory state surviving a restart: workflow state lives in the databases and in Kafka offsets. The same holds for the .NET BFFs: their sessions and the Data Protection keys that encrypt their cookies live in PostgreSQL (`EwpBffStateDb`, one schema per BFF), so a restarted or second BFF instance keeps everybody signed in.
 
 **Where to look at:**
 
@@ -371,7 +394,7 @@ No step relies on in-memory state surviving a restart: workflow state lives in t
 
 Every component also exposes liveness and readiness endpoints for the orchestrator's probes ([1.7.2](#172-health-endpoints-for-liveness-and-readiness)), so a stuck instance is restarted and a starting one receives no work until it is ready.
 
-**Not yet:** the BFFs keep server-side sessions in memory, so scaling a BFF beyond one instance needs a shared session store or sticky sessions.
+**Not yet:** the KYC (NestJS) BFF keeps its sessions in memory, so it cannot yet run as more than one instance; the .NET BFFs can.
 
 #### 1.6.2 Dead-letter handling
 
@@ -380,7 +403,7 @@ Two kinds of failure are told apart. **Transient** failures (a dependency is dow
 **Where to look at:**
 
 - Dead-letter step: `DeadLetterAsync` in [KafkaSubscriberHostedService.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/KafkaSubscriberHostedService.cs)
-- Topics `customer-kyc.case-opening-subscriber.dlq` and `customer-onboarding.outcome-subscriber.dlq`: [KafkaTopicNames.cs](../src/AsyncWorkflows/Infrastructure/Kafka/KafkaTopicNames.cs), [Integration-Event-Catalogue.md §4.3](Integration-Event-Catalogue.md#43-dead-letter-topics)
+- Topics `customer-kyc.case-opening-subscriber.dlq` and `customer-onboarding.outcome-subscriber.dlq`: [KafkaTopicNames.cs](../src/AsyncWorkflows/Infrastructure/Kafka/KafkaTopicNames.cs), [Integration-Event-Catalogue.md §4.6](Integration-Event-Catalogue.md#46-dead-letter-topics)
 - Parked Outbox rows: `MaxAttempts` in [CustomerOutboxPublisherOptions.cs](../src/AsyncWorkflows/Publishers/CustomerOnboarding/CustomerOutboxPublisher/Configuration/CustomerOutboxPublisherOptions.cs)
 
 Parked Outbox rows are not silent either: the relay's readiness check turns *Degraded* while any row is parked or has waited more than two minutes ([1.7.2](#172-health-endpoints-for-liveness-and-readiness)).
@@ -536,13 +559,14 @@ The coarse layer: the calling application must hold the OAuth scope for *this ki
 
 #### 2.2.3 Object-level authorization
 
-Having the right role is not enough to open a *specific* record. Every read, list and write checks that the record lies within the caller's scope, so changing an ID in a URL returns nothing (the defence against OWASP API Security's #1 risk, BOLA / IDOR). A customer service agent sees only customers whose primary residential address is in their branch's city. A KYC officer sees and decides only cases of their own branch. Documents are branch-scoped on every operation. Lists are filtered and paged **in the database**, so out-of-scope rows are never even loaded. A caller without the needed attributes sees nothing (fail closed).
+Having the right role is not enough to open a *specific* record. Every read, list and write checks that the record lies within the caller's scope, so changing an ID in a URL returns nothing (the defence against OWASP API Security's #1 risk, BOLA / IDOR). A customer service agent sees only customers whose primary residential address is in their branch's city. KYC, Compliance and account officers see and decide only cases of their own branch, and staff see and decide only payments of their own branch. Operations staff and auditors are the deliberate exception for payments: they read every branch (to watch processing and to audit), but cannot decide. Documents are branch-scoped on every operation. Lists are filtered and paged **in the database**, so out-of-scope rows are never even loaded. A caller without the needed attributes sees nothing (fail closed).
 
 **Where to look at:**
 
 - [CustomerAccessScope.cs](../src/Microservices/CustomerOnboarding/API/Application/Abstractions/Authorization/CustomerAccessScope.cs), [CustomerResourceAuthorization.cs](../src/Microservices/CustomerOnboarding/API/Authorization/CustomerResourceAuthorization.cs)
 - [DocumentResourceAuthorization.cs](../src/Microservices/DocumentsManagement/API/Authorization/DocumentResourceAuthorization.cs)
 - KYC branch scope: [KycCaseDecisionAuthorization.cs](../src/Microservices/CustomerKyc/API/Authorization/KycCaseDecisionAuthorization.cs), [KycCaseQueries.cs](../src/Microservices/CustomerKyc/API/Infrastructure/KycCaseQueries.cs)
+- Payments branch scope and the all-branches readers: `ReadScopeOf` in [PaymentsAuthorization.cs](../src/Microservices/Payments/API/Authorization/PaymentsAuthorization.cs)
 
 #### 2.2.4 ABAC: department, clearance and stage permissions
 
@@ -550,12 +574,15 @@ Attributes of the user, not only their role, decide what they may do. To decide 
 
 In Compliance the required clearance depends on the **case's risk**, not only on the user: a CLEAR screening (LOW risk) can be approved at clearance 3, a POTENTIAL_MATCH (MEDIUM) needs 4 and a MATCH (HIGH) needs 5. Any compliance officer may reject. The rule lives in the aggregate, so the API, a future UI and any other caller get the same answer.
 
+Payments works the same way with **amounts**: a payments officer approves only up to their clearance's limit (3: AUD 10,000; 4: AUD 100,000; 5: any amount). The limits are configuration (`ApprovalLimits`), the check is in the saga aggregate.
+
 **Where to look at:**
 
 - Requirement and handler: [KycCaseDecisionAuthorization.cs](../src/Microservices/CustomerKyc/API/Authorization/KycCaseDecisionAuthorization.cs)
 - Stage policies `KycIdentityApprove`, `KycDocumentReject`, …: [CustomerKyc API Program.cs](../src/Microservices/CustomerKyc/API/Program.cs)
 - Claims issued by the IDP: [CustomProfileService.cs](../src/IDP/Services/CustomProfileService.cs)
 - Clearance by risk: `RiskPolicy` in [ComplianceCodes.cs](../src/Microservices/Compliance/API/Domain/ValueObjects/ComplianceCodes.cs), `Approve` in [ComplianceCase.cs](../src/Microservices/Compliance/API/Domain/Aggregates/ComplianceCase.cs); officer attributes: [ComplianceOfficerAuthorization.cs](../src/Microservices/Compliance/API/Authorization/ComplianceOfficerAuthorization.cs)
+- Approval limit by clearance: `ApprovalLimits` in [PaymentDetails.cs](../src/Microservices/Payments/API/Domain/ValueObjects/PaymentDetails.cs), `OnApproved` in [PaymentSaga.cs](../src/Microservices/Payments/API/Domain/Aggregates/PaymentSaga.cs)
 
 #### 2.2.5 ReBAC: relationships owned by each context
 
@@ -573,11 +600,12 @@ Some decisions depend on the relationship between a user and a specific record, 
 
 The person who starts a workflow can never approve it. The agent who submits an onboarding application can neither take nor decide its KYC case. The rule lives inside the `KycCase` aggregate, so no code path can bypass it. It also fails closed: if the initiator is unknown, every decision is denied rather than allowed.
 
-The rule also spans contexts. A Compliance case may not be handled by the initiator **nor by either officer who decided the KYC stages** of the same application, so one person can never both verify a customer and clear them for financial crime. KYC publishes who decided each stage on `kyc.case.approved`; Compliance stores them on the case and checks them in the aggregate. In the same way, the account officer may be neither the initiator nor the Compliance officer who approved the application (the approver travels on `compliance.case.approved`).
+The rule also spans contexts. A Compliance case may not be handled by the initiator **nor by either officer who decided the KYC stages** of the same application, so one person can never both verify a customer and clear them for financial crime. KYC publishes who decided each stage on `kyc.case.approved`; Compliance stores them on the case and checks them in the aggregate. In the same way, the account officer may be neither the initiator nor the Compliance officer who approved the application (the approver travels on `compliance.case.approved`). A payment above the approval tier is decided by a payments officer who is never the person who started it.
 
 **Where to look at:**
 
 - `EnsureSeparationOfDuties` in [KycCase.cs](../src/Microservices/CustomerKyc/API/Domain/Aggregates/KycCase.cs)
+- Payments: `EnsureMayDecide` in [Payment.cs](../src/Microservices/Payments/API/Domain/Aggregates/Payment.cs)
 - Cross-context SoD: `EnsureOfficerMayAct` in [ComplianceCase.cs](../src/Microservices/Compliance/API/Domain/Aggregates/ComplianceCase.cs) and [AccountApplication.cs](../src/Microservices/Accounts/API/Domain/Aggregates/AccountApplication.cs); the stage deciders on the event: [KycIntegrationEvents.cs](../src/Microservices/CustomerKyc/API/Infrastructure/Messaging/KycIntegrationEvents.cs)
 - The initiator captured at the source and carried through Kafka: `initiated_by` in the Outbox tables, see [1.3.4](#134-workflow-correlation-and-causation-identity)
 - People on screen: officers appear by LAN ID (`etpar`, `olben`), never by subject ID, but every rule compares subject IDs: a LAN ID can change or be reused, a subject ID cannot. Each context keeps its own `staff_members` table (subject ID → LAN ID), filled from the officer's token and from the events that name people.
@@ -588,7 +616,7 @@ The rule also spans contexts. A Compliance case may not be handled by the initia
 
 #### 2.3.1 Strict Content-Security-Policy with script hashes
 
-The Shell, both MFE BFFs and the IDP send a strict Content-Security-Policy. Scripts may load only from the application's own origin. The few inline scripts that Next.js's static export needs are allowed **by their SHA-256 hash**, which each BFF computes at start-up from the exported HTML, so no `'unsafe-inline'` is needed for scripts. Plugins are disabled (`object-src 'none'`), forms may post only to the same origin, and frame sources are allow-listed. A report-only switch lets a new policy be observed before it is enforced.
+The Shell, every MFE BFF and the IDP send a strict Content-Security-Policy. Scripts may load only from the application's own origin. The few inline scripts that Next.js's static export needs are allowed **by their SHA-256 hash**, which each BFF computes at start-up from the exported HTML, so no `'unsafe-inline'` is needed for scripts. Plugins are disabled (`object-src 'none'`), forms may post only to the same origin, and frame sources are allow-listed. A report-only switch lets a new policy be observed before it is enforced.
 
 **Where to look at:**
 
@@ -623,10 +651,12 @@ Sessions are stored on the server; the cookie holds only a reference to them. A 
 
 **Where to look at:**
 
-- `AddServerSideSessions` and `ExpireTimeSpan`: [Shell Program.cs](../src/Shell/Program.cs), [CO BFF Program.cs](../src/Microservices/CustomerOnboarding/BFF.Web/Program.cs)
+- `AddEntityFrameworkServerSideSessions`, `AddSessionCleanupBackgroundProcess` and `ExpireTimeSpan`: [Shell Program.cs](../src/Shell/Program.cs), [CO BFF Program.cs](../src/Microservices/CustomerOnboarding/BFF.Web/Program.cs)
+- Persistent Data Protection keys (DPAPI-encrypted at rest on Windows): [PersistentDataProtection.cs](../src/Common/WebUtilities/Security/PersistentDataProtection.cs)
+- Session and key tables, one schema per BFF user: [EwpBffStateDb.sql](../db/EwpBffStateDb.sql)
 - `session.regenerate` at sign-in: [oidc.service.ts](../src/Microservices/CustomerKyc/BFF.Web/src/auth/oidc.service.ts)
 
-**Not yet:** session stores are in-memory (see [1.6.1](#161-pod-replacement-and-horizontal-scaling)).
+The .NET BFFs keep sessions in PostgreSQL, so a restart signs nobody out. **Not yet:** the KYC (NestJS) BFF still uses an in-memory session store.
 
 #### 2.3.5 Open-redirect protection
 
@@ -662,7 +692,8 @@ Each service connects with its own database user, which can reach only its own d
 
 **Where to look at:**
 
-- [EwpServiceDbUsers.sql](../db/EwpServiceDbUsers.sql) (roles `ewp_customer_onboarding_api`, `ewp_customer_outbox_relay`, `ewp_kyc_api`, `ewp_documents_api`, `ewp_idp`, `ewp_shell`)
+- [EwpServiceDbUsers.sql](../db/EwpServiceDbUsers.sql) (one role per service: `ewp_customer_onboarding_api`, `ewp_customer_outbox_relay`, `ewp_kyc_api`, `ewp_documents_api`, `ewp_compliance_api`, `ewp_accounts_api`, `ewp_notifications_api`, `ewp_payments_api`, `ewp_idp`, `ewp_shell`)
+- The BFFs' sessions and keys: one schema per BFF in `EwpBffStateDb`, usable only by that BFF's own role ([EwpBffStateDb.sql](../db/EwpBffStateDb.sql))
 
 #### 2.4.4 File upload security
 
@@ -698,6 +729,14 @@ The message broker is secured like any other service. In plain terms: a program 
 - Per-component Kafka user: `Kafka:SaslUsername` in each component's `appsettings.json`
 
 **Not yet:** TLS on the broker (`SASL_SSL`). Local development uses `SASL_PLAINTEXT` on localhost.
+
+#### 2.4.7 Rate limiting
+
+Every .NET BFF and API limits how fast each caller may send requests (OWASP API4, unrestricted resource consumption). The budget is per caller, never one shared bucket that one user could use up for everybody: a signed-in person by subject ID (600 requests a minute, of which at most 60 changes such as payments, decisions or uploads), a machine client by client ID (3,000 a minute), and anyone not yet signed in by IP address (120 a minute). Over the limit the answer is **429 Too Many Requests** with `Retry-After`, which the screens show as a message. Health probes, SignalR hubs and the workers' internal endpoints are not limited. The IDP has its own sign-in throttling and account lockout ([2.1.3](#213-identity-provider-hardening)).
+
+**Where to look at:**
+
+- [RateLimiting.cs](../src/Common/WebUtilities/Security/RateLimiting.cs) (`AddEwpRateLimiting` / `UseEwpRateLimiting`), used by every BFF's and API's `Program.cs`; limits in the `RateLimiting` configuration section
 
 ### 2.5 Supply chain
 

@@ -23,6 +23,8 @@ The screens hint at the rules (e.g. "this HIGH case needs clearance 5", "you dec
 | `GET api/auth/silent-login`, `api/auth/user`, `api/auth/csrf`, `POST api/auth/logout` | session endpoints (as in the Customer Onboarding BFF) |
 
 - **Tokens stay on the server.** The browser holds only the `__Host-Microservice-Compliance-bff` session cookie (HttpOnly, Secure, SameSite=Lax); sessions are server-side and end on front-channel or back-channel logout.
+- **Sessions survive a restart.** Sessions and the Data Protection keys that encrypt the cookies are stored in PostgreSQL (`EwpBffStateDb`, schema `compliance_bff`, used only by the database user `ewp_compliance_bff`). An API call whose session has expired answers **401** (never a redirect); the MFE then signs in again silently and returns to the same page. Only `silent-login` and `user` are anonymous.
+- **Rate limited** per person, per machine client and per IP before sign-in; over the limit the answer is 429 with `Retry-After` ([RateLimiting.cs](../../../Common/WebUtilities/Security/RateLimiting.cs)).
 - **Resilience to the API:** per-attempt (10 s) and total (30 s) timeouts and a circuit breaker on every call; **GETs only** are retried, because officer actions are not idempotent. When the API is unreachable or the circuit is open, the BFF answers 503 with a readable message.
 - **CSP:** scripts only from the BFF plus the SHA-256 hashes of the exported pages' inline scripts, computed at start-up; framed only by the Shell and the IDP. Restart the BFF after re-exporting the MFE.
 

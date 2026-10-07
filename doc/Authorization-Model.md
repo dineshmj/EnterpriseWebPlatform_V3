@@ -178,7 +178,8 @@ Relationship types used in EWP V3: `works_at`, `manages`, `assigned_to`, `owns`,
 |---|---|---|---|
 | Agent `manages` Customer | Customer Onboarding: `customers.managing_agent_user_id` (the creating agent) | Only the managing agent may change the customer or open and submit its applications. Other agents of the same branch may read it (403 on change); other branches get 404. | Present |
 | Officer `assigned_to` KYC case | Customer KYC: `kyc_cases.assigned_officer_user_id` | The first decision (or an explicit claim) assigns the case. Only the assignee decides; the assignee may release it. The workflow initiator can never take it (SoD). | Present |
-| Officer `assigned_to` compliance case; customer `owns` account / payment | Compliance, Accounts, Payments | — | Planned with those contexts |
+| Officer `assigned_to` Compliance case / account application | Compliance: `compliance_cases.assigned_officer_user_id`; Accounts: `account_applications.assigned_officer_user_id` | As for KYC cases: the first action (or a claim) assigns; only the assignee decides; the initiator and the people SoD excludes can never take it. | Present |
+| Customer `owns` account / payment | Accounts, Payments | A customer sees only their own accounts and payments. | Planned with the customer self-service channel |
 
 The IDP's former `user_relationships` table and `relationship` claim have been removed.
 

@@ -10,6 +10,7 @@ using OpenTelemetry.Trace;
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 using EnterpriseWebPlatform.Common.Observability;
+using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.CustomerKyc.Api.Application.Abstractions;
 using EnterpriseWebPlatform.CustomerKyc.Api.Application.Commands.AssignKycCase;
 using EnterpriseWebPlatform.CustomerKyc.Api.Application.Commands.DecideVerificationStage;
@@ -131,6 +132,9 @@ builder.Services.AddHealthChecks()
         failureStatus: HealthStatus.Degraded,
         tags: [HealthEndpoints.ReadyTag]));
 
+// OWASP API4: per-caller rate limits on the API surface (429 + Retry-After); configuration "RateLimiting".
+builder.Services.AddEwpRateLimiting(builder.Configuration, "/v1");
+
 var app = builder.Build();
 
 // Problem details without internals; see ApiExceptionHandler.
@@ -140,6 +144,7 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseAuthentication();
+app.UseEwpRateLimiting();
 
 // Remember the acting officer's LAN ID (shown on screens and in events; rules use "sub").
 app.Use(async (context, next) =>

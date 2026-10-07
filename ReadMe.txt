@@ -53,12 +53,11 @@ What the platform is, how it is designed and what each component must do are doc
 
 	c) ASP.NET Core applications run on Kestrel using the "https" launch profile (not IIS Express). The ASP.NET Core development certificate covers "*.dev.localhost".
 
-		This applies to: Shell BFF, Customer Onboarding BFF and API, Customer KYC API, Documents Management API, and later the Accounts BFF/API and Payments API.
+		This applies to every ASP.NET Core application: the Shell BFF, the Customer Onboarding, Compliance, Accounts and Payments BFFs, every API, the workers and the simulators.
 
 	d) Node.js applications need the development certificate exported as a PFX file:
 
 		- Customer KYC BFF (NestJS)  - see src\Microservices\CustomerKyc\BFF.Web\README.md
-		- Payments BFF (ASP.NET Core)
 
 	NOTE:
 		Kestrel is used deliberately in V3 so that the local topology is explicit and consistent. The IDP is self-hosted and opens its own console window.
@@ -137,6 +136,8 @@ What the platform is, how it is designed and what each component must do are doc
 			EwpAccountsDb				src\Microservices\Accounts\API\AccountsDb\EwpAccountsDb.sql
 			EwpNotificationsDb			src\Microservices\Notifications\API\NotificationsDb\EwpNotificationsDb.sql
 			EwpPaymentsDb				src\Microservices\Payments\API\PaymentsDb\EwpPaymentsDb.sql
+			EwpBffStateDb				db\EwpBffStateDb.sql   (sessions and Data Protection keys of the .NET BFFs;
+										run it AFTER Apply-EwpServiceDbUsers.ps1 - it grants each BFF user its own schema)
 
 		Upgrading an EXISTING EwpAccountsDb for Payments (keeps its accounts; adds balances and funds holds, and gives
 		existing accounts the demo opening deposit): src\Microservices\Accounts\API\AccountsDb\Upgrade-5a-Funds.sql
@@ -171,7 +172,8 @@ What the platform is, how it is designed and what each component must do are doc
 		pgAdmin's Query Tool - it uses psql's \connect; pgAdmin's Tools > PSQL Tool with \i <path> works too.)
 
 		Each service connects with its own user (ewp_idp, ewp_shell, ewp_customer_onboarding_api, ewp_customer_outbox_relay,
-		ewp_kyc_api, ewp_documents_api, ewp_compliance_api, ewp_accounts_api, ewp_notifications_api, ewp_payments_api) that may read and write ITS OWN database only: no DDL and no access to other
+		ewp_kyc_api, ewp_documents_api, ewp_compliance_api, ewp_accounts_api, ewp_notifications_api, ewp_payments_api; the BFFs
+		ewp_co_bff, ewp_compliance_bff, ewp_accounts_bff, ewp_payments_bff and ewp_shell each own one schema of EwpBffStateDb) that may read and write ITS OWN database only: no DDL and no access to other
 		services' databases; the CO outbox relay may only read and update outbox_messages. The database scripts above
 		still run as postgres; the grants survive re-running them. Without this step the services cannot connect.
 
@@ -179,7 +181,16 @@ What the platform is, how it is designed and what each component must do are doc
 		Symptom if it is missing: CO outbox rows stay unpublished (attempt_count 0) and KYC never opens a case.
 		Repair: re-run EwpServiceDbUsers.sql - it is idempotent and safe to run at any time.
 
-	f2) Content-Security-Policy and dependency scanning.
+	f2) Content-Security-Policy, rate limiting and dependency scanning.
+
+		Rate limiting (OWASP API4): every .NET BFF and API limits requests per signed-in person (600 per minute, of which 60 may be
+		changes - payments, decisions, uploads), per machine client (3,000) and per IP address before sign-in (120). Over the limit
+		the answer is 429 with Retry-After and a message the screens show. Configuration section "RateLimiting" (Enabled,
+		PerPersonPerMinute, ChangesPerPersonPerMinute, AnonymousPerIpPerMinute, PerMachineClientPerMinute). To see it, from PowerShell:
+
+			1..130 | ForEach-Object { curl.exe -sk -o NUL -w "%{http_code}`n" https://payments.dev.localhost:46388/api/auth/user } | Group-Object
+
+		shows about 120 x 401 (not signed in) and then 429.
 
 		The Shell, CO BFF, KYC BFF, Compliance BFF, Accounts BFF and Payments BFF send a strict CSP: scripts only from the BFF itself plus the SHA-256 hashes of the
 		exported pages' inline scripts, computed at startup from the files served. After re-exporting the MFEs
@@ -221,10 +232,9 @@ What the platform is, how it is designed and what each component must do are doc
 
 	NOTE - secrets:
 		Each component reads its own client secrets from its own configuration; nothing is compiled into Common.Landscape any more.
-		Development values: appsettings.Development.json of the IDP, Shell BFF, Customer Onboarding BFF, Compliance BFF, Accounts BFF, KycCaseOpeningSubscriber,
-		ComplianceCaseOpeningSubscriber, DocumentInvalidationSubscriber, AccountApplicationOpeningSubscriber, NotificationsSubscriber, Compliance API
-		(screening API key), Accounts API (core-banking API key), Screening Provider Simulator and Core Banking Simulator, and
-		runnow.bat of the KYC BFF.
+		Development values (client secrets, Kafka passwords, the simulators' API keys): the appsettings.Development.json of the
+		component that uses them - the IDP, the Shell BFF, every .NET MFE BFF and API, every relay and subscriber, and the three
+		simulators - and runnow.bat of the KYC BFF.
 		A component refuses to start when a secret is missing. Outside Development, supply them as environment variables or from a secret store.
 
 	i) Open EnterpriseWebPlatform.BSS.slnx in Visual Studio and restore the NuGet packages.
@@ -403,6 +413,10 @@ What the platform is, how it is designed and what each component must do are doc
 	i) A Kafka CLI tool hangs or reports "Disconnected" after securing Kafka: add --command-config C:\Kafka\config\admin.properties.
 
 	j) Visual Studio uses a stale launch profile: close VS, delete the solution's ".vs" folder, reopen, and check the start-up profile.
+
+	k) A .NET BFF fails on its first request with "database "EwpBffStateDb" does not exist" or "permission denied for schema ..._bff":
+		create EwpBffStateDb, run db\Apply-EwpServiceDbUsers.ps1, then db\EwpBffStateDb.sql (section 3 e). Sessions live there,
+		so restarting the BFFs or Visual Studio does not sign anybody out; re-running EwpBffStateDb.sql does (it recreates the tables).
 
 
 6) Bruno API Testing:

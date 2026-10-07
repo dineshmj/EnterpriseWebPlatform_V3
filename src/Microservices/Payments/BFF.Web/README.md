@@ -31,6 +31,9 @@ The screen explains limits early (available funds, the approval tier from `GET /
 
 Every call carries the staff member's own access token; GETs are retried, POSTs never (the screen resends with the same Idempotency-Key instead). `silent-login` accepts only the five pages above (the details page with exactly one numeric `paymentId`).
 
+- **Sessions survive a restart.** Sessions and the Data Protection keys that encrypt the cookies are stored in PostgreSQL (`EwpBffStateDb`, schema `payments_bff`, used only by the database user `ewp_payments_bff`). An API call whose session has expired answers **401** (never a redirect); the MFE then signs in again silently and returns to the same page. Only `silent-login` and `user` are anonymous.
+- **Rate limited** per person, per machine client and per IP before sign-in; over the limit the answer is 429 with `Retry-After` ([RateLimiting.cs](../../../Common/WebUtilities/Security/RateLimiting.cs)).
+
 ## Build
 
 `CompileAndExportBFFClients_V3.ps1` (step 7) builds the MFE and copies it to `wwwroot`; restart this BFF afterwards (its CSP hashes are computed at start-up).

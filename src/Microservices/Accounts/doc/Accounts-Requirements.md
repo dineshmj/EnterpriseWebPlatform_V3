@@ -59,7 +59,8 @@ API scopes: `accounts.read`, `accounts.write` (API resource `accounts-api`; its 
 ## 4. Domain Model
 
 - **`AccountApplication`** aggregate: one per onboarding application (unique `ApplicationRef`). It references the application, the customer and the approving Compliance case by value, and holds the branch, the workflow initiator and the Compliance approver (for SoD), the assignee, the hold, the decision (with the decision's command ID, so later events name it as their cause), the product, and the opening attempts, account number or failure reason.
-- **`Account`** aggregate: BSB and account number (issued by core banking), holder customer number, branch, product (`EVERYDAY_TRANSACTION`, `SAVINGS`), status `ACTIVE` (`FROZEN` / `CLOSED` planned), core-banking reference. One per onboarding application.
+- **`Account`** aggregate: BSB and account number (issued by core banking), holder customer number, branch, product (`EVERYDAY_TRANSACTION`, `SAVINGS`), status `ACTIVE` (`FROZEN` / `CLOSED` planned), core-banking reference, and the **balance** and **held** amount (available = balance − held, in AUD). One per onboarding application.
+- **`FundsHold`** aggregate: one per payment (unique `PaymentRef`), the Payments saga's reservation of an amount on an account: HELD, then SETTLED (debited) or RELEASED; REFUSED when the reservation could not be made. Every command on it is idempotent.
 
 ### States
 
@@ -83,7 +84,7 @@ hold ▼  │ release              OPENING ──refused, or still failing after
 5. **Only the core-banking system opens an account.** A technical failure keeps the application OPENING and is retried with exponential back-off (15 s doubling to 5 min). After `MaxOpeningAttempts` (6) failures, or a refusal (HTTP 422), the application is FAILED and `AccountOpeningFailed` is published; Customer Onboarding compensates the onboarding (COMPENSATING → REJECTED, documents invalidated). The background opening continues the trace of the officer's approval (stored as `opening_trace_parent`).
 6. **No duplicate accounts:** every core-banking request carries an `Idempotency-Key` (the `ApplicationRef`). A retried request after a lost answer returns the same account, which is why the POST may be retried at all.
 7. **The account holder's name** comes from `compliance.case.approved` (the applicant as Compliance cleared them) and is the name core banking opens the account in. Accounts stores no other personal data — no address or contact details.
-8. A funds reservation (Payments, planned) is idempotent per payment saga ID; releasing an unknown or already-released reservation is a no-op that succeeds.
+8. A funds reservation is idempotent per payment (`PaymentRef`): a repeated command repeats the first answer. Releasing a hold that was never made, or is already released, is a harmless repeat that succeeds; releasing funds that were already debited is refused.
 
 ---
 
@@ -98,7 +99,7 @@ hold ▼  │ release              OPENING ──refused, or still failing after
 | Hold / release hold | `account.application.hold` + assignment + SoD + state eligibility |
 | View accounts | `accounts.read` + `account.lifecycle.view` + officer rules; own branch only |
 | Customer views account (planned) | `customer` + `customer.account.view_own` + `owns` the account |
-| Reserve / release funds (planned) | M2M only: the Payments orchestrator's pinned client + a narrow scope |
+| Reserve / settle / release funds | M2M only: the `AccountsCommandSubscriber`'s pinned client + `accounts.write` (policy `AccountsCommandSubscriberWrite`), on the internal endpoint only |
 
 ---
 

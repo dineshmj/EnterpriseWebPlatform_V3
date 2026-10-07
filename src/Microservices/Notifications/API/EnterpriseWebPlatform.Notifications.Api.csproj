@@ -15,6 +15,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\Common\Landscape\EnterpriseWebPlatform.Common.Landscape.csproj" />
+    <ProjectReference Include="..\..\..\Common\WebUtilities\EnterpriseWebPlatform.Common.WebUtilties.csproj" />
     <ProjectReference Include="..\..\..\Common\Observability\EnterpriseWebPlatform.Common.Observability.csproj" />
   </ItemGroup>
 </Project>

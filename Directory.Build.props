@@ -1,0 +1,12 @@
+<Project>
+  <!--
+    Applies to every C# project under this folder.
+
+    Debug builds use WORKSTATION garbage collection. ASP.NET Core defaults to server GC: one heap
+    per CPU core and memory kept in reserve - right for a production server, wasteful when about
+    25 services run together on one development laptop. Release builds keep the defaults.
+  -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+  </PropertyGroup>
+</Project>

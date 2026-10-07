@@ -37,7 +37,12 @@ BEGIN
         ('ewp_compliance_api',          'ewp-compliance-api-dev'),
         ('ewp_accounts_api',            'ewp-accounts-api-dev'),
         ('ewp_notifications_api',       'ewp-notifications-api-dev'),
-        ('ewp_payments_api',            'ewp-payments-api-dev')
+        ('ewp_payments_api',            'ewp-payments-api-dev'),
+        -- The MFE BFFs' own users, for their sessions and keys in EwpBffStateDb (the Shell uses ewp_shell).
+        ('ewp_co_bff',                  'ewp-co-bff-dev'),
+        ('ewp_compliance_bff',          'ewp-compliance-bff-dev'),
+        ('ewp_accounts_bff',            'ewp-accounts-bff-dev'),
+        ('ewp_payments_bff',            'ewp-payments-bff-dev')
     ) AS t(role_name, role_password)
     LOOP
         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r.role_name) THEN
@@ -61,6 +66,7 @@ REVOKE CONNECT ON DATABASE "EwpComplianceDb"          FROM PUBLIC;
 REVOKE CONNECT ON DATABASE "EwpAccountsDb"            FROM PUBLIC;
 REVOKE CONNECT ON DATABASE "EwpNotificationsDb"       FROM PUBLIC;
 REVOKE CONNECT ON DATABASE "EwpPaymentsDb"            FROM PUBLIC;
+REVOKE CONNECT ON DATABASE "EwpBffStateDb"            FROM PUBLIC;
 
 GRANT CONNECT ON DATABASE "EwpIdentityAccessDb"      TO ewp_idp;
 GRANT CONNECT ON DATABASE "EwpBssShellDb"            TO ewp_shell;
@@ -71,6 +77,7 @@ GRANT CONNECT ON DATABASE "EwpComplianceDb"          TO ewp_compliance_api;
 GRANT CONNECT ON DATABASE "EwpAccountsDb"            TO ewp_accounts_api;
 GRANT CONNECT ON DATABASE "EwpNotificationsDb"       TO ewp_notifications_api;
 GRANT CONNECT ON DATABASE "EwpPaymentsDb"            TO ewp_payments_api;
+GRANT CONNECT ON DATABASE "EwpBffStateDb"            TO ewp_shell, ewp_co_bff, ewp_compliance_bff, ewp_accounts_bff, ewp_payments_bff;
 
 -- -----------------------------------------------------------------------------
 -- 3. Per database: data access for the owning service role
@@ -150,3 +157,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ewp_payme
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_payments_api;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ewp_payments_api;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ewp_payments_api;
+
+\connect EwpBffStateDb
+-- No objects in public; each BFF gets data access to ITS OWN schema only - granted by
+-- db\EwpBffStateDb.sql, which creates the schemas (re-run it after this script).
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;

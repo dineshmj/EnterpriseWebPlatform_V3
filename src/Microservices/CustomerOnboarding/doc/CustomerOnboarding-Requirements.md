@@ -217,7 +217,7 @@ Event contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Ev
 | Transactional Outbox with workflow, correlation and causation IDs and `initiated_by` | Present |
 | Outbox relay publishing all three event types | Present: `SKIP LOCKED` claiming (multi-instance safe), per-aggregate ordering, bounded retries with exponential backoff, parking after `MaxAttempts`, idempotent `acks=all` producer |
 | Reactions to KYC events (§5.3) | Present (`OnboardingOutcomeSubscriber`) |
-| Reactions to Compliance / Accounts events | Planned |
+| Reactions to Compliance / Accounts events | Present (`OnboardingOutcomeSubscriber`: COMPLIANCE_IN_PROGRESS / COMPLETED, ACCOUNT_OPENING_IN_PROGRESS, COMPLETED, REJECTED, and COMPENSATING → REJECTED after a failed account opening) |
 | Inbox / idempotent consumer | Present: `inbox_messages` (unique `message_id` + `consumer`) is written in the same transaction as the transition and its Outbox events; a redelivered KYC event returns `Duplicate` |
 | Consumer resilience | Present: timeout, retry with jitter and circuit breaker on the API call; transient failures retried in place; permanent failures to `customer-onboarding.outcome-subscriber.dlq` |
 | API scope enforced per operation | Present (read policies require `customer-onboarding.read`, write policies `customer-onboarding.write`) |

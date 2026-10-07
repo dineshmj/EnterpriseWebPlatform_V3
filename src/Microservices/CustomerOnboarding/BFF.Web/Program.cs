@@ -1,15 +1,17 @@
 using System.IdentityModel.Tokens.Jwt;
 
 using Microsoft.AspNetCore.Antiforgery;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 
 using Duende.AccessTokenManagement.OpenIdConnect;
-using Duende.Bff;
+using Duende.Bff.EntityFramework;
 using Duende.Bff.Yarp;
+using Duende.Bff;
 using OpenTelemetry.Trace;
 
 using EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.Configuration;
@@ -44,11 +46,18 @@ builder.Services.AddAntiforgery(options =>
     options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
 });
 
-// Server-side sessions: the cookie carries only a session reference; tokens stay
-// on the server and sessions can be revoked. The default store is in-memory
-// (sessions end on restart); use a persistent store for multiple instances.
+// Server-side sessions and the Data Protection keys (which encrypt the session and
+// anti-forgery cookies) live in PostgreSQL - EwpBffStateDb, schema customer_onboarding_bff, used only by
+// this BFF's own database user - not in memory: a restart signs nobody out, several
+// instances share them, and back-channel logout still ends a session. Expired sessions
+// are removed by Duende's clean-up job.
+var bffStateDb = builder.Configuration.GetConnectionString("BffStateDbConnection")
+    ?? throw new InvalidOperationException("Connection string 'BffStateDbConnection' was not configured.");
+builder.Services.AddEwpPersistentDataProtection(bffStateDb, schema: "customer_onboarding_bff", applicationName: "ewp-customer-onboarding-bff");
+builder.Services.Configure<SessionStoreOptions>(options => options.DefaultSchema = "customer_onboarding_bff");
 builder.Services.AddBff()
-    .AddServerSideSessions()
+    .AddEntityFrameworkServerSideSessions(options => options.UseNpgsql(bffStateDb))
+    .AddSessionCleanupBackgroundProcess()
     .AddRemoteApis();
 builder.Services.AddOpenIdConnectAccessTokenManagement();
 
@@ -161,6 +170,9 @@ builder.Services.AddHttpClient("IdentityServerTokenClient", (serviceProvider, cl
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), tags: [HealthEndpoints.LiveTag, HealthEndpoints.ReadyTag]);
 
+// OWASP API4: per-caller rate limits on the API surface (429 + Retry-After); configuration "RateLimiting".
+builder.Services.AddEwpRateLimiting(builder.Configuration, "/bff", "/api");
+
 var app = builder.Build();
 
 if (!app.Environment.IsDevelopment())
@@ -201,6 +213,7 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
+app.UseEwpRateLimiting();
 //app.UseAuthorization();
 //app.UseBff();
 app.UseBff();

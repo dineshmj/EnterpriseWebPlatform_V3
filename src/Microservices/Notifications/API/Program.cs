@@ -9,6 +9,7 @@ using OpenTelemetry.Trace;
 using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 using EnterpriseWebPlatform.Common.Observability;
+using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.Notifications.Api.Application;
 using EnterpriseWebPlatform.Notifications.Api.Hubs;
 using EnterpriseWebPlatform.Notifications.Api.Infrastructure;
@@ -100,6 +101,9 @@ builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), tags: [HealthEndpoints.LiveTag])
     .AddDbContextCheck<NotificationsDbContext>("database", tags: [HealthEndpoints.ReadyTag]);
 
+// OWASP API4: per-caller rate limits on the API surface (429 + Retry-After); configuration "RateLimiting".
+builder.Services.AddEwpRateLimiting(builder.Configuration, "/v1");
+
 var app = builder.Build();
 
 app.UseExceptionHandler();
@@ -108,6 +112,7 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseAuthentication();
+app.UseEwpRateLimiting();
 app.UseAuthorization();
 
 // Deny by default: every endpoint needs an authenticated caller, on top of its own policy.
