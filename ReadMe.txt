@@ -58,7 +58,7 @@ What the platform is, how it is designed and what each component must do are doc
 	d) Node.js applications need the development certificate exported as a PFX file:
 
 		- Customer KYC BFF (NestJS)  - see src\Microservices\CustomerKyc\BFF.Web\README.md
-		- Payments BFF (ASP.NET Core) - step 5b
+		- Payments BFF (ASP.NET Core)
 
 	NOTE:
 		Kestrel is used deliberately in V3 so that the local topology is explicit and consistent. The IDP is self-hosted and opens its own console window.
@@ -84,11 +84,8 @@ What the platform is, how it is designed and what each component must do are doc
 		Notifications API				https://notifications-api.dev.localhost:46377   (no UI of its own; the Shell proxies it)
 		Payments API					https://payments-api.dev.localhost:44488   (the payment saga ORCHESTRATOR lives here)
 		Payment Network Simulator		https://localhost:46386   (stands in for an NPP-style payment network)
+		Payments BFF (MFE)				https://payments.dev.localhost:46388
 		Kafka UI						http://localhost:8080
-
-	Reserved (not implemented yet):
-
-		Payments BFF					https://payments.dev.localhost:46388   (step 5b)
 
 	The Shell Menu DB seed registers these same URLs.
 
@@ -184,11 +181,11 @@ What the platform is, how it is designed and what each component must do are doc
 
 	f2) Content-Security-Policy and dependency scanning.
 
-		The Shell, CO BFF, KYC BFF, Compliance BFF and Accounts BFF send a strict CSP: scripts only from the BFF itself plus the SHA-256 hashes of the
+		The Shell, CO BFF, KYC BFF, Compliance BFF, Accounts BFF and Payments BFF send a strict CSP: scripts only from the BFF itself plus the SHA-256 hashes of the
 		exported pages' inline scripts, computed at startup from the files served. After re-exporting the MFEs
 		(CompileAndExportBFFClients_V3.ps1), restart the BFFs so the hashes are recomputed.
 		If a page is blocked by CSP, switch to report-only (violations appear in the browser console) while investigating:
-			Shell / CO BFF / Compliance BFF / Accounts BFF:  appsettings: "Security": { "CspReportOnly": true }
+			Shell / CO BFF / Compliance BFF / Accounts BFF / Payments BFF:  appsettings: "Security": { "CspReportOnly": true }
 			KYC BFF:         environment variable KYC_BFF_CSP_REPORT_ONLY=true
 
 		Known-vulnerability scan of all .NET and npm dependencies (fails only on deployed dependencies):
@@ -216,9 +213,9 @@ What the platform is, how it is designed and what each component must do are doc
 
 			.\CompileAndExportBFFClients_V3.ps1
 
-		This builds the Shell SPA, the Customer Onboarding MFE, the Customer KYC MFE, the KYC NestJS BFF, the Compliance MFE and the Accounts MFE, and copies each
-		static export to where its BFF serves it.
-		Restart the Shell, CO BFF, KYC BFF, Compliance BFF and Accounts BFF afterwards (the KYC BFF runs outside Visual Studio - easy to forget): their Content-Security-Policy hashes are computed at startup from the exported pages.
+		This builds the Shell SPA, the Customer Onboarding MFE, the Customer KYC MFE, the KYC NestJS BFF, the Compliance MFE, the Accounts MFE and the Payments MFE,
+		and copies each static export to where its BFF serves it.
+		Restart the Shell, CO BFF, KYC BFF, Compliance BFF, Accounts BFF and Payments BFF afterwards (the KYC BFF runs outside Visual Studio - easy to forget): their Content-Security-Policy hashes are computed at startup from the exported pages.
 
 	h) Configure the Customer KYC BFF: its environment variables and PFX certificate are described in src\Microservices\CustomerKyc\BFF.Web\README.md (runnow.bat sets them and starts the BFF).
 
@@ -243,7 +240,7 @@ What the platform is, how it is designed and what each component must do are doc
 		OnboardingOutcomeSubscriber, Compliance API, ComplianceCaseOpeningSubscriber, DocumentInvalidationSubscriber, Accounts API,
 		AccountApplicationOpeningSubscriber, Notifications API, NotificationsSubscriber, Payments API, AccountsCommandSubscriber,
 		PaymentsSagaReplySubscriber, Screening Provider Simulator, Core Banking Simulator, Payment Network Simulator, Shell BFF,
-		Customer Onboarding BFF, Compliance BFF and Accounts BFF.
+		Customer Onboarding BFF, Compliance BFF, Accounts BFF and Payments BFF.
 
 		Every publisher and subscriber is a console (generic host) application. Several instances of each may run in parallel:
 		publishers claim Outbox rows with FOR UPDATE SKIP LOCKED, subscribers share one Kafka consumer group per subscriber (one
@@ -306,13 +303,13 @@ What the platform is, how it is designed and what each component must do are doc
 		failures - or at once when Refusing (HTTP 422) - the application is FAILED and AccountOpeningFailed is published;
 		Customer Onboarding compensates: COMPENSATING -> REJECTED (RejectedBy ACCOUNT_OPENING), evidence INVALIDATED, customer PROSPECT. Back to Healthy, waiting accounts are opened automatically.
 
-	g4) Payments - the ORCHESTRATED saga (step 5a: API only, through Bruno; the screens follow in 5b):
+	g4) Payments - the ORCHESTRATED saga:
 
-		A new account starts with a demo balance of 5,000.00 AUD (Accounts:DemoOpeningDeposit). sophie.cs (payment.initiate) sends
-		POST https://payments-api.dev.localhost:44488/v1/payments with an Idempotency-Key header; the API answers 202 at once and the
-		PaymentSaga in the Payments API does the rest: ReserveFunds (Accounts) -> send to the Payment Network Simulator -> SettleFunds.
-		Follow it with GET /v1/payments/{id} (status + the saga's timeline). Details and ready-made requests:
-		src\Microservices\Payments\API\README.md. To see compensation, pay to a BSB starting with 999 (the network refuses it) or:
+		A new account starts with a demo balance of 5,000.00 AUD (Accounts:DemoOpeningDeposit). As sophie.cs, open Payments -> New Payment:
+		find the customer, pick the paying account, enter the payee (BSB, account, name - Confirmation of Payee checks it), the amount, then
+		Transfer. The status page follows the PaymentSaga live: ReserveFunds (Accounts) -> send to the Payment Network Simulator -> SettleFunds.
+		Confirmation of Payee (simulator): an account number ending in 0 = no match, in 9 = close match, otherwise match.
+		Details: src\Microservices\Payments\API\README.md. To see compensation, pay to a BSB starting with 999 (the network refuses it) or:
 
 			$pns = 'https://localhost:46386/admin/behaviour'
 			Invoke-RestMethod $pns -Method Put -ContentType 'application/json' -Body '{"behaviour":"Refusing"}'   # or Down / Failing / Slow / Healthy

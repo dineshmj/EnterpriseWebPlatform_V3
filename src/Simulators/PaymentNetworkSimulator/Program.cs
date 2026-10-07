@@ -11,13 +11,19 @@ using System.Text.Json.Serialization;
 // circuit breaker, and compensation (releasing the reserved funds) after a failure.
 //
 // POST /v1/payments              send a payment (needs X-Api-Key and Idempotency-Key)
+// GET  /v1/bsb/{bsb}             BSB directory: bank, branch, state (needs X-Api-Key)
+// POST /v1/payee-confirmations   Confirmation of Payee: does the name match the account? (X-Api-Key)
 // GET  /admin/behaviour          current behaviour            } localhost only
 // PUT  /admin/behaviour          change behaviour at runtime  }
 //
 // Behaviour: Healthy | Slow (answers after SlowDelaySeconds) | Failing (HTTP 500)
 //            | Down (HTTP 503) | Refusing (HTTP 422: a permanent "no").
 // Whatever the behaviour, a payee BSB starting with 999 is refused ("account closed"),
-// so one payment can show the compensation path without changing the behaviour.
+// so one payment can show the compensation path without changing the behaviour; a BSB
+// that is not in the directory is refused as well.
+// Confirmation of Payee (deterministic, for demos): an account number ending in 0 is a
+// NO_MATCH, one ending in 9 a CLOSE_MATCH (the bank holds a slightly different name),
+// anything else a MATCH.
 // Idempotency: the same Idempotency-Key always returns the SAME result, so a client may
 // safely retry after a timeout without paying twice.
 // =============================================================================
@@ -41,11 +47,37 @@ builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Ad
 var app = builder.Build();
 var log = app.Logger;
 
+// A real network authenticates its participants; constant-time key comparison.
+bool Authorised(HttpContext http) =>
+    CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(http.Request.Headers["X-Api-Key"].ToString()), Encoding.UTF8.GetBytes(apiKey));
+
+app.MapGet("/v1/bsb/{bsb}", (HttpContext http, string bsb) =>
+{
+    if (!Authorised(http))
+        return Results.Unauthorized();
+
+    var entry = BsbDirectory.Find(bsb);
+    return entry is null ? Results.NotFound(new { reason = $"BSB {bsb} is not in the directory." }) : Results.Ok(entry);
+});
+
+app.MapPost("/v1/payee-confirmations", (HttpContext http, PayeeConfirmationRequest request) =>
+{
+    if (!Authorised(http))
+        return Results.Unauthorized();
+
+    var number = request.AccountNumber?.Trim() ?? string.Empty;
+    var name = request.AccountName?.Trim() ?? string.Empty;
+    var result = number.EndsWith('0') ? new PayeeConfirmation("NO_MATCH", null)
+        : number.EndsWith('9') ? new PayeeConfirmation("CLOSE_MATCH", CloseMatchOf(name))
+        : new PayeeConfirmation("MATCH", null);
+
+    log.LogInformation("Confirmation of Payee for {Bsb} {Account} \"{Name}\": {Result}.", request.Bsb, number, name, result.Result);
+    return Results.Ok(result);
+});
+
 app.MapPost("/v1/payments", async (HttpContext http, PaymentRequest request, CancellationToken ct) =>
 {
-    // A real network authenticates its participants; constant-time key comparison.
-    var supplied = http.Request.Headers["X-Api-Key"].ToString();
-    if (!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(supplied), Encoding.UTF8.GetBytes(apiKey)))
+    if (!Authorised(http))
         return Results.Unauthorized();
 
     var idempotencyKey = http.Request.Headers["Idempotency-Key"].ToString();
@@ -64,6 +96,8 @@ app.MapPost("/v1/payments", async (HttpContext http, PaymentRequest request, Can
 
     if (request.Creditor?.Bsb?.Replace("-", string.Empty).StartsWith("999", StringComparison.Ordinal) == true)
         return Refuse(idempotencyKey, request, "The payee's account is closed (the payee's bank returned the payment).");
+    if (BsbDirectory.Find(request.Creditor?.Bsb) is null)
+        return Refuse(idempotencyKey, request, $"BSB {request.Creditor?.Bsb} is not in the BSB directory.");
 
     var current = state;
     switch (current.Behaviour)
@@ -118,6 +152,13 @@ IResult Refuse(string idempotencyKey, PaymentRequest request, string reason)
     return results.GetOrAdd(idempotencyKey, _ => Results.UnprocessableEntity(new { reason }));
 }
 
+// "Jane Citizen" -> "J Citizen": what a bank's record often looks like.
+static string CloseMatchOf(string name)
+{
+    var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+    return parts.Length >= 2 ? $"{parts[0][0]} {string.Join(' ', parts[1..])}" : $"{name} Pty Ltd";
+}
+
 static bool IsLocal(HttpContext http) =>
     http.Connection.RemoteIpAddress is { } ip && IPAddress.IsLoopback(ip);
 
@@ -138,3 +179,39 @@ sealed record PaymentRequest(
     string? RemittanceInformation);
 
 sealed record SentPayment(string NetworkReference, string Status, DateTimeOffset SettledAt);
+
+sealed record PayeeConfirmationRequest(string? Bsb, string? AccountNumber, string? AccountName);
+
+sealed record PayeeConfirmation(string Result, string? AccountNameHeld);
+
+sealed record BsbEntry(string Bsb, string Bank, string Branch, string State, bool Npp);
+
+/// <summary>
+/// A tiny stand-in for the Australian BSB directory: the first two digits name the bank,
+/// the third the state. Real enough for a demo; 999 is a deliberately "closed" bank.
+/// </summary>
+static class BsbDirectory
+{
+    private static readonly Dictionary<string, string> Banks = new()
+    {
+        ["01"] = "ANZ", ["03"] = "Westpac", ["06"] = "Commonwealth Bank", ["08"] = "National Australia Bank",
+        ["11"] = "St.George Bank", ["18"] = "Macquarie Bank", ["48"] = "Suncorp Bank", ["63"] = "Bendigo Bank",
+        ["73"] = "Westpac", ["80"] = "Cuscal (credit unions)", ["99"] = "Closed Bank (demo)"
+    };
+
+    private static readonly Dictionary<char, string> States = new()
+    {
+        ['2'] = "NSW", ['3'] = "VIC", ['4'] = "QLD", ['5'] = "SA", ['6'] = "WA", ['7'] = "TAS", ['0'] = "NT", ['1'] = "ACT"
+    };
+
+    public static BsbEntry? Find(string? bsb)
+    {
+        var digits = new string((bsb ?? string.Empty).Where(char.IsAsciiDigit).ToArray());
+        if (digits.Length != 6 || !Banks.TryGetValue(digits[..2], out var bank))
+            return null;
+
+        var state = States.GetValueOrDefault(digits[2], "NSW");
+        var formatted = $"{digits[..3]}-{digits[3..]}";
+        return new BsbEntry(formatted, bank, $"{bank} branch {digits[3..]}, {state}", state, Npp: digits[..2] != "99");
+    }
+}

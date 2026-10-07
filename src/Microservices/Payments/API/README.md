@@ -55,13 +55,16 @@ Limits are configuration (`Payments:ApprovalThreshold`, default 1,000.00; `Payme
 | `POST /v1/payments` | `payments.write` + `payment.initiate` + branch | Start a payment. Header **`Idempotency-Key`** (a GUID, one per payment form): the same key returns the same payment (200 instead of 202); another person's key is refused (409). |
 | `GET /v1/payments?status=&pageNumber=&pageSize=` | `payments.read` + `payment.view` or `payment.initiate` | The branch's payments, newest first. |
 | `GET /v1/payments/{id}` | as above | The payment, its saga (step, status, attempts, next check, last error, WorkflowId) and the timeline. Another branch's payment is 404. |
+| `GET /v1/payments/policy` | `payments.write` + `payment.initiate` | The limits the screen explains up front: currency, approval threshold, maximum amount, reference length. |
+| `GET /v1/payments/bsb/{bsb}` | as above | BSB directory (answered by the payment network): bank, branch, state; 404 when unknown. |
+| `POST /v1/payments/payee-confirmations` | as above | Confirmation of Payee: `MATCH`, `CLOSE_MATCH` (with the name the bank holds) or `NO_MATCH`. A warning for the staff member, never a decision. |
 | `POST /internal/v1/payment-sagas/replies` | pinned M2M client of the PaymentsSagaReplySubscriber | Replies from Accounts. |
 
 ABAC: a staff member sees and starts payments for their own branch only. Accounts additionally checks that the paying account belongs to the customer named in the payment.
 
-## Try it with Bruno (step 5a)
+## Try it
 
-Get a token for **sophie.cs** with the Bruno client (ReadMe.txt §6) and the scopes `payments.read payments.write`. Find a customer's account in EwpAccountsDb (`SELECT customer_number, bsb, account_number, balance, held_amount FROM accounts;`).
+Through the screens: as **sophie.cs**, Payments → New Payment ([Payments BFF + MFE](../BFF.Web/README.md)). Or directly against the API with Bruno: a token for sophie.cs with the scopes `payments.read payments.write`, and a customer's account from EwpAccountsDb (`SELECT customer_number, bsb, account_number, balance, held_amount FROM accounts;`).
 
 ```http
 POST https://payments-api.dev.localhost:44488/v1/payments
@@ -90,7 +93,7 @@ Content-Type: application/json
 | `toBsb` starting with `999` | The network refuses: COMPENSATING → **FAILED**, hold `RELEASED`, balance unchanged. |
 | Simulator `Down`, then a payment | Network retries in the timeline, then compensation → FAILED. |
 | Stop the AccountsCommandSubscriber, then a payment | TIMEOUT / resend lines every 30 s+; start it again and the saga continues. |
-| Amount above 1,000.00 | Stops at **PENDING_APPROVAL** (the approval screen is step 5b). |
+| Amount above 1,000.00 | Stops at **PENDING_APPROVAL** (the approval screen is step 5b-2). |
 
 ## Messages
 

@@ -15,7 +15,20 @@ public interface IAccountsQueries
 
     /// <summary>Null when the account does not exist or belongs to another branch.</summary>
     Task<AccountDetail?> GetAccountAsync(long accountId, BranchCode branch, CancellationToken cancellationToken);
+
+    /// <summary>ACTIVE accounts of the branch whose holder name or customer number contains the term (at most 20).</summary>
+    Task<IReadOnlyList<PaymentAccount>> FindAccountsForPaymentAsync(BranchCode branch, string term, CancellationToken cancellationToken);
 }
+
+/// <summary>A paying account as the assisted payment screen shows it: whose, which, and what is available.</summary>
+public sealed record PaymentAccount(
+    string CustomerNumber,
+    string HolderName,
+    string Bsb,
+    string AccountNumber,
+    string Product,
+    string Currency,
+    decimal Available);
 
 public sealed record AccountApplicationDetail(
     long AccountApplicationId,

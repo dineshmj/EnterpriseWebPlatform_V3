@@ -84,6 +84,55 @@ public sealed class PaymentNetworkClient(HttpClient http, IOptions<PaymentNetwor
         }
     }
 
+    public async Task<BsbInfo?> LookupBsbAsync(string bsb, CancellationToken cancellationToken)
+    {
+        using var message = new HttpRequestMessage(HttpMethod.Get, $"/v1/bsb/{Uri.EscapeDataString(bsb)}");
+        using var response = await SendReadAsync(message, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+            return null;
+        if (!response.IsSuccessStatusCode)
+            throw new PaymentNetworkUnavailableException($"Payment network returned HTTP {(int)response.StatusCode}.");
+
+        var body = await TryReadAsync<BsbEntry>(response, cancellationToken)
+            ?? throw new PaymentNetworkUnavailableException("Payment network returned an empty BSB entry.");
+        return new BsbInfo(body.Bsb ?? bsb, body.Bank ?? string.Empty, body.Branch ?? string.Empty, body.State ?? string.Empty, body.Npp ?? false);
+    }
+
+    public async Task<PayeeConfirmation> ConfirmPayeeAsync(string bsb, string accountNumber, string accountName, CancellationToken cancellationToken)
+    {
+        using var message = new HttpRequestMessage(HttpMethod.Post, "/v1/payee-confirmations")
+        {
+            Content = JsonContent.Create(new { bsb, accountNumber, accountName })
+        };
+        using var response = await SendReadAsync(message, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+            throw new PaymentNetworkUnavailableException($"Payment network returned HTTP {(int)response.StatusCode}.");
+
+        var body = await TryReadAsync<Confirmation>(response, cancellationToken);
+        if (string.IsNullOrWhiteSpace(body?.Result))
+            throw new PaymentNetworkUnavailableException("Payment network returned no confirmation result.");
+        return new PayeeConfirmation(body.Result, body.AccountNameHeld);
+    }
+
+    /// <summary>A read-only call (lookups): same API key and failure translation as sending.</summary>
+    private async Task<HttpResponseMessage> SendReadAsync(HttpRequestMessage message, CancellationToken cancellationToken)
+    {
+        message.Headers.Add("X-Api-Key", options.Value.ApiKey);
+        try
+        {
+            return await http.SendAsync(message, cancellationToken);
+        }
+        catch (BrokenCircuitException ex)
+        {
+            throw new PaymentNetworkUnavailableException("Payment network unavailable: the circuit breaker is open.", ex);
+        }
+        catch (Exception ex) when ((ex is HttpRequestException or TaskCanceledException or TimeoutException or TimeoutRejectedException)
+                                   && !cancellationToken.IsCancellationRequested)
+        {
+            throw new PaymentNetworkUnavailableException($"Payment network unavailable: {ex.Message}", ex);
+        }
+    }
+
     private static async Task<T?> TryReadAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken) where T : class
     {
         try { return await response.Content.ReadFromJsonAsync<T>(cancellationToken); }
@@ -93,4 +142,15 @@ public sealed class PaymentNetworkClient(HttpClient http, IOptions<PaymentNetwor
     private sealed record Accepted([property: JsonPropertyName("networkReference")] string? NetworkReference);
 
     private sealed record Refusal([property: JsonPropertyName("reason")] string? Reason);
+
+    private sealed record BsbEntry(
+        [property: JsonPropertyName("bsb")] string? Bsb,
+        [property: JsonPropertyName("bank")] string? Bank,
+        [property: JsonPropertyName("branch")] string? Branch,
+        [property: JsonPropertyName("state")] string? State,
+        [property: JsonPropertyName("npp")] bool? Npp);
+
+    private sealed record Confirmation(
+        [property: JsonPropertyName("result")] string? Result,
+        [property: JsonPropertyName("accountNameHeld")] string? AccountNameHeld);
 }

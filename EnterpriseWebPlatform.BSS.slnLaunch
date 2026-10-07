@@ -121,6 +121,11 @@
         "Path": "src\\Microservices\\Accounts\\BFF.Web\\EnterpriseWebPlatform.Accounts.Bff.Web.csproj",
         "Action": "Start",
         "DebugTarget": "https"
+      },
+      {
+        "Path": "src\\Microservices\\Payments\\BFF.Web\\EnterpriseWebPlatform.Payments.Bff.Web.csproj",
+        "Action": "Start",
+        "DebugTarget": "https"
       }
     ]
   }

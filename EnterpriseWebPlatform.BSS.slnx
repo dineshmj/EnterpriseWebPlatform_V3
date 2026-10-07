@@ -66,6 +66,7 @@
   </Folder>
   <Folder Name="/Microservices/Payments/">
     <Project Path="src/Microservices/Payments/API/EnterpriseWebPlatform.Payments.Api.csproj" />
+    <Project Path="src/Microservices/Payments/BFF.Web/EnterpriseWebPlatform.Payments.Bff.Web.csproj" />
   </Folder>
   <Folder Name="/Shell/">
     <Project Path="src/Shell/EnterpriseWebPlatform.BSS.BFFWeb.csproj" />

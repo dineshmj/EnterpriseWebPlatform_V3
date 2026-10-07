@@ -256,6 +256,10 @@ $codeRootFolder = $PSScriptRoot
 #   src\Microservices\Accounts\BFF.Web
 #       client-app
 #
+# Payments
+#   src\Microservices\Payments\BFF.Web
+#       client-app
+#
 # If your checked-in V3 folder names differ, update only these path variables.
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -281,6 +285,11 @@ $accountsBffFolder =
 $accountsSpaAppFolder =
     Join-Path $accountsBffFolder "client-app"
 
+$paymentsBffFolder =
+    Join-Path $codeRootFolder "src\Microservices\Payments\BFF.Web"
+$paymentsSpaAppFolder =
+    Join-Path $paymentsBffFolder "client-app"
+
 # ----------------------------------------------------------------------------------------------------------------------
 # Validate all expected folders before changing/building anything.
 # ----------------------------------------------------------------------------------------------------------------------
@@ -294,7 +303,9 @@ $requiredFolders = @(
     $complianceBffFolder,
     $complianceSpaAppFolder,
     $accountsBffFolder,
-    $accountsSpaAppFolder
+    $accountsSpaAppFolder,
+    $paymentsBffFolder,
+    $paymentsSpaAppFolder
 )
 
 foreach ($folder in $requiredFolders) {
@@ -355,6 +366,14 @@ Write-Banner "Step #6: Accounts Next.js client - PNPM install, build and export"
 Build-NextJS-Client -Directory $accountsSpaAppFolder
 
 # ----------------------------------------------------------------------------------------------------------------------
+# Step 7 - Payments Next.js SPA (served by the ASP.NET Core Payments BFF)
+# ----------------------------------------------------------------------------------------------------------------------
+
+Write-Banner "Step #7: Payments Next.js client - PNPM install, build and export"
+
+Build-NextJS-Client -Directory $paymentsSpaAppFolder
+
+# ----------------------------------------------------------------------------------------------------------------------
 # Done
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -367,5 +386,6 @@ Write-Host "  3. KYC Next.js client"
 Write-Host "  4. KYC NestJS BFF"
 Write-Host "  5. Compliance Next.js client"
 Write-Host "  6. Accounts Next.js client"
-Write-Host "`r`nRestart the Shell, Customer Onboarding, KYC, Compliance and Accounts BFFs: their Content-Security-Policy hashes are computed at start-up." -ForegroundColor Yellow
+Write-Host "  7. Payments Next.js client"
+Write-Host "`r`nRestart the Shell, Customer Onboarding, KYC, Compliance, Accounts and Payments BFFs: their Content-Security-Policy hashes are computed at start-up." -ForegroundColor Yellow
 Write-Host "`r`n"

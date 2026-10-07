@@ -91,6 +91,16 @@ builder.Services.AddAuthorization(options =>
     AddOfficerPolicy("AccountApplicationReject", AccountsApiScopesRequired.ACCOUNTS_WRITE, "account.application.reject");
     AddOfficerPolicy("AccountApplicationHold", AccountsApiScopesRequired.ACCOUNTS_WRITE, "account.application.hold");
     AddOfficerPolicy("AccountView", AccountsApiScopesRequired.ACCOUNTS_READ, "account.lifecycle.view");
+
+    // Assisted payment screen (Payments BFF, staff member's own token): find a customer's
+    // accounts in the staff member's branch. The branch itself is checked by the endpoint.
+    options.AddPolicy("PaymentAccountLookup", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireClaim("scope", AccountsApiScopesRequired.ACCOUNTS_READ);
+        policy.RequireClaim("permission", "payment.initiate");
+        policy.RequireClaim("branch");
+    });
 });
 builder.Services.AddSingleton<IAuthorizationHandler, AccountOfficerAuthorizationHandler>();
 

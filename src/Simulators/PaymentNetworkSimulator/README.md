@@ -9,6 +9,8 @@ URL: `https://localhost:46386` (launch profile `https`). The Payments API's saga
 | Endpoint | Who | Purpose |
 |---|---|---|
 | `POST /v1/payments` | Payments API, headers `X-Api-Key` (constant-time comparison) and **`Idempotency-Key`** | Send a payment: `201 { networkReference, status: "SETTLED" }`, or `422 { reason }` |
+| `GET /v1/bsb/{bsb}` | Payments API, `X-Api-Key` | BSB directory: `{ bsb, bank, branch, state, npp }`; 404 when unknown |
+| `POST /v1/payee-confirmations` | Payments API, `X-Api-Key` | Confirmation of Payee: `{ result: MATCH / CLOSE_MATCH / NO_MATCH, accountNameHeld }` |
 | `GET /admin/behaviour` | localhost only | Current behaviour |
 | `PUT /admin/behaviour` | localhost only | Change behaviour at runtime: `{"behaviour":"Down"}` |
 | `GET /health` | anyone | Liveness |
@@ -26,7 +28,12 @@ The same `Idempotency-Key` always returns the **same** answer (the payment's net
 | `Failing` / `Down` | 500 / 503 | Retries with back-off; after 4 attempts, releases the funds: payment FAILED |
 | `Refusing` | 422 `{ reason }` | A permanent "no": releases the funds at once: payment FAILED |
 
-Whatever the behaviour, a **payee BSB starting with 999** is refused ("the payee's account is closed"), so one payment can show the compensation path without changing anything.
+Whatever the behaviour, a **payee BSB starting with 999** is refused ("the payee's account is closed"), so one payment can show the compensation path without changing anything. A BSB that is not in the directory is refused too.
+
+## BSB directory and Confirmation of Payee (demo rules)
+
+- **BSB directory:** the first two digits name the bank (01 ANZ, 03 / 73 Westpac, 06 Commonwealth Bank, 08 NAB, 11 St.George, 18 Macquarie, 48 Suncorp, 63 Bendigo, 80 Cuscal, 99 "Closed Bank (demo)"), the third the state. Anything else is unknown.
+- **Confirmation of Payee:** an account number ending in **0** → `NO_MATCH`; ending in **9** → `CLOSE_MATCH` (the bank holds "J Citizen" for "Jane Citizen"); anything else → `MATCH`.
 
 ```powershell
 $pns = 'https://localhost:46386/admin/behaviour'

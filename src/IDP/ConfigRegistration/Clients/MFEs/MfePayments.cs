@@ -1,7 +1,7 @@
-﻿using Duende.IdentityServer;
+using Duende.IdentityServer;
 using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices;
+using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 using EnterpriseWebPlatform.IdentityServer.Security;
 
@@ -15,7 +15,7 @@ public sealed class MfePayments
         get
         {
             return
-                // Payments Microservice Client (BFF using NestJS, and not ASP.NET Core 10).
+                // Payments Microservice Client (BFF using ASP.NET Core 10)
                 new()
                 {
                     ClientId = PaymentsMicroservice.CLIENT_ID_FOR_IDP,
@@ -23,21 +23,22 @@ public sealed class MfePayments
                     ClientSecrets = { ClientSecretStore.For(PaymentsMicroservice.CLIENT_ID_FOR_IDP) },
 
                     AllowedGrantTypes = GrantTypes.Code,
-                    // 🡡__ WHY   : The Payments microservice (if acting as a confidential client or BFF) should use Authorization Code to keep tokens
-                    //              private on the server and to benefit from the standard OIDC/OAuth flow, including PKCE if applicable.
-                    // 🡡__ IF NOT: Using non-confidential or browser flows could expose tokens to the client-side, allowing token theft via XSS
-                    //              and making secure API access more difficult to enforce.
+                    // 🡡__ WHY   : A confidential BFF keeps the tokens on the server; the browser holds only a session cookie.
+                    // 🡡__ IF NOT: A browser-based flow would expose access tokens to JavaScript (XSS token theft).
 
                     RequirePkce = true,
 
-                    RedirectUris = { $"{PaymentsMicroservice.BFF_CLIENT_BASE_URL}/api/auth/callback" },
+                    RedirectUris = { $"{PaymentsMicroservice.BFF_CLIENT_BASE_URL}/signin-oidc" },
                     PostLogoutRedirectUris = { $"{PaymentsMicroservice.BFF_CLIENT_BASE_URL}/signout-callback-oidc" },
                     FrontChannelLogoutUri = $"{PaymentsMicroservice.BFF_CLIENT_BASE_URL}/signout-oidc",
+                    // Back-channel logout (server-to-server; Duende BFF endpoint): ends the
+                    // server-side session even when the browser blocks the front-channel iframe.
+                    BackChannelLogoutUri = $"{PaymentsMicroservice.BFF_CLIENT_BASE_URL}/bff/backchannel",
+                    BackChannelLogoutSessionRequired = true,
 
                     AllowOfflineAccess = true,
-                    // 🡡__ WHY   : Payments Microservice BFF frontend may need refresh tokens to maintain backend sessions or to act on behalf of the user without interactive login.
-                    //              For server-to-server or long-running operations, refresh tokens enable seamless token renewal.
-                    // 🡡__ IF NOT: Without offline access, the service cannot obtain refresh tokens and must force users to re-authenticate when access tokens expire.
+                    // 🡡__ WHY   : Refresh tokens let the BFF renew the user's access token while a payment is captured or followed.
+                    // 🡡__ IF NOT: The staff member would have to sign in again whenever the access token expires.
 
                     AllowedScopes =
                     {
@@ -45,25 +46,26 @@ public sealed class MfePayments
                         IdentityServerConstants.StandardScopes.Profile,
                         IdentityServerConstants.StandardScopes.Email,
                         "roles",
-                        MicroserviceApiResourceNames.PAYMENTS_API
-                            // 🡡__ WHY   : Including the PAYMENTS_API scope permits the Payments Microservice BFF client to request access tokens that include scope permissions for the
-                            //              Payments Microservice API. The Payments Microservice API will validate the access token and require the corresponding scope to authorize API calls.
-                            // 🡡__ IF NOT: If this scope is not included, tokens issued to the client will not be valid for calling the Payments Microservice API, so Payments Microservice API calls
-                            //              will be denied (insufficient scope). The microservice would not be authorized to access protected endpoints.
-                
+                        "organization",
+                        PaymentsApiScopesRequired.PAYMENTS_READ,
+                        PaymentsApiScopesRequired.PAYMENTS_WRITE,
+
+                        // The payment screen finds the customer's paying accounts (and what is
+                        // available) in Accounts, with the staff member's own token - read only.
+                        AccountsApiScopesRequired.ACCOUNTS_READ
                     },
 
+                    UpdateAccessTokenClaimsOnRefresh = true,
+                    // 🡡__ WHY   : Each refresh re-reads the user's CURRENT roles and ABAC attributes (branch, clearance),
+                    //              so an administrative change takes effect within one access-token lifetime.
+                    // 🡡__ IF NOT: Refreshed tokens keep the claims of the original sign-in until the user signs in again.
+
                     RefreshTokenUsage = TokenUsage.OneTimeOnly,
-                    // 🡡__ WHY   : Rotation (OAuth 2.1 / RFC 9700): every refresh returns a NEW refresh token and invalidates the old one, so a
-                    //              stolen refresh token stops working after its next legitimate use, and replay of a used token is detectable.
-                    // 🡡__ IF NOT: With ReUse, one leaked refresh token stays valid until it expires, silently granting new access tokens.
+                    // 🡡__ WHY   : Rotation (OAuth 2.1 / RFC 9700): a stolen refresh token stops working after its next legitimate use.
+                    // 🡡__ IF NOT: One leaked refresh token stays valid until it expires.
 
                     RefreshTokenExpiration = TokenExpiration.Sliding,
                     SlidingRefreshTokenLifetime = 3600
-                    // 🡡__ WHY   : Sliding expiration helps keep active users authenticated without forcing frequent full re-authentication. The value
-                    //              of 3600 seconds establishes the sliding window; each successful refresh within that window extends validity.
-                    // 🡡__ IF NOT: Absolute expiration would set a hard timeout after which the refresh token is invalid regardless of usage. If sliding
-                    //              is omitted and tokens are short-lived, clients must reauthenticate more often.            
                 };
         }
     }

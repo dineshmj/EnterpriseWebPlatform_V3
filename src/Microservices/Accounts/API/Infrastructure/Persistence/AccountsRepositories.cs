@@ -114,6 +114,28 @@ public sealed class AccountsQueries(AccountsDbContext db) : IAccountsQueries
         ProjectAccounts(db.Accounts.AsNoTracking().Where(x => x.BranchCode == branch && x.Id == accountId))
             .SingleOrDefaultAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<PaymentAccount>> FindAccountsForPaymentAsync(BranchCode branch, string term, CancellationToken cancellationToken)
+    {
+        // A LIKE pattern from user input: escape its wildcards so they match literally.
+        var pattern = "%" + term.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_") + "%";
+
+        return await db.Accounts.AsNoTracking()
+            .Where(x => x.BranchCode == branch && x.Status == AccountStatus.Active)
+            .Where(x => EF.Functions.ILike(x.CustomerNumber, pattern) ||
+                        EF.Functions.ILike(x.HolderName.FirstName + " " + x.HolderName.LastName, pattern))
+            .OrderBy(x => x.HolderName.LastName).ThenBy(x => x.HolderName.FirstName).ThenBy(x => x.AccountNumber)
+            .Take(20)
+            .Select(x => new PaymentAccount(
+                x.CustomerNumber,
+                x.HolderName.FirstName + " " + x.HolderName.LastName,
+                x.Bsb,
+                x.AccountNumber,
+                x.Product.ToCode(),
+                x.Currency,
+                x.Balance - x.HeldAmount))
+            .ToListAsync(cancellationToken);
+    }
+
     private IQueryable<AccountApplicationDetail> ProjectApplications(IQueryable<AccountApplication> query) =>
         query.Select(x => new AccountApplicationDetail(
             x.Id,

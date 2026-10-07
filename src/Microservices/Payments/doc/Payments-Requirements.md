@@ -2,7 +2,7 @@
 
 **Bounded context:** Payments  
 **Subdomain type:** Core  
-**Status:** Backend present (step 5a: Payments API with the saga orchestrator, Accounts funds holds, payment network simulator, two courier workers). The BFF and screens, human approval and notifications follow in step 5b; the operations "Retry release" in 5c.
+**Status:** Present: the Payments API with the saga orchestrator, Accounts funds holds, payment network simulator and two courier workers (5a); the Payments BFF and MFE - new payment, status page with the live timeline, payments list (5b-1). Human approval and notifications follow in 5b-2; the operations "Retry release" in 5c.
 
 Platform-wide rules are not repeated here. See [doc/](../../../../doc/). Payments is the **orchestrated-saga** demonstration; the orchestration pattern itself is described in the [Saga plan](../../../../doc/EWP-V3-Saga-Choreography-and-Orchestration-Plans.md).
 
@@ -23,8 +23,8 @@ Payments accepts payment instructions captured by bank staff for a customer (an 
 
 | Component | Location | Technology | Status |
 |---|---|---|---|
-| Payments MFE | `BFF.Web/client-app` | Next.js static export | 5b |
-| Payments BFF | `BFF.Web` | ASP.NET Core 10 + Duende BFF | 5b |
+| Payments MFE | [BFF.Web/client-app](../BFF.Web/README.md) — new payment, status page, payments list | Next.js static export | Present (approval queue: 5b-2) |
+| Payments BFF | [BFF.Web](../BFF.Web/README.md) — `https://payments.dev.localhost:46388` | ASP.NET Core 10 + Duende BFF | Present |
 | Payments API | `API` | ASP.NET Core 10, EF Core, PostgreSQL | Present |
 | Payment saga orchestrator | `PaymentSaga` inside the Payments API, with its step runner | Persisted state machine | Present |
 | PaymentsSagaReplySubscriber | `src/AsyncWorkflows/Subscribers/Payments` | .NET worker (courier) | Present |
@@ -116,5 +116,5 @@ Commands to Accounts (`accounts.commands`), Accounts' replies (`accounts.funds.r
 
 ## 8. Reserved Topology
 
-- Local URLs: API `https://payments-api.dev.localhost:44488`; Payment Network Simulator `https://localhost:46386`; BFF (5b) `https://payments.dev.localhost:46388` - the Shell menu seed uses the same BFF URL.
+- Local URLs: API `https://payments-api.dev.localhost:44488`; Payment Network Simulator `https://localhost:46386`; BFF `https://payments.dev.localhost:46388` - the Shell menu seed uses the same BFF URL ("New Payment" and "View Payments" for customer service agents).
 - Workers: AccountsCommandSubscriber (health 5108), PaymentsSagaReplySubscriber (health 5109).

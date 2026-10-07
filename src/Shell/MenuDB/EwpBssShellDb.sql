@@ -361,6 +361,16 @@ INSERT INTO menu_items
     (task_name, url_relative_path, icon_name, management_area_id)
 VALUES
     (
+        'New Payment',
+        '/v1/payments/new',
+        'fa-paper-plane',
+        (SELECT id FROM management_areas
+         WHERE name = 'Payment Instructions'
+           AND microservice_id =
+               (SELECT id FROM microservices
+                WHERE name = 'Payments'))
+    ),
+    (
         'View Payments',
         '/v1/payments/view-all',
         'fa-money-bill-transfer',
@@ -542,13 +552,25 @@ CROSS JOIN
 ) AS r(role_short_name)
 WHERE mi.task_name = 'Account Lifecycle';
 
--- Payments
+-- New Payment: the assisted channel - a customer service agent captures it for the customer.
 INSERT INTO menu_items_and_roles (menu_item_id, role_short_name)
 SELECT mi.id, r.role_short_name
 FROM menu_items mi
 CROSS JOIN
 (
     VALUES
+        ('customer_service_agent')
+) AS r(role_short_name)
+WHERE mi.task_name = 'New Payment';
+
+-- Payments (the branch's payments and their status)
+INSERT INTO menu_items_and_roles (menu_item_id, role_short_name)
+SELECT mi.id, r.role_short_name
+FROM menu_items mi
+CROSS JOIN
+(
+    VALUES
+        ('customer_service_agent'),
         ('payments_officer'),
         ('operations_administrator'),
         ('auditor'),

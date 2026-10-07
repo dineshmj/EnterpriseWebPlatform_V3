@@ -104,7 +104,23 @@ public sealed record NetworkPaymentRequest(
 public interface IPaymentNetwork
 {
     Task<string> SendAsync(NetworkPaymentRequest request, CancellationToken cancellationToken);
+
+    /// <summary>The bank and branch a BSB belongs to (the network's BSB directory); null when the BSB is unknown.</summary>
+    Task<BsbInfo?> LookupBsbAsync(string bsb, CancellationToken cancellationToken);
+
+    /// <summary>Confirmation of Payee: does this name match the account at the payee's bank?</summary>
+    Task<PayeeConfirmation> ConfirmPayeeAsync(string bsb, string accountNumber, string accountName, CancellationToken cancellationToken);
 }
+
+/// <summary>A BSB as the directory knows it.</summary>
+public sealed record BsbInfo(string Bsb, string Bank, string Branch, string State, bool AcceptsRealTimePayments);
+
+/// <summary>
+/// The payee bank's answer: MATCH, CLOSE_MATCH (with the name it holds) or NO_MATCH. A
+/// warning for the staff member, never a decision: a mismatch must be confirmed with the
+/// customer before sending.
+/// </summary>
+public sealed record PayeeConfirmation(string Result, string? AccountNameHeld);
 
 /// <summary>The network is down, slow, failing, or the circuit breaker is open: retry later.</summary>
 public sealed class PaymentNetworkUnavailableException(string message, Exception? inner = null) : Exception(message, inner);
