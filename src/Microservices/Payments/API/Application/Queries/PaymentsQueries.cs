@@ -69,11 +69,43 @@ public sealed record PagedResponse<T>(
     int PageSize,
     int TotalCount);
 
-/// <summary>Read side: branch-scoped (ABAC) - a staff member sees only their own branch's payments.</summary>
+/// <summary>A saga that operations should look at, with its payment.</summary>
+public sealed record ProcessingItem(
+    long PaymentId,
+    string PaymentNumber,
+    string BranchCode,
+    decimal Amount,
+    string Currency,
+    string PayeeName,
+    string PaymentStatus,
+    string SagaStep,
+    string SagaStatus,
+    int Attempts,
+    DateTimeOffset? NextCheckAt,
+    string? LastError,
+    DateTimeOffset UpdatedAt,
+    bool Overdue);
+
+/// <summary>The Payment Processing Monitor: counts, and the sagas that are not finished.</summary>
+public sealed record ProcessingOverview(
+    int CompensationFailed,
+    int Overdue,
+    int Retrying,
+    int WaitingForApproval,
+    int Running,
+    IReadOnlyList<ProcessingItem> Items);
+
+/// <summary>
+/// Read side. ABAC: staff see only their own branch's payments (branch given); operations and
+/// auditors, whose work is not branch-bound, see all branches (branch null).
+/// </summary>
 public interface IPaymentsQueries
 {
     Task<PagedResponse<PaymentSummary>> GetPaymentsAsync(
-        BranchCode branch, int pageNumber, int pageSize, PaymentStatus? status, CancellationToken cancellationToken);
+        BranchCode? branch, int pageNumber, int pageSize, PaymentStatus? status, CancellationToken cancellationToken);
 
-    Task<PaymentDetail?> GetPaymentAsync(long paymentId, BranchCode branch, CancellationToken cancellationToken);
+    Task<PaymentDetail?> GetPaymentAsync(long paymentId, BranchCode? branch, CancellationToken cancellationToken);
+
+    /// <summary>Every saga that is not finished, most urgent first (stuck, overdue, retrying, waiting, running).</summary>
+    Task<ProcessingOverview> GetProcessingAsync(BranchCode? branch, DateTimeOffset now, CancellationToken cancellationToken);
 }

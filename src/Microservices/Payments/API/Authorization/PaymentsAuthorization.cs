@@ -35,4 +35,20 @@ public sealed class PaymentsStaffAuthorizationHandler : AuthorizationHandler<Pay
     /// <summary>The user's branch (ABAC); null when absent or malformed (fail closed).</summary>
     public static BranchCode? BranchOf(ClaimsPrincipal user) =>
         BranchCode.TryCreate(user.FindFirst("branch")?.Value, out var branch) ? branch : null;
+
+    /// <summary>Permissions whose work is not branch-bound: operations (workflow.view) and audit (payment.history.view).</summary>
+    public static readonly IReadOnlySet<string> AllBranchesPermissions =
+        new HashSet<string>(StringComparer.Ordinal) { "workflow.view", "payment.history.view" };
+
+    /// <summary>
+    /// The branch a read is limited to: none (all branches) for operations and auditors, the
+    /// user's own branch for everyone else.
+    /// </summary>
+    public static (bool Allowed, BranchCode? Branch) ReadScopeOf(ClaimsPrincipal user)
+    {
+        if (user.Claims.Any(c => c.Type == "permission" && AllBranchesPermissions.Contains(c.Value)))
+            return (true, null);
+        var branch = BranchOf(user);
+        return (branch is not null, branch);
+    }
 }

@@ -312,6 +312,10 @@ What the platform is, how it is designed and what each component must do are doc
 		Above 1,000.00 the payment waits for approval: emily.payments (SYD001, clearance 4) is notified, opens Payments -> Payment
 		Approvals and approves (sent, completed) or rejects with remarks (funds released, REJECTED). Nobody approves their own payment;
 		clearance 4 approves up to 100,000.
+		Compensation failure and recovery: stop the AccountsCommandSubscriber, then pay $100. In Development the saga gives up the
+		unanswered reservation after about a minute, releases - also unanswered - and after about 2.5 minutes the payment is
+		COMPENSATION_FAILED. daniel.ops (operations, all branches) sees it in Payments -> Payment Processing Monitor, opens it and
+		presses Retry release; start the subscriber again and the payment ends FAILED, funds released.
 		Details: src\Microservices\Payments\API\README.md. To see compensation, pay to a BSB starting with 999 (the network refuses it) or:
 
 			$pns = 'https://localhost:46386/admin/behaviour'

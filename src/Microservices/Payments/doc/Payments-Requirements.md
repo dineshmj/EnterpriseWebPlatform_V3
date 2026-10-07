@@ -2,7 +2,7 @@
 
 **Bounded context:** Payments  
 **Subdomain type:** Core  
-**Status:** Present: the Payments API with the saga orchestrator, Accounts funds holds, payment network simulator and two courier workers (5a); the Payments BFF and MFE - new payment, status page with the live timeline, payments list (5b-1); human approval by a payments officer and notifications (5b-2). The operations "Retry release" follows in 5c.
+**Status:** Present: the Payments API with the saga orchestrator, Accounts funds holds, payment network simulator and two courier workers (5a); the Payments BFF and MFE - new payment, status page with the live timeline, payments list (5b-1); human approval by a payments officer and notifications (5b-2); the Payment Processing Monitor and the operations "Retry release" (5c).
 
 Platform-wide rules are not repeated here. See [doc/](../../../../doc/). Payments is the **orchestrated-saga** demonstration; the orchestration pattern itself is described in the [Saga plan](../../../../doc/EWP-V3-Saga-Choreography-and-Orchestration-Plans.md).
 
@@ -42,7 +42,8 @@ Accounts adds funds holds and the `AccountsCommandSubscriber` courier; the Payme
 | Customer | (Self-service: later) Initiate eligible payments; view their own payments | Approve payments; view others' payments |
 | Payments Officer | Review, validate, approve, reject, hold and release payments; review processing failures; retry eligible processing | Approve a payment they initiated; approve beyond their authorized amount |
 | Compliance Officer | Review exception and high-risk payments (via Compliance) | Approve the payment itself |
-| Auditor | View payment history | Change anything |
+| Operations administrator | See every branch's payments and the Payment Processing Monitor; retry the release of a payment whose compensation failed | Approve, reject or start payments |
+| Auditor | View payment history (every branch) | Change anything |
 
 ---
 
@@ -104,6 +105,8 @@ Approve / reject from PENDING_APPROVAL: present (5b-2). Planned: hold and releas
 | View | `payments.read` + `payment.view` or `payment.initiate`; own branch only (another branch's payment is 404) |
 | Approve | `payments.write` + `payment.approve` + own branch + PENDING_APPROVAL + **not the initiator** (SoD) + amount within the officer's clearance limit (`Payments:ApprovalLimits`: clearance 3 → 10,000; 4 → 100,000; 5 → any) |
 | Reject | `payments.write` + `payment.reject` + own branch + PENDING_APPROVAL + not the initiator; remarks required; the saga releases the reserved funds |
+| Retry release | `payments.write` + `workflow.retry` (operations), any branch; only a COMPENSATION_FAILED payment |
+| Read scope | Own branch, except `workflow.view` (operations) and `payment.history.view` (audit): every branch |
 | Funds | Accounts reserves only on an ACTIVE account of the customer named in the payment, in AUD, within the available balance |
 | Approve | `payments_officer` + `payment.approve` + PENDING_APPROVAL + amount within the user's limit + branch / organizational scope + SoD |
 | Customer view | `customer.payment.view_own` + `owns` the payment |

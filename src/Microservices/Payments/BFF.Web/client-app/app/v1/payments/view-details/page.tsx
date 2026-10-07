@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  ArrowLeft, CheckCircle2, CircleAlert, CircleDot, Clock, Cog, FileText, Gavel, Inbox, Send, Undo2, Workflow, XCircle,
+  ArrowLeft, CheckCircle2, CircleAlert, CircleDot, Clock, Cog, FileText, Gavel, Inbox, LifeBuoy, Send, Undo2, Workflow, XCircle,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
@@ -70,6 +70,7 @@ export default function PaymentDetailsPage() {
 
   const saga = data?.saga;
   const isOfficer = !!user?.roles.includes('payments_officer');
+  const isOperations = !!user?.roles.includes('operations_administrator');
 
   return (
     <MfeShell title={data ? `Payment · ${data.paymentNumber}` : `Payment ${paymentId ?? ''}`} subtitle="Payments">
@@ -89,6 +90,10 @@ export default function PaymentDetailsPage() {
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
           <div className="flex flex-col gap-6">
             <Outcome payment={data} />
+
+            {data.status === 'COMPENSATION_FAILED' && isOperations && (
+              <RetryReleasePanel payment={data} onRetried={() => void load(data.paymentId)} />
+            )}
 
             {data.status === 'PENDING_APPROVAL' && isOfficer && user && (
               <DecisionPanel payment={data} user={user} policy={policy} onDecided={() => void load(data.paymentId)} />
@@ -230,6 +235,52 @@ function DecisionPanel({ payment, user, policy, onDecided }: {
         <ConfirmDialog title="Reject this payment?" cancelLabel="Cancel" confirmLabel="Reject"
           onCancel={() => setConfirm(null)} onConfirm={() => void decide('reject')}>
           The payment will not be made and the reserved {formatMoney(payment.amount)} becomes available to the customer again.
+        </ConfirmDialog>
+      )}
+    </Card>
+  );
+}
+
+/**
+ * Operations recovery: send the release of the reserved funds again. The saga records the
+ * retry and continues on its own; Accounts treats the same payment idempotently.
+ */
+function RetryReleasePanel({ payment, onRetried }: { payment: PaymentDetail; onRetried: () => void }) {
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const retry = async () => {
+    setConfirm(false);
+    setBusy(true);
+    setActionError(null);
+    try {
+      await postJson(`/bff/api/payments/${payment.paymentId}/retry-release`, {});
+      onRetried();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'The retry could not be started.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader icon={<LifeBuoy />} title="Operations recovery" description="The release of the reserved funds was not confirmed. Make sure Accounts is reachable, then retry." />
+      <CardContent className="space-y-3">
+        <p className="text-sm text-ink-muted">
+          {formatMoney(payment.amount)} may still be held on the customer's account {payment.fromBsb} {payment.fromAccountNumber}.
+          Retrying sends the release again; if it already happened, Accounts simply confirms it.
+        </p>
+        {actionError && <Alert tone="danger">{actionError}</Alert>}
+      </CardContent>
+      <CardFooter>
+        <Button variant="accent" onClick={() => setConfirm(true)} disabled={busy}>{busy ? 'Retrying…' : 'Retry release'}</Button>
+      </CardFooter>
+      {confirm && (
+        <ConfirmDialog title="Retry the release?" cancelLabel="Cancel" confirmLabel="Retry release"
+          onCancel={() => setConfirm(false)} onConfirm={() => void retry()}>
+          The saga sends the release of {formatMoney(payment.amount)} to Accounts again and follows it until it is confirmed.
         </ConfirmDialog>
       )}
     </Card>

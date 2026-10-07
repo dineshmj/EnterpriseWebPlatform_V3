@@ -33,6 +33,7 @@ public sealed record InitiatePaymentRequest(
 public sealed class PaymentsController(
     InitiatePaymentCommandHandler initiateHandler,
     DecidePaymentCommandHandler decideHandler,
+    RetryReleaseCommandHandler retryReleaseHandler,
     IPaymentsQueries queries,
     ApprovalTier approvalTier,
     ApprovalLimits approvalLimits) : ControllerBase
@@ -167,20 +168,55 @@ public sealed class PaymentsController(
             statusFilter = parsed;
         }
 
-        var branch = PaymentsStaffAuthorizationHandler.BranchOf(User);
-        if (branch is null)
+        var (allowed, branch) = PaymentsStaffAuthorizationHandler.ReadScopeOf(User);
+        if (!allowed)
             return Forbid();
 
         return Ok(await queries.GetPaymentsAsync(branch, pageNumber, pageSize, statusFilter, cancellationToken));
     }
 
-    /// <summary>The payment, its saga and the saga's timeline. Another branch's payment is reported as not found.</summary>
+    /// <summary>
+    /// The Payment Processing Monitor: every saga that is not finished, most urgent first
+    /// (compensation failed, overdue, retrying, waiting for approval, running), with counts.
+    /// </summary>
+    [HttpGet("processing")]
+    [Authorize(Policy = "PaymentView")]
+    public async Task<IActionResult> GetProcessing(CancellationToken cancellationToken)
+    {
+        var (allowed, branch) = PaymentsStaffAuthorizationHandler.ReadScopeOf(User);
+        if (!allowed)
+            return Forbid();
+
+        return Ok(await queries.GetProcessingAsync(branch, DateTimeOffset.UtcNow, cancellationToken));
+    }
+
+    /// <summary>
+    /// Operations recovery: send the release of the reserved funds again for a payment whose
+    /// compensation failed (COMPENSATION_FAILED). Any branch: the operations desk is central.
+    /// </summary>
+    [HttpPost("{paymentId:long}/retry-release")]
+    [Authorize(Policy = "PaymentRetryRelease")]
+    public async Task<IActionResult> RetryRelease(long paymentId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await retryReleaseHandler.HandleAsync(
+                new RetryReleaseCommand(paymentId, User.FindFirst("lan_id")?.Value ?? "Operations"), cancellationToken);
+            return result is null ? NotFound() : Ok(new { status = result.Status, sagaStep = result.SagaStep });
+        }
+        catch (DomainConflictException ex)
+        {
+            return Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, title: "Nothing to retry");
+        }
+    }
+
+    /// <summary>The payment, its saga and the saga's timeline. A payment outside the caller's scope is reported as not found.</summary>
     [HttpGet("{paymentId:long}")]
     [Authorize(Policy = "PaymentView")]
     public async Task<IActionResult> GetPayment(long paymentId, CancellationToken cancellationToken)
     {
-        var branch = PaymentsStaffAuthorizationHandler.BranchOf(User);
-        if (branch is null)
+        var (allowed, branch) = PaymentsStaffAuthorizationHandler.ReadScopeOf(User);
+        if (!allowed)
             return Forbid();
 
         var payment = await queries.GetPaymentAsync(paymentId, branch, cancellationToken);

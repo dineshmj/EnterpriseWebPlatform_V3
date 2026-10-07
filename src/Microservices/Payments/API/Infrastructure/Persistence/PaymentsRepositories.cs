@@ -17,9 +17,9 @@ public sealed class PaymentRepository(PaymentsDbContext db) : IPaymentRepository
     public Task<Payment> GetAsync(long paymentId, CancellationToken cancellationToken) =>
         db.Payments.SingleAsync(x => x.Id == paymentId, cancellationToken);
 
-    public async Task<Guid?> GetRefInBranchAsync(long paymentId, BranchCode branch, CancellationToken cancellationToken) =>
+    public async Task<Guid?> GetRefInBranchAsync(long paymentId, BranchCode? branch, CancellationToken cancellationToken) =>
         await db.Payments.AsNoTracking()
-            .Where(x => x.Id == paymentId && x.BranchCode == branch)
+            .Where(x => x.Id == paymentId && (branch == null || x.BranchCode == branch))
             .Select(x => (Guid?)x.PaymentRef)
             .SingleOrDefaultAsync(cancellationToken);
 
@@ -60,10 +60,15 @@ public sealed class PaymentSagaRepository(PaymentsDbContext db) : IPaymentSagaRe
 
 public sealed class PaymentsQueries(PaymentsDbContext db) : IPaymentsQueries
 {
+    /// <summary>A RUNNING saga whose timer is this far past due is "overdue" (the step runner or a participant is not keeping up).</summary>
+    private static readonly TimeSpan OverdueAfter = TimeSpan.FromMinutes(1);
+
     public async Task<PagedResponse<PaymentSummary>> GetPaymentsAsync(
-        BranchCode branch, int pageNumber, int pageSize, PaymentStatus? status, CancellationToken cancellationToken)
+        BranchCode? branch, int pageNumber, int pageSize, PaymentStatus? status, CancellationToken cancellationToken)
     {
-        var query = db.Payments.AsNoTracking().Where(x => x.BranchCode == branch);
+        var query = db.Payments.AsNoTracking();
+        if (branch is not null)
+            query = query.Where(x => x.BranchCode == branch);
         if (status is { } s)
             query = query.Where(x => x.Status == s);
 
@@ -92,10 +97,48 @@ public sealed class PaymentsQueries(PaymentsDbContext db) : IPaymentsQueries
         return new PagedResponse<PaymentSummary>(items, pageNumber, pageSize, total);
     }
 
-    public async Task<PaymentDetail?> GetPaymentAsync(long paymentId, BranchCode branch, CancellationToken cancellationToken)
+    public async Task<ProcessingOverview> GetProcessingAsync(BranchCode? branch, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var payments = db.Payments.AsNoTracking();
+        if (branch is not null)
+            payments = payments.Where(x => x.BranchCode == branch);
+
+        var rows = await db.PaymentSagas.AsNoTracking()
+            .Where(s => s.Status != SagaStatus.Finished)
+            .Join(payments, s => s.PaymentId, p => p.Id, (s, p) => new { s, p })
+            .Select(x => new
+            {
+                x.p.Id, x.p.PaymentNumber, Branch = x.p.BranchCode, x.p.Amount, x.p.Currency, x.p.PayeeName, PaymentStatus = x.p.Status,
+                x.s.Step, SagaStatus = x.s.Status, x.s.Attempts, x.s.NextCheckAt, x.s.LastError, x.s.UpdatedAt
+            })
+            .ToListAsync(cancellationToken);
+
+        var cutoff = now - OverdueAfter;
+        bool IsOverdue(SagaStatus status, DateTimeOffset? next) => status == SagaStatus.Running && next < cutoff;
+        int Urgency(SagaStatus status, DateTimeOffset? next, int attempts) =>
+            status == SagaStatus.Stuck ? 0 : IsOverdue(status, next) ? 1 : attempts > 1 ? 2 : status == SagaStatus.WaitingForPerson ? 3 : 4;
+
+        var items = rows
+            .OrderBy(r => Urgency(r.SagaStatus, r.NextCheckAt, r.Attempts)).ThenBy(r => r.UpdatedAt)
+            .Select(r => new ProcessingItem(
+                r.Id, r.PaymentNumber, r.Branch.Value, r.Amount, r.Currency, r.PayeeName, r.PaymentStatus.ToCode(),
+                r.Step.ToCode(), r.SagaStatus.ToCode(), r.Attempts, r.NextCheckAt, r.LastError, r.UpdatedAt,
+                IsOverdue(r.SagaStatus, r.NextCheckAt)))
+            .ToList();
+
+        return new ProcessingOverview(
+            CompensationFailed: rows.Count(r => r.SagaStatus == SagaStatus.Stuck),
+            Overdue: rows.Count(r => IsOverdue(r.SagaStatus, r.NextCheckAt)),
+            Retrying: rows.Count(r => r.SagaStatus == SagaStatus.Running && r.Attempts > 1),
+            WaitingForApproval: rows.Count(r => r.SagaStatus == SagaStatus.WaitingForPerson),
+            Running: rows.Count(r => r.SagaStatus == SagaStatus.Running),
+            Items: items);
+    }
+
+    public async Task<PaymentDetail?> GetPaymentAsync(long paymentId, BranchCode? branch, CancellationToken cancellationToken)
     {
         var payment = await db.Payments.AsNoTracking()
-            .Where(x => x.Id == paymentId && x.BranchCode == branch)
+            .Where(x => x.Id == paymentId && (branch == null || x.BranchCode == branch))
             .SingleOrDefaultAsync(cancellationToken);
         if (payment is null)
             return null;

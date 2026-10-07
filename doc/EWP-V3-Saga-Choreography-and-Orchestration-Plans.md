@@ -152,7 +152,7 @@ SEND_TO_NETWORK ─refused / unavailable after N tries─► RELEASE_FUNDS ─Fu
 no reply in time ─► resend the same command (Accounts is idempotent per PaymentRef); timeout doubles 30 s → 5 min
 RESERVE not confirmed after N tries ─► release to be sure ─► FAILED
 SETTLE not confirmed               ─► keep trying (the money already left through the network)
-RELEASE not confirmed after N tries ─► STUCK, payment COMPENSATION_FAILED ─► operations "Retry release" (step 5c)
+RELEASE not confirmed after N tries ─► STUCK, payment COMPENSATION_FAILED ─► operations "Retry release" (Payment Processing Monitor)
                                        a late FundsReleased still resolves it
 ```
 
@@ -214,7 +214,7 @@ Retry, timeout and circuit breaker protect **individual technical interactions**
 - [x] Retry, timeout and circuit breaker (5a)
 - [x] Successful scenario (5a)
 - [x] Business failure with compensation (5a)
-- [ ] Deliberate compensation failure and recovery: the failure state is present (5a); the operations "Retry release" action follows (5c)
+- [x] Deliberate compensation failure and recovery: COMPENSATION_FAILED (5a); the Payment Processing Monitor and the operations "Retry release" (5c)
 - [x] Human approval as a long-running state: the saga waits with no timer; the payments officer's approve / reject resumes it (5b-2)
 - [x] Notifications: approval required → the branch's payments officers; outcomes → the initiator (5b-2)
 - [x] End-to-end observability by WorkflowId, CorrelationId, CausationId and one trace per payment (5a)

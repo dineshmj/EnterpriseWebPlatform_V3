@@ -78,7 +78,9 @@ builder.Services.AddAuthorization(options =>
         });
 
     AddStaffPolicy("PaymentInitiate", PaymentsApiScopesRequired.PAYMENTS_WRITE, "payment.initiate");
-    AddStaffPolicy("PaymentView", PaymentsApiScopesRequired.PAYMENTS_READ, "payment.view", "payment.initiate");
+    // Operations (workflow.view) and audit (payment.history.view) read every branch; the others their own.
+    AddStaffPolicy("PaymentView", PaymentsApiScopesRequired.PAYMENTS_READ, "payment.view", "payment.initiate", "workflow.view", "payment.history.view");
+    AddStaffPolicy("PaymentRetryRelease", PaymentsApiScopesRequired.PAYMENTS_WRITE, "workflow.retry");
     AddStaffPolicy("PaymentApprove", PaymentsApiScopesRequired.PAYMENTS_WRITE, "payment.approve");
     AddStaffPolicy("PaymentReject", PaymentsApiScopesRequired.PAYMENTS_WRITE, "payment.reject");
 });
@@ -97,6 +99,7 @@ builder.Services.AddScoped<InitiatePaymentCommandHandler>();
 builder.Services.AddScoped<HandleSagaReplyCommandHandler>();
 builder.Services.AddScoped<RunDueSagaStepCommandHandler>();
 builder.Services.AddScoped<DecidePaymentCommandHandler>();
+builder.Services.AddScoped<RetryReleaseCommandHandler>();
 
 // The approval tier and the saga's limits are configuration, never constants in a screen.
 var payments = builder.Configuration.GetSection("Payments");

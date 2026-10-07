@@ -280,7 +280,7 @@ Workflow event ──► candidate audience (initiator, assigned officer, superv
 
 The platform never treats "all connected users" as an implicit audience.
 
-**Implementation (Notifications API, 4a).** Two kinds of audience: a person (`user:{sub}`, e.g. the initiator told about a KYC decision) and the staff of one work-queue role in one branch (`staff:kyc_officer:SYD001`, told about new work). A connection joins only the audiences derived from its own access token (subject ID, roles, branch); the hub offers clients no way to join a group, and the REST queries and "mark read" apply the same audiences. Read state is per person.
+**Implementation (Notifications API, 4a).** Three kinds of audience: a person (`user:{sub}`, e.g. the initiator told about a KYC decision), the staff of one work-queue role in one branch (`staff:kyc_officer:SYD001`, told about new work), and the staff of a role whose work is not branch-bound in every branch (`staff:operations_administrator:*`, e.g. told that a payment's release must be retried). A connection joins only the audiences derived from its own access token (subject ID, roles, branch); the hub offers clients no way to join a group, and the REST queries and "mark read" apply the same audiences. Read state is per person.
 
 ---
 

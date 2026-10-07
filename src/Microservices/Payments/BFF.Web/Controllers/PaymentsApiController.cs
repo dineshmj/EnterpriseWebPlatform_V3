@@ -68,18 +68,25 @@ public sealed class PaymentsApiController(
         return SendAsync(PaymentsBffOptions.PaymentsApiClient, message, cancellationToken);
     }
 
-    /// <summary>A payments officer's decision; the Payments API checks the role, branch, clearance limit and SoD.</summary>
+    /// <summary>
+    /// A payments officer's decision (approve / reject: role, branch, clearance limit and SoD are
+    /// checked by the Payments API), or operations retrying a failed release (retry-release).
+    /// </summary>
     [HttpPost("payments/{paymentId:long}/{decision}")]
     [ValidateAntiForgeryToken]
     public Task<IActionResult> Decide(long paymentId, string decision, [FromBody] PaymentDecisionBody? body, CancellationToken cancellationToken = default)
     {
-        if (decision is not ("approve" or "reject"))
+        if (decision is not ("approve" or "reject" or "retry-release"))
             return Task.FromResult<IActionResult>(NotFound());
 
         return SendAsync(PaymentsBffOptions.PaymentsApiClient,
             new HttpRequestMessage(HttpMethod.Post, $"/v1/payments/{paymentId}/{decision}") { Content = JsonContent.Create(new PaymentDecisionBody(body?.Remarks)) },
             cancellationToken);
     }
+
+    [HttpGet("payments/processing")]
+    public Task<IActionResult> GetProcessing(CancellationToken cancellationToken = default) =>
+        SendAsync(PaymentsBffOptions.PaymentsApiClient, new HttpRequestMessage(HttpMethod.Get, "/v1/payments/processing"), cancellationToken);
 
     [HttpGet("payments/policy")]
     public Task<IActionResult> GetPolicy(CancellationToken cancellationToken = default) =>

@@ -599,19 +599,8 @@ CROSS JOIN
 ) AS r(role_short_name)
 WHERE mi.task_name = 'View Payments';
 
--- Beneficiaries
-INSERT INTO menu_items_and_roles (menu_item_id, role_short_name)
-SELECT mi.id, r.role_short_name
-FROM menu_items mi
-CROSS JOIN
-(
-    VALUES
-        ('payments_officer'),
-        ('operations_administrator'),
-        ('auditor'),
-        ('platform_administrator')
-) AS r(role_short_name)
-WHERE mi.task_name = 'Manage Beneficiaries';
+-- Beneficiaries (saved payees): deferred. The menu item exists but is mapped to no role, so
+-- nobody sees a page that is not built yet. Map roles here when it is implemented.
 
 -- Payment Processing
 INSERT INTO menu_items_and_roles (menu_item_id, role_short_name)

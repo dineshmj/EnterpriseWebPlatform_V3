@@ -89,7 +89,17 @@ public static class NotificationAudiences
 
     public static string ForStaff(string role, string branch) => $"staff:{role}:{branch.Trim().ToUpperInvariant()}";
 
-    /// <summary>Every audience the signed-in person belongs to: themselves, plus each work-queue role in their branch.</summary>
+    /// <summary>Roles whose work is not branch-bound (the operations desk): they hear about every branch.</summary>
+    public static readonly IReadOnlySet<string> AllBranchesRoles =
+        new HashSet<string>(StringComparer.Ordinal) { "operations_administrator" };
+
+    /// <summary>The staff of a role in EVERY branch, e.g. "staff:operations_administrator:*".</summary>
+    public static string ForStaffInAllBranches(string role) => $"staff:{role}:*";
+
+    /// <summary>
+    /// Every audience the signed-in person belongs to: themselves, each work-queue role in their
+    /// branch, and each all-branches role (operations) everywhere.
+    /// </summary>
     public static IReadOnlyList<string> Of(ClaimsPrincipal user)
     {
         var sub = user.FindFirst("sub")?.Value;
@@ -97,6 +107,11 @@ public static class NotificationAudiences
             return [];
 
         var audiences = new List<string> { ForUser(sub) };
+        audiences.AddRange(user.FindAll("role")
+            .Select(r => r.Value)
+            .Where(AllBranchesRoles.Contains)
+            .Distinct()
+            .Select(ForStaffInAllBranches));
         var branch = user.FindFirst("branch")?.Value;
         if (!string.IsNullOrWhiteSpace(branch))
         {

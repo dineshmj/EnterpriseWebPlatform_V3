@@ -333,8 +333,13 @@ public sealed class PaymentSaga : AggregateRoot
         Record(now, "COMPENSATION_FAILED", "Stopped: the release of the reserved funds is not confirmed. Operations must retry it.", null);
     }
 
-    /// <summary>Operations retry the release of a stuck compensation (step 5c exposes it).</summary>
-    public void RetryCompensation(Payment payment, SagaPolicy policy, DateTimeOffset now)
+    /// <summary>
+    /// Operations retry the release of a stuck compensation (e.g. the release command was
+    /// dead-lettered, or Accounts was down for long): a NEW ReleaseFunds is sent with fresh
+    /// attempts. Accounts treats the same PaymentRef idempotently, so a release that did
+    /// happen meanwhile is simply confirmed.
+    /// </summary>
+    public void RetryCompensation(Payment payment, string operatorLabel, SagaPolicy policy, DateTimeOffset now)
     {
         if (Status != SagaStatus.Stuck)
             throw new DomainConflictException("Only a stuck compensation can be retried.");
@@ -343,7 +348,7 @@ public sealed class PaymentSaga : AggregateRoot
         Attempts = 0;
         MoveTo(SagaStep.ReleaseFunds, SagaStatus.Running, null, now);
         LastError = null;
-        Record(now, "RETRY", "Operations retried the release of the reserved funds.", null);
+        Record(now, "RETRY", $"{operatorLabel} retried the release of the reserved funds.", null);
         SendFundsCommand(ReleaseFundsCommand, payment, policy, now);
     }
 

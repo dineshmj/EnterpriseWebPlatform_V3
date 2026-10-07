@@ -79,6 +79,33 @@ export interface PaymentDetail {
   decisionRemarks?: string | null;
 }
 
+/** A saga operations should look at (Payment Processing Monitor). */
+export interface ProcessingItem {
+  paymentId: number;
+  paymentNumber: string;
+  branchCode: string;
+  amount: number;
+  currency: string;
+  payeeName: string;
+  paymentStatus: string;
+  sagaStep: string;
+  sagaStatus: string;
+  attempts: number;
+  nextCheckAt?: string | null;
+  lastError?: string | null;
+  updatedAt: string;
+  overdue: boolean;
+}
+
+export interface ProcessingOverview {
+  compensationFailed: number;
+  overdue: number;
+  retrying: number;
+  waitingForApproval: number;
+  running: number;
+  items: ProcessingItem[];
+}
+
 /** A customer's paying account (from Accounts), with what is available now. */
 export interface PayerAccount {
   customerNumber: string;

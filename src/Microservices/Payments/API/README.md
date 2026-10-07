@@ -40,14 +40,14 @@ RELEASE_FUNDS ─no reply after N tries─► STUCK                             
 | No reply from Accounts in time | Sends the command again (Accounts treats the same PaymentRef idempotently); timeout doubles 30 s → 5 min. |
 | Reservation never confirmed (5 tries) | Releases, to be sure, and the payment ends FAILED. |
 | Settlement not confirmed | Keeps trying: the money already left through the network, so settlement is never abandoned. |
-| Release not confirmed (5 tries) | Stops (STUCK) and the payment is **COMPENSATION_FAILED**: it never claims an undo that did not happen. A late `FundsReleased` still resolves it. Operations' "Retry release" comes in step 5c. |
+| Release not confirmed (5 tries) | Stops (STUCK) and the payment is **COMPENSATION_FAILED**: it never claims an undo that did not happen. A late `FundsReleased` still resolves it; operations can also **Retry release** (a fresh `ReleaseFunds` with fresh attempts) from the payment page. |
 | Network unavailable | Retries with back-off (5 s doubling, 4 attempts), then compensates. The PaymentRef is the network's Idempotency-Key, so a retry can never pay twice. |
 | Network refuses (HTTP 422) | Compensates at once. |
 | Late or duplicate reply | Recorded as REPLY_IGNORED in the timeline; changes nothing. |
 
 Every line above is written to `payment_saga_history`, returned as the payment's **timeline** by `GET /v1/payments/{id}`.
 
-Limits are configuration (`Payments:ApprovalThreshold`, default 1,000.00; `Payments:Saga:*`). `/health/ready` turns **Degraded** when a saga is overdue by 2 minutes or a compensation failed.
+Limits are configuration (`Payments:ApprovalThreshold`, default 1,000.00; `Payments:Saga:*`). In **Development** the saga waits 10 s for a reply (doubling to 60 s) and tries 3 times, so a failed compensation shows within about a minute; production values are in `appsettings.json` (30 s → 5 min, 5 tries). `/health/ready` turns **Degraded** when a saga is overdue by 2 minutes or a compensation failed.
 
 ## API
 
@@ -61,9 +61,11 @@ Limits are configuration (`Payments:ApprovalThreshold`, default 1,000.00; `Payme
 | `POST /v1/payments/{id}/reject` | `payments.write` + `payment.reject` + branch | Rejects with remarks (required): the saga releases the funds and the payment ends REJECTED (`APPROVAL_REJECTED`). |
 | `GET /v1/payments/bsb/{bsb}` | as above | BSB directory (answered by the payment network): bank, branch, state; 404 when unknown. |
 | `POST /v1/payments/payee-confirmations` | as above | Confirmation of Payee: `MATCH`, `CLOSE_MATCH` (with the name the bank holds) or `NO_MATCH`. A warning for the staff member, never a decision. |
+| `GET /v1/payments/processing` | `payments.read` + view permission | The Payment Processing Monitor: counts (compensation failed, overdue, retrying, awaiting approval, running) and every unfinished saga, most urgent first. |
+| `POST /v1/payments/{id}/retry-release` | `payments.write` + `workflow.retry` (operations) | Retry the release of a COMPENSATION_FAILED payment; 409 when nothing is stuck. Any branch. |
 | `POST /internal/v1/payment-sagas/replies` | pinned M2M client of the PaymentsSagaReplySubscriber | Replies from Accounts. |
 
-ABAC: a staff member sees and starts payments for their own branch only. Accounts additionally checks that the paying account belongs to the customer named in the payment.
+ABAC: a staff member sees and starts payments for their own branch only; **operations** (`workflow.view`) and **auditors** (`payment.history.view`), whose work is not branch-bound, read every branch. Accounts additionally checks that the paying account belongs to the customer named in the payment.
 
 ## Try it
 
@@ -95,7 +97,7 @@ Content-Type: application/json
 | Amount above the available balance | REJECTED, `INSUFFICIENT_FUNDS`, nothing to undo. |
 | `toBsb` starting with `999` | The network refuses: COMPENSATING → **FAILED**, hold `RELEASED`, balance unchanged. |
 | Simulator `Down`, then a payment | Network retries in the timeline, then compensation → FAILED. |
-| Stop the AccountsCommandSubscriber, then a payment | TIMEOUT / resend lines every 30 s+; start it again and the saga continues. |
+| Stop the AccountsCommandSubscriber, then a payment | TIMEOUT / resend lines (10 s, 20 s, 40 s in Development); after 3 tries the reservation is given up and released - which is not answered either - so after about 2.5 minutes the payment is **COMPENSATION_FAILED**. **daniel.ops** sees it in the Payment Processing Monitor, opens it and presses **Retry release**; start the subscriber again and the release is confirmed: payment **FAILED**, funds released. |
 | Amount above 1,000.00 | Stops at **PENDING_APPROVAL**; the branch's payments officers are notified. emily.payments (Payment Approvals) approves → sent and completed, or rejects → funds released, REJECTED. Sophie cannot decide her own payment. |
 
 ## Messages

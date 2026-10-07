@@ -19,7 +19,8 @@ namespace EnterpriseWebPlatform.Notifications.Api.Domain;
 ///   payments (orchestrated saga; the target opens the payment's status page)
 ///     PaymentApprovalRequired   → staff:payments_officer:{branch}   (new work)
 ///     PaymentCompleted / Rejected / Failed → user:{initiator}
-///     PaymentCompensationFailed → user:{initiator} and staff:payments_officer:{branch}
+///     PaymentCompensationFailed → user:{initiator}, staff:payments_officer:{branch} and
+///                                 staff:operations_administrator:* (the desk that retries the release)
 /// </summary>
 public static class NotificationRules
 {
@@ -138,7 +139,10 @@ public static class NotificationRules
                 progress("Payment needs attention",
                     $"{what} was not sent, but the release of the reserved funds is not confirmed. Operations must retry it.", target),
                 newWork("payments_officer", "Payment needs attention",
-                    $"{what}: the release of the reserved funds is not confirmed. Operations must retry it.", target)
+                    $"{what}: the release of the reserved funds is not confirmed. Operations must retry it.", target),
+                new NotificationDraft(NotificationAudiences.ForStaffInAllBranches("operations_administrator"), NotificationCategory.NewWork,
+                    "Release to retry",
+                    $"{what} in branch {Str(p, "BranchCode") ?? "?"}: the release of the reserved funds is not confirmed. Open it and retry the release.", target)
             ],
             _ => []
         };
