@@ -1,3 +1,5 @@
+using System.Diagnostics.Metrics;
+
 using Microsoft.Extensions.Options;
 
 using Confluent.Kafka;
@@ -6,6 +8,12 @@ namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 
 public sealed class KafkaProducer : IKafkaProducer, IDisposable
 {
+    // ewp_messaging_published_total{topic,outcome}: every relay and every dead-letter write
+    // goes through here. Same meter name as the subscriber side (MessagingTelemetry).
+    private static readonly Meter Meter = new("EnterpriseWebPlatform.Messaging");
+    private static readonly Counter<long> Published = Meter.CreateCounter<long>(
+        "ewp.messaging.published", description: "Kafka messages published, by outcome.");
+
     private readonly IProducer<string, string> _producer;
 
     public KafkaProducer(IOptions<KafkaOptions> options)
@@ -30,14 +38,14 @@ public sealed class KafkaProducer : IKafkaProducer, IDisposable
         string payload,
         CancellationToken cancellationToken)
     {
-        await _producer.ProduceAsync(
+        await CountedAsync(topic, () => _producer.ProduceAsync(
             topic,
             new Message<string, string>
             {
                 Key = key,
                 Value = payload
             },
-            cancellationToken);
+            cancellationToken));
     }
 
     public async Task ProduceAsync(
@@ -53,7 +61,7 @@ public sealed class KafkaProducer : IKafkaProducer, IDisposable
             kafkaHeaders.Add(name, System.Text.Encoding.UTF8.GetBytes(value));
         }
 
-        await _producer.ProduceAsync(
+        await CountedAsync(topic, () => _producer.ProduceAsync(
             topic,
             new Message<string, string>
             {
@@ -61,7 +69,21 @@ public sealed class KafkaProducer : IKafkaProducer, IDisposable
                 Value = payload,
                 Headers = kafkaHeaders
             },
-            cancellationToken);
+            cancellationToken));
+    }
+
+    private static async Task CountedAsync(string topic, Func<Task> produce)
+    {
+        try
+        {
+            await produce();
+            Published.Add(1, new KeyValuePair<string, object?>("topic", topic), new KeyValuePair<string, object?>("outcome", "ok"));
+        }
+        catch
+        {
+            Published.Add(1, new KeyValuePair<string, object?>("topic", topic), new KeyValuePair<string, object?>("outcome", "failed"));
+            throw;
+        }
     }
 
     public void Dispose()

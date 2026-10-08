@@ -425,7 +425,8 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Saga orchestration (Payments) | Present: persisted `PaymentSaga` state machine in the Payments API, commands / replies over Kafka with Outbox + Inbox, timeouts and resends, compensation (release funds), approval by a payments officer above the tier, COMPENSATION_FAILED as a recoverable state (Payment Processing Monitor, operations "Retry release"); assisted-channel screens |
 | User-specific SignalR notifications | Present (Notifications API stores and pushes to `user:{sub}` / `staff:{role}:{branch}` audiences derived from the token; the Shell proxies REST and the hub and shows a bell and toasts; connections close at token expiry). A click opens the record through the menu-owned microservice and the normal navigation (4c). A backplane for several instances is planned |
 | Centralized audit trail | Planned (next: an Audit context in the customer's pattern - Next.js light BFF → NestJS Journey API → Domain API) |
-| OpenTelemetry / distributed tracing | Present (.NET components: one trace across HTTP, the Outbox and Kafka via `traceparent`; OTLP export when configured); Partial (KYC NestJS BFF not instrumented; no metrics yet) |
+| OpenTelemetry / distributed tracing | Present (.NET components: one trace across HTTP, the Outbox and Kafka via `traceparent`; OTLP export when configured); Partial (KYC NestJS BFF not instrumented) |
+| Structured logs and metrics | Present (.NET components: Serilog with service name and trace ID, one line per request, JSON outside Development; Prometheus `/metrics` with HTTP, rate limiting, auth, resilience, database and runtime metrics plus Kafka publish / consume outcomes and every health check's status and numbers; logs and metrics over OTLP when configured). Dashboards and alerts belong to the deployment |
 | Security headers / CSP | Present: strict CSP on the Shell and the CO, KYC, Compliance, Accounts and Payments BFFs (hashed inline scripts, `frame-ancestors` / `frame-src`, `object-src 'none'`); IDP CSP on its pages; `nosniff`; Referrer-Policy |
 | Cookie hardening | Present: session and anti-forgery cookies HttpOnly (session), Secure, `SameSite=Lax`; OIDC correlation / nonce cookies `None` for the login round trip only |
 | Logout propagation | Present: front-channel and back-channel logout on the Shell and every MFE BFF |
@@ -512,8 +513,9 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [ ] Artifact signing and provenance
 
 **Phase 7 — Operational resilience**
-- [x] OpenTelemetry (traces; metrics pending)
-- [ ] Centralized logs and metrics
+- [x] OpenTelemetry traces
+- [x] Structured logs (Serilog) and metrics (Prometheus `/metrics`, OTLP)
+- [ ] Centralized logs and metrics (a collector, Grafana / Observe - deployment)
 - [ ] Kafka monitoring
 - [ ] Workflow dashboards
 - [ ] Alerting

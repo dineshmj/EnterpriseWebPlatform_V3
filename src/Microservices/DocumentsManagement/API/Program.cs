@@ -164,6 +164,9 @@ builder.Services.AddEwpRateLimiting(builder.Configuration, "/v1");
 
 var app = builder.Build();
 
+// One structured log line per request (Serilog), with the caller and the trace ID.
+app.UseEwpRequestLogging();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -186,5 +189,6 @@ app.MapControllers()
     .RequireAuthorization("ApiScope");
 
 app.MapEwpHealthEndpoints();
+app.MapEwpMetricsEndpoint();   // Prometheus scrape (GET /metrics)
 
 app.Run();

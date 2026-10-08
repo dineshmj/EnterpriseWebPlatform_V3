@@ -129,6 +129,7 @@ public sealed class KafkaSubscriberHostedService<TProcessor, TSettings>(
                     consumer.Commit(result);
                     retrying = null;
                     health.Processed(outcome.DeadLetter);
+                    MessagingTelemetry.RecordConsumed(result.Topic, outcome.DeadLetter ? "dead_lettered" : "processed");
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
@@ -138,6 +139,7 @@ public sealed class KafkaSubscriberHostedService<TProcessor, TSettings>(
                     // message. Rewind to it and try again after a back-off.
                     transientAttempts++;
                     retrying = result.TopicPartitionOffset;
+                    MessagingTelemetry.RecordConsumed(result.Topic, "retried");
                     health.Retrying(result.TopicPartitionOffset.ToString(), transientAttempts, ex.Message);
 
                     var delay = TimeSpan.FromSeconds(Math.Min(

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 
 namespace EnterpriseWebPlatform.Common.Observability;
 
@@ -26,6 +27,16 @@ public static class MessagingTelemetry
     public const string CausationIdHeader = "causation-id";
 
     private static readonly ActivitySource Source = new(SourceName);
+
+    // Metrics share the name: ewp_messaging_consumed_total{topic,outcome}. The publish side
+    // (ewp_messaging_published_total) is counted by the Kafka producer.
+    private static readonly Meter Meter = new(SourceName);
+    private static readonly Counter<long> Consumed = Meter.CreateCounter<long>(
+        "ewp.messaging.consumed", description: "Kafka messages handled by a subscriber, by outcome.");
+
+    /// <summary>Outcome of one consumed message: "processed", "dead_lettered" or "retried" (transient failure).</summary>
+    public static void RecordConsumed(string topic, string outcome) =>
+        Consumed.Add(1, new KeyValuePair<string, object?>("topic", topic), new KeyValuePair<string, object?>("outcome", outcome));
 
     /// <summary>
     /// The current trace context in W3C traceparent format, to be stored with an

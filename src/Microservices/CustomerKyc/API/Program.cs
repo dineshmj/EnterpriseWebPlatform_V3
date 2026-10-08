@@ -137,6 +137,9 @@ builder.Services.AddEwpRateLimiting(builder.Configuration, "/v1");
 
 var app = builder.Build();
 
+// One structured log line per request (Serilog), with the caller and the trace ID.
+app.UseEwpRequestLogging();
+
 // Problem details without internals; see ApiExceptionHandler.
 app.UseExceptionHandler();
 if (!app.Environment.IsDevelopment())
@@ -158,6 +161,7 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.MapEwpHealthEndpoints();
+app.MapEwpMetricsEndpoint();   // Prometheus scrape (GET /metrics)
 
 await app.RunAsync();
 

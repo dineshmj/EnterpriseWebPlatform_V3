@@ -203,6 +203,9 @@ builder.Services.AddEwpRateLimiting(builder.Configuration, "/v1");
 
 var app = builder.Build();
 
+// One structured log line per request (Serilog), with the caller and the trace ID.
+app.UseEwpRequestLogging();
+
 app.UseExceptionHandler();
 if (!app.Environment.IsDevelopment())
     app.UseHsts();
@@ -223,6 +226,7 @@ app.UseAuthorization();
 // Deny by default: every controller endpoint needs an authenticated caller, on top of its own policy.
 app.MapControllers().RequireAuthorization();
 app.MapEwpHealthEndpoints();
+app.MapEwpMetricsEndpoint();   // Prometheus scrape (GET /metrics)
 
 await app.RunAsync();
 

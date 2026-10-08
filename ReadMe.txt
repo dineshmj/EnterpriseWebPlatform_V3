@@ -370,6 +370,30 @@ What the platform is, how it is designed and what each component must do are doc
 		Log lines carry the same TraceId, so a log entry can be matched to its trace.
 		The KYC BFF (NestJS) is not instrumented yet: a KYC officer's decision starts a new trace at the KYC API.
 
+	h) Logs and metrics (Serilog, Prometheus):
+
+		Logs - every .NET component logs through Serilog: one line per HTTP request (method, path without the query string,
+		status, duration, the caller's subject ID or client ID) and every entry with its service name and trace ID.
+		Development: readable text, e.g.
+			[18:06:21 INF] HTTP GET /v1/notifications responded 401 in 8 ms  <Serilog.AspNetCore.RequestLoggingMiddleware>  trace=f26d82e9...
+		Elsewhere: one JSON object per line (@t, @l, @m, @tr = trace ID, service, ...), ready for a log shipper.
+		Force either with "Observability": { "LogFormat": "Json" } (or "Text"). Levels still come from "Logging:LogLevel".
+
+		Metrics - every .NET component serves a Prometheus scrape endpoint, GET /metrics (workers on their health port):
+			https://payments-api.dev.localhost:44488/metrics          (an API; every BFF and API the same)
+			http://localhost:5109/metrics                              (a worker, e.g. PaymentsSagaReplySubscriber)
+		What is in it: HTTP requests and durations (http_server_request_duration_seconds), rate-limited requests
+		(aspnetcore_rate_limiting_*), sign-ins and authorization decisions, outgoing calls, retries and circuit breakers
+		(polly_*), database connections (npgsql_*), GC / CPU / memory (dotnet_*), and EWP's own:
+			ewp_messaging_published_total{topic,outcome}    Kafka messages published (ok / failed), dead-letter writes included
+			ewp_messaging_consumed_total{topic,outcome}     messages handled by a subscriber (processed / dead_lettered / retried)
+			ewp_health_status{check}                        each health check: 2 healthy, 1 degraded, 0 unhealthy
+			ewp_health_value{check,key}                     the numbers the checks report, e.g. the payment sagas
+			                                                (running, overdue, compensationFailed) and the Outbox backlog
+		The health metrics are refreshed every 30 seconds. Outside Development /metrics is off unless
+		"Observability:Metrics:Enabled" is true; it is anonymous and must be reachable from the cluster's scraper only.
+		With OTEL_EXPORTER_OTLP_ENDPOINT set (step f), logs and metrics are also sent over OTLP, next to the traces.
+
 
 5) Troubleshooting:
 

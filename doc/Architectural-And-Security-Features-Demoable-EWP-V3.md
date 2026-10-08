@@ -23,6 +23,7 @@ The document answers *how the platform is built and protected*, not *which busin
 | Can a double-click or a retried request send a payment twice? | [1.4.3](#143-orchestration-the-payments-saga) |
 | Are events processed in order? | [1.3.5](#135-ordering-guarantees) |
 | How do you trace one business transaction across services? | [1.3.4](#134-workflow-correlation-and-causation-identity), [1.7.1](#171-distributed-tracing-across-http-and-kafka) |
+| What can Prometheus / Grafana see? Are the logs structured? | [1.7.3](#173-structured-logs-and-metrics) |
 | Can you follow one request through Kafka in a tracing tool? | [1.7.1](#171-distributed-tracing-across-http-and-kafka) |
 | How do you version event contracts? | [1.3.6](#136-tolerant-readers-and-contract-evolution) |
 | How do two people editing the same record at once not overwrite each other? | [1.6.4](#164-concurrency-control) |
@@ -84,6 +85,7 @@ The document answers *how the platform is built and protected*, not *which busin
   - [1.7 Observability](#17-observability)
     - [1.7.1 Distributed tracing across HTTP and Kafka](#171-distributed-tracing-across-http-and-kafka)
     - [1.7.2 Health endpoints for liveness and readiness](#172-health-endpoints-for-liveness-and-readiness)
+    - [1.7.3 Structured logs and metrics](#173-structured-logs-and-metrics)
 - [2. Security features](#2-security-features)
   - [2.1 Identity](#21-identity)
     - [2.1.1 OIDC Authorization Code + PKCE through a BFF](#211-oidc-authorization-code--pkce-through-a-bff)
@@ -467,7 +469,7 @@ Every .NET component uses OpenTelemetry with W3C trace context. A trace normally
 - Process span: [KafkaSubscriberHostedService.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/KafkaSubscriberHostedService.cs)
 - How to view traces locally (Jaeger): [ReadMe.txt §4f](../ReadMe.txt)
 
-**Not yet:** the KYC BFF (NestJS) is not instrumented, so a KYC officer's decision starts a new trace at the KYC API. Metrics are still to come.
+**Not yet:** the KYC BFF (NestJS) is not instrumented, so a KYC officer's decision starts a new trace at the KYC API.
 
 #### 1.7.2 Health endpoints for liveness and readiness
 
@@ -479,6 +481,19 @@ Every component answers the two questions an orchestrator such as AKS or EKS ask
 - Loop heartbeat and Outbox backlog checks: [LoopHeartbeat.cs](../src/Common/Observability/LoopHeartbeat.cs), [OutboxBacklogHealthCheck.cs](../src/Common/Observability/OutboxBacklogHealthCheck.cs)
 - Subscriber liveness and readiness: [SubscriberHealth.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/SubscriberHealth.cs)
 - Wiring: the `AddHealthChecks` calls in each `Program.cs`, e.g. [CustomerKyc API Program.cs](../src/Microservices/CustomerKyc/API/Program.cs); endpoint list: [ReadMe.txt §4e](../ReadMe.txt)
+
+#### 1.7.3 Structured logs and metrics
+
+The three signals are set up once, in the shared observability library, and every .NET component gets them the same way. **Logs** go through Serilog: every entry carries the service name and the trace ID, so a log line leads straight to its trace; each HTTP request is one line with method, path, status, duration and the caller (a subject ID or client ID, never a name, a query string or a token). Development shows readable text; elsewhere each entry is one JSON object, ready for a log shipper. **Metrics** follow OpenTelemetry and are scraped by Prometheus at `/metrics` (workers serve it on their health port): request rates and durations, rate-limited requests, sign-ins and authorization decisions, retries and circuit breakers, database connections and the .NET runtime come from what .NET already measures. EWP adds its own: Kafka messages published and consumed by outcome (including dead-lettered), and every health check's status and numbers, so a Grafana panel or an alert sees exactly what the readiness probe sees, such as a payment whose compensation failed or a growing Outbox backlog. With an OTLP endpoint configured, logs and metrics travel with the traces to a collector (Grafana, Observe, Jaeger).
+
+**Where to look at:**
+
+- Set-up for all three signals: [ObservabilityExtensions.cs](../src/Common/Observability/ObservabilityExtensions.cs); logging and request logging: [EwpLogging.cs](../src/Common/Observability/EwpLogging.cs)
+- `/metrics` and the health-to-metrics bridge: [MetricsEndpoints.cs](../src/Common/Observability/MetricsEndpoints.cs); worker listener: [HealthEndpoints.cs](../src/Common/Observability/HealthEndpoints.cs)
+- Kafka counters: [KafkaProducer.cs](../src/AsyncWorkflows/Infrastructure/Kafka/KafkaProducer.cs), `RecordConsumed` in [MessagingTelemetry.cs](../src/Common/Observability/MessagingTelemetry.cs)
+- Metric names and how to look at them: [ReadMe.txt §4h](../ReadMe.txt)
+
+**Not yet:** dashboards and alert rules (they belong to the deployment's Grafana / Observe); the KYC BFF (NestJS) has neither structured logs nor metrics.
 
 ---
 

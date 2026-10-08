@@ -228,6 +228,9 @@ builder.Services.AddEwpRateLimiting(builder.Configuration, "/bff");
 
 var app = builder.Build();
 
+// One structured log line per request (Serilog), with the caller and the trace ID.
+app.UseEwpRequestLogging();
+
 if (app.Environment.IsDevelopment ())
 {
 	app.UseDeveloperExceptionPage ();
@@ -353,6 +356,7 @@ app.MapRemoteBffApiEndpoint(NotificationsHubPath, new Uri($"{NotificationsMicros
     //               however, consider restricting or disabling these in production if they expose sensitive operations.
 
 app.MapEwpHealthEndpoints();
+app.MapEwpMetricsEndpoint();   // Prometheus scrape (GET /metrics)
 
 app.Run();
 

@@ -25,15 +25,9 @@ try
     var builder = WebApplication.CreateBuilder(args);
 
     // Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
-    // over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
+    // over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt); Serilog logs and
+    // Prometheus metrics come with it.
     builder.AddEwpObservability("identity-server", tracing => tracing.AddAspNetCoreInstrumentation().AddNpgsql());
-
-    builder.Host.UseSerilog((ctx, lc) => lc
-        .WriteTo.Console(
-            outputTemplate:
-                "[{Timestamp:HH:mm:ss} {Level}] {SourceContext}{NewLine}{Message:lj}{NewLine}{Exception}{NewLine}")
-        .Enrich.FromLogContext()
-        .ReadFrom.Configuration(ctx.Configuration));
 
     // PostgreSQL database for identity and authorization data.
     var identityDb = builder.Configuration.GetConnectionString("IdentityDbConnection")
@@ -121,7 +115,7 @@ try
     var app = builder.Build();
 
     // Application logging and exception handling.
-    app.UseSerilogRequestLogging();
+    app.UseEwpRequestLogging();
 
     if (app.Environment.IsDevelopment())
     {
@@ -150,6 +144,7 @@ try
     app.MapRazorPages();
 
     app.MapEwpHealthEndpoints();
+    app.MapEwpMetricsEndpoint();   // Prometheus scrape (GET /metrics)
 
     app.Run();
 }

@@ -11,6 +11,8 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
+using OpenTelemetry.Metrics;
+
 namespace EnterpriseWebPlatform.Common.Observability;
 
 /// <summary>
@@ -35,10 +37,11 @@ public static class HealthEndpoints
     }
 
     /// <summary>
-    /// For a worker (generic host, no web server): serves the same two endpoints from
-    /// a minimal Kestrel listener on Health:Urls (e.g. http://localhost:5101; in a
-    /// container http://+:8080), so the orchestrator can probe the worker like any
-    /// other service. No listener is started when Health:Urls is empty.
+    /// For a worker (generic host, no web server): serves the same two endpoints - and
+    /// the Prometheus scrape endpoint /metrics (<see cref="MetricsEndpoints"/>) - from a
+    /// minimal Kestrel listener on Health:Urls (e.g. http://localhost:5101; in a container
+    /// http://+:8080), so the orchestrator can probe and scrape the worker like any other
+    /// service. No listener is started when Health:Urls is empty.
     /// </summary>
     public static IHostApplicationBuilder AddWorkerHealthEndpoints(this IHostApplicationBuilder builder)
     {
@@ -79,6 +82,8 @@ public static class HealthEndpoints
     private sealed class WorkerHealthEndpointHostedService(
         HealthCheckService healthChecks,
         IConfiguration configuration,
+        IHostEnvironment environment,
+        IServiceProvider services,
         ILogger<WorkerHealthEndpointHostedService> logger) : IHostedService
     {
         private WebApplication? _app;
@@ -102,8 +107,14 @@ public static class HealthEndpoints
             _app.MapGet("/health/live", (HttpContext http) => RespondAsync(http, LiveTag));
             _app.MapGet("/health/ready", (HttpContext http) => RespondAsync(http, ReadyTag));
 
+            // The worker's own metrics (its MeterProvider), scraped through this listener.
+            var metrics = MetricsEndpoints.IsEnabled(configuration, environment) ? services.GetService<MeterProvider>() : null;
+            if (metrics is not null)
+                _app.MapPrometheusScrapingEndpoint(MetricsEndpoints.Path, metrics, configureBranchedPipeline: null, optionsName: null);
+
             await _app.StartAsync(cancellationToken);
-            logger.LogInformation("Health endpoints listening on {Urls} (/health/live, /health/ready).", urls);
+            logger.LogInformation("Health endpoints listening on {Urls} (/health/live, /health/ready{Metrics}).",
+                urls, metrics is null ? "" : ", " + MetricsEndpoints.Path);
         }
 
         private async Task RespondAsync(HttpContext http, string tag)

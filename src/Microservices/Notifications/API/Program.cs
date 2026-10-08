@@ -106,6 +106,9 @@ builder.Services.AddEwpRateLimiting(builder.Configuration, "/v1");
 
 var app = builder.Build();
 
+// One structured log line per request (Serilog), with the caller and the trace ID.
+app.UseEwpRequestLogging();
+
 app.UseExceptionHandler();
 if (!app.Environment.IsDevelopment())
     app.UseHsts();
@@ -122,6 +125,7 @@ app.MapControllers().RequireAuthorization();
 app.MapHub<NotificationsHub>(NotificationsHub.Path, options => options.CloseOnAuthenticationExpiration = true)
     .RequireAuthorization("NotificationsRead");
 app.MapEwpHealthEndpoints();
+app.MapEwpMetricsEndpoint();   // Prometheus scrape (GET /metrics)
 
 await app.RunAsync();
 
