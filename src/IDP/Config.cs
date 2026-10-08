@@ -50,7 +50,11 @@ public static class Config
 
             // Notifications API
             NotificationsApiScope.Read,
-            NotificationsApiScope.Write            
+            NotificationsApiScope.Write,
+
+            // Audit (Domain API and Journey API)
+            AuditApiScope.Read,
+            AuditApiScope.JourneyRead
         ];
 
     public static IEnumerable<ApiResource> ApiResources =>
@@ -61,7 +65,9 @@ public static class Config
             ComplianceApiResource.ApiResource,
             AccountsApiResource.ApiResource,
             PaymentsApiResource.ApiResource,
-            NotificationsApiResource.ApiResource
+            NotificationsApiResource.ApiResource,
+            AuditApiResource.ApiResource,
+            AuditApiResource.JourneyApiResource
         ];
 
     /// <summary>
@@ -82,6 +88,7 @@ public static class Config
             MfeCompliance.Client,
             MfeAccounts.Client,
             MfePayments.Client,
+            MfeAudit.Client,
 
             // M2M Clients
             CustomerOnboardingBFFToDocumentsManagementM2M.Client,
@@ -93,6 +100,9 @@ public static class Config
             NotificationsSubscriberToNotificationsApiM2M.Client,
             AccountsCommandSubscriberToAccountsApiM2M.Client,
             PaymentsSagaReplySubscriberToPaymentsApiM2M.Client,
-            KycBFFToDocumentsManagementM2M.Client
+            KycBFFToDocumentsManagementM2M.Client,
+
+            // Token exchange only (delegation): the Audit Journey API acts for a signed-in person.
+            AuditJourneyApiTokenExchange.Client
         ];
 }

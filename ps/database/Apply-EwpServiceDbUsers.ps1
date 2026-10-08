@@ -31,10 +31,10 @@
     Password of the "postgres" superuser. Default: the local development password "admin".
 
 .EXAMPLE
-    .\db\Apply-EwpServiceDbUsers.ps1
+    .\ps\database\Apply-EwpServiceDbUsers.ps1
 
 .EXAMPLE
-    .\db\Apply-EwpServiceDbUsers.ps1 -PsqlPath 'D:\PostgreSQL\18\bin\psql.exe' -PostgresPassword 'secret'
+    .\ps\database\Apply-EwpServiceDbUsers.ps1 -PsqlPath 'D:\PostgreSQL\18\bin\psql.exe' -PostgresPassword 'secret'
 #>
 [CmdletBinding()]
 param(
@@ -49,7 +49,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$sqlFile = Join-Path $PSScriptRoot 'EwpServiceDbUsers.sql'
+$sqlFile = (Resolve-Path (Join-Path $PSScriptRoot '..\..\db\EwpServiceDbUsers.sql')).Path   # the SQL stays in db\
 
 $requiredDatabases = @(
     'EwpIdentityAccessDb',
@@ -88,7 +88,7 @@ try {
 
     $missing = $requiredDatabases | Where-Object { $_ -notin $existing }
     if ($missing) {
-        Write-Host 'These databases do not exist yet - create them first (ReadMe.txt, section 3e):' -ForegroundColor Red
+        Write-Host 'These databases do not exist yet - create them first (or run ps\database\Initialize-EwpDatabases.ps1, which does it all):' -ForegroundColor Red
         $missing | ForEach-Object { Write-Host "    CREATE DATABASE `"$_`";" -ForegroundColor Red }
         exit 1
     }

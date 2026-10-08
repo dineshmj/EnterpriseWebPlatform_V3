@@ -7,7 +7,7 @@
 --
 -- Run as postgres with psql (it uses \connect - pgAdmin's Query Tool cannot run it),
 -- after the databases exist. Easiest, from the repository root:
---   .\db\Apply-EwpServiceDbUsers.ps1
+--   .\ps\database\Apply-EwpServiceDbUsers.ps1
 -- or directly:
 --   psql -h localhost -U postgres -d postgres -f db\EwpServiceDbUsers.sql
 -- It is idempotent: safe to re-run. ALTER DEFAULT PRIVILEGES makes the grants
@@ -43,7 +43,8 @@ BEGIN
         ('ewp_co_bff',                  'ewp-co-bff-dev'),
         ('ewp_compliance_bff',          'ewp-compliance-bff-dev'),
         ('ewp_accounts_bff',            'ewp-accounts-bff-dev'),
-        ('ewp_payments_bff',            'ewp-payments-bff-dev')
+        ('ewp_payments_bff',            'ewp-payments-bff-dev'),
+        ('ewp_audit_web',               'ewp-audit-web-dev')
     ) AS t(role_name, role_password)
     LOOP
         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r.role_name) THEN
@@ -80,7 +81,7 @@ GRANT CONNECT ON DATABASE "EwpAccountsDb"            TO ewp_accounts_api;
 GRANT CONNECT ON DATABASE "EwpNotificationsDb"       TO ewp_notifications_api;
 GRANT CONNECT ON DATABASE "EwpPaymentsDb"            TO ewp_payments_api;
 GRANT CONNECT ON DATABASE "EwpAuditDb"               TO ewp_audit_api;
-GRANT CONNECT ON DATABASE "EwpBffStateDb"            TO ewp_shell, ewp_co_bff, ewp_compliance_bff, ewp_accounts_bff, ewp_payments_bff;
+GRANT CONNECT ON DATABASE "EwpBffStateDb"            TO ewp_shell, ewp_co_bff, ewp_compliance_bff, ewp_accounts_bff, ewp_payments_bff, ewp_audit_web;
 
 -- -----------------------------------------------------------------------------
 -- 3. Per database: data access for the owning service role

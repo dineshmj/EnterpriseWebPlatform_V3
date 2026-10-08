@@ -4,7 +4,7 @@
 -- Create the database once (as postgres):  CREATE DATABASE "EwpAuditDb";
 -- Then, connected to EwpAuditDb (it DROPS the trail - development only):
 --   psql -h localhost -U postgres -d EwpAuditDb -v ON_ERROR_STOP=1 -f EwpAuditDb.sql
--- and run db\Apply-EwpServiceDbUsers.ps1 (user ewp_audit_api: SELECT and INSERT only).
+-- and run ps\database\Apply-EwpServiceDbUsers.ps1 (user ewp_audit_api: SELECT and INSERT only).
 --
 -- Three layers keep the trail honest:
 --   1. the Audit API's database user may only INSERT and SELECT (no UPDATE, DELETE, DDL);

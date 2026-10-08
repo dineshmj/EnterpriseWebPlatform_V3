@@ -4,8 +4,8 @@ The platform uses a single-node Kafka broker in KRaft mode, installed natively a
 
 | File | Purpose |
 |---|---|
-| [Setup-KafkaSecurity.ps1](Setup-KafkaSecurity.ps1) | SCRAM-SHA-512 authentication, one Kafka user per deployable, deny-by-default ACLs, explicit topics, no auto-creation |
-| [Stop-Kafka.ps1](Stop-Kafka.ps1) | Stops the broker without knowing its PID (for when Ctrl+C is not possible, e.g. under PowerShell ISE), waits for the ports to free, and clears the read-only flag on metadata snapshots that otherwise breaks the next start on Windows |
+| [Setup-KafkaSecurity.ps1](../ps/kafka/Setup-KafkaSecurity.ps1) | SCRAM-SHA-512 authentication, one Kafka user per deployable, deny-by-default ACLs, explicit topics, no auto-creation |
+| [Stop-Kafka.ps1](../ps/kafka/Stop-Kafka.ps1) | Stops the broker without knowing its PID (for when Ctrl+C is not possible, e.g. under PowerShell ISE), waits for the ports to free, and clears the read-only flag on metadata snapshots that otherwise breaks the next start on Windows |
 | [kafka-ui.yml](kafka-ui.yml) | Configuration for Kafka UI: localhost only, login form, read-only Kafka user, read-only cluster |
 
 ## 1. Secure the broker (once)
@@ -14,18 +14,18 @@ Run the phases in order from the repository root (PowerShell). Each phase checks
 
 ```powershell
 # Kafka RUNNING (still PLAINTEXT): users, topics, new consumer groups
-.\kafka\Setup-KafkaSecurity.ps1 -Phase Prepare
+.\ps\kafka\Setup-KafkaSecurity.ps1 -Phase Prepare
 
 # Stop Kafka (Ctrl+C in its window), then: SASL listener + authorizer (server.properties is backed up first)
-.\kafka\Setup-KafkaSecurity.ps1 -Phase Secure
+.\ps\kafka\Setup-KafkaSecurity.ps1 -Phase Secure
 
 # Start Kafka (C:\Kafka\StartKafka.bat), then: least-privilege ACLs
-.\kafka\Setup-KafkaSecurity.ps1 -Phase Acls
+.\ps\kafka\Setup-KafkaSecurity.ps1 -Phase Acls
 ```
 
 **Adding a component to an already-secured broker** (e.g. a new bounded context): with Kafka running, run `-Phase Prepare` (it detects `config\admin.properties` and authenticates as admin) and then `-Phase Acls`. The Secure phase is not needed again.
 
-To undo: stop Kafka and run `.\kafka\Setup-KafkaSecurity.ps1 -Revert` (restores the backed-up `server.properties`), then set `Kafka:SecurityProtocol` back to `Plaintext` in the components.
+To undo: stop Kafka and run `.\ps\kafka\Setup-KafkaSecurity.ps1 -Revert` (restores the backed-up `server.properties`), then set `Kafka:SecurityProtocol` back to `Plaintext` in the components.
 
 ### Who may do what
 

@@ -150,7 +150,9 @@ VALUES
     ('Customer KYC',        'https://kyc.dev.localhost:33800'),
     ('Compliance',          'https://compliance.dev.localhost:46399'),
     ('Accounts',            'https://accounts.dev.localhost:45456'),
-    ('Payments',            'https://payments.dev.localhost:46388');
+    ('Payments',            'https://payments.dev.localhost:46388'),
+    -- The customer's pattern: a Next.js app (SPA + light BFF), not an ASP.NET Core BFF.
+    ('Audit',               'https://audit.dev.localhost:46380');
 
 -- ============================================================
 -- Seed: Management Areas
@@ -223,6 +225,11 @@ VALUES
         'Payment Processing',
         'Monitor payment processing and payment workflow status.',
         (SELECT id FROM microservices WHERE name = 'Payments')
+    ),
+    (
+        'Audit',
+        'Search the tamper-evident audit trail and follow one record end to end.',
+        (SELECT id FROM microservices WHERE name = 'Audit')
     );
 
 -- ============================================================
@@ -409,6 +416,16 @@ VALUES
            AND microservice_id =
                (SELECT id FROM microservices
                 WHERE name = 'Payments'))
+    ),
+    (
+        'Audit Trail',
+        '/v1/audit/trail/view-all',
+        'fa-shield-halved',
+        (SELECT id FROM management_areas
+         WHERE name = 'Audit'
+           AND microservice_id =
+               (SELECT id FROM microservices
+                WHERE name = 'Audit'))
     );
 
 -- ============================================================
@@ -615,6 +632,17 @@ CROSS JOIN
         ('platform_administrator')
 ) AS r(role_short_name)
 WHERE mi.task_name = 'Payment Processing Monitor';
+
+-- Audit Trail: auditors only (the Audit API also requires the auditor's audit.view / audit.search).
+INSERT INTO menu_items_and_roles (menu_item_id, role_short_name)
+SELECT mi.id, r.role_short_name
+FROM menu_items mi
+CROSS JOIN
+(
+    VALUES
+        ('auditor')
+) AS r(role_short_name)
+WHERE mi.task_name = 'Audit Trail';
 
 -- ============================================================
 -- Verification queries

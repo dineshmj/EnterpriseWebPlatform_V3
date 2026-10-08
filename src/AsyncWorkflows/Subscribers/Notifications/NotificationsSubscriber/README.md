@@ -29,6 +29,6 @@ commit Kafka offset
 | Notifications API / IDP unavailable, 5xx, timeout, 401 / 403 | Transient: retried in place with back-off; never skipped. |
 | Malformed message, or the API answers 4xx | Dead-lettered to `notifications.subscriber.dlq` with diagnostic headers. |
 
-The consumer group starts at the **latest** offsets (`Setup-KafkaSecurity.ps1 -Phase Prepare`): notifications are about what happens from now on, never a replay of history.
+The consumer group starts at the **latest** offsets (`ps\kafka\Setup-KafkaSecurity.ps1 -Phase Prepare`): notifications are about what happens from now on, never a replay of history.
 
 Health: `http://localhost:5107/health/live` and `/health/ready`. Secrets: `Kafka:SaslPassword` and `NotificationsSubscriber:ClientSecret` (Development values in `appsettings.Development.json`).

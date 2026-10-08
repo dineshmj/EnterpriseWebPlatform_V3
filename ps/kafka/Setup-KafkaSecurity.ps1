@@ -28,7 +28,7 @@
     itself, but the data is not encrypted. Production uses SASL_SSL (or mTLS).
 
 .EXAMPLE
-    .\kafka\Setup-KafkaSecurity.ps1 -Phase Prepare
+    .\ps\kafka\Setup-KafkaSecurity.ps1 -Phase Prepare
 #>
 [CmdletBinding()]
 param(
@@ -209,9 +209,9 @@ switch ($Phase) {
     }
 
     if ($auth) {
-        Write-Host "`nNext (broker already secured): run  .\kafka\Setup-KafkaSecurity.ps1 -Phase Acls" -ForegroundColor Green
+        Write-Host "`nNext (broker already secured): run  .\ps\kafka\Setup-KafkaSecurity.ps1 -Phase Acls" -ForegroundColor Green
     } else {
-        Write-Host "`nNext: stop Kafka (Ctrl+C in its window), then run:  .\kafka\Setup-KafkaSecurity.ps1 -Phase Secure" -ForegroundColor Green
+        Write-Host "`nNext: stop Kafka (Ctrl+C in its window), then run:  .\ps\kafka\Setup-KafkaSecurity.ps1 -Phase Secure" -ForegroundColor Green
     }
 }
 
@@ -255,7 +255,7 @@ switch ($Phase) {
     )
 
     Write-Host 'server.properties now uses SASL_PLAINTEXT + StandardAuthorizer; config\admin.properties written.' -ForegroundColor Green
-    Write-Host "Next: start Kafka (StartKafka.bat), then run:  .\kafka\Setup-KafkaSecurity.ps1 -Phase Acls" -ForegroundColor Green
+    Write-Host "Next: start Kafka (StartKafka.bat), then run:  .\ps\kafka\Setup-KafkaSecurity.ps1 -Phase Acls" -ForegroundColor Green
 }
 
 # ---------------------------------------------------------------------------------------

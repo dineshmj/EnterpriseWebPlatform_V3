@@ -41,6 +41,8 @@ The document answers *how the platform is built and protected*, not *which busin
 | If one service is compromised, what can it reach in the database? | [2.4.3](#243-least-privilege-database-users) |
 | Is Kafka secured? Could someone publish a fake event? | [2.4.6](#246-kafka-authentication-and-per-topic-acls) |
 | Can one user or a script flood an API? | [2.4.7](#247-rate-limiting) |
+| Who did what, and can the record be trusted? Could an administrator quietly change it? | [2.4.8](#248-tamper-evident-audit-trail) |
+| A service calls another for a person - does the second one still know who it is? | [2.1.2](#212-separate-human-and-machine-identities) |
 | Does restarting a BFF sign everybody out? | [2.3.4](#234-session-management), [1.6.1](#161-pod-replacement-and-horizontal-scaling) |
 | How does Kubernetes know a pod is healthy, or ready for traffic? | [1.7.2](#172-health-endpoints-for-liveness-and-readiness) |
 | How are vulnerable dependencies caught? | [2.5.1](#251-dependency-vulnerability-scanning) |
@@ -113,6 +115,7 @@ The document answers *how the platform is built and protected*, not *which busin
     - [2.4.5 Secrets per deployable](#245-secrets-per-deployable)
     - [2.4.6 Kafka authentication and per-topic ACLs](#246-kafka-authentication-and-per-topic-acls)
     - [2.4.7 Rate limiting](#247-rate-limiting)
+    - [2.4.8 Tamper-evident audit trail](#248-tamper-evident-audit-trail)
   - [2.5 Supply chain](#25-supply-chain)
     - [2.5.1 Dependency vulnerability scanning](#251-dependency-vulnerability-scanning)
 - [3. Anti-patterns avoided](#3-anti-patterns-avoided)
@@ -144,13 +147,13 @@ Each business capability (Customer Onboarding, Customer KYC, Compliance, Account
 
 #### 1.1.2 Independently deployable components
 
-Every API, BFF, worker and front end is its own deployable with its own configuration and secrets. A micro-frontend and its BFF ship together: the Next.js app is exported as static files and served by its BFF, so the pair can be released and rolled back as one unit without touching the Shell or other contexts. Contexts can even use different stacks: the Customer Onboarding, Compliance, Accounts and Payments BFFs are ASP.NET Core, the Customer KYC BFF is NestJS. All sit behind the same Shell and the same protocol. (The existing contexts stay as they are; a new context follows the customer's pattern: Next.js SPA with a light BFF → NestJS Journey API → ASP.NET Core Domain APIs.)
+Every API, BFF, worker and front end is its own deployable with its own configuration and secrets. A micro-frontend and its BFF ship together: the Next.js app is exported as static files and served by its BFF, so the pair can be released and rolled back as one unit without touching the Shell or other contexts. Contexts can even use different stacks: the Customer Onboarding, Compliance, Accounts and Payments BFFs are ASP.NET Core, the Customer KYC BFF is NestJS, and the Audit context follows the customer's pattern: a Next.js app that is both the SPA and a light BFF (server actions), a separately deployed NestJS Journey API, and ASP.NET Core Domain APIs. All sit behind the same Shell and the same protocol. (The existing contexts stay as they are; new contexts follow the customer's pattern.)
 
 **Where to look at:**
 
 - .NET BFFs serving their exported MFEs: [CustomerOnboarding/BFF.Web](../src/Microservices/CustomerOnboarding/BFF.Web), [Compliance/BFF.Web](../src/Microservices/Compliance/BFF.Web/README.md), [Accounts/BFF.Web](../src/Microservices/Accounts/BFF.Web/README.md)
 - NestJS BFF serving its exported MFE: [CustomerKyc/BFF.Web](../src/Microservices/CustomerKyc/BFF.Web)
-- Build and export of all front ends: [CompileAndExportBFFClients_V3.ps1](../CompileAndExportBFFClients_V3.ps1)
+- Build and export of all front ends: [CompileAndExportBFFClients_V3.ps1](../ps/build/CompileAndExportBFFClients_V3.ps1)
 - Rules and release checklist: [Blueprint §7](Enterprise-Web-Platform-V3-Architectural-Vision-and-Security-Blueprint.md#7-independent-deployability)
 
 **Not yet:** service URLs and client IDs are still compiled into `Common.Landscape`, so changing one forces a rebuild of the others. Secrets are already per deployable.
@@ -425,7 +428,7 @@ Every call from a worker to an API runs through a resilience pipeline: a 10-seco
 
 - Worker and back-off: [ScreeningWorker.cs](../src/Microservices/Compliance/API/Infrastructure/Screening/ScreeningWorker.cs), [ScreenDueCase.cs](../src/Microservices/Compliance/API/Application/Commands/ScreenDueCase.cs); "failure is not a pass": `RecordScreeningFailure` in [ComplianceCase.cs](../src/Microservices/Compliance/API/Domain/Aggregates/ComplianceCase.cs)
 - Provider pipeline and anti-corruption mapping: [Compliance API Program.cs](../src/Microservices/Compliance/API/Program.cs), [ScreeningProviderClient.cs](../src/Microservices/Compliance/API/Infrastructure/Screening/ScreeningProviderClient.cs)
-- Demo: ReadMe.txt section 4, step g2
+- Demo: ReadMe.txt section 7b
 
 **Retrying a POST without opening two accounts.** Accounts asks the bank's core-banking system (simulated by the [Core Banking Simulator](../src/Simulators/CoreBankingSimulator/README.md)) to open the account, through the same kind of worker, back-off and circuit breaker. Unlike a screening, opening an account is **not** naturally repeatable: if the answer to a successful request is lost in a timeout, a blind retry could open a second account. Every request therefore carries an **`Idempotency-Key`** (the onboarding's `ApplicationRef`), and core banking returns the same account for a repeated key — which is the only reason this POST may be retried at all. A refusal (HTTP 422) is a business answer: no retry, the application is FAILED. Too many technical failures end the same way, and compensation follows.
 
@@ -467,7 +470,7 @@ Every .NET component uses OpenTelemetry with W3C trace context. A trace normally
 - Trace stored with the event: `trace_parent` in [EwpCustomerDb.sql](../src/Microservices/CustomerOnboarding/API/CustomerDB/EwpCustomerDb.sql) and [EwpKycDb.sql](../src/Microservices/CustomerKyc/API/KycDb/EwpKycDb.sql)
 - Publish span and headers: [CustomerOutboxPublisher.cs](../src/AsyncWorkflows/Publishers/CustomerOnboarding/CustomerOutboxPublisher/Publishing/CustomerOutboxPublisher.cs), [KycOutboxPublisher.cs](../src/Microservices/CustomerKyc/API/Infrastructure/KycOutboxPublisher.cs)
 - Process span: [KafkaSubscriberHostedService.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/KafkaSubscriberHostedService.cs)
-- How to view traces locally (Jaeger): [ReadMe.txt §4f](../ReadMe.txt)
+- How to view traces locally (Jaeger): [ReadMe.txt §9b](../ReadMe.txt)
 
 **Not yet:** the KYC BFF (NestJS) is not instrumented, so a KYC officer's decision starts a new trace at the KYC API.
 
@@ -480,7 +483,7 @@ Every component answers the two questions an orchestrator such as AKS or EKS ask
 - Shared endpoints and worker listener: [HealthEndpoints.cs](../src/Common/Observability/HealthEndpoints.cs)
 - Loop heartbeat and Outbox backlog checks: [LoopHeartbeat.cs](../src/Common/Observability/LoopHeartbeat.cs), [OutboxBacklogHealthCheck.cs](../src/Common/Observability/OutboxBacklogHealthCheck.cs)
 - Subscriber liveness and readiness: [SubscriberHealth.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/SubscriberHealth.cs)
-- Wiring: the `AddHealthChecks` calls in each `Program.cs`, e.g. [CustomerKyc API Program.cs](../src/Microservices/CustomerKyc/API/Program.cs); endpoint list: [ReadMe.txt §4e](../ReadMe.txt)
+- Wiring: the `AddHealthChecks` calls in each `Program.cs`, e.g. [CustomerKyc API Program.cs](../src/Microservices/CustomerKyc/API/Program.cs); endpoint list: [ReadMe.txt §9a](../ReadMe.txt)
 
 #### 1.7.3 Structured logs and metrics
 
@@ -491,7 +494,7 @@ The three signals are set up once, in the shared observability library, and ever
 - Set-up for all three signals: [ObservabilityExtensions.cs](../src/Common/Observability/ObservabilityExtensions.cs); logging and request logging: [EwpLogging.cs](../src/Common/Observability/EwpLogging.cs)
 - `/metrics` and the health-to-metrics bridge: [MetricsEndpoints.cs](../src/Common/Observability/MetricsEndpoints.cs); worker listener: [HealthEndpoints.cs](../src/Common/Observability/HealthEndpoints.cs)
 - Kafka counters: [KafkaProducer.cs](../src/AsyncWorkflows/Infrastructure/Kafka/KafkaProducer.cs), `RecordConsumed` in [MessagingTelemetry.cs](../src/Common/Observability/MessagingTelemetry.cs)
-- Metric names and how to look at them: [ReadMe.txt §4h](../ReadMe.txt)
+- Metric names and how to look at them: [ReadMe.txt §9c](../ReadMe.txt)
 
 **Not yet:** dashboards and alert rules (they belong to the deployment's Grafana / Observe); the KYC BFF (NestJS) has neither structured logs nor metrics.
 
@@ -521,7 +524,12 @@ Humans and services authenticate differently. Workers and BFFs use OAuth 2.0 Cli
 - Pinned-client policies `KycCaseOpeningSubscriberWrite` and `OnboardingOutcomeSubscriberWrite`: [CustomerKyc API Program.cs](../src/Microservices/CustomerKyc/API/Program.cs), [CustomerOnboarding API Program.cs](../src/Microservices/CustomerOnboarding/API/Program.cs)
 - Client and scope inventory: [IDP-Requirements.md](../src/IDP/doc/IDP-Requirements.md)
 
-**Not yet:** delegated user context (RFC 8693 token exchange). Documents Management receives the acting user's branch as an asserted header from a pinned BFF client.
+**Delegated user context (token exchange, RFC 8693).** Where a service calls another **for a person**, a plain machine token would lose who that person is. The Audit context therefore uses token exchange at every hop: the caller swaps the token it holds for one aimed at the next service, in which the person stays the subject (so roles, permissions and branch still decide) and the acting services are listed in a nested `act` claim. The Audit API accepts a token only when the person is an auditor **and** the acting client is the Audit Journey API; the IDP decides, by an allow-list, which client may exchange which token, and the Journey API has no grant other than token exchange, so it can never act without a person.
+
+- Grant and allow-list: [TokenExchangeGrantValidator.cs](../src/IDP/Security/TokenExchangeGrantValidator.cs); `act` in the access token: [CustomProfileService.cs](../src/IDP/Services/CustomProfileService.cs)
+- Checking person and caller: [DelegatedAuditorAuthorization.cs](../src/Microservices/Audit/API/Authorization/DelegatedAuditorAuthorization.cs); the Journey API side: [Audit Journey API README](../src/Microservices/Audit/JourneyApi/README.md)
+
+**Not yet:** Documents Management still receives the acting user's branch as an asserted header from a pinned BFF client, not by token exchange.
 
 #### 2.1.3 Identity provider hardening
 
@@ -743,7 +751,7 @@ The message broker is secured like any other service. In plain terms: a program 
 
 **Where to look at:**
 
-- Users, ACLs and broker settings: [Setup-KafkaSecurity.ps1](../kafka/Setup-KafkaSecurity.ps1), [kafka/README.md](../kafka/README.md)
+- Users, ACLs and broker settings: [Setup-KafkaSecurity.ps1](../ps/kafka/Setup-KafkaSecurity.ps1), [kafka/README.md](../kafka/README.md)
 - Client side, failing closed without credentials: [KafkaClientSecurity.cs](../src/AsyncWorkflows/Infrastructure/Kafka/KafkaClientSecurity.cs)
 - Per-component Kafka user: `Kafka:SaslUsername` in each component's `appsettings.json`
 
@@ -757,6 +765,18 @@ Every .NET BFF and API limits how fast each caller may send requests (OWASP API4
 
 - [RateLimiting.cs](../src/Common/WebUtilities/Security/RateLimiting.cs) (`AddEwpRateLimiting` / `UseEwpRateLimiting`), used by every BFF's and API's `Program.cs`; limits in the `RateLimiting` configuration section
 
+#### 2.4.8 Tamper-evident audit trail
+
+Who did what is recorded once, centrally, and cannot be quietly changed. The Audit context reads every business event from Kafka (no producer has to do anything) and appends it to a trail that keeps identifiers and people only - who initiated, who decided, which record, the outcome - plus the SHA-256 of the original message as evidence; no names or addresses. Three layers keep it honest: its database user may only insert and read; a trigger refuses updates and deletes for everybody, the owner included; and every entry's hash covers the previous entry's hash, so an edit made by someone who bypasses both still breaks the chain from that entry on. The chain is re-verified on a schedule: a break turns readiness Degraded and shows in the metrics, so an alert can fire. Auditors - and only auditors - search the trail, follow one record end to end (with its current status from the context that owns it) and verify the chain on demand; every one of those reads is itself recorded. The screens are built in the customer's pattern (Next.js light BFF → NestJS Journey API → Domain APIs), with the person carried by token exchange at every hop ([2.1.2](#212-separate-human-and-machine-identities)).
+
+**Where to look at:**
+
+- The trail and its chain: [AuditEntry.cs](../src/Microservices/Audit/API/Domain/AuditEntry.cs), [AuditTrailAppender.cs](../src/Microservices/Audit/API/Infrastructure/AuditTrailAppender.cs), [AuditChainVerifier.cs](../src/Microservices/Audit/API/Application/AuditChainVerifier.cs); append-only table and trigger: [EwpAuditDb.sql](../src/Microservices/Audit/API/AuditDb/EwpAuditDb.sql)
+- What is kept from an event: [AuditEventMapper.cs](../src/Microservices/Audit/API/Application/AuditEventMapper.cs)
+- The three tiers: [Audit web](../src/Microservices/Audit/Web/README.md), [Audit Journey API](../src/Microservices/Audit/JourneyApi/README.md), [Audit API](../src/Microservices/Audit/API/README.md)
+
+**Not yet:** operations' "Retry release" on a payment is not an event, so it is not in the trail; the chain is not anchored outside the database (e.g. periodically to WORM storage).
+
 ### 2.5 Supply chain
 
 #### 2.5.1 Dependency vulnerability scanning
@@ -765,7 +785,7 @@ One script checks every .NET and npm dependency of the solution against publishe
 
 **Where to look at:**
 
-- [Scan-Dependencies.ps1](../Scan-Dependencies.ps1)
+- [Scan-Dependencies.ps1](../ps/build/Scan-Dependencies.ps1)
 
 **Not yet:** wiring into a CI pipeline, SAST, secret scanning, SBOM and artifact signing.
 

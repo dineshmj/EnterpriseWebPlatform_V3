@@ -36,4 +36,4 @@ pnpm install
 pnpm run export          # next build + copy of the export into ..\wwwroot
 ```
 
-`CompileAndExportBFFClients_V3.ps1` (repository root) does this for every front end. The BFF itself is part of the solution's launch profile. Its client secret is `Oidc:ClientSecret` (Development value in `appsettings.Development.json`; elsewhere `Oidc__ClientSecret` from the environment or a secret store).
+`ps\build\CompileAndExportBFFClients_V3.ps1` does this for every front end. The BFF itself is part of the solution's launch profile. Its client secret is `Oidc:ClientSecret` (Development value in `appsettings.Development.json`; elsewhere `Oidc__ClientSecret` from the environment or a secret store).

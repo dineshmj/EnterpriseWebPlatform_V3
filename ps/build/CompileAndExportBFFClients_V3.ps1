@@ -231,7 +231,7 @@ function Build-NestJS-BFF {
 ### TEMPORARILIY COMMENTED OUT:   
 ### TEMPORARILIY COMMENTED OUT:   Write-Host "`r`nNo targeted IDEs detected. Proceeding with EWP V3 client/BFF builds..." -ForegroundColor Green
 
-$codeRootFolder = $PSScriptRoot
+$codeRootFolder = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path   # the repository root (this script is in ps\<area>)
 
 # ----------------------------------------------------------------------------------------------------------------------
 # EWP V3 folder structure

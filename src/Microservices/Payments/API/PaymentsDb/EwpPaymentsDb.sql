@@ -202,6 +202,6 @@ BEGIN
         GRANT SELECT, INSERT, UPDATE, DELETE ON payments, payment_sagas, payment_saga_history, outbox_messages, inbox_messages, staff_members TO ewp_payments_api;
         GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_payments_api;
     ELSE
-        RAISE WARNING 'Role ewp_payments_api does not exist yet: run db\Apply-EwpServiceDbUsers.ps1, then this script again.';
+        RAISE WARNING 'Role ewp_payments_api does not exist yet: run ps\database\Apply-EwpServiceDbUsers.ps1, then this script again.';
     END IF;
 END $$;

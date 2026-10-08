@@ -210,6 +210,25 @@ public sealed class PaymentsController(
         }
     }
 
+    /// <summary>
+    /// The same, found by the payment's number - how other contexts (e.g. the audit trail, through
+    /// the Audit Journey API acting for an auditor) refer to a payment. Same policy and scope.
+    /// </summary>
+    [HttpGet("by-number/{paymentNumber}")]
+    [Authorize(Policy = "PaymentView")]
+    public async Task<IActionResult> GetPaymentByNumber(string paymentNumber, CancellationToken cancellationToken)
+    {
+        var (allowed, branch) = PaymentsStaffAuthorizationHandler.ReadScopeOf(User);
+        if (!allowed)
+            return Forbid();
+        if (paymentNumber.Length > 40)
+            return NotFound();
+
+        var paymentId = await queries.FindPaymentIdAsync(paymentNumber, branch, cancellationToken);
+        var payment = paymentId is { } id ? await queries.GetPaymentAsync(id, branch, cancellationToken) : null;
+        return payment is null ? NotFound() : Ok(payment);
+    }
+
     /// <summary>The payment, its saga and the saga's timeline. A payment outside the caller's scope is reported as not found.</summary>
     [HttpGet("{paymentId:long}")]
     [Authorize(Policy = "PaymentView")]

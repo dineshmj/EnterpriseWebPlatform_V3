@@ -824,7 +824,7 @@ BEGIN
         GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA identity_server TO ewp_idp;
         GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA identity_server TO ewp_idp;
     ELSE
-        RAISE WARNING 'Role ewp_idp does not exist yet: run db\Apply-EwpServiceDbUsers.ps1 (it grants this schema too).';
+        RAISE WARNING 'Role ewp_idp does not exist yet: run ps\database\Apply-EwpServiceDbUsers.ps1 (it grants this schema too).';
     END IF;
 END $$;
 

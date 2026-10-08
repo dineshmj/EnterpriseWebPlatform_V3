@@ -135,6 +135,12 @@ public sealed class PaymentsQueries(PaymentsDbContext db) : IPaymentsQueries
             Items: items);
     }
 
+    public async Task<long?> FindPaymentIdAsync(string paymentNumber, BranchCode? branch, CancellationToken cancellationToken) =>
+        await db.Payments.AsNoTracking()
+            .Where(x => x.PaymentNumber == paymentNumber && (branch == null || x.BranchCode == branch))
+            .Select(x => (long?)x.Id)
+            .SingleOrDefaultAsync(cancellationToken);
+
     public async Task<PaymentDetail?> GetPaymentAsync(long paymentId, BranchCode? branch, CancellationToken cancellationToken)
     {
         var payment = await db.Payments.AsNoTracking()

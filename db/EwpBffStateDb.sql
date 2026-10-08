@@ -2,7 +2,7 @@
 -- EwpBffStateDb - server-side sessions and Data Protection keys of the .NET BFFs
 -- =============================================================================
 -- Create the database once (as postgres):  CREATE DATABASE "EwpBffStateDb";
--- Run db\Apply-EwpServiceDbUsers.ps1 (creates the BFF users), then, while connected to
+-- Run ps\database\Apply-EwpServiceDbUsers.ps1 (creates the BFF users), then, while connected to
 -- EwpBffStateDb (it drops and recreates the schemas - everybody is signed out):
 --   psql -h localhost -U postgres -d EwpBffStateDb -v ON_ERROR_STOP=1 -f db\EwpBffStateDb.sql
 --
@@ -13,6 +13,7 @@
 --   compliance_bff          ewp_compliance_bff   (Compliance BFF)
 --   accounts_bff            ewp_accounts_bff     (Accounts BFF)
 --   payments_bff            ewp_payments_bff     (Payments BFF)
+--   audit_bff               ewp_audit_web        (Audit web - the Next.js light BFF; its own table, below)
 --
 -- "UserSessions" is Duende BFF's server-side session table, exactly as its EF store maps it
 -- (PascalCase names are Duende's). data_protection_keys holds the BFF's key ring, which
@@ -68,9 +69,42 @@ BEGIN
             EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA %I TO %I', b.schema_name, b.role_name);
             EXECUTE format('GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA %I TO %I', b.schema_name, b.role_name);
         ELSE
-            RAISE WARNING 'Role % does not exist yet: run db\Apply-EwpServiceDbUsers.ps1, then this script again.', b.role_name;
+            RAISE WARNING 'Role % does not exist yet: run ps\database\Apply-EwpServiceDbUsers.ps1, then this script again.', b.role_name;
         END IF;
     END LOOP;
+END $$;
+
+-- -----------------------------------------------------------------------------
+-- audit_bff: the Next.js light BFF of the Audit context (not Duende). The key is the SHA-256
+-- of the session cookie, never the cookie itself; data holds the person's tokens encrypted
+-- with AES-256-GCM (the key, AUDIT_WEB_SESSION_KEY, is not in the database). So a database
+-- reader can neither hijack nor read a session.
+-- -----------------------------------------------------------------------------
+DROP SCHEMA IF EXISTS audit_bff CASCADE;
+CREATE SCHEMA audit_bff;
+
+CREATE TABLE audit_bff.sessions (
+    session_hash CHAR(64)     NOT NULL,
+    subject_id   VARCHAR(200) NOT NULL,
+    sid          VARCHAR(200) NULL,       -- the IDP session: front- and back-channel logout end it
+    data         TEXT         NOT NULL,   -- AES-256-GCM: iv | tag | ciphertext, base64
+    created_at   TIMESTAMPTZ  NOT NULL,
+    renewed_at   TIMESTAMPTZ  NOT NULL,
+    expires_at   TIMESTAMPTZ  NOT NULL,   -- sliding, 30 minutes
+    CONSTRAINT pk_audit_bff_sessions PRIMARY KEY (session_hash)
+);
+CREATE INDEX ix_audit_bff_sessions_sid ON audit_bff.sessions (sid);
+CREATE INDEX ix_audit_bff_sessions_subject ON audit_bff.sessions (subject_id);
+CREATE INDEX ix_audit_bff_sessions_expires ON audit_bff.sessions (expires_at);
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ewp_audit_web') THEN
+        GRANT USAGE ON SCHEMA audit_bff TO ewp_audit_web;
+        GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA audit_bff TO ewp_audit_web;
+    ELSE
+        RAISE WARNING 'Role ewp_audit_web does not exist yet: run ps\database\Apply-EwpServiceDbUsers.ps1, then this script again.';
+    END IF;
 END $$;
 
 SELECT n.nspname AS schema, c.relname AS "table"

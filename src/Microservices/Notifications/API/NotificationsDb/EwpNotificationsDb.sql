@@ -63,6 +63,6 @@ BEGIN
         GRANT SELECT, INSERT, UPDATE, DELETE ON notifications, notification_reads, inbox_messages TO ewp_notifications_api;
         GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_notifications_api;
     ELSE
-        RAISE WARNING 'Role ewp_notifications_api does not exist yet: run db\Apply-EwpServiceDbUsers.ps1, then this script again.';
+        RAISE WARNING 'Role ewp_notifications_api does not exist yet: run ps\database\Apply-EwpServiceDbUsers.ps1, then this script again.';
     END IF;
 END $$;

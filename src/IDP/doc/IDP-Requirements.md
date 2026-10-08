@@ -50,13 +50,22 @@ The IDP authenticates humans and services and issues the tokens and claims that 
 | `BSS.Shell.BFF.ClientID` | Interactive (confidential) | Shell BFF | Present |
 | `CustomerOnboarding.Microservice.BFF.ClientID` | Interactive (confidential) | CO BFF | Present |
 | `CustomerKYC.Microservice.BFF.ClientID` | Interactive (confidential) | KYC BFF | Present |
-| `Accounts.Microservice.BFF.ClientID` | Interactive (confidential) | Accounts BFF | Reserved |
-| `Payments.Microservice.BFF.ClientID` | Interactive (confidential) | Payments BFF | Reserved |
+| `Compliance.Microservice.BFF.ClientID` | Interactive (confidential) | Compliance BFF | Present |
+| `Accounts.Microservice.BFF.ClientID` | Interactive (confidential) | Accounts BFF | Present |
+| `Payments.Microservice.BFF.ClientID` | Interactive (confidential) | Payments BFF | Present |
+| `Audit.Microservice.Web.ClientID` | Interactive (confidential) **+ token exchange** | Audit web BFF (Next.js): signs the person in, then exchanges their token for one aimed at the Audit Journey API (`audit-journey.read`) | Present (front end in 6e-3) |
+| `Audit.JourneyApi.ClientID` | **Token exchange only** (no client credentials) | Audit Journey API (NestJS) → Audit API (`audit.read`) and Payments API (`payments.read`), always for a person | Present |
 | ~~`DocumentsManagement.Microservice.BFF.ClientID`~~ | — | — | Removed: DM has no MFE by design |
 | `CustomerOnboarding.BFF.To.DocumentsManagement.M2M.ClientID` | M2M | CO BFF → DM (`documents-management.write`) | Present |
 | `Kyc.BFF.To.DocumentsManagement.M2M.ClientID` | M2M | KYC BFF → DM (`documents-management.read`) | Present |
 | `CustomerKyc.CaseOpeningSubscriber.To.CustomerKycApi.M2M.ClientID` | M2M | KYC Case Opening Subscriber → KYC API (`customer-kyc.write`) | Present |
 | `CustomerOnboarding.OutcomeSubscriber.To.CustomerOnboardingApi.M2M.ClientID` | M2M | Onboarding Outcome Subscriber → CO API internal endpoint (`customer-onboarding.write`) | Present |
+| `Compliance.CaseOpeningSubscriber.To.ComplianceApi.M2M.ClientID` | M2M | Compliance Case Opening Subscriber → Compliance API (`compliance.write`) | Present |
+| `DocumentsManagement.InvalidationSubscriber.To.DocumentsManagementApi.M2M.ClientID` | M2M | Document Invalidation Subscriber → DM (`documents-management.write`) | Present |
+| `Accounts.ApplicationOpeningSubscriber.To.AccountsApi.M2M.ClientID` | M2M | Account Application Opening Subscriber → Accounts API (`accounts.write`) | Present |
+| `Accounts.CommandSubscriber.To.AccountsApi.M2M.ClientID` | M2M | Accounts Command Subscriber → Accounts API (`accounts.write`) | Present |
+| `Payments.SagaReplySubscriber.To.PaymentsApi.M2M.ClientID` | M2M | Payments Saga Reply Subscriber → Payments API (`payments.write`) | Present |
+| `Notifications.Subscriber.To.NotificationsApi.M2M.ClientID` | M2M | Notifications Subscriber → Notifications API (`notifications.write`) | Present |
 | `BSS.ApiTesting.Bruno.ClientID` | Interactive (public, PKCE) | Developer API testing with Bruno; redirect URIs `http://127.0.0.1:3000/callback` and `https://oauth.usebruno.com/callback` | Present, registered **only in Development** |
 
 ## 4. API Resources and Scopes
@@ -68,9 +77,16 @@ The IDP authenticates humans and services and issues the tokens and claims that 
 | Documents Management API | `documents-management.read`, `documents-management.write` |
 | Accounts API | `accounts.read`, `accounts.write` |
 | Payments API | `payments.read`, `payments.write` |
-| Compliance API | *(to be registered)* |
+| Compliance API | `compliance.read`, `compliance.write` |
+| Notifications API | `notifications.read`, `notifications.write` |
+| Audit API | `audit.read` (delegated tokens only) |
+| Audit Journey API | `audit-journey.read` (delegated tokens only) |
 
 Identity scopes: `openid`, `profile`, `email`, `roles`, `organization`.
+
+### Token exchange (RFC 8693, delegation)
+
+Grant `urn:ietf:params:oauth:grant-type:token-exchange` (`Security/TokenExchangeGrantValidator.cs`). A service presents the access token it received (`subject_token`) and receives a new one for the next service: the **person stays the subject** (their roles, permissions and branch are re-read by the profile service at every exchange; a deactivated person's exchange fails), and the requesting client is added to the **`act`** claim, nested when the token was already delegated. Who may exchange what is an explicit allow-list (fail closed): the Audit web BFF only its own sign-in tokens; the Audit Journey API only tokens the Audit web BFF exchanged for it. A token without a person (`sub`) is never exchanged. Used by the Audit context ([Audit Journey API README](../../Microservices/Audit/JourneyApi/README.md)).
 
 ## 5. Claims Issued
 

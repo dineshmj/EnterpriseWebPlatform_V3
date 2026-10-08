@@ -36,4 +36,4 @@ Every call carries the staff member's own access token; GETs are retried, POSTs 
 
 ## Build
 
-`CompileAndExportBFFClients_V3.ps1` (step 7) builds the MFE and copies it to `wwwroot`; restart this BFF afterwards (its CSP hashes are computed at start-up).
+`ps\build\CompileAndExportBFFClients_V3.ps1` (step 7) builds the MFE and copies it to `wwwroot`; restart this BFF afterwards (its CSP hashes are computed at start-up).

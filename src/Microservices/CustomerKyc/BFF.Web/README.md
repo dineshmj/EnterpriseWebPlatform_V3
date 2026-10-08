@@ -82,7 +82,7 @@ Then start the BFF:
 pnpm run start
 ```
 
-`CompileAndExportBFFClients_V3.ps1` at the repository root runs the MFE export and the BFF build together.
+`ps\build\CompileAndExportBFFClients_V3.ps1` runs the MFE export and the BFF build together.
 
 ## Documents Management M2M
 

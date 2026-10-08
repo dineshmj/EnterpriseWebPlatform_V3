@@ -35,8 +35,11 @@ The API re-verifies the whole chain every `Audit:VerifyIntervalMinutes` (Develop
 |---|---|
 | `/health/live`, `/health/ready` | Liveness (process, consume loop); readiness (database, consumer group, chain) |
 | `/metrics` | Prometheus scrape, including `ewp_health_value{check="audit-chain"}` and `ewp_messaging_consumed_total` |
+| `GET /v1/audit/entries?record=&person=&eventType=&from=&to=&kind=&pageNumber=&pageSize=` | Search, newest first (`audit.search`). `record` matches the record or customer number; `person` a LAN ID or subject ID (a LAN ID also finds entries that carry only the subject ID); `kind` = `EVENT` (default) or `ACCESS` |
+| `GET /v1/audit/records/{recordRef}/timeline` | One record's story, oldest first: its entries and those of the same workflow(s) (`audit.view`) |
+| `GET /v1/audit/integrity` | Re-walk the chain now (`audit.view`) |
 
-The auditor's read endpoints (search, record timeline, verify on demand) come with token exchange in step 6e-2: only the Audit Journey API, **acting for an auditor** (the person's identity in the token), will be able to call them - and every search will itself be recorded as an `ACCESS` entry.
+**Who may read:** only a **delegated** token (token exchange): scope `audit.read`, the acting client (`act`) must be the Audit Journey API, and the **person** must hold `audit.view` / `audit.search` - which only auditors have. A plain machine token, the web BFF's token or a person's own token is refused (`DelegatedAuditorAuthorization.cs`). People are shown by LAN ID, resolved from the trail itself. Every read is itself recorded as an `ACCESS` entry (who searched what, when) - search them with `kind=ACCESS`.
 
 ## Try it
 
@@ -59,6 +62,5 @@ Within a minute the API logs `AUDIT CHAIN BROKEN at entry 1`, `/health/ready` sh
 
 ## Not yet
 
-- The read endpoints, the Journey API and the auditor's screens (6e-2, 6e-3).
 - Operations' "Retry release" on a payment publishes no event, so it is not in the trail yet.
 - A chain anchor outside the database (e.g. the latest hash periodically written to WORM storage), so even a full re-computation of the chain by an attacker would be detectable.

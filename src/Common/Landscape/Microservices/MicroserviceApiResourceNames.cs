@@ -23,4 +23,10 @@ public static class MicroserviceApiResourceNames
 
     public const string NOTIFICATIONS_API =
         "notifications-api";
+
+    public const string AUDIT_API =
+        "audit-api";
+
+    public const string AUDIT_JOURNEY_API =
+        "audit-journey-api";
 }

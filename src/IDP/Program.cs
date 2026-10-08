@@ -104,6 +104,9 @@ try
         // 🡡__ IF NOT: The in-memory default: after a restart no refresh token works, and everybody must sign in
         //              again once their access token expires.
         .AddProfileService<CustomProfileService>()
+        // OAuth 2.0 Token Exchange (RFC 8693): a service swaps a person's token for one aimed at
+        // the next service, keeping the person as subject and naming itself in "act".
+        .AddExtensionGrantValidator<TokenExchangeGrantValidator>()
         .AddSigningCredential(builder);
 
     // Health endpoints for the orchestrator's probes: /health/live (process working)

@@ -106,6 +106,9 @@ public interface IPaymentsQueries
 
     Task<PaymentDetail?> GetPaymentAsync(long paymentId, BranchCode? branch, CancellationToken cancellationToken);
 
+    /// <summary>The payment's ID for its number (e.g. PAY-261008-8KQNFR), within the caller's scope; null when none.</summary>
+    Task<long?> FindPaymentIdAsync(string paymentNumber, BranchCode? branch, CancellationToken cancellationToken);
+
     /// <summary>Every saga that is not finished, most urgent first (stuck, overdue, retrying, waiting, running).</summary>
     Task<ProcessingOverview> GetProcessingAsync(BranchCode? branch, DateTimeOffset now, CancellationToken cancellationToken);
 }

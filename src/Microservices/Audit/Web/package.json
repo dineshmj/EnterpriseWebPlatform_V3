@@ -1,0 +1,33 @@
+{
+  "name": "audit-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Audit web: Next.js SPA + light BFF (server actions) - the customer's pattern. Calls the Audit Journey API by token exchange.",
+  "scripts": {
+    "build": "next build",
+    "start": "node server.mjs",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "jose": "4.15.9",
+    "lucide-react": "^1.50.0",
+    "next": "16.3.8",
+    "openid-client": "5.7.0",
+    "pg": "8.16.3",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "tailwind-merge": "^3.7.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "24.5.2",
+    "@types/pg": "8.15.5",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.5",
+    "postcss": "^8.5.28",
+    "tailwindcss": "^4.3.3",
+    "typescript": "5.9.2"
+  }
+}

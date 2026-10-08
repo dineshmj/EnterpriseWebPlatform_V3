@@ -14,7 +14,7 @@
     PowerShell ISE, or its window was closed). Kafka recovers from a hard stop on its next start.
 
 .EXAMPLE
-    .\kafka\Stop-Kafka.ps1
+    .\ps\kafka\Stop-Kafka.ps1
 #>
 [CmdletBinding()]
 param(

@@ -1,31 +1,102 @@
 Enterprise Web Platform V3 - Local Development Guide
 ====================================================
 
-This file is ONLY the local-development guide: host names, HTTPS, databases, Kafka, building, starting, troubleshooting and API testing.
+This file is ONLY the local-development guide: setting up a laptop, host names, HTTPS, databases, Kafka, building,
+starting, demonstrating, troubleshooting and API testing.
 
-What the platform is, how it is designed and what each component must do are documented elsewhere - see the "Documentation map" in README.md. Nothing in this file repeats those documents.
+What the platform is, how it is designed and what each component must do are documented elsewhere - see the
+"Documentation map" in README.md. Nothing in this file repeats those documents.
 
 
 0) Contents:
 
-	1) Local Development Hostnames and HTTPS
-	2) Local URLs
-	3) First-Time Setup
-	4) Starting the Platform
-	5) Troubleshooting
-	6) Bruno API Testing
+	1) Quick start on a new laptop (about 10 minutes)
+	2) Host names and HTTPS
+	3) Local URLs and ports
+	4) Databases
+	5) Kafka
+	6) Running and debugging
+	7) Demonstrations
+	8) Upgrading an existing set-up
+	9) Operations reference (health, traces, logs, metrics, security headers, rate limiting, scans, secrets)
+	10) Troubleshooting
+	11) Bruno API testing
 
 
-1) Local Development Hostnames and HTTPS:
+1) Quick start on a new laptop (about 10 minutes):
 
-	Each tier uses its own host name. Browser cookies are scoped by host name, not by port. When several applications share "localhost", their authentication, correlation, nonce, session and BFF cookies are all sent to each other, and the request headers grow until the server answers:
+	Every step is a command or a copy. Run the PowerShell commands from the repository root. The first run of steps 6 to 8
+	downloads packages (NuGet, pnpm), which is most of the time; later runs are much faster.
+
+	1. Prerequisites (installed once):
+		.NET 10 SDK; Visual Studio 2026 (or 2022 17.14+, see 6a); Node.js 20.9+ (24 recommended) and pnpm;
+		PostgreSQL 18 with pgAdmin (user "postgres", password "admin", port 5432); a Java runtime 21+;
+		Apache Kafka 4.x (KRaft) at C:\Kafka.
+
+		Kafka, first time only (a fresh C:\Kafka):
+			cd C:\Kafka
+			$id = .\bin\windows\kafka-storage.bat random-uuid
+			.\bin\windows\kafka-storage.bat format --standalone -t $id -c config\server.properties
+		and create C:\Kafka\StartKafka.bat with these two lines:
+			cd /d C:\Kafka
+			bin\windows\kafka-server-start.bat config\server.properties
+
+	2. Hosts file (as Administrator): append the "127.0.0.1 ..." lines of Sample 'hosts'.txt (repository root) to
+	   C:\Windows\System32\drivers\etc\hosts. Why and how to check: section 2.
+
+	3. Certificates - trust the ASP.NET Core development certificate (it covers *.dev.localhost), and export it once
+	   for the Node.js services (Audit Journey API, Audit web):
+			dotnet dev-certs https --trust
+			dotnet dev-certs https -ep "$env:USERPROFILE\.aspnet\https\ewp-v3-dev.pfx" -p "dev-password"
+			dotnet dev-certs https -ep "$env:USERPROFILE\.aspnet\https\ewp-v3-dev.pem" --format Pem --no-password
+	   (The KYC BFF uses its own copy in src\Microservices\CustomerKyc\BFF.Web\certs.)
+
+	4. Kafka - secure it once (SCRAM users, per-component ACLs, explicit topics). Details: section 5.
+			C:\Kafka\StartKafka.bat                                 (in its own window; leave it running)
+			.\ps\kafka\Setup-KafkaSecurity.ps1 -Phase Prepare        (Kafka running)
+			... stop Kafka (Ctrl+C in its window) ...
+			.\ps\kafka\Setup-KafkaSecurity.ps1 -Phase Secure         (Kafka stopped)
+			C:\Kafka\StartKafka.bat
+			.\ps\kafka\Setup-KafkaSecurity.ps1 -Phase Acls           (Kafka running)
+
+	5. Databases - all 11, their users and their demo data, in the right order, in one command (it asks for YES):
+			.\ps\database\Initialize-EwpDatabases.ps1
+	   It ends with "Done: 11 database(s) recreated." and no yellow WARNING lines. Details: section 4.
+
+	6. Front ends - build and export the MFEs, the Shell SPA and the KYC NestJS BFF:
+			.\ps\build\CompileAndExportBFFClients_V3.ps1
+
+	7. Visual Studio - open EnterpriseWebPlatform.BSS.slnx, choose the multi-project launch profile ("New Profile",
+	   EnterpriseWebPlatform.BSS.slnLaunch) and Start. It builds and starts the IDP, every API, BFF, worker and
+	   simulator in their own console windows (list: section 6a).
+
+	8. Node.js services - when Visual Studio has started everything:
+			.\ps\run\Start-NodeServices.ps1
+	   It opens the KYC BFF, the Audit Journey API and the Audit web app in their own windows (each builds on its
+	   first run).
+
+	9. Browse to https://shell.dev.localhost:46367 and sign in. The demo users, their roles and the password convention
+	   are in src\IDP\doc\IDP-Requirements.md (section 6). A quick smoke test:
+		- sophie.cs (customer service, SYD001): the Customer Onboarding, Payments and other menus appear;
+		- sarah.audit (auditor): Audit -> Audit Trail shows the trail (empty on a new laptop until something happens);
+		- the walkthroughs in section 7 exercise everything else.
+
+	If something does not start: section 10 (troubleshooting).
+
+
+2) Host names and HTTPS:
+
+	Each tier uses its own host name. Browser cookies are scoped by host name, not by port. When several applications
+	share "localhost", their authentication, correlation, nonce, session and BFF cookies are all sent to each other, and
+	the request headers grow until the server answers:
 
 		HTTP 400 - Request Too Long
 		The size of the request headers is too long.
 
 	Giving each tier its own host name (all resolving to 127.0.0.1) gives each application an independent cookie namespace.
 
-	a) Open "C:\Windows\System32\drivers\etc\hosts" as Administrator and append:
+	a) Open "C:\Windows\System32\drivers\etc\hosts" as Administrator and append the lines below (a complete, current
+	   copy of a working hosts file is kept in the repository root: Sample 'hosts'.txt):
 
 		127.0.0.1    idp.dev.localhost
 		127.0.0.1    shell.dev.localhost
@@ -49,31 +120,37 @@ What the platform is, how it is designed and what each component must do are doc
 		127.0.0.1    payments.dev.localhost
 		127.0.0.1    payments-api.dev.localhost
 
+		127.0.0.1    audit.dev.localhost
 		127.0.0.1    audit-api.dev.localhost
+		127.0.0.1    audit-journey.dev.localhost
 
-	b) Check each name with "ping <hostname>"; each must resolve to 127.0.0.1.
+	b) Check each name with "ping <hostname>"; each must resolve to 127.0.0.1. (Browsers resolve any *.localhost name
+	   to this machine by themselves - PowerShell, Node.js and .NET use the hosts file, so a missing line shows there first.)
 
-	c) ASP.NET Core applications run on Kestrel using the "https" launch profile (not IIS Express). The ASP.NET Core development certificate covers "*.dev.localhost".
+	c) ASP.NET Core applications run on Kestrel using the "https" launch profile (not IIS Express). The ASP.NET Core
+	   development certificate covers "*.dev.localhost". This applies to every ASP.NET Core application: the Shell BFF,
+	   the Customer Onboarding, Compliance, Accounts and Payments BFFs, every API, the workers and the simulators.
+		dotnet dev-certs https --check
+		dotnet dev-certs https --trust
 
-		This applies to every ASP.NET Core application: the Shell BFF, the Customer Onboarding, Compliance, Accounts and Payments BFFs, every API, the workers and the simulators.
-
-	d) Node.js applications need the development certificate exported as a PFX file:
-
-		- Customer KYC BFF (NestJS)  - see src\Microservices\CustomerKyc\BFF.Web\README.md
+	d) Node.js applications need the development certificate as files, because Node does not use the Windows
+	   certificate store:
+		- Audit Journey API and Audit web: the PFX (to serve HTTPS) and the PEM (NODE_EXTRA_CA_CERTS, to trust the IDP
+		  and the APIs), exported to %USERPROFILE%\.aspnet\https (section 1, step 3); their runnow.bat checks for them.
+		- Customer KYC BFF (NestJS): its own copy in its certs folder - see src\Microservices\CustomerKyc\BFF.Web\README.md.
 
 	NOTE:
-		Kestrel is used deliberately in V3 so that the local topology is explicit and consistent. The IDP is self-hosted and opens its own console window.
+		Kestrel is used deliberately in V3 so that the local topology is explicit and consistent. The IDP is self-hosted
+		and opens its own console window.
 
 
-2) Local URLs:
-
-	Live:
+3) Local URLs and ports:
 
 		IDP								https://idp.dev.localhost:46392
 		Shell BFF (serves Shell SPA)	https://shell.dev.localhost:46367
 		Customer Onboarding BFF (MFE)	https://customer.dev.localhost:46311
 		Customer Onboarding API			https://customer-api.dev.localhost:46363
-		Customer KYC BFF (MFE)			https://kyc.dev.localhost:33800
+		Customer KYC BFF (MFE)			https://kyc.dev.localhost:33800   (Node.js; outside Visual Studio)
 		Customer KYC API				https://kyc-api.dev.localhost:46305
 		Documents Management API		https://documents-management-api.dev.localhost:49486
 		Compliance BFF (MFE)			https://compliance.dev.localhost:46399
@@ -86,8 +163,12 @@ What the platform is, how it is designed and what each component must do are doc
 		Payments API					https://payments-api.dev.localhost:44488   (the payment saga ORCHESTRATOR lives here)
 		Payment Network Simulator		https://localhost:46386   (stands in for an NPP-style payment network)
 		Payments BFF (MFE)				https://payments.dev.localhost:46388
-		Audit API						https://audit-api.dev.localhost:46378   (the tamper-evident audit trail; no UI yet)
-		Kafka UI						http://localhost:8080
+		Audit web (Next.js SPA + BFF)	https://audit.dev.localhost:46380   (Node.js; outside Visual Studio; menu "Audit Trail")
+		Audit API						https://audit-api.dev.localhost:46378   (the tamper-evident audit trail)
+		Audit Journey API (NestJS)		https://audit-journey.dev.localhost:46379   (Node.js; outside Visual Studio)
+		Kafka UI						http://localhost:8080   (optional)
+
+		Workers (health and metrics only): http://localhost:5101 ... 5109 - see section 9a.
 
 	The Shell Menu DB seed registers these same URLs.
 
@@ -97,38 +178,19 @@ What the platform is, how it is designed and what each component must do are doc
 	from 443xx to 463xx for this reason. Check a suspect port with:  netsh http show servicestate view=requestq | Select-String <port>
 
 
-3) First-Time Setup:
+4) Databases:
 
-	a) Install: .NET 10 SDK, Node.js 18+, pnpm, PostgreSQL 18, a Java runtime (21+) and Apache Kafka 4.x (KRaft) at C:\Kafka.
+	a) One command creates everything (section 1, step 5):
 
-	b) Configure the hosts file (section 1).
+			.\ps\database\Initialize-EwpDatabases.ps1                        # all databases (asks for YES)
+			.\ps\database\Initialize-EwpDatabases.ps1 -Database EwpAuditDb   # only the named ones; -Force skips the question
 
-	c) Trust the ASP.NET Core development certificate:
+		In this order: it creates every database that does not exist yet, creates / refreshes the service users
+		(ps\database\Apply-EwpServiceDbUsers.ps1), then runs each database's script connected to that database.
+		Users BEFORE scripts matters: the scripts grant their own new schemas and tables to those users.
 
-			dotnet dev-certs https --check
-			dotnet dev-certs https --trust
-
-	d) Start PostgreSQL and Kafka:
-
-			PostgreSQL listens on localhost:5432 (user "postgres", password "admin").
-			Kafka: C:\Kafka\StartKafka.bat (single KRaft node; clients on localhost:9092).
-
-		Secure Kafka once (SCRAM users, per-component ACLs, explicit topics) - see kafka\README.md:
-
-			.\kafka\Setup-KafkaSecurity.ps1 -Phase Prepare     (Kafka running)
-			... stop Kafka ...
-			.\kafka\Setup-KafkaSecurity.ps1 -Phase Secure      (Kafka stopped)
-			... start Kafka ...
-			.\kafka\Setup-KafkaSecurity.ps1 -Phase Acls        (Kafka running)
-
-		Optional: Kafka UI (read-only browser) - installation steps in kafka\README.md section 2.
-
-		IMPORTANT:
-			These are development-only credentials. Real environments must use a secret store.
-
-	e) Create the databases and run their scripts.
-
-		Each database has ONE complete script. It drops and recreates that database's tables and seeds its reference/demo data:
+	b) Each database has ONE complete script. It drops and recreates that database's tables and seeds its reference /
+	   demo data:
 
 			EwpIdentityAccessDb			src\IDP\IdentityAccessDB\IdentityAccessDb.sql
 			EwpBssShellDb				src\Shell\MenuDB\EwpBssShellDb.sql
@@ -140,122 +202,83 @@ What the platform is, how it is designed and what each component must do are doc
 			EwpNotificationsDb			src\Microservices\Notifications\API\NotificationsDb\EwpNotificationsDb.sql
 			EwpPaymentsDb				src\Microservices\Payments\API\PaymentsDb\EwpPaymentsDb.sql
 			EwpAuditDb					src\Microservices\Audit\API\AuditDb\EwpAuditDb.sql   (append-only; recreating it
-										empties the trail - reset the group audit.trail-subscriber to --to-earliest to re-record)
-			EwpBffStateDb				db\EwpBffStateDb.sql   (sessions and Data Protection keys of the .NET BFFs;
-										run it AFTER Apply-EwpServiceDbUsers.ps1 - it grants each BFF user its own schema)
-
-		Upgrading an EXISTING EwpIdentityAccessDb (keeps its users; adds the schema identity_server - Duende's refresh tokens,
-		PAR requests, signing keys and the IDP's key ring): src\IDP\IdentityAccessDB\Upgrade-6b-OperationalStore.sql,
-		then run db\Apply-EwpServiceDbUsers.ps1 again (it grants ewp_idp the new schema).
-
-		Upgrading an EXISTING EwpAccountsDb for Payments (keeps its accounts; adds balances and funds holds, and gives
-		existing accounts the demo opening deposit): src\Microservices\Accounts\API\AccountsDb\Upgrade-5a-Funds.sql
+										empties the trail - see section 8 to re-record it from Kafka)
+			EwpBffStateDb				db\EwpBffStateDb.sql   (sessions and Data Protection keys of the .NET BFFs, and the
+										Audit web app's sessions (schema audit_bff); re-running it signs everybody out)
 
 		WARNING:
 			Running a script erases that database's data. Each script must run while connected to ITS OWN database.
 
-		With PostgreSQL installed locally (Windows service), from the repository root in PowerShell:
+	c) Running one script by hand, from the repository root in PowerShell:
 
 			$psql = 'C:\Program Files\PostgreSQL\18\bin\psql.exe'
 			$env:PGPASSWORD = 'admin'
 
-			# Create any database that does not exist yet (the quotes keep the mixed-case names used by the connection strings):
+			# Create a database that does not exist yet (the quotes keep the mixed-case names used by the connection strings):
 			& $psql -h localhost -U postgres -c 'CREATE DATABASE "EwpBssShellDb";'
 
 			# Run a script against its database:
 			& $psql -h localhost -U postgres -d EwpBssShellDb -v ON_ERROR_STOP=1 -f .\src\Shell\MenuDB\EwpBssShellDb.sql
 
-		With the docker-compose PostgreSQL container instead, prefix the same psql commands with "docker exec -i ewp-postgres" and pipe the script in, e.g.:
+		pgAdmin's Query Tool, opened on the right database, works as well (its warnings appear in the Messages tab, not the
+		result grid). With the docker-compose PostgreSQL container instead, prefix the same psql commands with
+		"docker exec -i ewp-postgres" and pipe the script in, e.g.:
 
 			Get-Content .\src\Shell\MenuDB\EwpBssShellDb.sql -Raw | docker exec -i ewp-postgres psql -U postgres -d EwpBssShellDb -v ON_ERROR_STOP=1
 
-		(The container creates EwpIdentityAccessDb automatically.) pgAdmin's Query Tool, opened on the right database, works as well.
+		(The container creates EwpIdentityAccessDb automatically.)
 
 		After recreating the IDP database, sign out and sign in again so that new claims are issued.
 
-		Service database users (least privilege) - run ONCE after the databases exist (and again only if you drop a database itself):
-
-			.\db\Apply-EwpServiceDbUsers.ps1
-
-		(It checks that every database exists and runs db\EwpServiceDbUsers.sql with psql. The SQL file cannot run in
-		pgAdmin's Query Tool - it uses psql's \connect; pgAdmin's Tools > PSQL Tool with \i <path> works too.)
+	d) Service database users (least privilege): ps\database\Apply-EwpServiceDbUsers.ps1 runs db\EwpServiceDbUsers.sql with
+	   psql (it checks that every database exists first). Initialize-EwpDatabases.ps1 runs it for you; run it by hand
+	   after creating a NEW database or dropping a database itself. It is idempotent and safe to run at any time. The SQL
+	   file cannot run in pgAdmin's Query Tool - it uses psql's \connect; pgAdmin's Tools > PSQL Tool with \i <path> works too.
 
 		Each service connects with its own user (ewp_idp, ewp_shell, ewp_customer_onboarding_api, ewp_customer_outbox_relay,
-		ewp_kyc_api, ewp_documents_api, ewp_compliance_api, ewp_accounts_api, ewp_notifications_api, ewp_payments_api, ewp_audit_api (SELECT and INSERT only); the BFFs
-		ewp_co_bff, ewp_compliance_bff, ewp_accounts_bff, ewp_payments_bff and ewp_shell each own one schema of EwpBffStateDb) that may read and write ITS OWN database only: no DDL and no access to other
-		services' databases; the CO outbox relay may only read and update outbox_messages. The database scripts above
-		still run as postgres; the grants survive re-running them. Without this step the services cannot connect.
+		ewp_kyc_api, ewp_documents_api, ewp_compliance_api, ewp_accounts_api, ewp_notifications_api, ewp_payments_api,
+		ewp_audit_api (SELECT and INSERT only); the BFFs ewp_co_bff, ewp_compliance_bff, ewp_accounts_bff, ewp_payments_bff,
+		ewp_audit_web and ewp_shell each own one schema of EwpBffStateDb) that may read and write ITS OWN database only: no
+		DDL and no access to other services' databases; the CO outbox relay may only read and update outbox_messages. The
+		database scripts still run as postgres; the grants survive re-running them. Without the users the services cannot connect.
 
 		The relay's grant is per TABLE, so EwpCustomerDb.sql re-applies it (watch for its NOTICE / WARNING line).
 		Symptom if it is missing: CO outbox rows stay unpublished (attempt_count 0) and KYC never opens a case.
-		Repair: re-run EwpServiceDbUsers.sql - it is idempotent and safe to run at any time.
+		Repair: re-run ps\database\Apply-EwpServiceDbUsers.ps1.
 
-	f2) Content-Security-Policy, rate limiting and dependency scanning.
 
-		Rate limiting (OWASP API4): every .NET BFF and API limits requests per signed-in person (600 per minute, of which 60 may be
-		changes - payments, decisions, uploads), per machine client (3,000) and per IP address before sign-in (120). Over the limit
-		the answer is 429 with Retry-After and a message the screens show. Configuration section "RateLimiting" (Enabled,
-		PerPersonPerMinute, ChangesPerPersonPerMinute, AnonymousPerIpPerMinute, PerMachineClientPerMinute). To see it, from PowerShell:
+5) Kafka:
 
-			1..130 | ForEach-Object { curl.exe -sk -o NUL -w "%{http_code}`n" https://payments.dev.localhost:46388/api/auth/user } | Group-Object
+	a) Secure the broker once (SCRAM users, per-component ACLs, explicit topics) - section 1, step 4; details in kafka\README.md:
 
-		shows about 120 x 401 (not signed in) and then 429.
+			.\ps\kafka\Setup-KafkaSecurity.ps1 -Phase Prepare     (Kafka running: users, topics, consumer-group positions)
+			.\ps\kafka\Setup-KafkaSecurity.ps1 -Phase Secure      (Kafka stopped: switches the broker to SASL + ACLs)
+			.\ps\kafka\Setup-KafkaSecurity.ps1 -Phase Acls        (Kafka running: grants each user only what it needs)
 
-		The Shell, CO BFF, KYC BFF, Compliance BFF, Accounts BFF and Payments BFF send a strict CSP: scripts only from the BFF itself plus the SHA-256 hashes of the
-		exported pages' inline scripts, computed at startup from the files served. After re-exporting the MFEs
-		(CompileAndExportBFFClients_V3.ps1), restart the BFFs so the hashes are recomputed.
-		If a page is blocked by CSP, switch to report-only (violations appear in the browser console) while investigating:
-			Shell / CO BFF / Compliance BFF / Accounts BFF / Payments BFF:  appsettings: "Security": { "CspReportOnly": true }
-			KYC BFF:         environment variable KYC_BFF_CSP_REPORT_ONLY=true
+		A NEW component (a new Kafka user or topic) needs only Prepare and Acls again, with Kafka running - no restart.
+		Stop Kafka without its window (e.g. under PowerShell ISE): .\ps\kafka\Stop-Kafka.ps1.
+		Optional: Kafka UI (read-only browser) - installation steps in kafka\README.md section 2.
 
-		Known-vulnerability scan of all .NET and npm dependencies (fails only on deployed dependencies):
+		IMPORTANT:
+			These are development-only credentials. Real environments must use a secret store.
 
-			.\Scan-Dependencies.ps1            # or -FailOn critical
-
-	f) Kafka topics.
-
-		Topic auto-creation is disabled, so every topic is created explicitly: Setup-KafkaSecurity.ps1 -Phase Prepare creates
-		all of them (event topics and the dead-letter topics). To create topics later, as the admin user:
+	b) Topics. Topic auto-creation is disabled, so every topic is created explicitly: ps\kafka\Setup-KafkaSecurity.ps1
+	   -Phase Prepare creates all of them (event topics and the dead-letter topics). To create topics later, as the admin user:
 
 			C:\Kafka\bin\windows\kafka-topics.bat --bootstrap-server localhost:9092 --command-config C:\Kafka\config\admin.properties ^
 			    --create --if-not-exists --topic <name> --partitions 1 --replication-factor 1
 
 		The authoritative topic list is doc\Integration-Event-Catalogue.md.
 
-		IMPORTANT - recreating databases means recreating topics:
-			Database IDs restart at 1 when a database is recreated, but Kafka keeps the old messages, and consumer groups would replay
-			them against the new data (e.g. an old "application 1" event applied to a new application 1). Whenever you recreate the
-			Customer Onboarding, KYC or Compliance database, delete and recreate the topics above (Kafka UI, or kafka-topics.sh --delete followed by the
-			creation above, or simply re-run Setup-KafkaSecurity.ps1 -Phase Prepare). Deleting a topic also discards the consumer
-		groups' offsets for it.
-
-	g) Build and export the front ends:
-
-			.\CompileAndExportBFFClients_V3.ps1
-
-		This builds the Shell SPA, the Customer Onboarding MFE, the Customer KYC MFE, the KYC NestJS BFF, the Compliance MFE, the Accounts MFE and the Payments MFE,
-		and copies each static export to where its BFF serves it.
-		Restart the Shell, CO BFF, KYC BFF, Compliance BFF, Accounts BFF and Payments BFF afterwards (the KYC BFF runs outside Visual Studio - easy to forget): their Content-Security-Policy hashes are computed at startup from the exported pages.
-
-	h) Configure the Customer KYC BFF: its environment variables and PFX certificate are described in src\Microservices\CustomerKyc\BFF.Web\README.md (runnow.bat sets them and starts the BFF).
-
-	NOTE - secrets:
-		Each component reads its own client secrets from its own configuration; nothing is compiled into Common.Landscape any more.
-		Development values (client secrets, Kafka passwords, the simulators' API keys): the appsettings.Development.json of the
-		component that uses them - the IDP, the Shell BFF, every .NET MFE BFF and API, every relay and subscriber, and the three
-		simulators - and runnow.bat of the KYC BFF.
-		A component refuses to start when a secret is missing. Outside Development, supply them as environment variables or from a secret store.
-		Outside Development, the IDP and every .NET BFF also need DataProtection:CertificatePath (and CertificatePassword): the
-		certificate that encrypts their key ring in the database. In Development on Windows, DPAPI is used instead.
-
-	i) Open EnterpriseWebPlatform.BSS.slnx in Visual Studio and restore the NuGet packages.
-	   (.slnx is the XML solution format: Visual Studio 2026, or Visual Studio 2022 17.14+; 17.10-17.13 need the preview
-	   feature "Use Solution File Persistence Model". The dotnet CLI needs SDK 9.0.200+.)
+	c) IMPORTANT - recreating databases means recreating topics: see section 8b.
 
 
-4) Starting the Platform:
+6) Running and debugging:
 
-	a) Visual Studio: use the multi-project launch profile in EnterpriseWebPlatform.BSS.slnLaunch. It starts:
+	a) Visual Studio: open EnterpriseWebPlatform.BSS.slnx and use the multi-project launch profile in
+	   EnterpriseWebPlatform.BSS.slnLaunch. (.slnx is the XML solution format: Visual Studio 2026, or Visual Studio 2022
+	   17.14+; 17.10-17.13 need the preview feature "Use Solution File Persistence Model". The dotnet CLI needs SDK 9.0.200+.)
+	   It starts:
 
 		IDP, Documents Management API, Customer Onboarding API, Customer KYC API, CustomerOutboxPublisher, KycCaseOpeningSubscriber,
 		OnboardingOutcomeSubscriber, Compliance API, ComplianceCaseOpeningSubscriber, DocumentInvalidationSubscriber, Accounts API,
@@ -263,19 +286,37 @@ What the platform is, how it is designed and what each component must do are doc
 		PaymentsSagaReplySubscriber, Screening Provider Simulator, Core Banking Simulator, Payment Network Simulator, Shell BFF,
 		Customer Onboarding BFF, Compliance BFF, Accounts BFF and Payments BFF.
 
+		Stop everything BEFORE "Rebuild Solution": a rebuild while services run can delete a project's output without
+		writing the new one (the service then fails to start).
+
 		Every publisher and subscriber is a console (generic host) application. Several instances of each may run in parallel:
 		publishers claim Outbox rows with FOR UPDATE SKIP LOCKED, subscribers share one Kafka consumer group per subscriber (one
 		partition = one instance), and consumers are idempotent. Topics are created with 1 partition, so extra subscriber instances
 		are hot standbys until the partition count is raised.
 
-	b) The Customer KYC BFF is NestJS and is NOT in that profile. Start it separately:
+	b) The Node.js services are NOT in that profile: the Customer KYC BFF (NestJS + Next.js), the Audit Journey API
+	   (NestJS) and the Audit web app (Next.js SPA + light BFF). After Visual Studio has started the solution, start all
+	   three - each in its own console window, the Audit web app after the Journey API is listening:
 
-			cd src\Microservices\CustomerKyc\BFF.Web
-			pnpm run start
+			.\ps\run\Start-NodeServices.ps1                 (-Only Kyc / -Only Audit;  -Stop stops them)
 
-	c) Browse to https://shell.dev.localhost:46367 and sign in. The demo users, their roles and the password convention are listed in src\IDP\doc\IDP-Requirements.md (section 6).
+	   Each window runs that service's runnow.bat (which installs and builds on its first run). The KYC BFF's environment
+	   variables are set by its runnow.bat and described in src\Microservices\CustomerKyc\BFF.Web\README.md.
 
-	d) A typical end-to-end check:
+	c) Debugging a Node.js service: close its window (Ctrl+C), open its folder in VS Code, open a "JavaScript Debug
+	   Terminal" and run "runnow.bat dev" there (the Audit services; development / watch mode with source maps):
+	   breakpoints in the TypeScript sources are hit - Next.js server actions, route handlers and lib\server for the web
+	   app; the browser's DevTools for its client code. The other services keep running.
+
+	d) After changing a front end (MFE or Shell): .\ps\build\CompileAndExportBFFClients_V3.ps1, then restart the Shell, CO,
+	   KYC, Compliance, Accounts and Payments BFFs (the KYC BFF runs outside Visual Studio - easy to forget): their
+	   Content-Security-Policy hashes are computed at start-up from the exported pages. The Audit web app is not exported:
+	   its runnow.bat builds it, and its CSP uses a per-request nonce.
+
+
+7) Demonstrations:
+
+	a) A typical end-to-end check:
 
 		- Sign in as sophie.cs (branch SYD001, Sydney), open Onboarding Applications, create a customer with a residential address in Sydney, AU, attach both PDFs and submit.
 		- Optional ABAC check: sign in as mia.cs (MEL001, Melbourne) - Sophie's customer is not visible, and a Sydney address is refused with 403.
@@ -290,19 +331,19 @@ What the platform is, how it is designed and what each component must do are doc
 		- Sign in as olivia.compliance (SYD001, clearance 4), open Compliance Monitor, open the case and approve, reject or put it on
 		  hold. She is neither the onboarding initiator nor a KYC decider (separation of duties); a HIGH-risk case needs clearance 5
 		  to approve, so she can only reject or hold one; grace.compliance (clearance 5, senior) can approve it. The decision moves
-		  the application to COMPLIANCE_COMPLETED or REJECTED. (The same actions are available through the API with Bruno, section 6.)
+		  the application to COMPLIANCE_COMPLETED or REJECTED. (The same actions are available through the API with Bruno, section 11.)
 		- Compensation: when KYC or Compliance REJECTS an application, its two evidence documents become INVALIDATED in
 		  EwpDocumentsManagementDb.documents (status, invalidated_at, invalidation_reason) - retained, not deleted - via the
 		  onboarding.application.rejected topic and the DocumentInvalidationSubscriber.
 		- Compliance approval opens an ACCOUNT APPLICATION (AccountApplicationOpeningSubscriber): the application moves to
 		  ACCOUNT_OPENING_IN_PROGRESS and EwpAccountsDb.account_applications has a PENDING_REVIEW row. jack.accounts (SYD001) decides
 		  it in the Shell: Account Applications -> open the application -> choose the product -> Approve and open account.
-		  (Through the API with Bruno, section 6, scope accounts.read accounts.write: POST .../v1/accounts/applications/{id}/approve.)
+		  (Through the API with Bruno, section 11, scope accounts.read accounts.write: POST .../v1/accounts/applications/{id}/approve.)
 		  He is neither the initiator nor the Compliance approver (separation of duties). On approval the core-banking system
 		  opens the account within seconds (EwpAccountsDb.accounts: BSB 062-000 + account number) and the onboarding is COMPLETED.
 		  A rejection (with remarks) ends it REJECTED and invalidates the evidence, as above.
 
-	g2) Demonstrating an unreliable external provider (Screening Provider Simulator, localhost only):
+	b) An unreliable external provider (Screening Provider Simulator, localhost only):
 
 			$sim = 'https://localhost:46366/admin/behaviour'
 			Invoke-RestMethod $sim -Method Put -ContentType 'application/json' -Body '{"behaviour":"Down"}'      # or Failing / Slow / Healthy
@@ -314,7 +355,7 @@ What the platform is, how it is designed and what each component must do are doc
 		"circuit open"), and /health/ready of the Compliance API reports Degraded once a case waits more than 2 minutes.
 		Set it back to Healthy and the waiting cases are screened automatically.
 
-	g3) Demonstrating an unreliable core-banking system (Core Banking Simulator, localhost only):
+	c) An unreliable core-banking system (Core Banking Simulator, localhost only):
 
 			$cbs = 'https://localhost:46376/admin/behaviour'
 			Invoke-RestMethod $cbs -Method Put -ContentType 'application/json' -Body '{"behaviour":"Down"}'      # or Failing / Slow / Refusing / Healthy
@@ -322,9 +363,10 @@ What the platform is, how it is designed and what each component must do are doc
 		While Down / Failing / Slow, approved account applications stay OPENING and are retried with back-off; every request
 		carries an Idempotency-Key (the ApplicationRef), so a retry after a lost answer never opens a second account. After 6
 		failures - or at once when Refusing (HTTP 422) - the application is FAILED and AccountOpeningFailed is published;
-		Customer Onboarding compensates: COMPENSATING -> REJECTED (RejectedBy ACCOUNT_OPENING), evidence INVALIDATED, customer PROSPECT. Back to Healthy, waiting accounts are opened automatically.
+		Customer Onboarding compensates: COMPENSATING -> REJECTED (RejectedBy ACCOUNT_OPENING), evidence INVALIDATED, customer PROSPECT.
+		Back to Healthy, waiting accounts are opened automatically.
 
-	g4) Payments - the ORCHESTRATED saga:
+	d) Payments - the ORCHESTRATED saga:
 
 		A new account starts with a demo balance of 5,000.00 AUD (Accounts:DemoOpeningDeposit). As sophie.cs, open Payments -> New Payment:
 		find the customer, pick the paying account, enter the payee (BSB, account, name - Confirmation of Payee checks it), the amount, then
@@ -342,7 +384,46 @@ What the platform is, how it is designed and what each component must do are doc
 			$pns = 'https://localhost:46386/admin/behaviour'
 			Invoke-RestMethod $pns -Method Put -ContentType 'application/json' -Body '{"behaviour":"Refusing"}'   # or Down / Failing / Slow / Healthy
 
-	e) Health endpoints (as used by Kubernetes liveness / readiness probes):
+	e) Audit - the tamper-evident trail, in the customer's pattern (Next.js light BFF -> NestJS Journey API -> Domain APIs):
+
+		Every business event above is recorded by the Audit API from Kafka. Sign in as sarah.audit (auditor) and open
+		Audit -> Audit Trail: search by record (e.g. a PAY-... or APP-... number), by person (a LAN ID such as somit) or by
+		event; click a record to see where it stands now (for a payment, live from the Payments API) and everything that
+		happened to it; "Verify integrity" re-walks the hash chain; "Who read the trail" lists every search and view - each
+		recorded too. Other users have no Audit menu, and the Audit API refuses anything but the Journey API acting for an
+		auditor (token exchange). Tampering test and details: src\Microservices\Audit\API\README.md ("Try it").
+
+
+8) Upgrading an existing set-up:
+
+	a) Upgrade scripts keep an existing database's data (a new laptop never needs them - it runs the full scripts):
+		- EwpIdentityAccessDb (keeps its users; adds the schema identity_server - Duende's refresh tokens, PAR requests,
+		  signing keys and the IDP's key ring): src\IDP\IdentityAccessDB\Upgrade-6b-OperationalStore.sql, then run
+		  ps\database\Apply-EwpServiceDbUsers.ps1 again (it grants ewp_idp the new schema).
+		- EwpAccountsDb for Payments (keeps its accounts; adds balances and funds holds, and gives existing accounts the demo
+		  opening deposit): src\Microservices\Accounts\API\AccountsDb\Upgrade-5a-Funds.sql
+
+	b) Recreating databases means recreating topics. Database IDs restart at 1 when a database is recreated, but Kafka keeps
+	   the old messages, and consumer groups would replay them against the new data (e.g. an old "application 1" event applied
+	   to a new application 1). Whenever you recreate the Customer Onboarding, KYC or Compliance database (and likewise
+	   Accounts or Payments), delete and recreate the topics (Kafka UI, or kafka-topics.bat --delete followed by
+	   ps\kafka\Setup-KafkaSecurity.ps1 -Phase Prepare). Deleting a topic also discards the consumer groups' offsets for it.
+
+	c) Re-recording the audit trail after recreating EwpAuditDb: stop the Audit API, then reset its consumer group to the
+	   start of every topic it reads, and start the API again (it records everything Kafka still holds):
+
+			C:\Kafka\bin\windows\kafka-consumer-groups.bat --bootstrap-server localhost:9092 --command-config C:\Kafka\config\admin.properties ^
+			    --group audit.trail-subscriber --reset-offsets --to-earliest --all-topics --execute
+
+	d) A new database or a new service user: run ps\database\Apply-EwpServiceDbUsers.ps1, then the database's script (or
+	   .\ps\database\Initialize-EwpDatabases.ps1 -Database <name>).
+
+	e) Re-running db\EwpBffStateDb.sql signs everybody out (it recreates every BFF's session tables).
+
+
+9) Operations reference:
+
+	a) Health endpoints (as used by Kubernetes liveness / readiness probes):
 
 			APIs, BFFs, IDP:              https://<host>/health/live   and   https://<host>/health/ready
 			CustomerOutboxPublisher:      http://localhost:5101/health/live | /health/ready
@@ -354,12 +435,14 @@ What the platform is, how it is designed and what each component must do are doc
 			NotificationsSubscriber:      http://localhost:5107/health/live | /health/ready
 			AccountsCommandSubscriber:    http://localhost:5108/health/live | /health/ready
 			PaymentsSagaReplySubscriber:  http://localhost:5109/health/live | /health/ready
+			Audit Journey API (Node.js):  https://audit-journey.dev.localhost:46379/health/live | /health/ready
 
 		live  = the process (and its background loop) is working; 503 means "restart it".
 		ready = its dependencies are reachable (database; for a subscriber, its Kafka consumer group). "Degraded" (still 200)
-		        means "working, but look": an Outbox relay with parked or old messages, or a subscriber retrying a message.
+		        means "working, but look": an Outbox relay with parked or old messages, a subscriber retrying a message, or
+		        the audit chain broken.
 
-	f) Optional - view distributed traces (OpenTelemetry):
+	b) Optional - distributed traces (OpenTelemetry):
 
 		Every .NET component creates W3C trace context and carries it across HTTP calls, the Outbox and Kafka ("traceparent" header),
 		so one onboarding is one trace: CO BFF -> CO API -> relay -> KycCaseOpeningSubscriber -> KYC API -> ... -> CO API.
@@ -373,9 +456,10 @@ What the platform is, how it is designed and what each component must do are doc
 
 		Alternative: the .NET Aspire dashboard (docker run -p 18888:18888 -p 4317:18889 mcr.microsoft.com/dotnet/aspire-dashboard).
 		Log lines carry the same TraceId, so a log entry can be matched to its trace.
-		The KYC BFF (NestJS) is not instrumented yet: a KYC officer's decision starts a new trace at the KYC API.
+		The Node.js services (KYC BFF, Audit Journey API, Audit web) are not instrumented yet: a request through them starts a
+		new trace at the .NET API behind them.
 
-	h) Logs and metrics (Serilog, Prometheus):
+	c) Logs and metrics (Serilog, Prometheus):
 
 		Logs - every .NET component logs through Serilog: one line per HTTP request (method, path without the query string,
 		status, duration, the caller's subject ID or client ID) and every entry with its service name and trace ID.
@@ -394,13 +478,45 @@ What the platform is, how it is designed and what each component must do are doc
 			ewp_messaging_consumed_total{topic,outcome}     messages handled by a subscriber (processed / dead_lettered / retried)
 			ewp_health_status{check}                        each health check: 2 healthy, 1 degraded, 0 unhealthy
 			ewp_health_value{check,key}                     the numbers the checks report, e.g. the payment sagas
-			                                                (running, overdue, compensationFailed) and the Outbox backlog
+			                                                (running, overdue, compensationFailed), the Outbox backlog and
+			                                                the audit chain (entriesVerified, brokenAtSequence)
 		The health metrics are refreshed every 30 seconds. Outside Development /metrics is off unless
 		"Observability:Metrics:Enabled" is true; it is anonymous and must be reachable from the cluster's scraper only.
-		With OTEL_EXPORTER_OTLP_ENDPOINT set (step f), logs and metrics are also sent over OTLP, next to the traces.
+		With OTEL_EXPORTER_OTLP_ENDPOINT set (9b), logs and metrics are also sent over OTLP, next to the traces.
+
+	d) Content-Security-Policy, rate limiting and dependency scanning:
+
+		The Shell, CO BFF, KYC BFF, Compliance BFF, Accounts BFF and Payments BFF send a strict CSP: scripts only from the BFF
+		itself plus the SHA-256 hashes of the exported pages' inline scripts, computed at startup from the files served - so
+		restart them after re-exporting the MFEs (6d). The Audit web app uses a per-request nonce instead.
+		If a page is blocked by CSP, switch to report-only (violations appear in the browser console) while investigating:
+			Shell / CO BFF / Compliance BFF / Accounts BFF / Payments BFF:  appsettings: "Security": { "CspReportOnly": true }
+			KYC BFF:         environment variable KYC_BFF_CSP_REPORT_ONLY=true
+
+		Rate limiting (OWASP API4): every .NET BFF and API limits requests per signed-in person (600 per minute, of which 60 may be
+		changes - payments, decisions, uploads), per machine client (3,000) and per IP address before sign-in (120). Over the limit
+		the answer is 429 with Retry-After and a message the screens show. Configuration section "RateLimiting" (Enabled,
+		PerPersonPerMinute, ChangesPerPersonPerMinute, AnonymousPerIpPerMinute, PerMachineClientPerMinute). To see it, from PowerShell:
+
+			1..130 | ForEach-Object { curl.exe -sk -o NUL -w "%{http_code}`n" https://payments.dev.localhost:46388/api/auth/user } | Group-Object
+
+		shows about 120 x 401 (not signed in) and then 429.
+
+		Known-vulnerability scan of all .NET and npm dependencies (fails only on deployed dependencies):
+
+			.\ps\build\Scan-Dependencies.ps1            # or -FailOn critical
+
+	e) Secrets:
+		Each component reads its own client secrets from its own configuration; nothing is compiled into Common.Landscape any more.
+		Development values (client secrets, Kafka passwords, the simulators' API keys): the appsettings.Development.json of the
+		component that uses them - the IDP, the Shell BFF, every .NET MFE BFF and API, every relay and subscriber, and the three
+		simulators - and the runnow.bat of the Node.js services (KYC BFF, Audit Journey API, Audit web).
+		A component refuses to start when a secret is missing. Outside Development, supply them as environment variables or from a secret store.
+		Outside Development, the IDP and every .NET BFF also need DataProtection:CertificatePath (and CertificatePassword): the
+		certificate that encrypts their key ring in the database. In Development on Windows, DPAPI is used instead.
 
 
-5) Troubleshooting:
+10) Troubleshooting:
 
 	a) "HTTP 400 - Request Too Long" / "The size of the request headers is too long":
 
@@ -414,8 +530,11 @@ What the platform is, how it is designed and what each component must do are doc
 		- ASP.NET Core: make sure the "https" launch profile is used, not IIS Express.
 		- Run "dotnet dev-certs https --check", and "--trust" if needed.
 		- Node.js (KYC BFF): re-export the PFX and check the KYC_BFF_TLS_PFX_* settings.
+		- Node.js (Audit services): their runnow.bat stops with "the development certificate was not found" until it is
+		  exported to %USERPROFILE%\.aspnet\https (section 1, step 3).
 
-	c) A host name does not resolve: check the hosts file and ping it (section 1).
+	c) A host name does not resolve: check the hosts file and ping it (section 2). Remember that the browser resolves
+	   *.localhost by itself: a missing line may show only in PowerShell or Node.js ("remote name could not be resolved").
 
 	d) The menu does not appear:
 
@@ -425,36 +544,46 @@ What the platform is, how it is designed and what each component must do are doc
 
 	e) Expected menu items are missing after a role change: sign out and in again, so new role claims are issued.
 
-	f) Nothing appears in KYC after an onboarding submission:
+	f) A menu item opens Chrome's error page in the frame (no response): that MFE is not running. For the KYC BFF and the
+	   Audit web app, start the Node.js services (section 6b); check with
+	   Get-NetTCPConnection -LocalPort <port> -State Listen.
 
-		- Check that the Kafka topics exist (3f); auto-creation is disabled.
+	g) Nothing appears in KYC after an onboarding submission:
+
+		- Check that the Kafka topics exist (5b); auto-creation is disabled.
 		- Check that CustomerOutboxPublisher is running, and look at outbox_messages.published_at and last_error in EwpCustomerDb.
 		- Check that KycCaseOpeningSubscriber is running. A message it cannot process currently stops the worker; its console shows the cause.
 
-	g) The KYC BFF shows "documents cannot be shown" or 403 for evidence:
+	h) The KYC BFF shows "documents cannot be shown" or 403 for evidence:
 
 		- Documents are branch-scoped. The officer's branch (IDP employment profile) must match the branch of the agent who uploaded them.
 		- Documents uploaded before branch scoping existed have no branch and are inaccessible; re-submit the onboarding.
 		- Sign out and in again after IDP changes, so the "organization" claims are issued.
 
-	h) A component logs "Kafka client error ... SASL authentication failed" or "Topic authorization failed", or its /health/ready
+	i) A component logs "Kafka client error ... SASL authentication failed" or "Topic authorization failed", or its /health/ready
 	   says it is not connected to its consumer group:
-		- Run kafka\Setup-KafkaSecurity.ps1 (all three phases) - the users or ACLs are missing.
+		- Run ps\kafka\Setup-KafkaSecurity.ps1 (all three phases) - the users or ACLs are missing.
 		- Check that the component's appsettings.Development.json has Kafka:SaslPassword (it refuses to start without it
 		  when Kafka:SecurityProtocol is SaslPlaintext).
 		- A component that stops at start-up with "Kafka:SaslPassword is not configured" was started without
 		  DOTNET_ENVIRONMENT=Development, so appsettings.Development.json was not loaded: start it with its launch profile.
 
-	i) A Kafka CLI tool hangs or reports "Disconnected" after securing Kafka: add --command-config C:\Kafka\config\admin.properties.
+	j) A Kafka CLI tool hangs or reports "Disconnected" after securing Kafka: add --command-config C:\Kafka\config\admin.properties.
 
-	j) Visual Studio uses a stale launch profile: close VS, delete the solution's ".vs" folder, reopen, and check the start-up profile.
+	k) Visual Studio uses a stale launch profile: close VS, delete the solution's ".vs" folder, reopen, and check the start-up profile.
 
-	k) A .NET BFF fails on its first request with "database "EwpBffStateDb" does not exist" or "permission denied for schema ..._bff":
-		create EwpBffStateDb, run db\Apply-EwpServiceDbUsers.ps1, then db\EwpBffStateDb.sql (section 3 e). Sessions live there,
-		so restarting the BFFs or Visual Studio does not sign anybody out; re-running EwpBffStateDb.sql does (it recreates the tables).
+	l) A service does not start after "Rebuild Solution" (its bin folder has no DLL): stop everything, Rebuild again, then start (6a).
+
+	m) A .NET BFF or the Audit web app fails on its first request with "database "EwpBffStateDb" does not exist" or
+	   "permission denied for schema ..._bff": run .\ps\database\Initialize-EwpDatabases.ps1 -Database EwpBffStateDb (it
+	   creates the database and the users first). Sessions live there, so restarting the BFFs or Visual Studio does not
+	   sign anybody out; re-running EwpBffStateDb.sql does (it recreates the tables).
+
+	n) A database script printed "WARNING: Role ... does not exist yet": the users were created after the script ran. Run
+	   ps\database\Apply-EwpServiceDbUsers.ps1, then that script again (Initialize-EwpDatabases.ps1 does both in the right order).
 
 
-6) Bruno API Testing:
+11) Bruno API testing:
 
 	Bruno can call the Microservice APIs directly using OAuth 2.0 Authorization Code + PKCE against the IDP.
 
@@ -468,7 +597,8 @@ What the platform is, how it is designed and what each component must do are doc
 		Redirect URIs:		http://127.0.0.1:3000/callback (local callback server, recommended - see c)
 							https://oauth.usebruno.com/callback
 
-		The Bruno client is registered ONLY when the IDP runs in the Development environment.
+		The Bruno client is registered ONLY when the IDP runs in the Development environment. The Audit APIs cannot be
+		called this way: they accept only tokens obtained by token exchange (src\Microservices\Audit\JourneyApi\README.md).
 
 	b) Bruno OAuth settings:
 

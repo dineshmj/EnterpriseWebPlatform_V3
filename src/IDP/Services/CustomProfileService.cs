@@ -59,6 +59,17 @@ public sealed class CustomProfileService : IProfileService
         var requestedClaimTypes = context.RequestedClaimTypes;
 
         // ------------------------------------------------------------
+        // Delegation (token exchange, RFC 8693): the chain of services acting for this
+        // person travels in the access token, so a Domain API knows who is calling for whom.
+        // ------------------------------------------------------------
+
+        if (context.Caller == Duende.IdentityServer.IdentityServerConstants.ProfileDataCallers.ClaimsProviderAccessToken &&
+            context.Subject.FindFirst(JwtClaimTypes.Actor) is { } actor)
+        {
+            context.IssuedClaims.Add(actor);
+        }
+
+        // ------------------------------------------------------------
         // Identity claims
         // ------------------------------------------------------------
 

@@ -125,7 +125,7 @@ payment network ◄── Payments API. BFF sessions and keys: EwpBffStateDb (on
 | Documents Management | Generic / supporting | Present | [DocumentsManagement-Requirements.md](../src/Microservices/DocumentsManagement/doc/DocumentsManagement-Requirements.md) |
 | Identity and access | Generic | Present | [IDP-Requirements.md](../src/IDP/doc/IDP-Requirements.md) |
 | Composition (not a business context) | — | Present | [Shell-Requirements.md](../src/Shell/doc/Shell-Requirements.md) |
-| Audit | Generic / supporting | Partial (backend: tamper-evident trail from Kafka) | [Audit API README](../src/Microservices/Audit/API/README.md) |
+| Audit | Generic / supporting | Present (tamper-evident trail from Kafka; auditor screens in the customer's pattern: Next.js light BFF → NestJS Journey API → Domain APIs, token exchange at every hop) | [Audit API README](../src/Microservices/Audit/API/README.md) |
 | Notifications | Generic / supporting | Present (including deep links from a notification) | [Notifications API README](../src/Microservices/Notifications/API/README.md), [Shell-Requirements.md §7](../src/Shell/doc/Shell-Requirements.md#7-workflow-notifications) |
 
 ### Context map
@@ -425,7 +425,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Compensation | Present (a rejection at any stage, and a failed account opening after approval: CO COMPENSATING → REJECTED; DM invalidates and retains the evidence; the customer returns to PROSPECT) |
 | Saga orchestration (Payments) | Present: persisted `PaymentSaga` state machine in the Payments API, commands / replies over Kafka with Outbox + Inbox, timeouts and resends, compensation (release funds), approval by a payments officer above the tier, COMPENSATION_FAILED as a recoverable state (Payment Processing Monitor, operations "Retry release"); assisted-channel screens |
 | User-specific SignalR notifications | Present (Notifications API stores and pushes to `user:{sub}` / `staff:{role}:{branch}` audiences derived from the token; the Shell proxies REST and the hub and shows a bell and toasts; connections close at token expiry). A click opens the record through the menu-owned microservice and the normal navigation (4c). A backplane for several instances is planned |
-| Centralized audit trail | Partial: the Audit Domain API records every business event from Kafka in an append-only, hash-chained trail (INSERT/SELECT-only user, trigger, scheduled chain verification on readiness and metrics; identifiers and people only, no personal data). Next: token exchange, the NestJS Journey API and the auditor's screens (customer pattern) |
+| Centralized audit trail | Present: the Audit Domain API records every business event from Kafka in an append-only, hash-chained trail (INSERT/SELECT-only user, trigger, scheduled chain verification on readiness and metrics; identifiers and people only, no personal data). Auditors search it, follow one record end to end (with its live status from the owning context) and verify integrity in the Audit Trail screen; every read is itself recorded. Partial: operations' "Retry release" is not yet an event |
 | OpenTelemetry / distributed tracing | Present (.NET components: one trace across HTTP, the Outbox and Kafka via `traceparent`; OTLP export when configured); Partial (KYC NestJS BFF not instrumented) |
 | Structured logs and metrics | Present (.NET components: Serilog with service name and trace ID, one line per request, JSON outside Development; Prometheus `/metrics` with HTTP, rate limiting, auth, resilience, database and runtime metrics plus Kafka publish / consume outcomes and every health check's status and numbers; logs and metrics over OTLP when configured). Dashboards and alerts belong to the deployment |
 | Security headers / CSP | Present: strict CSP on the Shell and the CO, KYC, Compliance, Accounts and Payments BFFs (hashed inline scripts, `frame-ancestors` / `frame-src`, `object-src 'none'`); IDP CSP on its pages; `nosniff`; Referrer-Policy |
@@ -433,7 +433,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Logout propagation | Present: front-channel and back-channel logout on the Shell and every MFE BFF |
 | Error responses without internals | Present: problem details with `traceId` only; details logged |
 | Least-privilege database users | Present: one user per service, own database only, no DDL (`db/EwpServiceDbUsers.sql`); each BFF only its own schema of `EwpBffStateDb` (`db/EwpBffStateDb.sql`) |
-| Dependency vulnerability scanning | Present: `Scan-Dependencies.ps1` (NuGet + pnpm); not yet wired into a CI pipeline |
+| Dependency vulnerability scanning | Present: `ps/build/Scan-Dependencies.ps1` (NuGet + pnpm); not yet wired into a CI pipeline |
 | Rate limiting | Present: IDP login throttling and lockout; every .NET BFF and API limits per caller (person by subject ID, with a tighter budget for changes; machine client by client ID; anonymous by IP) and answers 429 with Retry-After. Shared code: `Common.WebUtilities/Security/RateLimiting.cs`, configuration `RateLimiting` |
 | Health checks | Present: `/health/live` and `/health/ready` on every .NET component (workers via a built-in listener); relay heartbeat and Outbox backlog (Degraded) checks |
 | Kafka authentication and authorization | Present: SCRAM-SHA-512 user per deployable, deny-by-default ACLs (own topics and consumer group only), no topic auto-creation; TLS (`SASL_SSL`) is a Production Concern |
@@ -496,13 +496,13 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [x] SoD that fails closed
 - [x] Object-level authorization (every context)
 - [x] Persistent server-side BFF sessions and Data Protection keys (.NET BFFs)
-- [ ] Audit trail
+- [x] Audit trail (tamper-evident, from Kafka; auditor screens)
 - [ ] PII-aware logging
 - [ ] Secrets management
 - [ ] Key rotation
 - [x] CSP and security headers
 - [x] Rate limiting
-- [ ] Delegated user context
+- [x] Delegated user context (token exchange, RFC 8693: Audit; Documents Management still on a pinned header)
 - [ ] Sender-constrained tokens where justified
 
 **Phase 6 — Secure delivery**

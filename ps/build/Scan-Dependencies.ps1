@@ -14,8 +14,8 @@
     warnings. Needs network access to nuget.org and the npm registry.
 
 .EXAMPLE
-    .\Scan-Dependencies.ps1
-    .\Scan-Dependencies.ps1 -FailOn critical
+    .\ps\build\Scan-Dependencies.ps1
+    .\ps\build\Scan-Dependencies.ps1 -FailOn critical
 #>
 param(
     [ValidateSet('low', 'moderate', 'high', 'critical')]
@@ -23,7 +23,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$root = $PSScriptRoot
+$root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path   # the repository root (this script is in ps\<area>)
 $failed = $false
 $severityRank = @{ low = 1; moderate = 2; high = 3; critical = 4 }
 

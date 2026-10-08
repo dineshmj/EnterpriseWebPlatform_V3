@@ -237,6 +237,6 @@ BEGIN
         GRANT SELECT, INSERT, UPDATE, DELETE ON account_applications, accounts, funds_holds, outbox_messages, inbox_messages, staff_members TO ewp_accounts_api;
         GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_accounts_api;
     ELSE
-        RAISE WARNING 'Role ewp_accounts_api does not exist yet: run db\Apply-EwpServiceDbUsers.ps1, then this script again.';
+        RAISE WARNING 'Role ewp_accounts_api does not exist yet: run ps\database\Apply-EwpServiceDbUsers.ps1, then this script again.';
     END IF;
 END $$;
