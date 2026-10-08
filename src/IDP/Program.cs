@@ -43,6 +43,12 @@ try
     builder.Services.AddScoped<IUserRepository, UserRepository>();
     builder.Services.AddScoped<IPasswordManager, PasswordManager>();
 
+    // Two-step sign-in (TOTP - Google Authenticator). "Mfa:Enabled" is false by default; when
+    // true it applies to EVERY user: enrolment at the next sign-in, then the code each time.
+    builder.Services.Configure<MfaOptions>(builder.Configuration.GetSection(MfaOptions.SectionName));
+    builder.Services.AddSingleton(TimeProvider.System);
+    builder.Services.AddScoped<MfaService>();
+
     builder.Services.AddRazorPages();
 
     // Login throttling per client IP, complementing per-account lockout

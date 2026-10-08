@@ -68,7 +68,7 @@ public sealed class TokenExchangeGrantValidator(
             return;
         }
 
-        var token = SubjectToken.From(validation.Claims);
+        var token = SubjectToken.From(validation.Claims ?? []);
         if (token.Subject is null)
         {
             // A machine's own token has no person to act for: delegation needs one.

@@ -28,6 +28,10 @@ public sealed class IdentityDbContext : DbContext
 
     public DbSet<UserEmploymentProfile> UserEmploymentProfiles => Set<UserEmploymentProfile>();
 
+    public DbSet<UserMfa> UserMfa => Set<UserMfa>();
+
+    public DbSet<UserMfaRecoveryCode> UserMfaRecoveryCodes => Set<UserMfaRecoveryCode>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -40,6 +44,29 @@ public sealed class IdentityDbContext : DbContext
         ConfigureBranch(modelBuilder);
         ConfigureDepartment(modelBuilder);
         ConfigureUserEmploymentProfile(modelBuilder);
+        ConfigureMfa(modelBuilder);
+    }
+
+    // Multi-factor authentication (TOTP): one authenticator per user, and its recovery codes.
+    private static void ConfigureMfa(ModelBuilder modelBuilder)
+    {
+        var mfa = modelBuilder.Entity<UserMfa>();
+        mfa.ToTable("user_mfa");
+        mfa.HasKey(x => x.UserId);
+        mfa.Property(x => x.UserId).HasColumnName("user_id").ValueGeneratedNever();
+        mfa.Property(x => x.SecretProtected).HasColumnName("secret_protected").IsRequired();
+        mfa.Property(x => x.EnrolledAt).HasColumnName("enrolled_at");
+        mfa.Property(x => x.LastUsedTimeStep).HasColumnName("last_used_time_step");
+        mfa.HasOne(x => x.User).WithOne().HasForeignKey<UserMfa>(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+
+        var codes = modelBuilder.Entity<UserMfaRecoveryCode>();
+        codes.ToTable("user_mfa_recovery_codes");
+        codes.HasKey(x => x.Id);
+        codes.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        codes.Property(x => x.UserId).HasColumnName("user_id");
+        codes.Property(x => x.CodeHash).HasColumnName("code_hash").HasMaxLength(64).IsRequired();
+        codes.Property(x => x.UsedAt).HasColumnName("used_at");
+        codes.HasIndex(x => x.UserId).HasDatabaseName("ix_user_mfa_recovery_codes_user_id");
     }
 
     private static void ConfigureUser(ModelBuilder modelBuilder)

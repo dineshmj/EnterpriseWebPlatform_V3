@@ -393,6 +393,23 @@ What the platform is, how it is designed and what each component must do are doc
 		recorded too. Other users have no Audit menu, and the Audit API refuses anything but the Journey API acting for an
 		auditor (token exchange). Tampering test and details: src\Microservices\Audit\API\README.md ("Try it").
 
+	f) Two-step sign-in (MFA) with Google Authenticator - OFF by default:
+
+		Switch it on in FIVE appsettings.json files (keep them equal): src\IDP ("Mfa": { "Enabled": true }) - the sign-in -
+		and the Payments, Accounts, Compliance and Customer KYC APIs - the step-up for decisions. Restart them.
+
+		- Every user is asked to enrol at their next sign-in: in Google Authenticator tap +, "Scan a QR code" (or "Enter a
+		  setup key"); the entry appears as "EWP V3 Demo: <username>". Enter the 6-digit code it shows, save the 10 recovery
+		  codes (shown once), continue. ONE phone holds any number of users - one entry each.
+		- From then on: password, then the current code (or one unused recovery code). Wrong codes count towards the same
+		  lockout as wrong passwords (5 attempts, 15 minutes); a code is never accepted twice.
+		- Step-up: approving or rejecting a payment, "Retry release", and the KYC, Compliance and account-opening decisions
+		  need a sign-in WITH the code (the token's amr contains "mfa"). A session from before MFA was switched on is refused
+		  with "This action needs a sign-in with your authenticator code" - sign out and in again.
+		- Switch it off again (false in the same five files): sign-in and decisions work as before. Enrolments are kept, so
+		  switching it on later does not ask anybody to enrol again.
+		Details: src\IDP\doc\IDP-Requirements.md (section 7).
+
 
 8) Upgrading an existing set-up:
 
@@ -400,6 +417,8 @@ What the platform is, how it is designed and what each component must do are doc
 		- EwpIdentityAccessDb (keeps its users; adds the schema identity_server - Duende's refresh tokens, PAR requests,
 		  signing keys and the IDP's key ring): src\IDP\IdentityAccessDB\Upgrade-6b-OperationalStore.sql, then run
 		  ps\database\Apply-EwpServiceDbUsers.ps1 again (it grants ewp_idp the new schema).
+		- EwpIdentityAccessDb for two-step sign-in (keeps its users; adds the empty tables user_mfa and
+		  user_mfa_recovery_codes): src\IDP\IdentityAccessDB\Upgrade-6c-Mfa.sql
 		- EwpAccountsDb for Payments (keeps its accounts; adds balances and funds holds, and gives existing accounts the demo
 		  opening deposit): src\Microservices\Accounts\API\AccountsDb\Upgrade-5a-Funds.sql
 

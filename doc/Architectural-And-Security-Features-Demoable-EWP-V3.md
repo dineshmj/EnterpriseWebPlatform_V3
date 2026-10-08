@@ -552,7 +552,13 @@ The IDP (Duende IdentityServer 8) applies the standard defences of a sign-in ser
 - Operational store: `AddOperationalStore` in [IDP Program.cs](../src/IDP/Program.cs), tables in [IdentityAccessDb.sql](../src/IDP/IdentityAccessDB/IdentityAccessDb.sql) (schema `identity_server`)
 - Key-ring encryption, fail closed: [PersistentDataProtection.cs](../src/Common/WebUtilities/Security/PersistentDataProtection.cs)
 
-**Not yet:** multi-factor authentication.
+**Two-step sign-in and step-up (MFA), switched off by default.** With `Mfa:Enabled` on, every user signs in with the password AND the 6-digit code from Google Authenticator; someone without one enrols at their next sign-in (QR code, one confirming code, ten single-use recovery codes). The authenticator secret is stored only encrypted with the IDP's key ring, recovery codes only as hashes; a wrong code counts towards the lockout, and a code is never accepted twice. Every token then says how the person signed in (`amr`), and the APIs require `mfa` for the risky actions - a payments officer's approval or rejection, operations' "Retry release", and the KYC, Compliance and account-opening decisions - answering 403 with a clear reason otherwise (step-up, in the spirit of RFC 9470).
+
+- Sign-in steps: [Login.cshtml.cs](../src/IDP/Pages/Account/Login.cshtml.cs), [Mfa.cshtml.cs](../src/IDP/Pages/Account/Mfa.cshtml.cs), [MfaSetup.cshtml.cs](../src/IDP/Pages/Account/MfaSetup.cshtml.cs); codes and secrets: [Totp.cs](../src/IDP/Security/Totp.cs), [MfaService.cs](../src/IDP/Security/MfaService.cs)
+- Step-up in the APIs: [MfaStepUp.cs](../src/Common/WebUtilities/Security/MfaStepUp.cs), and `stepUpPolicies` in the Payments, Accounts, Compliance and KYC APIs' `Program.cs`
+- How to try it: [ReadMe.txt §7f](../ReadMe.txt)
+
+**Not yet:** passkeys / FIDO2 (phishing-resistant), and remembering a trusted device (deliberately off).
 
 #### 2.1.4 Single sign-out
 

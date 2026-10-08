@@ -70,12 +70,18 @@ builder.Services.AddAuthorization(options =>
     });
 
     // Staff policies: scope for the kind of operation + any of the permissions + a branch.
+    // Step-up (MFA): a payments officer's decision and operations' "Retry release" need a sign-in with the authenticator code while "Mfa:Enabled"
+    // is true (the token's amr contains "mfa"); with MFA off, nothing changes.
+    string[] stepUpPolicies = ["PaymentApprove", "PaymentReject", "PaymentRetryRelease"];
+
     void AddStaffPolicy(string name, string scope, params string[] anyOfPermissions) =>
         options.AddPolicy(name, policy =>
         {
             policy.RequireAuthenticatedUser();
             policy.RequireClaim("scope", scope);
             policy.AddRequirements(new PaymentsStaffRequirement(anyOfPermissions));
+            if (stepUpPolicies.Contains(name))
+                policy.RequireMfa();
         });
 
     AddStaffPolicy("PaymentInitiate", PaymentsApiScopesRequired.PAYMENTS_WRITE, "payment.initiate");
@@ -201,6 +207,7 @@ builder.Services.AddHealthChecks()
 
 // OWASP API4: per-caller rate limits on the API surface (429 + Retry-After); configuration "RateLimiting".
 builder.Services.AddEwpRateLimiting(builder.Configuration, "/v1");
+builder.Services.AddEwpMfaStepUp();   // the step-up requirement and its clear 403 ("mfa_required")
 
 var app = builder.Build();
 

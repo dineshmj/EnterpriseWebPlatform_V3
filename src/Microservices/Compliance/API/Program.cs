@@ -68,12 +68,18 @@ builder.Services.AddAuthorization(options =>
 
     // Officer policies: scope for the kind of operation + role, department, clearance
     // and the operation's permission. Case-level rules live in the aggregate.
+    // Step-up (MFA): a compliance officer's decision (approve or reject) need a sign-in with the authenticator code while "Mfa:Enabled"
+    // is true (the token's amr contains "mfa"); with MFA off, nothing changes.
+    string[] stepUpPolicies = ["ComplianceCaseApprove", "ComplianceCaseReject"];
+
     void AddOfficerPolicy(string name, string scope, params string[] permissions) =>
         options.AddPolicy(name, policy =>
         {
             policy.RequireAuthenticatedUser();
             policy.RequireClaim("scope", scope);
             policy.AddRequirements(new ComplianceOfficerRequirement(permissions));
+            if (stepUpPolicies.Contains(name))
+                policy.RequireMfa();
         });
 
     AddOfficerPolicy("ComplianceCaseView", ComplianceApiScopesRequired.COMPLIANCE_READ, "compliance.case.view");
@@ -169,6 +175,7 @@ builder.Services.AddHealthChecks()
 
 // OWASP API4: per-caller rate limits on the API surface (429 + Retry-After); configuration "RateLimiting".
 builder.Services.AddEwpRateLimiting(builder.Configuration, "/v1");
+builder.Services.AddEwpMfaStepUp();   // the step-up requirement and its clear 403 ("mfa_required")
 
 var app = builder.Build();
 

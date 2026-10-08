@@ -259,3 +259,10 @@ a:hover { color: var(--ewp-brand-800); }
 .status-line { display: flex; align-items: center; gap: 10px; margin-top: 20px; font-size: 14px; color: var(--ewp-ink-muted); }
 
 iframe.signout { display: none; width: 0; height: 0; border: 0; }
+
+/* Two-step sign-in (Google Authenticator enrolment). */
+.mfa-qr { display: flex; justify-content: center; margin: 20px 0 8px; }
+.mfa-qr img { border: 1px solid var(--ewp-line, #e2e8f0); border-radius: 12px; padding: 8px; background: #fff; }
+.mfa-key { margin: 8px 0 20px; padding: 10px 12px; border-radius: 8px; background: var(--ewp-subtle, #f1f5f9); font-family: var(--ewp-font-mono); font-size: 14px; letter-spacing: 0.04em; text-align: center; word-break: break-all; }
+.mfa-codes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 20px 0; padding: 0; list-style: none; }
+.mfa-codes li { padding: 8px 10px; border-radius: 8px; background: var(--ewp-subtle, #f1f5f9); font-family: var(--ewp-font-mono); font-size: 14px; text-align: center; }

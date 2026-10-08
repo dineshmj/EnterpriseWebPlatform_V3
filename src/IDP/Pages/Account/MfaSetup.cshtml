@@ -1,0 +1,58 @@
+@page
+@model EnterpriseWebPlatform.IdentityServer.Pages.Account.MfaSetupModel
+@{
+    ViewData["Title"] = "Set up Google Authenticator";
+}
+
+<section class="card" aria-labelledby="setup-title">
+    @if (Model.RecoveryCodes is null)
+    {
+        <header class="card-head">
+            <p class="eyebrow">Two-step sign-in</p>
+            <h1 class="card-title" id="setup-title">Set up Google Authenticator</h1>
+            <p class="card-lead">Two-step sign-in is now required. In <strong>Google Authenticator</strong> on your phone, tap <strong>+</strong>, then <strong>Scan a QR code</strong>.</p>
+        </header>
+
+        <partial name="_ValidationSummary" />
+
+        <div class="mfa-qr">
+            <img src="@Url.Page("/Account/MfaSetup", "QrCode")" width="246" height="246" alt="QR code to scan with Google Authenticator" />
+        </div>
+
+        <p class="card-lead">The entry appears as <strong>@Model.AccountName</strong>. Can't scan? Choose <strong>Enter a setup key</strong> and type:</p>
+        <p class="mfa-key">@Model.ManualKey</p>
+
+        <form method="post" novalidate>
+            <div class="field">
+                <label asp-for="Code">Then enter the 6-digit code the app shows</label>
+                <input class="input" asp-for="Code" inputmode="numeric" autocomplete="one-time-code"
+                       maxlength="6" placeholder="123456" autocapitalize="none" spellcheck="false" autofocus />
+            </div>
+            <div class="actions">
+                <button class="btn btn-primary btn-block">Verify</button>
+                <a class="btn btn-ghost btn-block" asp-page="/Account/Login">Cancel</a>
+            </div>
+        </form>
+    }
+    else
+    {
+        <header class="card-head">
+            <p class="eyebrow">Two-step sign-in</p>
+            <h1 class="card-title" id="setup-title">Save your recovery codes</h1>
+            <p class="card-lead">Google Authenticator is set up. If you lose your phone, each of these codes signs you in <strong>once</strong>. They are shown only now - keep them somewhere safe.</p>
+        </header>
+
+        <ul class="mfa-codes">
+            @foreach (var code in Model.RecoveryCodes)
+            {
+                <li>@code</li>
+            }
+        </ul>
+
+        <form method="post" asp-page-handler="Continue">
+            <div class="actions">
+                <button class="btn btn-primary btn-block">I have saved them - continue</button>
+            </div>
+        </form>
+    }
+</section>

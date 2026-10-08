@@ -438,6 +438,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Health checks | Present: `/health/live` and `/health/ready` on every .NET component (workers via a built-in listener); relay heartbeat and Outbox backlog (Degraded) checks |
 | Kafka authentication and authorization | Present: SCRAM-SHA-512 user per deployable, deny-by-default ACLs (own topics and consumer group only), no topic auto-creation; TLS (`SASL_SSL`) is a Production Concern |
 | IDP hardening (lockout, no enumeration, POST logout, front-channel logout, refresh-token rotation) | Present; refresh tokens, PAR requests and signing keys in Duende's operational store (PostgreSQL), so an IDP restart signs nobody out |
+| MFA and step-up | Present, off by default (`Mfa:Enabled`): TOTP with Google Authenticator for every user, enrolment at sign-in with recovery codes; tokens carry `amr`, and officer decisions and operations' retry require `mfa` while it is on |
 | Server-side BFF sessions | Present for the .NET BFFs: Duende sessions and Data Protection keys in PostgreSQL (`EwpBffStateDb`, one schema and user per BFF), so restarts and several instances keep sessions; key rings encrypted at rest (certificate, or DPAPI in Development) or the application refuses to start; KYC (NestJS) BFF still in-memory |
 | Automated tests | Planned (none yet) |
 | Document content verification (allow-list + magic bytes) | Present |
@@ -503,6 +504,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [x] CSP and security headers
 - [x] Rate limiting
 - [x] Delegated user context (token exchange, RFC 8693: Audit; Documents Management still on a pinned header)
+- [x] MFA (TOTP, Google Authenticator) and step-up for officer decisions - off by default
 - [ ] Sender-constrained tokens where justified
 
 **Phase 6 — Secure delivery**

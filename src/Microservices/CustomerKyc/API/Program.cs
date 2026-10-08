@@ -73,12 +73,18 @@ builder.Services.AddAuthorization(options =>
     });
 
     // Stage decisions: the decision permission AND the stage permission.
+    // Step-up (MFA): a KYC officer's stage decisions (claiming a case is not a decision) need a sign-in with the authenticator code while "Mfa:Enabled"
+    // is true (the token's amr contains "mfa"); with MFA off, nothing changes.
+    string[] stepUpPolicies = ["KycIdentityApprove", "KycIdentityReject", "KycDocumentApprove", "KycDocumentReject"];
+
     void AddDecisionPolicy(string name, params string[] permissions) =>
         options.AddPolicy(name, policy =>
         {
             policy.RequireAuthenticatedUser();
             policy.RequireClaim("scope", "customer-kyc.write");
             policy.AddRequirements(new KycCaseDecisionRequirement(permissions));
+            if (stepUpPolicies.Contains(name))
+                policy.RequireMfa();
         });
 
     AddDecisionPolicy("KycIdentityApprove", "kyc.case.approve", "kyc.identity.verify");
@@ -134,6 +140,7 @@ builder.Services.AddHealthChecks()
 
 // OWASP API4: per-caller rate limits on the API surface (429 + Retry-After); configuration "RateLimiting".
 builder.Services.AddEwpRateLimiting(builder.Configuration, "/v1");
+builder.Services.AddEwpMfaStepUp();   // the step-up requirement and its clear 403 ("mfa_required")
 
 var app = builder.Build();
 

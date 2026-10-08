@@ -145,6 +145,7 @@ Role → permission mappings: see the permission tables in each context's requir
 ## 7. Session and Logout
 
 - The IDP holds the SSO session that lets MFE BFFs sign in silently (`prompt=none`) after the Shell login.
+- **Two-step sign-in (MFA), off by default.** With `Mfa:Enabled` true, the password is only the first factor: the person is not signed in until the 6-digit code from Google Authenticator (or a recovery code) is entered (`Pages/Account/Mfa`). Someone without an authenticator enrols first (`Pages/Account/MfaSetup`: QR code or setup key, one confirming code, then 10 recovery codes shown once). In between, an encrypted 5-minute cookie remembers who passed the password. The SSO session records `amr` = `pwd otp mfa`, which every token carries; the silent sign-ins of the MFE BFFs inherit it. TOTP: RFC 6238, HMAC-SHA1, 6 digits, 30 s, ±30 s drift (`Security/Totp.cs`, checked against the RFC's test vectors).
 - **What the IDP remembers survives a restart and is shared by instances.** Refresh tokens (stored by a hash of the handle; details encrypted), pushed authorization requests and Duende's signing keys live in Duende's operational store, and the IDP's Data Protection keys (its cookies, the encrypted columns) next to them: `EwpIdentityAccessDb`, schema `identity_server`, used only by `ewp_idp`. Expired rows are removed hourly. An existing database gets the schema from `IdentityAccessDB/Upgrade-6b-OperationalStore.sql`.
 - Each interactive client registers a front-channel logout URI **and a back-channel logout URI** (Shell and CO BFF: Duende `/bff/backchannel`; KYC BFF: `/backchannel-logout`). On end-session the IDP notifies every participating client both ways; the back-channel call (a signed logout token, server-to-server) ends the BFF session even when the browser blocks the front-channel iframes. The user-facing logout flow is owned by the [Shell](../../Shell/doc/Shell-Requirements.md#6-logout).
 
@@ -155,7 +156,7 @@ Role → permission mappings: see the permission tables in each context's requir
 | Requirement | Status |
 |---|---|
 | Account lockout and login throttling | Present: 5 failed attempts lock the account for 15 minutes; login is limited to 20 requests per minute per IP |
-| MFA / step-up authentication for high-risk operations | Planned |
+| MFA / step-up authentication for high-risk operations | Present, switched off by default (`Mfa:Enabled`): TOTP with Google Authenticator for every user; enrolment at the next sign-in (QR code, 10 single-use recovery codes); the secret encrypted with the IDP's key ring, recovery codes hashed; wrong codes count towards the lockout; a code is never accepted twice. Tokens carry `amr` (`pwd`, or `pwd otp mfa`); officer decisions and operations' retry require `mfa` while it is on (step-up, 403 `mfa_required`) |
 | No username enumeration (uniform timing and response for unknown users) | Present: unknown, inactive and locked users get the same response and the same hash cost |
 | A password-hasher upgrade must not lock users out (`SuccessRehashNeeded` treated as success, then rehash) | Present |
 | Security headers (CSP, `frame-ancestors`, `nosniff`) on login, consent and logout pages | Present (`SecurityHeadersAttribute` now covers Razor `PageResult`) |

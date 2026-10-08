@@ -1,8 +1,10 @@
 ﻿using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Options;
 
 using Duende.IdentityServer;
 using Duende.IdentityServer.Events;
@@ -11,6 +13,7 @@ using Duende.IdentityServer.Services;
 using Duende.IdentityServer.Test;
 
 using EnterpriseWebPlatform.IdentityServer.Repositories;
+using EnterpriseWebPlatform.IdentityServer.Security;
 
 namespace EnterpriseWebPlatform.IdentityServer.Pages.Account;
 
@@ -23,18 +26,30 @@ public sealed class LoginModel : PageModel
     private readonly IEventService _events;
     private readonly IAuthenticationSchemeProvider _schemeProvider;
     private readonly IUserRepository _userRepository;
+    private readonly MfaService _mfa;
+    private readonly MfaOptions _mfaOptions;
+    private readonly IDataProtectionProvider _dataProtection;
+    private readonly TimeProvider _time;
 
     public LoginModel(
         IIdentityServerInteractionService interaction,
         IAuthenticationSchemeProvider schemeProvider,
         IUserRepository userRepository,
         IEventService events,
+        MfaService mfa,
+        IOptions<MfaOptions> mfaOptions,
+        IDataProtectionProvider dataProtection,
+        TimeProvider time,
         TestUserStore? users = null)
     {
         _interaction = interaction;
         _schemeProvider = schemeProvider;
         _userRepository = userRepository;
         _events = events;
+        _mfa = mfa;
+        _mfaOptions = mfaOptions.Value;
+        _dataProtection = dataProtection;
+        _time = time;
     }
 
     [BindProperty]
@@ -121,66 +136,24 @@ public sealed class LoginModel : PageModel
 
                 if (user is not null)
                 {
-                    await _events.RaiseAsync(
-                        new UserLoginSuccessEvent(
-                            user.UserName,
-                            user.SubjectId.ToString(),
-                            $"{user.FirstName} {user.LastName}"),
-                        cancellationToken);
-
-                    // This event notifies IdentityServer's event pipeline that
-                    // a login succeeded, enabling auditing, diagnostics,
-                    // monitoring hooks, and security log tracking.
-
-                    AuthenticationProperties? props = null;
-
-                    if (Input.RememberLogin)
+                    // MFA off: signed in now, as before. MFA on: not yet - the password was only the
+                    // first factor; the authenticator code (or, the first time, enrolment) follows.
+                    if (!_mfaOptions.Enabled)
                     {
-                        props = new AuthenticationProperties
-                        {
-                            IsPersistent = true,
-                            ExpiresUtc = DateTimeOffset.UtcNow.AddDays(30)
-                        };
+                        return await SignInCompletion.CompleteAsync(
+                            this, _interaction, _events, user, Input.RememberLogin, Input.ReturnUrl, withMfa: false);
                     }
 
-                    var isuser = new IdentityServerUser(
-                        user.SubjectId.ToString())
-                    {
-                        DisplayName =
-                            $"{user.FirstName} {user.LastName}"
-                    };
+                    new PendingSignIn(
+                        user.SubjectId.ToString(),
+                        Input.RememberLogin,
+                        Input.ReturnUrl,
+                        _time.GetUtcNow().Add(PendingSignIn.Lifetime))
+                        .Save(HttpContext, _dataProtection);
 
-                    await HttpContext.SignInAsync(
-                        isuser,
-                        props);
-
-                    // This issues the authentication cookie for the user,
-                    // creating their local login session inside IdentityServer.
-                    // Subsequent authorization requests use this cookie to
-                    // identify the authenticated user.
-
-                    if (context != null)
-                    {
-                        if (context.IsNativeClient())
-                        {
-                            return this.LoadingPage(Input.ReturnUrl);
-                        }
-
-                        return Redirect(Input.ReturnUrl ?? "~/");
-                    }
-
-                    if (Url.IsLocalUrl(Input.ReturnUrl))
-                    {
-                        return Redirect(Input.ReturnUrl);
-                    }
-
-                    if (string.IsNullOrEmpty(Input.ReturnUrl))
-                    {
-                        return Redirect("~/");
-                    }
-
-                    throw new ArgumentException(
-                        "Invalid return URL.");
+                    return await _mfa.IsEnrolledAsync(user.Id, cancellationToken)
+                        ? RedirectToPage("/Account/Mfa")
+                        : RedirectToPage("/Account/MfaSetup");
                 }
             }
 
