@@ -174,6 +174,12 @@ Every command is idempotent per `PaymentRef` in Accounts (one funds hold per pay
 
 ---
 
+### 4.7 Audit (consumer of everything)
+
+The Audit API's in-process subscriber (`audit.trail-subscriber`, Kafka user `ewp-audit-api`, read-only) reads **every business event topic** above - not the commands on `accounts.commands`, not the dead-letter topics - and appends each message to the tamper-evident trail. It is a tolerant reader: it keeps only identifiers, people (`InitiatedBy…`, `DecisionBy…`, `ApprovedBy…`), status, reason, amount and the SHA-256 of the message, never names or addresses. A producer therefore needs to do nothing for its events to be audited, as long as they use the standard envelope. Details: [Audit API README](../src/Microservices/Audit/API/README.md).
+
+---
+
 ## 5. Known Deviations from the Target
 
 1. **Every consumer has an Inbox and a dead-letter topic.** The KYC API additionally keeps one case per `ApplicationRef`, so even a re-published submission (new `MessageId`) returns the existing case.

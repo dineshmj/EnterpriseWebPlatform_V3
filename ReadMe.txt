@@ -49,6 +49,8 @@ What the platform is, how it is designed and what each component must do are doc
 		127.0.0.1    payments.dev.localhost
 		127.0.0.1    payments-api.dev.localhost
 
+		127.0.0.1    audit-api.dev.localhost
+
 	b) Check each name with "ping <hostname>"; each must resolve to 127.0.0.1.
 
 	c) ASP.NET Core applications run on Kestrel using the "https" launch profile (not IIS Express). The ASP.NET Core development certificate covers "*.dev.localhost".
@@ -84,6 +86,7 @@ What the platform is, how it is designed and what each component must do are doc
 		Payments API					https://payments-api.dev.localhost:44488   (the payment saga ORCHESTRATOR lives here)
 		Payment Network Simulator		https://localhost:46386   (stands in for an NPP-style payment network)
 		Payments BFF (MFE)				https://payments.dev.localhost:46388
+		Audit API						https://audit-api.dev.localhost:46378   (the tamper-evident audit trail; no UI yet)
 		Kafka UI						http://localhost:8080
 
 	The Shell Menu DB seed registers these same URLs.
@@ -136,6 +139,8 @@ What the platform is, how it is designed and what each component must do are doc
 			EwpAccountsDb				src\Microservices\Accounts\API\AccountsDb\EwpAccountsDb.sql
 			EwpNotificationsDb			src\Microservices\Notifications\API\NotificationsDb\EwpNotificationsDb.sql
 			EwpPaymentsDb				src\Microservices\Payments\API\PaymentsDb\EwpPaymentsDb.sql
+			EwpAuditDb					src\Microservices\Audit\API\AuditDb\EwpAuditDb.sql   (append-only; recreating it
+										empties the trail - reset the group audit.trail-subscriber to --to-earliest to re-record)
 			EwpBffStateDb				db\EwpBffStateDb.sql   (sessions and Data Protection keys of the .NET BFFs;
 										run it AFTER Apply-EwpServiceDbUsers.ps1 - it grants each BFF user its own schema)
 
@@ -176,7 +181,7 @@ What the platform is, how it is designed and what each component must do are doc
 		pgAdmin's Query Tool - it uses psql's \connect; pgAdmin's Tools > PSQL Tool with \i <path> works too.)
 
 		Each service connects with its own user (ewp_idp, ewp_shell, ewp_customer_onboarding_api, ewp_customer_outbox_relay,
-		ewp_kyc_api, ewp_documents_api, ewp_compliance_api, ewp_accounts_api, ewp_notifications_api, ewp_payments_api; the BFFs
+		ewp_kyc_api, ewp_documents_api, ewp_compliance_api, ewp_accounts_api, ewp_notifications_api, ewp_payments_api, ewp_audit_api (SELECT and INSERT only); the BFFs
 		ewp_co_bff, ewp_compliance_bff, ewp_accounts_bff, ewp_payments_bff and ewp_shell each own one schema of EwpBffStateDb) that may read and write ITS OWN database only: no DDL and no access to other
 		services' databases; the CO outbox relay may only read and update outbox_messages. The database scripts above
 		still run as postgres; the grants survive re-running them. Without this step the services cannot connect.
@@ -254,7 +259,7 @@ What the platform is, how it is designed and what each component must do are doc
 
 		IDP, Documents Management API, Customer Onboarding API, Customer KYC API, CustomerOutboxPublisher, KycCaseOpeningSubscriber,
 		OnboardingOutcomeSubscriber, Compliance API, ComplianceCaseOpeningSubscriber, DocumentInvalidationSubscriber, Accounts API,
-		AccountApplicationOpeningSubscriber, Notifications API, NotificationsSubscriber, Payments API, AccountsCommandSubscriber,
+		AccountApplicationOpeningSubscriber, Notifications API, NotificationsSubscriber, Audit API, Payments API, AccountsCommandSubscriber,
 		PaymentsSagaReplySubscriber, Screening Provider Simulator, Core Banking Simulator, Payment Network Simulator, Shell BFF,
 		Customer Onboarding BFF, Compliance BFF, Accounts BFF and Payments BFF.
 

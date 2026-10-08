@@ -58,6 +58,9 @@
     <Project Path="src/Microservices/CustomerOnboarding/API/EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Api.csproj" />
     <Project Path="src/Microservices/CustomerOnboarding/BFF.Web/EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.csproj" />
   </Folder>
+  <Folder Name="/Microservices/Audit/">
+    <Project Path="src/Microservices/Audit/API/EnterpriseWebPlatform.Audit.Api.csproj" />
+  </Folder>
   <Folder Name="/Microservices/DocumentsManagement/">
     <Project Path="src/Microservices/DocumentsManagement/API/EnterpriseWebPlatform.BSS.Microservices.DocumentsManagement.Api.csproj" />
   </Folder>

@@ -21,6 +21,15 @@ public static class KafkaTopicNames
 
     public const string KycCaseApproved = "kyc.case.approved";
 
+    /// <summary>A KYC officer decided one stage of a case (published by the KYC API; read by Audit).</summary>
+    public const string KycIdentityVerificationApproved = "kyc.identity.verification.approved";
+
+    public const string KycIdentityVerificationRejected = "kyc.identity.verification.rejected";
+
+    public const string KycDocumentVerificationApproved = "kyc.document.verification.approved";
+
+    public const string KycDocumentVerificationRejected = "kyc.document.verification.rejected";
+
     public const string KycCaseRejected = "kyc.case.rejected";
 
     public const string ComplianceCaseCreated = "compliance.case.created";
@@ -114,4 +123,11 @@ public static class KafkaTopicNames
     /// </summary>
     public const string NotificationsSubscriberDeadLetter =
         "notifications.subscriber.dlq";
+
+    /// <summary>
+    /// Dead-letter topic of the Audit API's trail subscriber: messages that are not JSON at all,
+    /// so nothing meaningful can be recorded. Everything else is recorded, never dead-lettered.
+    /// </summary>
+    public const string AuditTrailSubscriberDeadLetter =
+        "audit.trail-subscriber.dlq";
 }

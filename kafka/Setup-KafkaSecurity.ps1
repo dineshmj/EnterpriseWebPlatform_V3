@@ -60,6 +60,7 @@ $Users = [ordered]@{
     'ewp-accounts-command-subscriber'   = 'ewp-accounts-command-subscriber-kafka-dev'    # AccountsCommandSubscriber
     'ewp-payments-api'                  = 'ewp-payments-api-kafka-dev'       # Payments API (in-process relay: saga commands + payment events)
     'ewp-payments-saga-reply-subscriber' = 'ewp-payments-saga-reply-subscriber-kafka-dev' # PaymentsSagaReplySubscriber
+    'ewp-audit-api'                     = 'ewp-audit-api-kafka-dev'          # Audit API (in-process trail subscriber; read-only)
     'ewp-kafka-ui'                      = 'ewp-kafka-ui-dev'                 # Kafka UI (read-only)
 }
 
@@ -93,7 +94,8 @@ $Topics = @(
     'accounts.funds.replies',
     'payments.payment.events',
     'accounts.command-subscriber.dlq',
-    'payments.saga-reply-subscriber.dlq'
+    'payments.saga-reply-subscriber.dlq',
+    'audit.trail-subscriber.dlq'
 )
 
 # Consumer groups introduced with these security settings, and the topics they read.
@@ -112,6 +114,8 @@ $NewGroups = [ordered]@{
     # Payments saga (orchestration): commands to Accounts, and Accounts' replies to the orchestrator.
     'accounts.command-subscriber'             = @('accounts.commands')
     'payments.saga-reply-subscriber'          = @('accounts.funds.replies')
+    # NOT listed on purpose: 'audit.trail-subscriber' starts at the EARLIEST offset, so the
+    # audit trail first records the history Kafka still holds.
 }
 
 $Bootstrap   = 'localhost:9092'
@@ -336,6 +340,18 @@ switch ($Phase) {
     }
     Grant 'ewp-notifications-subscriber' '--operation Read --group notifications.subscriber'
     Grant 'ewp-notifications-subscriber' '--operation Write --operation Describe --topic notifications.subscriber.dlq'
+
+    Write-Host 'Audit API (in-process trail subscriber): READ every business event topic and its group; write its dead-letter topic; nothing else' -ForegroundColor Cyan
+    foreach ($t in 'customer.created', 'onboarding.application.submitted', 'onboarding.application.status.changed', 'onboarding.application.rejected',
+                   'kyc.case.created', 'kyc.identity.verification.approved', 'kyc.identity.verification.rejected',
+                   'kyc.document.verification.approved', 'kyc.document.verification.rejected', 'kyc.case.approved', 'kyc.case.rejected',
+                   'compliance.case.created', 'compliance.case.screened', 'compliance.case.approved', 'compliance.case.rejected',
+                   'accounts.application.created', 'accounts.application.rejected', 'accounts.account.opened', 'accounts.account.opening.failed',
+                   'accounts.funds.replies', 'payments.payment.events') {
+        Grant 'ewp-audit-api' "--operation Read --operation Describe --topic $t"
+    }
+    Grant 'ewp-audit-api' '--operation Read --group audit.trail-subscriber'
+    Grant 'ewp-audit-api' '--operation Write --operation Describe --topic audit.trail-subscriber.dlq'
 
     # Clean-up of an earlier run where "*" was expanded to ".git" (see Invoke-KafkaTool).
     Invoke-KafkaTool 'kafka-acls.bat' "--bootstrap-server $Bootstrap --command-config `"$AdminProps`" --remove --force --topic .git" -AllowFailure | Out-Null

@@ -38,6 +38,7 @@ BEGIN
         ('ewp_accounts_api',            'ewp-accounts-api-dev'),
         ('ewp_notifications_api',       'ewp-notifications-api-dev'),
         ('ewp_payments_api',            'ewp-payments-api-dev'),
+        ('ewp_audit_api',               'ewp-audit-api-dev'),
         -- The MFE BFFs' own users, for their sessions and keys in EwpBffStateDb (the Shell uses ewp_shell).
         ('ewp_co_bff',                  'ewp-co-bff-dev'),
         ('ewp_compliance_bff',          'ewp-compliance-bff-dev'),
@@ -66,6 +67,7 @@ REVOKE CONNECT ON DATABASE "EwpComplianceDb"          FROM PUBLIC;
 REVOKE CONNECT ON DATABASE "EwpAccountsDb"            FROM PUBLIC;
 REVOKE CONNECT ON DATABASE "EwpNotificationsDb"       FROM PUBLIC;
 REVOKE CONNECT ON DATABASE "EwpPaymentsDb"            FROM PUBLIC;
+REVOKE CONNECT ON DATABASE "EwpAuditDb"               FROM PUBLIC;
 REVOKE CONNECT ON DATABASE "EwpBffStateDb"            FROM PUBLIC;
 
 GRANT CONNECT ON DATABASE "EwpIdentityAccessDb"      TO ewp_idp;
@@ -77,6 +79,7 @@ GRANT CONNECT ON DATABASE "EwpComplianceDb"          TO ewp_compliance_api;
 GRANT CONNECT ON DATABASE "EwpAccountsDb"            TO ewp_accounts_api;
 GRANT CONNECT ON DATABASE "EwpNotificationsDb"       TO ewp_notifications_api;
 GRANT CONNECT ON DATABASE "EwpPaymentsDb"            TO ewp_payments_api;
+GRANT CONNECT ON DATABASE "EwpAuditDb"               TO ewp_audit_api;
 GRANT CONNECT ON DATABASE "EwpBffStateDb"            TO ewp_shell, ewp_co_bff, ewp_compliance_bff, ewp_accounts_bff, ewp_payments_bff;
 
 -- -----------------------------------------------------------------------------
@@ -167,6 +170,14 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ewp_payme
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_payments_api;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ewp_payments_api;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ewp_payments_api;
+
+\connect EwpAuditDb
+-- The audit trail is append-only: SELECT and INSERT, nothing else - no UPDATE, no DELETE
+-- (a trigger refuses those for everybody, and the hash chain exposes any change).
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+GRANT USAGE ON SCHEMA public TO ewp_audit_api;
+GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA public TO ewp_audit_api;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT ON TABLES TO ewp_audit_api;
 
 \connect EwpBffStateDb
 -- No objects in public; each BFF gets data access to ITS OWN schema only - granted by
