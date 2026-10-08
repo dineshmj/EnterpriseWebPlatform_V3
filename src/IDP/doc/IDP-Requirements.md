@@ -129,6 +129,7 @@ Role → permission mappings: see the permission tables in each context's requir
 ## 7. Session and Logout
 
 - The IDP holds the SSO session that lets MFE BFFs sign in silently (`prompt=none`) after the Shell login.
+- **What the IDP remembers survives a restart and is shared by instances.** Refresh tokens (stored by a hash of the handle; details encrypted), pushed authorization requests and Duende's signing keys live in Duende's operational store, and the IDP's Data Protection keys (its cookies, the encrypted columns) next to them: `EwpIdentityAccessDb`, schema `identity_server`, used only by `ewp_idp`. Expired rows are removed hourly. An existing database gets the schema from `IdentityAccessDB/Upgrade-6b-OperationalStore.sql`.
 - Each interactive client registers a front-channel logout URI **and a back-channel logout URI** (Shell and CO BFF: Duende `/bff/backchannel`; KYC BFF: `/backchannel-logout`). On end-session the IDP notifies every participating client both ways; the back-channel call (a signed logout token, server-to-server) ends the BFF session even when the browser blocks the front-channel iframes. The user-facing logout flow is owned by the [Shell](../../Shell/doc/Shell-Requirements.md#6-logout).
 
 ---
@@ -144,4 +145,6 @@ Role → permission mappings: see the permission tables in each context's requir
 | Security headers (CSP, `frame-ancestors`, `nosniff`) on login, consent and logout pages | Present (`SecurityHeadersAttribute` now covers Razor `PageResult`) |
 | Logout only by POST, with anti-forgery | Present: GET signs out only for a client-initiated logout with a valid `id_token_hint` (no prompt needed); otherwise a confirmation form is POSTed |
 | Front-channel logout iframe rendered on the logout page | Present (`Pages/Account/LoggedOut`) |
+| Refresh tokens, PAR requests and signing keys survive a restart and are shared by instances | Present: Duende operational store in PostgreSQL (schema `identity_server`), hourly clean-up of expired rows |
+| Key ring encrypted at rest; no start-up with readable keys | Present: certificate from `DataProtection:CertificatePath` (required outside Development), DPAPI in Development on Windows; otherwise the IDP refuses to start |
 | Secrets (client secrets, DB credentials) from a secret store, not compiled constants | Partial: client secrets come from configuration (`ClientSecrets:<client id>`; Development values in `appsettings.Development.json`) and the IDP refuses to start without them. Remaining: a real secret store; per-service DB credentials. |

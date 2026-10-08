@@ -8,6 +8,7 @@ using OpenTelemetry.Trace;
 using Serilog;
 
 using EnterpriseWebPlatform.Common.Observability;
+using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.IdentityServer.Data;
 using EnterpriseWebPlatform.IdentityServer.Repositories;
 using EnterpriseWebPlatform.IdentityServer.Security;
@@ -35,9 +36,15 @@ try
         .ReadFrom.Configuration(ctx.Configuration));
 
     // PostgreSQL database for identity and authorization data.
-    builder.Services.AddDbContext<IdentityDbContext>(options =>
-        options.UseNpgsql(
-            builder.Configuration.GetConnectionString("IdentityDbConnection")));
+    var identityDb = builder.Configuration.GetConnectionString("IdentityDbConnection")
+        ?? throw new InvalidOperationException("Connection string 'IdentityDbConnection' was not configured.");
+    builder.Services.AddDbContext<IdentityDbContext>(options => options.UseNpgsql(identityDb));
+
+    // The IDP's Data Protection keys (its cookies, and the encrypted columns of the operational
+    // store below) live in EwpIdentityAccessDb, schema identity_server, encrypted at rest:
+    // a restart or a second instance can still read them. No certificate outside Development
+    // means no start-up (the keys are never stored readable).
+    builder.AddEwpPersistentDataProtection(identityDb, schema: "identity_server", applicationName: "ewp-idp");
 
     builder.Services.AddScoped<IUserRepository, UserRepository>();
     builder.Services.AddScoped<IPasswordManager, PasswordManager>();
@@ -89,6 +96,19 @@ try
         .AddInMemoryApiScopes(Config.ApiScopes)
         .AddInMemoryApiResources(Config.ApiResources)
         .AddInMemoryClients(clients)
+        .AddOperationalStore(options =>
+        {
+            options.ConfigureDbContext = db => db.UseNpgsql(identityDb);
+            options.DefaultSchema = "identity_server";
+            options.EnableTokenCleanup = true;
+            options.TokenCleanupInterval = 3600;
+        })
+        // 🡡__ WHY   : Refresh tokens, pushed authorization requests and Duende's signing keys are stored in
+        //              PostgreSQL (refresh tokens by a hash of the handle only; their details encrypted), so an IDP
+        //              restart no longer forgets them and several IDP instances share them. Expired rows are
+        //              removed hourly.
+        // 🡡__ IF NOT: The in-memory default: after a restart no refresh token works, and everybody must sign in
+        //              again once their access token expires.
         .AddProfileService<CustomProfileService>()
         .AddSigningCredential(builder);
 

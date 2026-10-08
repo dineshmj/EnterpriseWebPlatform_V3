@@ -435,8 +435,8 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Rate limiting | Present: IDP login throttling and lockout; every .NET BFF and API limits per caller (person by subject ID, with a tighter budget for changes; machine client by client ID; anonymous by IP) and answers 429 with Retry-After. Shared code: `Common.WebUtilities/Security/RateLimiting.cs`, configuration `RateLimiting` |
 | Health checks | Present: `/health/live` and `/health/ready` on every .NET component (workers via a built-in listener); relay heartbeat and Outbox backlog (Degraded) checks |
 | Kafka authentication and authorization | Present: SCRAM-SHA-512 user per deployable, deny-by-default ACLs (own topics and consumer group only), no topic auto-creation; TLS (`SASL_SSL`) is a Production Concern |
-| IDP hardening (lockout, no enumeration, POST logout, front-channel logout, refresh-token rotation) | Present |
-| Server-side BFF sessions | Present for the .NET BFFs: Duende sessions and Data Protection keys in PostgreSQL (`EwpBffStateDb`, one schema and user per BFF), so restarts and several instances keep sessions; KYC (NestJS) BFF still in-memory |
+| IDP hardening (lockout, no enumeration, POST logout, front-channel logout, refresh-token rotation) | Present; refresh tokens, PAR requests and signing keys in Duende's operational store (PostgreSQL), so an IDP restart signs nobody out |
+| Server-side BFF sessions | Present for the .NET BFFs: Duende sessions and Data Protection keys in PostgreSQL (`EwpBffStateDb`, one schema and user per BFF), so restarts and several instances keep sessions; key rings encrypted at rest (certificate, or DPAPI in Development) or the application refuses to start; KYC (NestJS) BFF still in-memory |
 | Automated tests | Planned (none yet) |
 | Document content verification (allow-list + magic bytes) | Present |
 | Direct / pre-signed document upload, malware scanning | Planned / Target |

@@ -55,7 +55,7 @@ builder.Services.AddAntiforgery(options =>
 // are removed by Duende's clean-up job.
 var bffStateDb = builder.Configuration.GetConnectionString("BffStateDbConnection")
     ?? throw new InvalidOperationException("Connection string 'BffStateDbConnection' was not configured.");
-builder.Services.AddEwpPersistentDataProtection(bffStateDb, schema: "payments_bff", applicationName: "ewp-payments-bff");
+builder.AddEwpPersistentDataProtection(bffStateDb, schema: "payments_bff", applicationName: "ewp-payments-bff");
 builder.Services.Configure<SessionStoreOptions>(options => options.DefaultSchema = "payments_bff");
 builder.Services.AddBff()
     .AddEntityFrameworkServerSideSessions(options => options.UseNpgsql(bffStateDb))

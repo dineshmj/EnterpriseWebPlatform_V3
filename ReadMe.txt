@@ -139,6 +139,10 @@ What the platform is, how it is designed and what each component must do are doc
 			EwpBffStateDb				db\EwpBffStateDb.sql   (sessions and Data Protection keys of the .NET BFFs;
 										run it AFTER Apply-EwpServiceDbUsers.ps1 - it grants each BFF user its own schema)
 
+		Upgrading an EXISTING EwpIdentityAccessDb (keeps its users; adds the schema identity_server - Duende's refresh tokens,
+		PAR requests, signing keys and the IDP's key ring): src\IDP\IdentityAccessDB\Upgrade-6b-OperationalStore.sql,
+		then run db\Apply-EwpServiceDbUsers.ps1 again (it grants ewp_idp the new schema).
+
 		Upgrading an EXISTING EwpAccountsDb for Payments (keeps its accounts; adds balances and funds holds, and gives
 		existing accounts the demo opening deposit): src\Microservices\Accounts\API\AccountsDb\Upgrade-5a-Funds.sql
 
@@ -236,6 +240,8 @@ What the platform is, how it is designed and what each component must do are doc
 		component that uses them - the IDP, the Shell BFF, every .NET MFE BFF and API, every relay and subscriber, and the three
 		simulators - and runnow.bat of the KYC BFF.
 		A component refuses to start when a secret is missing. Outside Development, supply them as environment variables or from a secret store.
+		Outside Development, the IDP and every .NET BFF also need DataProtection:CertificatePath (and CertificatePassword): the
+		certificate that encrypts their key ring in the database. In Development on Windows, DPAPI is used instead.
 
 	i) Open EnterpriseWebPlatform.BSS.slnx in Visual Studio and restore the NuGet packages.
 	   (.slnx is the XML solution format: Visual Studio 2026, or Visual Studio 2022 17.14+; 17.10-17.13 need the preview

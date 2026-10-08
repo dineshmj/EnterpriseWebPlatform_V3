@@ -58,7 +58,7 @@ builder.Services.AddDbContext<MenuDbContext>(options =>
 // are removed by Duende's clean-up job.
 var bffStateDb = builder.Configuration.GetConnectionString("BffStateDbConnection")
     ?? throw new InvalidOperationException("Connection string 'BffStateDbConnection' was not configured.");
-builder.Services.AddEwpPersistentDataProtection(bffStateDb, schema: "shell_bff", applicationName: "ewp-shell-bff");
+builder.AddEwpPersistentDataProtection(bffStateDb, schema: "shell_bff", applicationName: "ewp-shell-bff");
 builder.Services.Configure<SessionStoreOptions>(options => options.DefaultSchema = "shell_bff");
 
 builder.Services.AddBff()

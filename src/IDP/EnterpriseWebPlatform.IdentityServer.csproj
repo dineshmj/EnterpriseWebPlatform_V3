@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <PackageReference Include="Duende.IdentityServer" Version="8.0.9" />
+    <PackageReference Include="Duende.IdentityServer.EntityFramework" Version="8.0.9" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.12" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageReference Include="Npgsql.OpenTelemetry" Version="10.0.3" />
@@ -22,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Common\Landscape\EnterpriseWebPlatform.Common.Landscape.csproj" />
     <ProjectReference Include="..\Common\Observability\EnterpriseWebPlatform.Common.Observability.csproj" />
+    <ProjectReference Include="..\Common\WebUtilities\EnterpriseWebPlatform.Common.WebUtilties.csproj" />
   </ItemGroup>
 
   <!-- The shared design tokens and brand mark (src/Common/DesignSystem) are the single

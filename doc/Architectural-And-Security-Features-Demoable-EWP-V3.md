@@ -518,12 +518,16 @@ The IDP (Duende IdentityServer 8) applies the standard defences of a sign-in ser
 - **Logout:** POST only, so it cannot be triggered cross-site.
 - **Pages:** framing is forbidden (`frame-ancestors 'none'`); the pages use no CDN and no inline script or style, so their CSP has no `'unsafe-inline'`.
 - **Passwords:** password managers are supported (`autocomplete="current-password"`).
+- **State that survives:** refresh tokens (only a hash of each is stored, the details encrypted), pushed authorization requests and signing keys are kept in PostgreSQL by Duende's operational store, with hourly clean-up. An IDP restart signs nobody out, and several IDP instances share them.
+- **Keys never stored readable:** the IDP's and every .NET BFF's Data Protection key ring is encrypted at rest - with a certificate (`DataProtection:CertificatePath`), or DPAPI in Development on Windows. Without either, the application refuses to start.
 
 **Where to look at:**
 
 - Lockout and dummy hash: [UserRepository.cs](../src/IDP/Repositories/UserRepository.cs), [PasswordManager.cs](../src/IDP/Security/PasswordManager.cs)
 - Throttling: `AddRateLimiter` in [IDP Program.cs](../src/IDP/Program.cs)
 - Headers and CSP: [SecurityHeadersAttribute.cs](../src/IDP/SecurityHeadersAttribute.cs)
+- Operational store: `AddOperationalStore` in [IDP Program.cs](../src/IDP/Program.cs), tables in [IdentityAccessDb.sql](../src/IDP/IdentityAccessDB/IdentityAccessDb.sql) (schema `identity_server`)
+- Key-ring encryption, fail closed: [PersistentDataProtection.cs](../src/Common/WebUtilities/Security/PersistentDataProtection.cs)
 
 **Not yet:** multi-factor authentication.
 
