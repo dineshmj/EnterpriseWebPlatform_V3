@@ -26,13 +26,15 @@ param(
     [switch] $Stop
 )
 
+cls
+
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path   # the repository root (this script is in ps\<area>)
 
 $services = @(
     [pscustomobject]@{ Name = 'Customer KYC BFF';  Group = 'Kyc';   Port = 33800; Folder = 'src\Microservices\CustomerKyc\BFF.Web' }
     [pscustomobject]@{ Name = 'Audit Journey API'; Group = 'Audit'; Port = 46379; Folder = 'src\Microservices\Audit\JourneyApi' }
-    [pscustomobject]@{ Name = 'Audit web';         Group = 'Audit'; Port = 46380; Folder = 'src\Microservices\Audit\Web' }
+    [pscustomobject]@{ Name = 'Audit web';         Group = 'Audit'; Port = 46380; Folder = 'src\Microservices\Audit\BFF.Web' }
 ) | Where-Object { $Only -eq 'All' -or $_.Group -eq $Only }
 
 function Get-Listener([int] $port) {

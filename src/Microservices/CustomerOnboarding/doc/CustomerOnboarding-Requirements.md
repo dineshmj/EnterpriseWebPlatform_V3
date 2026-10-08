@@ -39,7 +39,7 @@ Customer Onboarding owns the **customer** and the **onboarding application** —
 | Customer *(self-service channel planned)* | Start their own onboarding; enter and update their own details while the application is in Draft; upload required documents; submit; view the status of their own application | Approve any stage; see another customer's data; use internal functions |
 | Customer Service Agent | Create customers and applications on a customer's behalf; review and correct permitted customer data; submit applications; view onboarding workflow status; view KYC status where permitted | Make KYC, compliance or account-opening decisions; access customers outside their organizational scope; approve their own submissions |
 | Operations Administrator | View applications and workflow status; perform technical recovery | Create or change business data; approve |
-| Auditor | Read customer and onboarding history | Change anything |
+| Auditor | See customer and onboarding activity in the Audit Trail (Audit context) | Use this context's screens or API |
 
 ---
 
@@ -190,7 +190,7 @@ Event contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Ev
 
 | Operation | Rule |
 |---|---|
-| View a customer or application | Permission **and** branch scope (ABAC). A Customer Service Agent sees customers whose primary residential address is in the agent's branch city and country (`branch_city` / `branch_country_code` claims). Operations administrators, platform administrators and auditors read globally. Anyone else, or an agent without branch location claims, sees nothing (404). |
+| View a customer or application | Permission **and** branch scope (ABAC). A Customer Service Agent sees customers whose primary residential address is in the agent's branch city and country (`branch_city` / `branch_country_code` claims). Operations administrators and platform administrators read globally. Auditors are not admitted: they see onboarding activity in the Audit Trail, where every look is recorded (no personal data). Anyone else, or an agent without branch location claims, sees nothing (404). |
 | Update a customer; open or submit its application | Branch scope **and** ReBAC `manages`: only the customer's managing agent (`customers.managing_agent_user_id`). Another agent of the same branch gets 403; another branch gets 404. |
 | Create a customer | `customer_service_agent` + write scope + the residential address is within the agent's branch scope (otherwise 403). The creating agent becomes the managing agent. |
 | Submit | `customer.onboarding.submit` + application in DRAFT + version match |
@@ -243,4 +243,4 @@ Event contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Ev
 - An agent from another branch cannot read or update the customer.
 - Another agent of the same branch can read the customer but cannot update it or open / submit its application (403).
 - `operations_administrator` and `platform_administrator` cannot create or update customers.
-- An `auditor` can read history but receives 403 on any write.
+- An `auditor` receives 403 on every endpoint: auditors work through the Audit context.

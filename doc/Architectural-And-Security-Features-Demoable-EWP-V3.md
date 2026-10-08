@@ -586,7 +586,7 @@ The coarse layer: the calling application must hold the OAuth scope for *this ki
 
 #### 2.2.3 Object-level authorization
 
-Having the right role is not enough to open a *specific* record. Every read, list and write checks that the record lies within the caller's scope, so changing an ID in a URL returns nothing (the defence against OWASP API Security's #1 risk, BOLA / IDOR). A customer service agent sees only customers whose primary residential address is in their branch's city. KYC, Compliance and account officers see and decide only cases of their own branch, and staff see and decide only payments of their own branch. Operations staff and auditors are the deliberate exception for payments: they read every branch (to watch processing and to audit), but cannot decide. Documents are branch-scoped on every operation. Lists are filtered and paged **in the database**, so out-of-scope rows are never even loaded. A caller without the needed attributes sees nothing (fail closed).
+Having the right role is not enough to open a *specific* record. Every read, list and write checks that the record lies within the caller's scope, so changing an ID in a URL returns nothing (the defence against OWASP API Security's #1 risk, BOLA / IDOR). A customer service agent sees only customers whose primary residential address is in their branch's city. KYC, Compliance and account officers see and decide only cases of their own branch, and staff see and decide only payments of their own branch. Operations staff are the deliberate exception for payments: they read every branch (to watch processing), but cannot decide. Auditors never use the operational screens: they see every context's activity through the Audit context only (the Audit Trail), where every look is itself recorded, and the Payments API answers an auditor only when the Audit Journey API is the acting client (token exchange). Documents are branch-scoped on every operation. Lists are filtered and paged **in the database**, so out-of-scope rows are never even loaded. A caller without the needed attributes sees nothing (fail closed).
 
 **Where to look at:**
 
@@ -773,7 +773,7 @@ Who did what is recorded once, centrally, and cannot be quietly changed. The Aud
 
 - The trail and its chain: [AuditEntry.cs](../src/Microservices/Audit/API/Domain/AuditEntry.cs), [AuditTrailAppender.cs](../src/Microservices/Audit/API/Infrastructure/AuditTrailAppender.cs), [AuditChainVerifier.cs](../src/Microservices/Audit/API/Application/AuditChainVerifier.cs); append-only table and trigger: [EwpAuditDb.sql](../src/Microservices/Audit/API/AuditDb/EwpAuditDb.sql)
 - What is kept from an event: [AuditEventMapper.cs](../src/Microservices/Audit/API/Application/AuditEventMapper.cs)
-- The three tiers: [Audit web](../src/Microservices/Audit/Web/README.md), [Audit Journey API](../src/Microservices/Audit/JourneyApi/README.md), [Audit API](../src/Microservices/Audit/API/README.md)
+- The three tiers: [Audit web](../src/Microservices/Audit/BFF.Web/README.md), [Audit Journey API](../src/Microservices/Audit/JourneyApi/README.md), [Audit API](../src/Microservices/Audit/API/README.md)
 
 **Not yet:** operations' "Retry release" on a payment is not an event, so it is not in the trail; the chain is not anchored outside the database (e.g. periodically to WORM storage).
 

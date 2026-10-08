@@ -39,7 +39,7 @@ Accounts opens customer accounts once onboarding prerequisites are complete. It 
 |---|---|---|
 | Account Officer | Review account applications of their branch; claim and release them; approve (choosing the product), reject or hold the opening; view opened accounts | Open an account for an application they initiated, or one they approved in Compliance; act outside their branch; open an account without the core-banking system |
 | Customer | View their own accounts (planned) | View anyone else's accounts |
-| Auditor | View account history (planned) | Change anything |
+| Auditor | View account history, in the Audit Trail (Audit context) | Use this context's screens or API; change anything |
 
 ---
 

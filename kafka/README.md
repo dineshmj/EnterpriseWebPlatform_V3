@@ -5,6 +5,7 @@ The platform uses a single-node Kafka broker in KRaft mode, installed natively a
 | File | Purpose |
 |---|---|
 | [Setup-KafkaSecurity.ps1](../ps/kafka/Setup-KafkaSecurity.ps1) | SCRAM-SHA-512 authentication, one Kafka user per deployable, deny-by-default ACLs, explicit topics, no auto-creation |
+| [Reset-KafkaRecords.ps1](../ps/kafka/Reset-KafkaRecords.ps1) | Empties every topic (deletes all records up to each topic's end) while the topics, ACLs and consumer groups stay - with `ps\database\Initialize-EwpDatabases.ps1`, a clean slate. Asks first; Kafka running, EWP services stopped |
 | [Stop-Kafka.ps1](../ps/kafka/Stop-Kafka.ps1) | Stops the broker without knowing its PID (for when Ctrl+C is not possible, e.g. under PowerShell ISE), waits for the ports to free, and clears the read-only flag on metadata snapshots that otherwise breaks the next start on Windows |
 | [kafka-ui.yml](kafka-ui.yml) | Configuration for Kafka UI: localhost only, login form, read-only Kafka user, read-only cluster |
 

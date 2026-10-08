@@ -139,6 +139,8 @@ builder.Services.AddAuthorization(options =>
     // Writes are business operations: only Customer Service Agents perform them.
     // Operations and platform administrators read for support purposes but never
     // change customer data (operational authority is not business authority).
+    // Auditors are deliberately NOT here: they see customers' activity through the Audit context,
+    // where every look is recorded - not through the operational screens, which show personal data.
     options.AddPolicy("CustomerRead", policy =>
     {
         policy.RequireAuthenticatedUser();
@@ -146,7 +148,6 @@ builder.Services.AddAuthorization(options =>
         policy.RequireRole(
             "customer_service_agent",
             "operations_administrator",
-            "auditor",
             "platform_administrator");
     });
 
@@ -164,7 +165,6 @@ builder.Services.AddAuthorization(options =>
         policy.RequireRole(
             "customer_service_agent",
             "operations_administrator",
-            "auditor",
             "platform_administrator");
     });
 

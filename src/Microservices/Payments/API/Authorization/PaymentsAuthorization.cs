@@ -1,7 +1,9 @@
 using System.Security.Claims;
+using System.Text.Json;
 
 using Microsoft.AspNetCore.Authorization;
 
+using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 using EnterpriseWebPlatform.Payments.Api.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.Payments.Api.Authorization;
@@ -25,18 +27,49 @@ public sealed class PaymentsStaffAuthorizationHandler : AuthorizationHandler<Pay
     {
         var user = context.User;
         var permissions = user.Claims.Where(c => c.Type == "permission").Select(c => c.Value).ToHashSet(StringComparer.Ordinal);
+        var granted = requirement.AnyOfPermissions.Where(permissions.Contains).ToList();
 
-        if (requirement.AnyOfPermissions.Any(permissions.Contains) && BranchOf(user) is not null)
-            context.Succeed(requirement);
+        if (granted.Count == 0 || BranchOf(user) is null)
+            return Task.CompletedTask;
 
+        // Auditors read payments only THROUGH the Audit context, where every look is itself
+        // recorded: a grant that rests on the auditor's permission alone needs a delegated token
+        // whose acting client is the Audit Journey API (token exchange). The Payments screens
+        // therefore refuse an auditor, while the Audit Trail's "where it stands now" works.
+        if (granted.All(p => p == AuditReadPermission) &&
+            ActingClientOf(user) != AuditMicroservice.CLIENT_ID_FOR_IDP_FOR_AUDIT_JOURNEY_API)
+        {
+            return Task.CompletedTask;
+        }
+
+        context.Succeed(requirement);
         return Task.CompletedTask;
+    }
+
+    /// <summary>The auditor's permission on payments: read-only, all branches, and only through the Audit context.</summary>
+    public const string AuditReadPermission = "payment.history.view";
+
+    /// <summary>The client acting for the person (the outermost "act" of a delegated token), or null.</summary>
+    public static string? ActingClientOf(ClaimsPrincipal user)
+    {
+        if (user.FindFirst("act")?.Value is not { } act)
+            return null;
+        try
+        {
+            using var document = JsonDocument.Parse(act);
+            return document.RootElement.TryGetProperty("client_id", out var client) ? client.GetString() : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     /// <summary>The user's branch (ABAC); null when absent or malformed (fail closed).</summary>
     public static BranchCode? BranchOf(ClaimsPrincipal user) =>
         BranchCode.TryCreate(user.FindFirst("branch")?.Value, out var branch) ? branch : null;
 
-    /// <summary>Permissions whose work is not branch-bound: operations (workflow.view) and audit (payment.history.view).</summary>
+    /// <summary>Permissions whose work is not branch-bound: operations (workflow.view) and audit (payment.history.view, through the Audit context only).</summary>
     public static readonly IReadOnlySet<string> AllBranchesPermissions =
         new HashSet<string>(StringComparer.Ordinal) { "workflow.view", "payment.history.view" };
 

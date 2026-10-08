@@ -34,7 +34,7 @@ It deliberately does **not** contain:
 | Account Officer | `account_officer` | Reviews and approves account opening | Accounts |
 | Payments Officer | `payments_officer` | Reviews and processes payment instructions | Payments |
 | Operations Administrator | `operations_administrator` | Monitors workflows and handles technical exceptions (retry, reprocess) | All contexts — operational views only |
-| Auditor | `auditor` | Independent, read-only review of business activity and history | All contexts — read-only |
+| Auditor | `auditor` | Independent, read-only review of business activity and history | All contexts — read-only, through the Audit context only (the Audit Trail), where every look is itself recorded; never the operational screens |
 | Platform Administrator | `platform_administrator` | Administers the platform: users, roles, configuration, health | IDP, Shell — never business approvals |
 
 A persona is a **business responsibility**, not a job title or a technical role. One employee may hold more than one role where organizational policy permits, but holding several roles never bypasses Separation of Duties.

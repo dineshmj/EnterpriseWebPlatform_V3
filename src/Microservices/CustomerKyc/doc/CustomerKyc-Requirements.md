@@ -37,7 +37,7 @@ Customer KYC verifies that a customer is who they claim to be and that their sub
 |---|---|---|
 | KYC Officer | View the KYC work queue and case details; view the identity proof and tax proof; approve or reject identity verification; approve or reject document verification; *(planned)* request more information, place on hold, mark for remediation | Decide a case for a workflow they initiated; make compliance or AML decisions; change customer data to influence a decision |
 | Customer Service Agent | *(planned)* View the KYC status of their customers' applications | Decide anything |
-| Auditor | View KYC history and decisions | Change anything |
+| Auditor | View KYC history and decisions, in the Audit Trail (Audit context) | Use this context's screens or API; change anything |
 
 **Single officer, two stages.** One KYC Officer may currently decide both the identity stage and the document stage of the same case. A four-eyes variant, where each stage must be decided by a different officer, is a planned SoD demonstration.
 

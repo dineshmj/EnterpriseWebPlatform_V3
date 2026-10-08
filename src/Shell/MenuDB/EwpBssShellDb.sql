@@ -433,7 +433,16 @@ VALUES
 --
 -- These are navigation visibility rules only.
 -- The authoritative RBAC/ABAC/ReBAC decisions remain in the
--- BFF/API layers.
+-- BFF/API layers - and the menu must not promise more than
+-- they allow: each item lists exactly the roles its API admits
+-- (no item that ends in "You are not permitted ...").
+--   Customer Onboarding: agents (write) and operations and
+--     platform administrators (read, all branches).
+--   KYC, Compliance, Accounts: their own officers only.
+--   Payments: agents, payments officers, and operations (read,
+--     all branches).
+--   Audit: auditors - who see everything ONLY through the Audit
+--     context, where every look is itself recorded.
 -- ============================================================
 
 -- Customer Management
@@ -443,10 +452,8 @@ FROM menu_items mi
 CROSS JOIN
 (
     VALUES
-        ('customer'),
         ('customer_service_agent'),
         ('operations_administrator'),
-        ('auditor'),
         ('platform_administrator')
 ) AS r(role_short_name)
 WHERE mi.task_name = 'View Customers';
@@ -458,10 +465,8 @@ FROM menu_items mi
 CROSS JOIN
 (
     VALUES
-        ('customer'),
         ('customer_service_agent'),
         ('operations_administrator'),
-        ('auditor'),
         ('platform_administrator')
 ) AS r(role_short_name)
 WHERE mi.task_name = 'View Onboarding Applications';
@@ -475,7 +480,6 @@ CROSS JOIN
     VALUES
         ('customer_service_agent'),
         ('operations_administrator'),
-        ('auditor'),
         ('platform_administrator')
 ) AS r(role_short_name)
 WHERE mi.task_name = 'Onboarding Workflow Monitor';
@@ -487,10 +491,7 @@ FROM menu_items mi
 CROSS JOIN
 (
     VALUES
-        ('kyc_officer'),
-        ('operations_administrator'),
-        ('auditor'),
-        ('platform_administrator')
+        ('kyc_officer')
 ) AS r(role_short_name)
 WHERE mi.task_name = 'View KYC Cases';
 
@@ -501,10 +502,7 @@ FROM menu_items mi
 CROSS JOIN
 (
     VALUES
-        ('kyc_officer'),
-        ('operations_administrator'),
-        ('auditor'),
-        ('platform_administrator')
+        ('kyc_officer')
 ) AS r(role_short_name)
 WHERE mi.task_name = 'Identity Verification';
 
@@ -515,10 +513,7 @@ FROM menu_items mi
 CROSS JOIN
 (
     VALUES
-        ('kyc_officer'),
-        ('operations_administrator'),
-        ('auditor'),
-        ('platform_administrator')
+        ('kyc_officer')
 ) AS r(role_short_name)
 WHERE mi.task_name = 'Document Verification';
 
@@ -529,10 +524,7 @@ FROM menu_items mi
 CROSS JOIN
 (
     VALUES
-        ('compliance_officer'),
-        ('operations_administrator'),
-        ('auditor'),
-        ('platform_administrator')
+        ('compliance_officer')
 ) AS r(role_short_name)
 WHERE mi.task_name = 'Compliance Monitor';
 
@@ -543,10 +535,7 @@ FROM menu_items mi
 CROSS JOIN
 (
     VALUES
-        ('account_officer'),
-        ('operations_administrator'),
-        ('auditor'),
-        ('platform_administrator')
+        ('account_officer')
 ) AS r(role_short_name)
 WHERE mi.task_name = 'View Account Applications';
 
@@ -557,11 +546,7 @@ FROM menu_items mi
 CROSS JOIN
 (
     VALUES
-        ('customer'),
-        ('account_officer'),
-        ('operations_administrator'),
-        ('auditor'),
-        ('platform_administrator')
+        ('account_officer')
 ) AS r(role_short_name)
 WHERE mi.task_name = 'View Accounts';
 
@@ -572,10 +557,7 @@ FROM menu_items mi
 CROSS JOIN
 (
     VALUES
-        ('account_officer'),
-        ('operations_administrator'),
-        ('auditor'),
-        ('platform_administrator')
+        ('account_officer')
 ) AS r(role_short_name)
 WHERE mi.task_name = 'Account Lifecycle';
 
@@ -610,9 +592,7 @@ CROSS JOIN
     VALUES
         ('customer_service_agent'),
         ('payments_officer'),
-        ('operations_administrator'),
-        ('auditor'),
-        ('platform_administrator')
+        ('operations_administrator')
 ) AS r(role_short_name)
 WHERE mi.task_name = 'View Payments';
 
@@ -627,9 +607,7 @@ CROSS JOIN
 (
     VALUES
         ('payments_officer'),
-        ('operations_administrator'),
-        ('auditor'),
-        ('platform_administrator')
+        ('operations_administrator')
 ) AS r(role_short_name)
 WHERE mi.task_name = 'Payment Processing Monitor';
 

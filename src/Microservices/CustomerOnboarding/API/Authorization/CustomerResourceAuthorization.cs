@@ -23,7 +23,8 @@ public enum ResourceAccess
 /// Object-level authorization for customers and onboarding applications.
 ///
 /// ABAC (who may SEE a customer):
-/// - operations_administrator, platform_administrator, auditor: global (read).
+/// - operations_administrator, platform_administrator: global (read). Auditors read through the
+///   Audit context instead (every look recorded), not here.
 /// - customer_service_agent: customers whose primary residential address is in
 ///   the agent's branch city and country (branch_city / branch_country_code claims).
 /// - anyone else, or an agent without branch location claims: nothing (fail closed).
@@ -37,8 +38,7 @@ public sealed class CustomerResourceAuthorization(CustomerDbContext db)
     public CustomerAccessScope GetScope(ClaimsPrincipal user)
     {
         if (user.IsInRole("operations_administrator") ||
-            user.IsInRole("platform_administrator") ||
-            user.IsInRole("auditor"))
+            user.IsInRole("platform_administrator"))
         {
             return new CustomerAccessScope(true, null, null, null);
         }

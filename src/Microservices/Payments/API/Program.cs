@@ -80,6 +80,7 @@ builder.Services.AddAuthorization(options =>
 
     AddStaffPolicy("PaymentInitiate", PaymentsApiScopesRequired.PAYMENTS_WRITE, "payment.initiate");
     // Operations (workflow.view) and audit (payment.history.view) read every branch; the others their own.
+    // An auditor only through the Audit Journey API (PaymentsStaffAuthorizationHandler): never the Payments screens.
     AddStaffPolicy("PaymentView", PaymentsApiScopesRequired.PAYMENTS_READ, "payment.view", "payment.initiate", "workflow.view", "payment.history.view");
     AddStaffPolicy("PaymentRetryRelease", PaymentsApiScopesRequired.PAYMENTS_WRITE, "workflow.retry");
     AddStaffPolicy("PaymentApprove", PaymentsApiScopesRequired.PAYMENTS_WRITE, "payment.approve");

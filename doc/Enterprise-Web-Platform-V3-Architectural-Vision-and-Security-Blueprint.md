@@ -412,7 +412,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | ReBAC | Present (owned by the contexts: CO managing agent, KYC, Compliance and Accounts assigned officer) |
 | Separation of Duties | Present across contexts (initiator excluded from KYC, Compliance and Accounts; KYC stage deciders excluded from Compliance; the Compliance approver excluded from Accounts; a payment's initiator never approves it; enforced in the aggregates, failing closed); Partial (four-eyes per KYC stage planned) |
 | Workflow-state authorization | Present (each aggregate allows an action only in the right state: CO transitions, KYC stages, Compliance and Accounts decisions, a payment decided only while PENDING_APPROVAL, "Retry release" only when COMPENSATION_FAILED) |
-| Object-level authorization | Present (branch scope on every read and write in CO, KYC, Compliance, Accounts, Payments and DM; payment operations and auditors read all branches but cannot decide) |
+| Object-level authorization | Present (branch scope on every read and write in CO, KYC, Compliance, Accounts, Payments and DM; payment operations read all branches but cannot decide; auditors read only through the Audit context, every look recorded) |
 | Transactional Outbox with `initiated_by` | Present (CO, KYC, Compliance, Accounts and Payments) |
 | Standard event envelope; Workflow / Correlation / Causation IDs | Present (CO, KYC, Compliance, Accounts and Payments, `SchemaVersion` 1; copies in Kafka headers) |
 | Kafka backbone, at-least-once model | Present |

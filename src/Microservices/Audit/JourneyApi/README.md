@@ -1,6 +1,6 @@
 # Audit Journey API (NestJS)
 
-The **Journey API** tier of the customer's pattern - an Experience / Edge API, deployed on its own between the [Audit web](../Web/README.md) app (Next.js light BFF) and the Domain APIs:
+The **Journey API** tier of the customer's pattern - an Experience / Edge API, deployed on its own between the [Audit web](../BFF.Web/README.md) app (Next.js light BFF) and the Domain APIs:
 
 ```text
 Audit SPA ──ajax──► Next.js server action (light BFF)

@@ -403,11 +403,19 @@ What the platform is, how it is designed and what each component must do are doc
 		- EwpAccountsDb for Payments (keeps its accounts; adds balances and funds holds, and gives existing accounts the demo
 		  opening deposit): src\Microservices\Accounts\API\AccountsDb\Upgrade-5a-Funds.sql
 
-	b) Recreating databases means recreating topics. Database IDs restart at 1 when a database is recreated, but Kafka keeps
-	   the old messages, and consumer groups would replay them against the new data (e.g. an old "application 1" event applied
-	   to a new application 1). Whenever you recreate the Customer Onboarding, KYC or Compliance database (and likewise
-	   Accounts or Payments), delete and recreate the topics (Kafka UI, or kafka-topics.bat --delete followed by
-	   ps\kafka\Setup-KafkaSecurity.ps1 -Phase Prepare). Deleting a topic also discards the consumer groups' offsets for it.
+	b) Recreating databases means emptying Kafka. Database IDs restart at 1 when a database is recreated, but Kafka keeps
+	   the old messages: consumer groups could replay them against the new data (e.g. an old "application 1" event applied to
+	   a new application 1), and the audit trail - which starts at the earliest offset - would record history about customers
+	   that no longer exist. A CLEAN SLATE, in this order (stop Visual Studio and .\ps\run\Start-NodeServices.ps1 -Stop first;
+	   Kafka and PostgreSQL running):
+
+			.\ps\kafka\Reset-KafkaRecords.ps1               (empties every topic; topics, ACLs and consumer groups stay)
+			.\ps\database\Initialize-EwpDatabases.ps1        (recreates every database)
+
+	   then start Visual Studio and the Node.js services. Reset-KafkaRecords.ps1 deletes each topic's records up to its
+	   current end (kafka-delete-records): offsets do not restart at 0, so every consumer group simply has nothing old to
+	   read. (The heavier alternative - deleting and recreating the topics with Kafka UI or kafka-topics.bat --delete, then
+	   ps\kafka\Setup-KafkaSecurity.ps1 -Phase Prepare - also discards the consumer groups' offsets.)
 
 	c) Re-recording the audit trail after recreating EwpAuditDb: stop the Audit API, then reset its consumer group to the
 	   start of every topic it reads, and start the API again (it records everything Kafka still holds):

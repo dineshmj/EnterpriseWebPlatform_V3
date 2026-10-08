@@ -38,7 +38,7 @@ Compliance makes the **financial-crime and regulatory decision** on an onboardin
 | Persona | May | Must not |
 |---|---|---|
 | Compliance Officer | Review KYC outcomes, AML screening and risk ratings; claim and release cases; approve or reject; place on or release from compliance hold | Bypass mandatory KYC; alter results produced by verification or screening services; decide a case they initiated or verified in KYC; act outside their branch; approve above their clearance |
-| Auditor | View compliance history and decisions | Change anything |
+| Auditor | View compliance history and decisions, in the Audit Trail (Audit context) | Use this context's screens or API; change anything |
 
 ---
 

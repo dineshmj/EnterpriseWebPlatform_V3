@@ -35,6 +35,7 @@ The Shell is **deliberately business-neutral**:
 - MFE base URLs come from the Menu DB, never from Shell code. Adding a bounded context adds menu rows, not Shell code.
 - The Shell shows only the items mapped to the user's role claims. **This is a convenience, not security.** Every MFE, BFF and API authorizes independently.
 - Role codes in `menu_items_and_roles` must match the IDP role codes exactly.
+- The menu must not promise more than the APIs allow: an item lists exactly the roles its API admits, so no item ends in "You are not permitted …". Today: Customer Onboarding - agents, plus operations and platform administrators (read, all branches); KYC, Compliance and Accounts - their own officers only; Payments - agents and payments officers, plus operations (read, all branches); Audit - auditors, who see every context's activity there only (every look recorded), never through the operational screens.
 
 ### Welcome screen
 

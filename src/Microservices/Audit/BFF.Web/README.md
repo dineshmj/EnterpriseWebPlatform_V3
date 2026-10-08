@@ -9,6 +9,8 @@ Audit SPA (browser, in the Shell's frame)
   --token exchange (act = Journey API, act = this app)--> Audit API, Payments API
 ```
 
+Like every context's front end it lives in `<Context>\BFF.Web`; unlike the others it has no `client-app` subfolder, because the Next.js app IS the BFF - its server side (route handlers and server actions) signs in, holds the session and exchanges tokens.
+
 URL: `https://audit.dev.localhost:46380`. Runs outside Visual Studio: `runnow.bat`. Menu: **Audit Trail** (auditors only - `sarah.audit`).
 
 ## Screens

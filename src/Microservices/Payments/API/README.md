@@ -66,7 +66,7 @@ Limits are configuration (`Payments:ApprovalThreshold`, default 1,000.00; `Payme
 | `POST /v1/payments/{id}/retry-release` | `payments.write` + `workflow.retry` (operations) | Retry the release of a COMPENSATION_FAILED payment; 409 when nothing is stuck. Any branch. |
 | `POST /internal/v1/payment-sagas/replies` | pinned M2M client of the PaymentsSagaReplySubscriber | Replies from Accounts. |
 
-ABAC: a staff member sees and starts payments for their own branch only; **operations** (`workflow.view`) and **auditors** (`payment.history.view`), whose work is not branch-bound, read every branch. Accounts additionally checks that the paying account belongs to the customer named in the payment.
+ABAC: a staff member sees and starts payments for their own branch only; **operations** (`workflow.view`), whose work is not branch-bound, read every branch. **Auditors** (`payment.history.view`) read every branch too, but only when the token's acting client is the Audit Journey API (token exchange): the Audit Trail's "where it stands now" works, the Payments screens refuse them (`PaymentsStaffAuthorizationHandler`). Accounts additionally checks that the paying account belongs to the customer named in the payment.
 
 ## Try it
 

@@ -43,7 +43,7 @@ Accounts adds funds holds and the `AccountsCommandSubscriber` courier; the Payme
 | Payments Officer | Review, validate, approve, reject, hold and release payments; review processing failures; retry eligible processing | Approve a payment they initiated; approve beyond their authorized amount |
 | Compliance Officer | Review exception and high-risk payments (via Compliance) | Approve the payment itself |
 | Operations administrator | See every branch's payments and the Payment Processing Monitor; retry the release of a payment whose compensation failed | Approve, reject or start payments |
-| Auditor | View payment history (every branch) | Change anything |
+| Auditor | View payments of every branch, through the Audit context only (the Audit Trail), where every look is itself recorded | Use the Payments screens; change anything |
 
 ---
 
