@@ -18,18 +18,28 @@ const ACCESS_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:access_token';
  * OAuth 2.0 Token Exchange (RFC 8693): swaps the signed-in officer's access token for a
  * short-lived Documents Management token (read only). The officer stays the subject, so
  * Documents Management reads THEIR branch from the token, issued by the IDP; this BFF is
- * named as the acting client ("act"). The token is kept in the officer's own session only,
- * never shared between people, and renewed a minute before it expires.
+ * named as the acting client ("act").
+ *
+ * The exchanged token is cached IN MEMORY, by session ID, until a minute before it expires -
+ * deliberately NOT in the session: viewing evidence would then write the session, and two of
+ * the page's requests overlapping would each save their own copy of it, the later one erasing
+ * what the other had just stored (the anti-forgery token - the officer's next decision was
+ * refused). A cache entry belongs to one session (never shared between people), is never
+ * persisted, and a new sign-in (new session ID) starts afresh.
  */
+const MAX_CACHED = 10_000;
+
 @Injectable()
 export class DocumentsManagementTokenService {
+  private readonly cache = new Map<string, { accessToken: string; expiresAt: number }>();
+
   constructor(
     private readonly oidc: OidcService,
     @Inject('KYC_BFF_OPTIONS') private readonly options: KycBffOptions,
   ) {}
 
   async getToken(req: Request): Promise<string> {
-    const cached = req.session.documentsToken;
+    const cached = this.cache.get(req.sessionID);
     if (cached && cached.expiresAt > Date.now() + 60_000) {
       return cached.accessToken;
     }
@@ -44,11 +54,19 @@ export class DocumentsManagementTokenService {
       throw error;
     }
 
-    req.session.documentsToken = {
+    this.remember(req.sessionID, {
       accessToken: token.access_token!,
       expiresAt: Date.now() + Math.max(30, token.expires_in ?? 300) * 1000,
-    };
+    });
     return token.access_token!;
+  }
+
+  /** Caches the token for this session; drops expired entries, and never grows without bound. */
+  private remember(sessionId: string, token: { accessToken: string; expiresAt: number }): void {
+    const now = Date.now();
+    for (const [id, entry] of this.cache) if (entry.expiresAt <= now) this.cache.delete(id);
+    if (this.cache.size >= MAX_CACHED) this.cache.delete(this.cache.keys().next().value!);
+    this.cache.set(sessionId, token);
   }
 
   /**

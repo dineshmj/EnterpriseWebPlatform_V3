@@ -45,6 +45,22 @@ public sealed class OpenDueAccountCommandHandler(
         if (application is null)
             return OpeningRunOutcome.NothingDue;
 
+        // Anything other than core banking's own answer (e.g. the database refusing the new
+        // account) must not leave the application due with no attempt recorded: it would be picked
+        // again every cycle, forever, ahead of every other application. Hand it to the worker,
+        // which records it as a failed attempt in a fresh transaction (RecordOpeningErrorCommandHandler).
+        try
+        {
+            return await OpenAsync(application, transaction, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw new AccountOpeningErrorException(application.Id, application.ApplicationNumber, ex);
+        }
+    }
+
+    private async Task<OpeningRunOutcome> OpenAsync(AccountApplication application, IUnitOfWorkTransaction transaction, CancellationToken cancellationToken)
+    {
         // The core-banking call and the resulting events join the approval's trace.
         using var trace = openingTrace.Continue(application);
 
@@ -102,5 +118,50 @@ public sealed class OpenDueAccountCommandHandler(
             cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return outcome;
+    }
+}
+
+/// <summary>
+/// Opening an account failed for a reason other than core banking's answer - typically the
+/// database refusing the result. Carries the application, so the failure can be recorded on it.
+/// </summary>
+public sealed class AccountOpeningErrorException(long applicationId, string applicationNumber, Exception inner)
+    : Exception($"Opening the account for application {applicationNumber} failed unexpectedly.", inner)
+{
+    public long ApplicationId { get; } = applicationId;
+
+    public string ApplicationNumber { get; } = applicationNumber;
+}
+
+/// <summary>
+/// Records an unexpected opening error as a failed attempt, in its own transaction (the opening's
+/// transaction was rolled back): the attempt is counted, the next try is scheduled with back-off,
+/// and after the usual limit the application is FAILED (and compensated) instead of blocking the
+/// queue. The recorded reason names the error's kind only; the details stay in the log, because
+/// the reason also appears in the readiness check, which is anonymous.
+/// </summary>
+public sealed class RecordOpeningErrorCommandHandler(
+    IAccountApplicationRepository applications,
+    IAccountsUnitOfWork unitOfWork,
+    OpeningRetryPolicy retryPolicy,
+    TimeProvider clock)
+{
+    public async Task HandleAsync(long applicationId, Exception error, CancellationToken cancellationToken)
+    {
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+
+        var application = await applications.GetForUpdateAsync(applicationId, cancellationToken);
+        if (application is null || application.Status != AccountApplicationStatus.Opening)
+            return;
+
+        var now = clock.GetUtcNow();
+        application.RecordOpeningFailure(
+            $"Unexpected error while opening the account ({error.GetType().Name}); see the Accounts API log.",
+            retryPolicy.MaxAttempts,
+            now + retryPolicy.DelayAfter(application.OpeningAttempts + 1),
+            now);
+
+        await unitOfWork.SaveChangesAsync(new WorkflowContext(null, null, application.DecisionId ?? Guid.NewGuid()), cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 }

@@ -32,7 +32,16 @@ var state = new SimulatorState(
 
 // Accounts opened so far, by idempotency key (in memory: a simulator, not a ledger).
 var opened = new ConcurrentDictionary<string, OpenedAccount>(StringComparer.Ordinal);
-var nextAccountNumber = 10_000_000L;
+
+// The account number is derived from the idempotency key (8 digits from its SHA-256), not from a
+// counter: a counter restarts with the simulator and would hand out a number already used (the
+// Accounts API's unique bsb + account number then refuses the new account), while the same key
+// keeps getting the same account number - even across a restart, as a real system would.
+static string AccountNumberFor(string idempotencyKey)
+{
+    var hash = SHA256.HashData(Encoding.UTF8.GetBytes(idempotencyKey));
+    return (10_000_000UL + BitConverter.ToUInt64(hash, 0) % 90_000_000UL).ToString();
+}
 
 // Behaviour travels as text ("Down"), not as a number.
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
@@ -78,7 +87,7 @@ app.MapPost("/v1/accounts", async (HttpContext http, OpenAccountRequest request,
     }
 
     var account = opened.GetOrAdd(idempotencyKey, _ => new OpenedAccount(
-        Interlocked.Increment(ref nextAccountNumber).ToString(),
+        AccountNumberFor(idempotencyKey),
         bsb,
         $"CBS-{Guid.NewGuid():N}"[..20].ToUpperInvariant(),
         request.Product ?? "EVERYDAY_TRANSACTION",

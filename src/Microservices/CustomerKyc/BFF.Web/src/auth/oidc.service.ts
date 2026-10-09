@@ -1,11 +1,21 @@
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { Issuer, Client, generators, TokenSet } from 'openid-client';
-import { Request } from 'express';
+import { Request, Response } from 'express';
+import { randomBytes } from 'node:crypto';
 import { KycBffOptions } from '../configuration/kyc-bff-options';
+import { savePendingSignIn, takePendingSignIn } from './pending-sign-in';
 
 @Injectable()
 export class OidcService {
   private clientPromise?: Promise<Client>;
+
+  /**
+   * Token refreshes in flight (and just finished), by the refresh token they used. Refresh
+   * tokens are one-time (rotation): requests that notice the expiring token at the same moment
+   * share ONE refresh instead of each spending the same refresh token (all but the first would
+   * be refused). Only the request that refreshed saves the new tokens in the session.
+   */
+  private readonly refreshes = new Map<string, Promise<TokenSet>>();
 
   constructor(@Inject('KYC_BFF_OPTIONS') private readonly options: KycBffOptions) {}
 
@@ -30,7 +40,7 @@ export class OidcService {
   }
 
   async authorizationUrl(
-    req: Request,
+    res: Response,
     returnUrl: string,
     silent: boolean = false,
   ): Promise<string> {
@@ -40,7 +50,8 @@ export class OidcService {
     const codeVerifier = generators.codeVerifier();
     const codeChallenge = generators.codeChallenge(codeVerifier);
 
-    req.session.oidc = { state, nonce, codeVerifier, returnUrl };
+    // In its own cookie, not the session (pending-sign-in.ts).
+    savePendingSignIn(res, this.options.sessionKey, { state, nonce, codeVerifier, returnUrl });
 
     return client.authorizationUrl({
       scope: 'openid profile email roles organization offline_access customer-kyc.read customer-kyc.write',
@@ -53,8 +64,8 @@ export class OidcService {
     });
   }
 
-  async handleCallback(req: Request): Promise<string> {
-    const pending = req.session.oidc;
+  async handleCallback(req: Request, res: Response): Promise<string> {
+    const pending = takePendingSignIn(req, res, this.options.sessionKey);
     if (!pending) throw new UnauthorizedException('No pending OIDC authorization request was found.');
 
     const client = await this.getClient();
@@ -77,6 +88,10 @@ export class OidcService {
     this.storeTokenSet(req, tokenSet);
     await this.loadUser(req, client, tokenSet);
 
+    // The anti-forgery token is issued with the new session, so later requests only read it
+    // (a request that wrote it lazily could be overwritten by another, overlapping one).
+    req.session.csrfToken = randomBytes(32).toString('base64url');
+
     // The IDP session (sid) is stored with the session row, so back-channel logout can end it
     // on whichever instance (session-store.ts).
     const idClaims = tokenSet.claims();
@@ -92,8 +107,25 @@ export class OidcService {
     if (expiresAt > Date.now() + 60_000) return req.session.accessToken;
     if (!req.session.refreshToken) return req.session.accessToken;
 
-    const client = await this.getClient();
-    const tokenSet = await client.refresh(req.session.refreshToken);
+    const usedRefreshToken = req.session.refreshToken;
+    const shared = this.refreshes.get(usedRefreshToken);
+    if (shared) {
+      // Another request is refreshing (or just refreshed) with the same refresh token: use its
+      // result, and leave the session alone - that request saves the new tokens.
+      return (await shared).access_token!;
+    }
+
+    const refresh = this.getClient().then(client => client.refresh(usedRefreshToken));
+    this.refreshes.set(usedRefreshToken, refresh);
+    // A success is kept for a minute: a request that loaded the session just before the new
+    // tokens were saved still holds the old refresh token, and must not spend it again.
+    // A failure is forgotten at once, so the next request may try again.
+    void refresh.then(
+      () => setTimeout(() => this.refreshes.delete(usedRefreshToken), 60_000),
+      () => this.refreshes.delete(usedRefreshToken),
+    );
+
+    const tokenSet = await refresh;
     this.storeTokenSet(req, tokenSet);
     return req.session.accessToken!;
   }

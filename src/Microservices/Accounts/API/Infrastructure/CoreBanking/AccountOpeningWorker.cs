@@ -33,8 +33,22 @@ public sealed class AccountOpeningWorker(
             {
                 for (var i = 0; i < 20; i++)
                 {
-                    using var scope = scopeFactory.CreateScope();
-                    var outcome = await scope.ServiceProvider.GetRequiredService<OpenDueAccountCommandHandler>().HandleAsync(stoppingToken);
+                    OpeningRunOutcome outcome;
+                    try
+                    {
+                        using var scope = scopeFactory.CreateScope();
+                        outcome = await scope.ServiceProvider.GetRequiredService<OpenDueAccountCommandHandler>().HandleAsync(stoppingToken);
+                    }
+                    catch (AccountOpeningErrorException ex)
+                    {
+                        // Counted as a failed attempt on THAT application (fresh scope: the failed one's
+                        // database context is unusable), so it waits its back-off and the next due
+                        // application gets its turn instead of the same one being picked forever.
+                        logger.LogError(ex.InnerException, "Opening the account for application {ApplicationNumber} failed unexpectedly; recorded as a failed attempt.", ex.ApplicationNumber);
+                        using var scope = scopeFactory.CreateScope();
+                        await scope.ServiceProvider.GetRequiredService<RecordOpeningErrorCommandHandler>().HandleAsync(ex.ApplicationId, ex.InnerException ?? ex, stoppingToken);
+                        continue;
+                    }
 
                     // Stop this round when nothing is due, or core banking is failing:
                     // the remaining applications keep their own retry times.

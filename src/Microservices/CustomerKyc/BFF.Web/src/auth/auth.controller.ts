@@ -19,7 +19,7 @@ export class AuthController {
     @Res() res: Response,
   ) {
     const safeReturnUrl = this.safeReturnUrl(returnUrl);
-    const url = await this.oidc.authorizationUrl(req, safeReturnUrl, false);
+    const url = await this.oidc.authorizationUrl(res, safeReturnUrl, false);
     return res.redirect(url);
   }
 
@@ -30,13 +30,13 @@ export class AuthController {
     @Res() res: Response,
   ) {
     const safeReturnUrl = this.safeReturnUrl(returnUrl);
-    const url = await this.oidc.authorizationUrl(req, safeReturnUrl, true);
+    const url = await this.oidc.authorizationUrl(res, safeReturnUrl, true);
     return res.redirect(url);
   }
 
   @Get('callback')
   async callback(@Req() req: Request, @Res() res: Response) {
-    const returnUrl = await this.oidc.handleCallback(req);
+    const returnUrl = await this.oidc.handleCallback(req, res);
     return res.redirect(returnUrl);
   }
 
@@ -54,6 +54,7 @@ export class AuthController {
 
   @Get('csrf')
   csrf(@Req() req: Request) {
+    // Issued at sign-in (oidc.service.ts); created here only for a session from before that.
     req.session.csrfToken ??= randomBytes(32).toString('base64url');
     return { token: req.session.csrfToken };
   }

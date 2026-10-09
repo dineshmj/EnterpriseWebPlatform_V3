@@ -1,12 +1,5 @@
 import 'express-session';
 
-export interface OidcSession {
-  state: string;
-  nonce: string;
-  codeVerifier: string;
-  returnUrl: string;
-}
-
 export interface KycUserSession {
   subject: string;
   name?: string;
@@ -17,7 +10,6 @@ export interface KycUserSession {
 
 declare module 'express-session' {
   interface SessionData {
-    oidc?: OidcSession;
     user?: KycUserSession;
     accessToken?: string;
     refreshToken?: string;
@@ -26,7 +18,5 @@ declare module 'express-session' {
     csrfToken?: string;
     /** The IDP session ID (sid): back-channel logout ends every session of it. */
     idpSid?: string;
-    /** Documents Management token for this officer (token exchange), kept until shortly before it expires. */
-    documentsToken?: { accessToken: string; expiresAt: number };
   }
 }

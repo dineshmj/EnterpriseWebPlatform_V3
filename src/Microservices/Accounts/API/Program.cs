@@ -126,6 +126,7 @@ builder.Services.AddScoped<IAccountsQueries, AccountsQueries>();
 builder.Services.AddScoped<OpenAccountApplicationCommandHandler>();
 builder.Services.AddScoped<OfficerActionCommandHandler>();
 builder.Services.AddScoped<OpenDueAccountCommandHandler>();
+builder.Services.AddScoped<RecordOpeningErrorCommandHandler>();
 builder.Services.AddScoped<FundsCommandHandler>();
 
 // Demo only: a new account starts with this balance so payments can be shown at once
