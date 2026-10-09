@@ -79,4 +79,3 @@ desktop.ini
 /CodeHierarchy.md
 *.zip
 /smartzipper.exclude.json
-/src/IDP/IdentityAccessDB/Upgrade-6b-OperationalStore.sql

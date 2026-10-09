@@ -96,7 +96,7 @@ GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_idp;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ewp_idp;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ewp_idp;
 -- Duende's operational store and the IDP's key ring (schema identity_server, created by
--- IdentityAccessDb.sql / Upgrade-6b-OperationalStore.sql): data access only.
+-- IdentityAccessDb.sql): data access only.
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'identity_server') THEN

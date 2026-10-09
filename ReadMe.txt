@@ -17,7 +17,7 @@ What the platform is, how it is designed and what each component must do are doc
 	5) Kafka
 	6) Running and debugging
 	7) Demonstrations
-	8) Upgrading an existing set-up
+	8) Picking up a schema change; a clean slate
 	9) Operations reference (health, traces, logs, metrics, security headers, rate limiting, scans, secrets)
 	10) Troubleshooting
 	11) Bruno API testing
@@ -412,18 +412,15 @@ What the platform is, how it is designed and what each component must do are doc
 		Details: src\IDP\doc\IDP-Requirements.md (section 7).
 
 
-8) Upgrading an existing set-up:
+8) Picking up a schema change; a clean slate:
 
-	a) Upgrade scripts keep an existing database's data (a new laptop never needs them - it runs the full scripts):
-		- EwpIdentityAccessDb (keeps its users; adds the schema identity_server - Duende's refresh tokens, PAR requests,
-		  signing keys and the IDP's key ring): src\IDP\IdentityAccessDB\Upgrade-6b-OperationalStore.sql, then run
-		  ps\database\Apply-EwpServiceDbUsers.ps1 again (it grants ewp_idp the new schema).
-		- EwpIdentityAccessDb for two-step sign-in (keeps its users; adds the empty tables user_mfa and
-		  user_mfa_recovery_codes): src\IDP\IdentityAccessDB\Upgrade-6c-Mfa.sql
-		- EwpAccountsDb for Payments (keeps its accounts; adds balances and funds holds, and gives existing accounts the demo
-		  opening deposit): src\Microservices\Accounts\API\AccountsDb\Upgrade-5a-Funds.sql
-		- EwpBffStateDb for the KYC BFF's sessions (M6; signs everybody out, nothing else is lost):
-		  .\ps\database\Apply-EwpServiceDbUsers.ps1 (creates ewp_kyc_bff), then db\EwpBffStateDb.sql (creates kyc_bff).
+	a) There are no upgrade scripts: each database has ONE full script (section 4), and that is the only source of truth.
+	   This is a demonstration platform - after pulling a schema change, re-create the affected database with its full
+	   script (its data is lost; the demo records are re-created by the Playwright scenarios), or every database with
+	   .\ps\database\Initialize-EwpDatabases.ps1. The commit description names the databases that changed. Always run
+	   .\ps\database\Apply-EwpServiceDbUsers.ps1 BEFORE a script whose grants need a new user (a script run first only
+	   warns "Role ... does not exist yet"; run it again afterwards).
+	   A real deployment would use versioned migrations (e.g. EF Core migrations, DbUp or Flyway) instead.
 
 	b) Recreating databases means emptying Kafka. Database IDs restart at 1 when a database is recreated, but Kafka keeps
 	   the old messages: consumer groups could replay them against the new data (e.g. an old "application 1" event applied to
