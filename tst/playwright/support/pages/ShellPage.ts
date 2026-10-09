@@ -68,6 +68,22 @@ export class ShellPage {
     return this.page.frameLocator('iframe[title="Microservice application workspace"]');
   }
 
+  /**
+   * Reloads the MFE in the workspace (its own page, same session) - to see work that arrived
+   * through Kafka. Never in the middle of a sign-in: replaying the one-time OIDC callback is
+   * refused (401), and a new sign-in renews the session ID, so a request already on its way
+   * with the old one is refused too. So: wait until the frame shows an MFE page, navigate to
+   * that page, and wait until it has settled again.
+   */
+  async reloadWorkspace(): Promise<void> {
+    const handle = await this.page.locator('iframe[title="Microservice application workspace"]').elementHandle();
+    const frame = await handle?.contentFrame();
+    if (!frame) throw new Error('No MFE is open in the workspace.');
+    await expect.poll(() => isSignInUrl(frame.url()), { timeout: 30_000 }).toBe(false);
+    await frame.goto(frame.url());
+    await expect.poll(() => isSignInUrl(frame.url()), { timeout: 30_000 }).toBe(false);
+  }
+
   /** The MFE has signed in silently and shows its screen (its title is the frame's level-1 heading). */
   async waitForScreen(title: string): Promise<void> {
     await expect(this.workspace().getByRole('heading', { level: 1, name: title, exact: true })).toBeVisible({ timeout: 30_000 });
@@ -77,6 +93,11 @@ export class ShellPage {
     await this.page.locator('button[aria-haspopup="menu"]').click();
     await this.page.getByRole('menuitem', { name: 'Sign out', exact: true }).click();
   }
+}
+
+/** A URL of the sign-in round trip (BFF sign-in endpoints, the OIDC callback, the IDP). */
+function isSignInUrl(url: string): boolean {
+  return /\/api\/auth\/|\/signin-oidc|\/bff\/login|\/connect\/|idp\.dev\.localhost/i.test(url) || url === 'about:blank';
 }
 
 function escape(text: string): string {
