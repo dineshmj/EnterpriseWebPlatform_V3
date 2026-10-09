@@ -1,0 +1,22 @@
+{
+  "name": "ewp-v3-playwright",
+  "version": "0.1.0",
+  "private": true,
+  "description": "End-to-end and security tests of EWP V3 through its real front ends (Edge).",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "smoke": "playwright test --project=smoke",
+    "functional": "playwright test --project=functional",
+    "security": "playwright test --project=security",
+    "report": "playwright show-report",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.0",
+    "@types/node": "24.19.1",
+    "dotenv": "18.0.6",
+    "typescript": "5.9.2"
+  }
+}
