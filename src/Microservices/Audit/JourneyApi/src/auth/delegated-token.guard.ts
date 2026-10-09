@@ -56,6 +56,7 @@ export class DelegatedTokenGuard implements CanActivate {
       ({ payload } = await jwtVerify(token, this.jwks, {
         issuer: this.options.authority,
         audience: this.options.audience,
+        typ: 'at+jwt',   // access tokens only (RFC 9068), like the .NET APIs
       }));
     } catch {
       throw new UnauthorizedException('The token is not valid.');

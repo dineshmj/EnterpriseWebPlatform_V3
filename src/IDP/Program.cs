@@ -67,18 +67,6 @@ try
                 }));
     });
 
-    builder.Services.ConfigureApplicationCookie(options =>
-    {
-        options.Cookie.SameSite = SameSiteMode.None;
-        // WHY:
-        // Required for the current cross-site OIDC/OAuth and iframe-based
-        // authentication flows when the cookie is used across origins.
-        //
-        // IF NOT:
-        // Modern browsers may block the cookie during cross-site callbacks,
-        // potentially causing authentication or silent-login failures.
-    });
-
     // Client secrets come from this deployable's configuration. The client list
     // is materialized now, so a missing secret stops start-up (fail closed).
     ClientSecretStore.Initialize(builder.Configuration);

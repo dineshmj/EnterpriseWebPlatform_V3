@@ -417,12 +417,12 @@ Parked Outbox rows are not silent either: the relay's readiness check turns *Deg
 
 #### 1.6.3 Timeouts, retries and circuit breakers
 
-Every call from a worker to an API runs through a resilience pipeline: a 10-second timeout per attempt, three retries with exponential back-off and jitter, a circuit breaker and a 60-second total budget. When half of the recent calls fail, the circuit opens for 30 seconds, so a struggling API gets room to recover instead of being hammered by every retry. Retrying a POST is safe here only because the endpoints are idempotent (Inbox). Where an endpoint is *not* idempotent, it is deliberately not retried: the Customer Onboarding BFF retries only GET requests.
+Every call from a worker to an API runs through a resilience pipeline: a 10-second timeout per attempt, three retries with exponential back-off and jitter, a circuit breaker and a 60-second total budget. When half of the recent calls fail, the circuit opens for 30 seconds, so a struggling API gets room to recover instead of being hammered by every retry. Retrying a POST is safe here only because the endpoints are idempotent (Inbox). Where an endpoint is *not* idempotent, it is deliberately not retried: every BFF retries only GET requests, and the KYC BFF sends an officer's decision exactly once (a lost answer is reported as such, never resent into a misleading "already decided").
 
 **Where to look at:**
 
 - Pipelines (Microsoft.Extensions.Http.Resilience / Polly): `AddStandardResilienceHandler` in the [KycCaseOpeningSubscriber Program.cs](../src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/Program.cs) and [OnboardingOutcomeSubscriber Program.cs](../src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/Program.cs)
-- GET-only retries: [TransientGetRetryHandler.cs](../src/Microservices/CustomerOnboarding/BFF.Web/Services/TransientGetRetryHandler.cs)
+- GET-only retries in the BFFs: `options.Retry.DisableForUnsafeHttpMethods()` in [CO BFF Program.cs](../src/Microservices/CustomerOnboarding/BFF.Web/Program.cs); a decision sent once: `postOnce` in [kyc-api.service.ts](../src/Microservices/CustomerKyc/BFF.Web/src/services/kyc-api.service.ts)
 
 **An external provider that is slow or down.** Compliance screens every customer against a third-party AML / sanctions provider, simulated by the [Screening Provider Simulator](../src/Simulators/ScreeningProviderSimulator/README.md), which can be switched to Slow, Failing or Down while the platform runs. Screening is never done inside a user request or a Kafka handler: a background worker picks up due cases and calls the provider through its own pipeline (5-second attempt timeout, two retries, a circuit breaker that opens for 30 seconds when half of the recent calls fail, 20-second budget). A failure is **never a pass**: the case stays in `SCREENING` and is retried later with back-off (15 s doubling to 5 minutes), and while the circuit is open the worker does not call the provider at all. Readiness turns Degraded when a case has waited more than two minutes, so operations see the backlog. When the provider recovers, waiting cases are screened automatically and nothing is lost.
 
@@ -437,7 +437,7 @@ Every call from a worker to an API runs through a resilience pipeline: a 10-seco
 
 The Compliance and Accounts BFFs also put their calls to their APIs behind timeouts and a circuit breaker, retrying GETs only; when the API is down, the officer sees "temporarily unavailable" at once instead of a hanging page ([Compliance BFF Program.cs](../src/Microservices/Compliance/BFF.Web/Program.cs)).
 
-**Not yet:** circuit breakers on the Customer Onboarding BFF's calls (it retries GETs only).
+**Not yet:** a circuit breaker in the KYC BFF (NestJS): it has timeouts and GET-only retries.
 
 #### 1.6.4 Concurrency control
 
@@ -649,7 +649,7 @@ The rule also spans contexts. A Compliance case may not be handled by the initia
 
 #### 2.3.1 Strict Content-Security-Policy with script hashes
 
-The Shell, every MFE BFF and the IDP send a strict Content-Security-Policy. Scripts may load only from the application's own origin. The few inline scripts that Next.js's static export needs are allowed **by their SHA-256 hash**, which each BFF computes at start-up from the exported HTML, so no `'unsafe-inline'` is needed for scripts. Plugins are disabled (`object-src 'none'`), forms may post only to the same origin, and frame sources are allow-listed. A report-only switch lets a new policy be observed before it is enforced.
+The Shell, every MFE BFF and the IDP send a strict Content-Security-Policy. Scripts may load only from the application's own origin. The few inline scripts that Next.js's static export needs are allowed **by their SHA-256 hash**, which each BFF computes at start-up from the exported HTML, so no `'unsafe-inline'` is needed for scripts. Styles follow the same rule: only the application's own style sheets, plus any inline `<style>` block of the export by its hash, and no `'unsafe-inline'`, so injected CSS (data theft through attribute selectors, fake overlays) is blocked too. The front ends render no `style` attributes, and each app has its own not-found page because Next.js's default one carries inline styles. The Audit web app, rendered per request, allows its styles by the request's nonce (the development server alone allows inline styles, which it injects from script). Plugins are disabled (`object-src 'none'`), forms may post only to the same origin, and frame sources are allow-listed. A report-only switch lets a new policy be observed before it is enforced.
 
 **Where to look at:**
 
@@ -657,7 +657,8 @@ The Shell, every MFE BFF and the IDP send a strict Content-Security-Policy. Scri
 - NestJS twin: [content-security-policy.ts](../src/Microservices/CustomerKyc/BFF.Web/src/security/content-security-policy.ts)
 - Report-only switches: `Security:CspReportOnly` / `KYC_BFF_CSP_REPORT_ONLY` ([ReadMe.txt](../ReadMe.txt))
 
-**Not yet:** the MFEs still allow inline *styles* (`style-src 'unsafe-inline'`). The IDP does not.
+- Audit web app (nonce per request): [proxy.ts](../src/Microservices/Audit/BFF.Web/proxy.ts)
+- Spinner and not-found styles as classes: [AuthGuard.tsx](../src/Shell/client-app/app/components/AuthGuard.tsx), [Shell not-found.tsx](../src/Shell/client-app/app/not-found.tsx)
 
 #### 2.3.2 Clickjacking and iframe boundaries
 
@@ -872,7 +873,7 @@ One script checks every .NET and npm dependency of the solution against publishe
 
 **Where to look at:**
 
-- [TransientGetRetryHandler.cs](../src/Microservices/CustomerOnboarding/BFF.Web/Services/TransientGetRetryHandler.cs), [KafkaSubscriberHostedService.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/KafkaSubscriberHostedService.cs)
+- `AddStandardResilienceHandler` with GET-only retries in [CO BFF Program.cs](../src/Microservices/CustomerOnboarding/BFF.Web/Program.cs), [KafkaSubscriberHostedService.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/KafkaSubscriberHostedService.cs)
 
 ### 3.8 Anaemic domain model
 

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Options;
 
 using Duende.AccessTokenManagement.OpenIdConnect;
@@ -13,6 +14,7 @@ using Duende.Bff.EntityFramework;
 using Duende.Bff.Yarp;
 using Duende.Bff;
 using OpenTelemetry.Trace;
+using Polly;
 
 using EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.Configuration;
 using EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.Services;
@@ -141,23 +143,40 @@ builder.Services
         };
     });
 
-builder.Services.AddTransient<TransientGetRetryHandler>();
 builder.Services.AddSingleton<IM2MAccessTokenService, M2MAccessTokenService>();
 
+// Calls to the APIs, like the other .NET BFFs: a timeout per attempt and in total, a circuit
+// breaker (a struggling API gets room to recover), and retries for GET only - creating a
+// customer, submitting or uploading is not idempotent, so a write is never retried blindly.
 builder.Services.AddHttpClient("CustomerOnboardingApi", (serviceProvider, client) =>
 {
     var options = serviceProvider.GetRequiredService<IOptions<CustomerOnboardingBffOptions>>().Value;
     client.BaseAddress = new Uri(options.CustomerOnboardingApiBaseUrl);
 })
 .AddUserAccessTokenHandler()
-.AddHttpMessageHandler<TransientGetRetryHandler>();
+.AddStandardResilienceHandler(options =>
+{
+    options.Retry.DisableForUnsafeHttpMethods();
+    options.Retry.MaxRetryAttempts = 2;
+    options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(10);
+    options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(30);
+    options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(30);
+});
 
+// Documents Management: the same, with more time per attempt for the PDF uploads.
 builder.Services.AddHttpClient("DocumentsManagementApi", (serviceProvider, client) =>
 {
     var options = serviceProvider.GetRequiredService<IOptions<CustomerOnboardingBffOptions>>().Value;
     client.BaseAddress = new Uri(options.DocumentsManagementApiBaseUrl);
 })
-.AddHttpMessageHandler<TransientGetRetryHandler>();
+.AddStandardResilienceHandler(options =>
+{
+    options.Retry.DisableForUnsafeHttpMethods();
+    options.Retry.MaxRetryAttempts = 2;
+    options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(30);
+    options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(60);
+    options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(60);
+});
 
 builder.Services.AddHttpClient("IdentityServerTokenClient", (serviceProvider, client) =>
 {
@@ -174,6 +193,23 @@ builder.Services.AddHealthChecks()
 builder.Services.AddEwpRateLimiting(builder.Configuration, "/bff", "/api");
 
 var app = builder.Build();
+
+// An API that is down, too slow, or behind an open circuit: a readable 503 at once, never a
+// hanging page or a bare 500 (the submission flow handles its own failures and compensation).
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (Exception ex) when (ex is ExecutionRejectedException or HttpRequestException && !context.Response.HasStarted)
+    {
+        context.RequestServices.GetRequiredService<ILogger<Program>>()
+            .LogWarning(ex, "A downstream API is unavailable for {Method} {Path}.", context.Request.Method, context.Request.Path);
+        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        await context.Response.WriteAsJsonAsync(new { message = "The Customer Onboarding service is temporarily unavailable. Please try again shortly." });
+    }
+});
 
 // One structured log line per request (Serilog), with the caller and the trace ID.
 app.UseEwpRequestLogging();

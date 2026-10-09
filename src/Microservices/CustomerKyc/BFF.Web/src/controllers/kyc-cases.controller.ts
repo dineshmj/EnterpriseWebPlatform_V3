@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ServiceUnavailableException,
   Controller,
   Get,
   Headers,
@@ -157,7 +158,13 @@ export class KycCasesController {
       throw new BadRequestException('Decision remarks are required when rejecting a KYC verification stage.');
     }
 
-    const response = await this.api.decideStage(req, caseId, stage, action, remarks);
+    let response: globalThis.Response;
+    try {
+      response = await this.api.decideStage(req, caseId, stage, action, remarks);
+    } catch {
+      // Sent once, never retried: the answer was lost, not necessarily the decision.
+      throw new ServiceUnavailableException('The KYC service did not answer in time. Reload the case to see whether your decision was applied.');
+    }
     return this.forwardApiResponse(response, res);
   }
 

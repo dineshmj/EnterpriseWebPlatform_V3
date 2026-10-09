@@ -609,6 +609,14 @@ What the platform is, how it is designed and what each component must do are doc
 	n) A database script printed "WARNING: Role ... does not exist yet": the users were created after the script ran. Run
 	   ps\database\Apply-EwpServiceDbUsers.ps1, then that script again (Initialize-EwpDatabases.ps1 does both in the right order).
 
+	o) "HTTP 400 - Bad Request - Invalid Hostname": host filtering (AllowedHosts in each service's
+	   appsettings.Development.json) serves only its own *.dev.localhost name and localhost. Use the name from section 2;
+	   a new or renamed host name must be added to that service's AllowedHosts.
+
+	p) A page looks unstyled and the browser console reports "Refused to apply inline style ... Content Security Policy":
+	   the front ends allow no inline styles. Use a CSS class instead of a style={...} attribute, rebuild the export
+	   (CompileAndExportBFFClients_V3.ps1) and restart its BFF, which hashes any <style> block of the export at start-up.
+
 
 11) Bruno API testing:
 

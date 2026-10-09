@@ -106,6 +106,8 @@ builder.Services
             ValidateAudience = true,
             ValidateIssuerSigningKey = true,
             ValidateLifetime = true,
+            // Access tokens only (RFC 9068 "typ": "at+jwt"): an ID token or any other JWT from the IDP never passes.
+            ValidTypes = ["at+jwt"],
 
             RoleClaimType = "role"  // Required to explicitly tell the JWT middleware to use the "role" claim for role-based authorization
         };

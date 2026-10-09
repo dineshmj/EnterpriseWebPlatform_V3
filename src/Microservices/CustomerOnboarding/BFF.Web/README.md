@@ -56,7 +56,8 @@ The CO API never receives the PDF binary.
 
 ## Retry / compensation policy
 
-- Safe GET requests have bounded exponential retry (3 attempts) for transient HTTP failures.
+- Every call to the CO and DM APIs runs through a resilience pipeline (`AddStandardResilienceHandler`): a timeout per attempt and in total (CO 10 s / 30 s; DM 30 s / 60 s for uploads), a circuit breaker, and retries for safe GET requests only.
+- An API that is down, too slow or behind an open circuit gives a readable 503 at once, never a hanging page.
 - M2M token acquisition has bounded exponential retry (3 attempts).
 - Non-idempotent POST/DELETE operations are deliberately **not** blindly retried because the current CO and DM APIs do not expose an idempotency-key contract.
 - If a later step fails after documents were uploaded in the same request, the BFF deletes those documents from DM. This is request-level cleanup, not saga compensation (see the [Saga plan §1.3](../../../../doc/EWP-V3-Saga-Choreography-and-Orchestration-Plans.md#13-the-mfe--bff-boundary)). Any cleanup failure is logged.

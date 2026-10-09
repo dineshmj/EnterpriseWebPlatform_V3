@@ -46,6 +46,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidateIssuerSigningKey = true,
             ValidateLifetime = true,
+            // Access tokens only (RFC 9068 "typ": "at+jwt"): an ID token or any other JWT from the IDP never passes.
+            ValidTypes = ["at+jwt"],
             RoleClaimType = "role"
         };
     });

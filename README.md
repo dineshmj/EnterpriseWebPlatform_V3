@@ -34,7 +34,7 @@ Enterprise Web Platform V3 (EWP V3) is a demonstration banking-services platform
 | Audit (Next.js SPA + light BFF; NestJS Journey API; Domain API with the trail's Kafka consumer inside - the customer's pattern, token exchange at every hop) | `src/Microservices/Audit` | Next.js, NestJS, ASP.NET Core 10 | Present |
 | Payment Network Simulator (stand-in for the payment network: BSB directory, Confirmation of Payee) | `src/Simulators/PaymentNetworkSimulator` | ASP.NET Core 10 | Present |
 | BFF state (sessions and Data Protection keys of the .NET BFFs) | `db/EwpBffStateDb.sql` | PostgreSQL, one schema per BFF | Present |
-| Infrastructure | PostgreSQL 18 and Kafka 4 (KRaft) installed natively; Kafka secured with [ps/ps/kafka/Setup-KafkaSecurity.ps1](kafka/README.md) | SCRAM-SHA-512 users, per-topic ACLs, Kafka UI (read-only) | Present |
+| Infrastructure | PostgreSQL 18 and Kafka 4 (KRaft) installed natively; Kafka secured with [ps/kafka/Setup-KafkaSecurity.ps1](kafka/README.md) | SCRAM-SHA-512 users, per-topic ACLs, Kafka UI (read-only) | Present |
 | Observability | `src/Common/Observability` | OpenTelemetry traces across HTTP and Kafka; Serilog structured logs with the trace ID; Prometheus `/metrics`; all three over OTLP when configured; `/health/live` and `/health/ready` on every component | Present |
 
 ---

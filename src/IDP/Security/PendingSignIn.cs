@@ -62,6 +62,8 @@ public sealed record PendingSignIn(
 /// </summary>
 public static class SignInCompletion
 {
+    public static readonly TimeSpan RememberLoginLifetime = TimeSpan.FromHours(8);
+
     public static async Task<IActionResult> CompleteAsync(
         PageModel page,
         IIdentityServerInteractionService interaction,
@@ -75,8 +77,10 @@ public static class SignInCompletion
         var displayName = $"{user.FirstName} {user.LastName}";
         await events.RaiseAsync(new UserLoginSuccessEvent(user.UserName, user.SubjectId.ToString(), displayName), http.RequestAborted);
 
+        // "Keep me signed in" survives closing the browser, but only for a working day - a staff
+        // sign-in to a bank must not live for weeks on a shared or lost device.
         var properties = rememberLogin
-            ? new AuthenticationProperties { IsPersistent = true, ExpiresUtc = DateTimeOffset.UtcNow.AddDays(30) }
+            ? new AuthenticationProperties { IsPersistent = true, ExpiresUtc = DateTimeOffset.UtcNow.Add(RememberLoginLifetime) }
             : null;
 
         var identityServerUser = new IdentityServerUser(user.SubjectId.ToString())

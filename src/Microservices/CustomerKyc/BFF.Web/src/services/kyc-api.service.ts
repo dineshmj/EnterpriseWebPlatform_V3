@@ -38,7 +38,7 @@ export class KycApiService {
     remarks: string,
   ): Promise<Response> {
     const accessToken = await this.oidc.refreshIfNeeded(req);
-    return this.postWithRetry(
+    return this.postOnce(
       `${this.options.apiBaseUrl}/v1/kyc/cases/${caseId}/${stage}/${action}`,
       accessToken,
       { decisionRemarks: remarks },
@@ -68,34 +68,31 @@ export class KycApiService {
     throw lastError instanceof Error ? lastError : new Error('KYC API request failed.');
   }
 
-  private async postWithRetry(
+  /**
+   * A decision is sent exactly once - never retried. If the first attempt reached the API and
+   * committed but its answer was lost (timeout, 5xx on the way back), a retry would be refused
+   * with a misleading 409 ("already decided"). The officer instead reloads the case and sees
+   * whether the decision was applied (the same rule as the .NET BFFs: GETs retry, writes do not).
+   */
+  private async postOnce(
     url: string,
     accessToken: string,
     body: unknown,
   ): Promise<Response> {
-    let lastError: unknown;
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 5000);
-      try {
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(body),
-          signal: controller.signal,
-        });
-        if (![408, 429, 500, 502, 503, 504].includes(response.status) || attempt === 3) return response;
-      } catch (error) {
-        lastError = error;
-        if (attempt === 3) throw error;
-      } finally {
-        clearTimeout(timer);
-      }
-      await new Promise(resolve => setTimeout(resolve, 150 * attempt));
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10_000);
+    try {
+      return await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
     }
-    throw lastError instanceof Error ? lastError : new Error('KYC API decision request failed.');
   }
 }

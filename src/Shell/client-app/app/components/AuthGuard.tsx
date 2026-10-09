@@ -18,28 +18,10 @@ export function AuthGuard({ children, loadingComponent }: AuthGuardProps) {
     return (
       <>
         {loadingComponent || (
-          <div style={{ 
-            padding: '2rem', 
-            fontFamily: 'system-ui, sans-serif',
-            textAlign: 'center',
-            marginTop: '4rem'
-          }}>
-            <div style={{
-              display: 'inline-block',
-              width: '50px',
-              height: '50px',
-              border: '5px solid #f3f3f3',
-              borderTop: '5px solid #0070f3',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite'
-            }}></div>
-            <p style={{ marginTop: '1rem', color: '#666' }}>Loading...</p>
-            <style>{`
-              @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-              }
-            `}</style>
+          // Classes, not inline styles: the Content-Security-Policy allows no inline CSS (globals.css).
+          <div className="auth-loading">
+            <div className="auth-loading-spinner" aria-hidden="true"></div>
+            <p className="auth-loading-text">Loading...</p>
           </div>
         )}
       </>

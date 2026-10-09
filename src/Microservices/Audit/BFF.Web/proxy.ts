@@ -14,8 +14,9 @@ export function proxy(request: NextRequest) {
   const csp = [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
-    // Inline styles as in the other MFEs (see the Blueprint's "Not yet").
-    "style-src 'self' 'unsafe-inline'",
+    // Styles from this app's files, plus inline ones only with this request's nonce. The dev
+    // server injects its styles from script without a nonce, so it alone allows inline styles.
+    process.env.NODE_ENV === 'production' ? `style-src 'self' 'nonce-${nonce}'` : "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
     "font-src 'self'",
     "connect-src 'self'",

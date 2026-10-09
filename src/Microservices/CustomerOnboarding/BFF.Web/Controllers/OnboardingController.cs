@@ -6,6 +6,8 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+using Polly;
+
 using EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.Services;
 
 namespace EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.Controllers;
@@ -127,7 +129,7 @@ public sealed class OnboardingController(
             {
                 m2mToken = await m2mAccessTokenService.GetAccessTokenAsync(cancellationToken);
             }
-            catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException)
+            catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or ExecutionRejectedException)
             {
                 logger.LogError(ex, "Unable to obtain the Documents Management M2M access token.");
                 return StatusCode(StatusCodes.Status502BadGateway, new
@@ -209,8 +211,9 @@ public sealed class OnboardingController(
                 }
             });
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ex is HttpRequestException or ExecutionRejectedException)
         {
+            // Unreachable, timed out, or the circuit is open (ExecutionRejectedException).
             logger.LogError(ex, "Unexpected downstream communication failure during onboarding submission.");
             return StatusCode(StatusCodes.Status502BadGateway, new
             {

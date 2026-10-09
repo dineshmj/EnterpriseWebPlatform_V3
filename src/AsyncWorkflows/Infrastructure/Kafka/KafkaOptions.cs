@@ -3,7 +3,7 @@ namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 /// <summary>
 /// Connection settings for one Kafka client (producer or consumer). Each deployable
 /// authenticates as its OWN Kafka user, so the broker's ACLs can limit it to its own
-/// topics and consumer group (see ps/ps/kafka/Setup-KafkaSecurity.ps1).
+/// topics and consumer group (see ps/kafka/Setup-KafkaSecurity.ps1).
 /// </summary>
 public sealed class KafkaOptions
 {
