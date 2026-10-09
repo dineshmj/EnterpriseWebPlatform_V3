@@ -1,5 +1,5 @@
 -- =============================================================================
--- EwpBffStateDb - server-side sessions and Data Protection keys of the .NET BFFs
+-- EwpBffStateDb - server-side sessions of every BFF (and the .NET BFFs' Data Protection keys)
 -- =============================================================================
 -- Create the database once (as postgres):  CREATE DATABASE "EwpBffStateDb";
 -- Run ps\database\Apply-EwpServiceDbUsers.ps1 (creates the BFF users), then, while connected to
@@ -13,6 +13,7 @@
 --   compliance_bff          ewp_compliance_bff   (Compliance BFF)
 --   accounts_bff            ewp_accounts_bff     (Accounts BFF)
 --   payments_bff            ewp_payments_bff     (Payments BFF)
+--   kyc_bff                 ewp_kyc_bff          (Customer KYC BFF - NestJS; its own table, below)
 --   audit_bff               ewp_audit_web        (Audit web - the Next.js light BFF; its own table, below)
 --
 -- "UserSessions" is Duende BFF's server-side session table, exactly as its EF store maps it
@@ -104,6 +105,39 @@ BEGIN
         GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA audit_bff TO ewp_audit_web;
     ELSE
         RAISE WARNING 'Role ewp_audit_web does not exist yet: run ps\database\Apply-EwpServiceDbUsers.ps1, then this script again.';
+    END IF;
+END $$;
+
+-- -----------------------------------------------------------------------------
+-- kyc_bff: the Customer KYC BFF (NestJS, express-session). The key is the SHA-256 of the session
+-- ID, never the ID itself (that is only in the signed cookie); data is the whole session - the
+-- officer's tokens included - encrypted with AES-256-GCM (the key, KYC_BFF_SESSION_KEY, is not in
+-- the database). subject_id and sid stay readable so back-channel logout can find the rows.
+-- -----------------------------------------------------------------------------
+DROP SCHEMA IF EXISTS kyc_bff CASCADE;
+CREATE SCHEMA kyc_bff;
+
+CREATE TABLE kyc_bff.sessions (
+    session_hash CHAR(64)     NOT NULL,
+    subject_id   VARCHAR(200) NULL,       -- null until sign-in completes (the pending sign-in has a session too)
+    sid          VARCHAR(200) NULL,       -- the IDP session: back-channel logout ends it
+    data         TEXT         NOT NULL,   -- AES-256-GCM: iv | tag | ciphertext, base64
+    created_at   TIMESTAMPTZ  NOT NULL,
+    renewed_at   TIMESTAMPTZ  NOT NULL,
+    expires_at   TIMESTAMPTZ  NOT NULL,   -- sliding, 30 minutes
+    CONSTRAINT pk_kyc_bff_sessions PRIMARY KEY (session_hash)
+);
+CREATE INDEX ix_kyc_bff_sessions_sid ON kyc_bff.sessions (sid);
+CREATE INDEX ix_kyc_bff_sessions_subject ON kyc_bff.sessions (subject_id);
+CREATE INDEX ix_kyc_bff_sessions_expires ON kyc_bff.sessions (expires_at);
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ewp_kyc_bff') THEN
+        GRANT USAGE ON SCHEMA kyc_bff TO ewp_kyc_bff;
+        GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA kyc_bff TO ewp_kyc_bff;
+    ELSE
+        RAISE WARNING 'Role ewp_kyc_bff does not exist yet: run ps\database\Apply-EwpServiceDbUsers.ps1, then this script again.';
     END IF;
 END $$;
 

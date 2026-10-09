@@ -44,6 +44,7 @@ BEGIN
         ('ewp_compliance_bff',          'ewp-compliance-bff-dev'),
         ('ewp_accounts_bff',            'ewp-accounts-bff-dev'),
         ('ewp_payments_bff',            'ewp-payments-bff-dev'),
+        ('ewp_kyc_bff',                 'ewp-kyc-bff-dev'),
         ('ewp_audit_web',               'ewp-audit-web-dev')
     ) AS t(role_name, role_password)
     LOOP
@@ -81,7 +82,7 @@ GRANT CONNECT ON DATABASE "EwpAccountsDb"            TO ewp_accounts_api;
 GRANT CONNECT ON DATABASE "EwpNotificationsDb"       TO ewp_notifications_api;
 GRANT CONNECT ON DATABASE "EwpPaymentsDb"            TO ewp_payments_api;
 GRANT CONNECT ON DATABASE "EwpAuditDb"               TO ewp_audit_api;
-GRANT CONNECT ON DATABASE "EwpBffStateDb"            TO ewp_shell, ewp_co_bff, ewp_compliance_bff, ewp_accounts_bff, ewp_payments_bff, ewp_audit_web;
+GRANT CONNECT ON DATABASE "EwpBffStateDb"            TO ewp_shell, ewp_co_bff, ewp_compliance_bff, ewp_accounts_bff, ewp_payments_bff, ewp_kyc_bff, ewp_audit_web;
 
 -- -----------------------------------------------------------------------------
 -- 3. Per database: data access for the owning service role

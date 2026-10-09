@@ -389,7 +389,7 @@ The asynchronous components assume that any instance can be killed at any moment
 | Two subscriber instances running | They share one consumer group; Kafka assigns each partition to one instance, and rebalances when an instance leaves. |
 | Graceful shutdown (SIGTERM) | The subscriber leaves the consumer group cleanly, so its partitions are reassigned at once; the producer flushes pending messages. |
 
-No step relies on in-memory state surviving a restart: workflow state lives in the databases and in Kafka offsets. The same holds for the .NET BFFs: their sessions and the Data Protection keys that encrypt their cookies live in PostgreSQL (`EwpBffStateDb`, one schema per BFF), so a restarted or second BFF instance keeps everybody signed in.
+No step relies on in-memory state surviving a restart: workflow state lives in the databases and in Kafka offsets. The same holds for every BFF: the .NET BFFs' sessions and the Data Protection keys that encrypt their cookies live in PostgreSQL (`EwpBffStateDb`, one schema per BFF), so a restarted or second BFF instance keeps everybody signed in.
 
 **Where to look at:**
 
@@ -399,7 +399,7 @@ No step relies on in-memory state surviving a restart: workflow state lives in t
 
 Every component also exposes liveness and readiness endpoints for the orchestrator's probes ([1.7.2](#172-health-endpoints-for-liveness-and-readiness)), so a stuck instance is restarted and a starting one receives no work until it is ready.
 
-**Not yet:** the KYC (NestJS) BFF keeps its sessions in memory, so it cannot yet run as more than one instance; the .NET BFFs can.
+The KYC (NestJS) BFF and the Audit web app keep their sessions in the same database (schemas `kyc_bff` and `audit_bff`), encrypted at rest, so they too can run as several instances.
 
 #### 1.6.2 Dead-letter handling
 
@@ -437,7 +437,7 @@ Every call from a worker to an API runs through a resilience pipeline: a 10-seco
 
 The Compliance and Accounts BFFs also put their calls to their APIs behind timeouts and a circuit breaker, retrying GETs only; when the API is down, the officer sees "temporarily unavailable" at once instead of a hanging page ([Compliance BFF Program.cs](../src/Microservices/Compliance/BFF.Web/Program.cs)).
 
-**Not yet:** a circuit breaker in the KYC BFF (NestJS): it has timeouts and GET-only retries.
+The KYC BFF (NestJS) does the same with its own breaker per downstream service (KYC API, Documents Management, the IDP's token endpoint; half of the calls in 30 seconds failing opens it for 30 seconds), timeouts and GET-only retries: [resilient-fetch.ts](../src/Microservices/CustomerKyc/BFF.Web/src/resilience/resilient-fetch.ts).
 
 #### 1.6.4 Concurrency control
 
@@ -472,7 +472,9 @@ Every .NET component uses OpenTelemetry with W3C trace context. A trace normally
 - Process span: [KafkaSubscriberHostedService.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/KafkaSubscriberHostedService.cs)
 - How to view traces locally (Jaeger): [ReadMe.txt §9b](../ReadMe.txt)
 
-**Not yet:** the KYC BFF (NestJS) is not instrumented, so a KYC officer's decision starts a new trace at the KYC API.
+The KYC BFF (NestJS) continues the caller's trace (or starts one) and passes `traceparent` to the KYC API and Documents Management, so an officer's decision is one trace too ([trace-context.ts](../src/Microservices/CustomerKyc/BFF.Web/src/observability/trace-context.ts)).
+
+**Not yet:** the Node.js services export no spans of their own (only the context is propagated), and the Audit Journey API and Audit web app do not propagate it yet.
 
 #### 1.7.2 Health endpoints for liveness and readiness
 
@@ -496,7 +498,9 @@ The three signals are set up once, in the shared observability library, and ever
 - Kafka counters: [KafkaProducer.cs](../src/AsyncWorkflows/Infrastructure/Kafka/KafkaProducer.cs), `RecordConsumed` in [MessagingTelemetry.cs](../src/Common/Observability/MessagingTelemetry.cs)
 - Metric names and how to look at them: [ReadMe.txt §9c](../ReadMe.txt)
 
-**Not yet:** dashboards and alert rules (they belong to the deployment's Grafana / Observe); the KYC BFF (NestJS) has neither structured logs nor metrics.
+The KYC BFF (NestJS) follows the same rules: the same log formats and request line, and `/metrics` with the same metric names plus its circuit breakers and token exchanges ([logger.ts](../src/Microservices/CustomerKyc/BFF.Web/src/observability/logger.ts), [metrics.ts](../src/Microservices/CustomerKyc/BFF.Web/src/observability/metrics.ts)).
+
+**Not yet:** dashboards and alert rules (they belong to the deployment's Grafana / Observe); logs and metrics in the Audit Journey API and Audit web app.
 
 ---
 
@@ -693,7 +697,7 @@ Sessions are stored on the server; the cookie holds only a reference to them. A 
 - Session and key tables, one schema per BFF user: [EwpBffStateDb.sql](../db/EwpBffStateDb.sql)
 - `session.regenerate` at sign-in: [oidc.service.ts](../src/Microservices/CustomerKyc/BFF.Web/src/auth/oidc.service.ts)
 
-The .NET BFFs keep sessions in PostgreSQL, so a restart signs nobody out. **Not yet:** the KYC (NestJS) BFF still uses an in-memory session store.
+Every BFF keeps its sessions in PostgreSQL, so a restart signs nobody out. The two Node.js BFFs (KYC and Audit web) store only the SHA-256 of the session ID and encrypt the session, tokens included, with AES-256-GCM under a key that is not in the database: a database reader can neither hijack nor read a session ([session-store.ts](../src/Microservices/CustomerKyc/BFF.Web/src/auth/session-store.ts)).
 
 #### 2.3.5 Open-redirect protection
 

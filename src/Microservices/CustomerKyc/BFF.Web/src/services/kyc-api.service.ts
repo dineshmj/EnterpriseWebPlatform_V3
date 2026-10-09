@@ -1,7 +1,9 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { Request } from 'express';
 import { OidcService } from '../auth/oidc.service';
 import { KycBffOptions } from '../configuration/kyc-bff-options';
+import { breakers } from '../resilience/breakers';
+import { resilientFetch } from '../resilience/resilient-fetch';
 
 @Injectable()
 export class KycApiService {
@@ -16,18 +18,12 @@ export class KycApiService {
     if (status) params.set('status', status);
     if (stage) params.set('stage', stage);
 
-    return this.getWithRetry(
-      `${this.options.apiBaseUrl}/v1/kyc/cases?${params.toString()}`,
-      accessToken,
-    );
+    return this.get(`${this.options.apiBaseUrl}/v1/kyc/cases?${params.toString()}`, accessToken);
   }
 
   async getCase(req: Request, caseId: number): Promise<Response> {
     const accessToken = await this.oidc.refreshIfNeeded(req);
-    return this.getWithRetry(
-      `${this.options.apiBaseUrl}/v1/kyc/cases/${caseId}`,
-      accessToken,
-    );
+    return this.get(`${this.options.apiBaseUrl}/v1/kyc/cases/${caseId}`, accessToken);
   }
 
   async decideStage(
@@ -45,27 +41,19 @@ export class KycApiService {
     );
   }
 
-  private async getWithRetry(url: string, accessToken: string): Promise<Response> {
-    let lastError: unknown;
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 5000);
-      try {
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${accessToken}` },
-          signal: controller.signal,
-        });
-        if (![408, 429, 500, 502, 503, 504].includes(response.status) || attempt === 3) return response;
-      } catch (error) {
-        lastError = error;
-        if (attempt === 3) throw error;
-      } finally {
-        clearTimeout(timer);
-      }
-      await new Promise(resolve => setTimeout(resolve, 150 * attempt));
+  /** GETs: 5-second attempts, up to three, through the KYC API's circuit breaker. */
+  private async get(url: string, accessToken: string): Promise<Response> {
+    try {
+      return await resilientFetch(
+        breakers.kycApi,
+        url,
+        { method: 'GET', headers: { Authorization: `Bearer ${accessToken}` } },
+        { timeoutMs: 5000, attempts: 3 },
+      );
+    } catch (error) {
+      if (error instanceof ServiceUnavailableException) throw error;
+      throw new ServiceUnavailableException('The KYC service is temporarily unavailable. Please try again shortly.');
     }
-    throw lastError instanceof Error ? lastError : new Error('KYC API request failed.');
   }
 
   /**
@@ -73,26 +61,18 @@ export class KycApiService {
    * committed but its answer was lost (timeout, 5xx on the way back), a retry would be refused
    * with a misleading 409 ("already decided"). The officer instead reloads the case and sees
    * whether the decision was applied (the same rule as the .NET BFFs: GETs retry, writes do not).
+   * While the circuit is open the decision is not sent at all (ServiceUnavailableException).
    */
-  private async postOnce(
-    url: string,
-    accessToken: string,
-    body: unknown,
-  ): Promise<Response> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10_000);
-    try {
-      return await fetch(url, {
+  private postOnce(url: string, accessToken: string, body: unknown): Promise<Response> {
+    return resilientFetch(
+      breakers.kycApi,
+      url,
+      {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timer);
-    }
+      },
+      { timeoutMs: 10_000 },
+    );
   }
 }

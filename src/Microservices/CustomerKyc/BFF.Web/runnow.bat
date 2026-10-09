@@ -56,6 +56,11 @@ set "KYC_API_BASE_URL=https://kyc-api.dev.localhost:46305"
 
 set "KYC_BFF_SESSION_SECRET=8091a396-fdf8-4a2c-8535-18d8b3483fba"
 
+REM Sessions in PostgreSQL (EwpBffStateDb, schema kyc_bff), encrypted at rest with this key
+REM (32 random bytes, base64). Development values only: elsewhere from a secret store.
+set "KYC_BFF_SESSION_KEY=GTnnrDXPQ66oL8MYk1htsvQqduJcKc1/QGGxXs2LdnA="
+set "KYC_BFF_DATABASE_URL=postgres://ewp_kyc_bff:ewp-kyc-bff-dev@localhost:5432/EwpBffStateDb"
+
 REM ============================================================
 REM Documents Management (called for the officer by token exchange; no secret of its own)
 REM ============================================================

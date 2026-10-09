@@ -3,7 +3,7 @@ import { Response } from 'express';
 import { createRemoteJWKSet, jwtVerify, JWTPayload } from 'jose';
 import { Issuer } from 'openid-client';
 import { KycBffOptions } from '../configuration/kyc-bff-options';
-import { destroySessions } from './session-registry';
+import { sessionStore } from './session-store';
 
 const BACKCHANNEL_LOGOUT_EVENT = 'http://schemas.openid.net/event/backchannel-logout';
 
@@ -41,7 +41,7 @@ export class BackChannelLogoutController {
       return res.status(400).json({ error: 'invalid_request' });
     }
 
-    const destroyed = await destroySessions({
+    const destroyed = await sessionStore().destroySessionsOf({
       sid: typeof claims.sid === 'string' ? claims.sid : undefined,
       sub: typeof claims.sub === 'string' ? claims.sub : undefined,
     });

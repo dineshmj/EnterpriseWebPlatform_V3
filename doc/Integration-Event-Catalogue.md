@@ -183,4 +183,4 @@ The Audit API's in-process subscriber (`audit.trail-subscriber`, Kafka user `ewp
 ## 5. Known Deviations from the Target
 
 1. **Every consumer has an Inbox and a dead-letter topic.** The KYC API additionally keeps one case per `ApplicationRef`, so even a re-published submission (new `MessageId`) returns the existing case.
-2. **The KYC BFF (NestJS) is not instrumented with OpenTelemetry**, so a KYC officer's decision starts a new trace at the KYC API; the workflow is still linked through `WorkflowId` / `CausationId`.
+2. **The KYC BFF (NestJS) propagates the trace context but exports no spans of its own**, so a KYC officer's decision is one trace that starts, in Jaeger / Tempo, at the KYC API; the workflow is also linked through `WorkflowId` / `CausationId`.

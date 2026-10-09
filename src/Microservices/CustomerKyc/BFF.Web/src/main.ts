@@ -7,17 +7,55 @@ import * as path from 'node:path';
 import { AppModule } from './app.module';
 import { loadOptions } from './configuration/kyc-bff-options';
 import { buildContentSecurityPolicy } from './security/content-security-policy';
-import { sessionStore } from './auth/session-registry';
+import { sessionStore } from './auth/session-store';
+import { EwpLogger, requestLogging } from './observability/logger';
+import { healthStatus, metricsEndpoint, requestMetrics } from './observability/metrics';
+import { traceMiddleware } from './observability/trace-context';
 
 async function bootstrap() {
   const options = loadOptions();
+  const logger = new EwpLogger('customer-kyc-bff');
 
   const app = await NestFactory.create(AppModule, {
     httpsOptions: createHttpsOptions(
       options.tlsPfxPath,
       options.tlsPfxPassword
     ),
+    logger,
   });
+
+  // Telemetry first, so every request - static files included - is traced, timed and logged.
+  app.use(traceMiddleware);
+  app.use(requestMetrics);
+  app.use(requestLogging(logger));
+
+  // Sessions in PostgreSQL (EwpBffStateDb, schema kyc_bff), encrypted at rest (session-store.ts).
+  const store = sessionStore(options.databaseUrl, options.sessionKey);
+
+  // Probes and the Prometheus scrape, like the .NET components: anonymous, no session, no
+  // internals in the body. Live: the process answers. Ready: the session database answers too.
+  const http = app.getHttpAdapter().getInstance() as express.Express;
+  http.get('/health/live', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ status: 'Healthy', checks: [{ name: 'self', status: 'Healthy' }] });
+  });
+  http.get('/health/ready', async (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    try {
+      await store.ping();
+      healthStatus.set({ check: 'session-database' }, 2);
+      res.json({ status: 'Healthy', checks: [{ name: 'session-database', status: 'Healthy' }] });
+    } catch {
+      healthStatus.set({ check: 'session-database' }, 0);
+      res.status(503).json({ status: 'Unhealthy', checks: [{ name: 'session-database', status: 'Unhealthy', description: 'The session database is not reachable.' }] });
+    }
+  });
+  // Like Observability:Metrics:Enabled in .NET: on in development, off in production unless
+  // KYC_BFF_METRICS_ENABLED=true - the scrape is anonymous, so only the cluster's scraper may reach it.
+  const metricsEnabled = process.env.KYC_BFF_METRICS_ENABLED
+    ? process.env.KYC_BFF_METRICS_ENABLED === 'true'
+    : process.env.NODE_ENV !== 'production';
+  if (metricsEnabled) http.get('/metrics', metricsEndpoint);
 
   // Browser security headers. This MFE may be framed only by the Shell, and by
   // the IDP (which loads /signout-oidc in a hidden iframe for front-channel logout).
@@ -50,10 +88,12 @@ async function bootstrap() {
     session({
       name: '__Host-KYC-BFF-SESSION',
       secret: options.sessionSecret,
-      // Shared with the back-channel logout endpoint (session-registry.ts).
-      store: sessionStore,
+      // PostgreSQL, shared by every instance and by back-channel logout (session-store.ts).
+      store,
       resave: false,
       saveUninitialized: false,
+      // Sliding 30 minutes, like the .NET BFFs: every request renews the cookie and the row.
+      rolling: true,
       cookie: {
         httpOnly: true,
         secure: true,
@@ -76,9 +116,7 @@ async function bootstrap() {
 
   await app.listen(options.port, '0.0.0.0');
 
-  console.log(
-    `Customer KYC BFF listening on https://kyc.dev.localhost:${options.port}`
-  );
+  logger.log(`Customer KYC BFF listening on https://kyc.dev.localhost:${options.port}`, 'Bootstrap');
 }
 
 function createHttpsOptions(pfxPath?: string, pfxPassword?: string) {

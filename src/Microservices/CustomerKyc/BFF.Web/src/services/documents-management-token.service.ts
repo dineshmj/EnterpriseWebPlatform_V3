@@ -2,6 +2,9 @@ import { Inject, Injectable, ServiceUnavailableException } from '@nestjs/common'
 import { Request } from 'express';
 import { OidcService } from '../auth/oidc.service';
 import { KycBffOptions } from '../configuration/kyc-bff-options';
+import { tokenExchanges } from '../observability/metrics';
+import { breakers } from '../resilience/breakers';
+import { resilientFetch } from '../resilience/resilient-fetch';
 
 interface TokenResponse {
   access_token?: string;
@@ -32,7 +35,14 @@ export class DocumentsManagementTokenService {
     }
 
     const subjectToken = await this.oidc.refreshIfNeeded(req);
-    const token = await this.exchange(subjectToken);
+    let token: TokenResponse;
+    try {
+      token = await this.exchange(subjectToken);
+      tokenExchanges.inc({ outcome: 'issued' });
+    } catch (error) {
+      tokenExchanges.inc({ outcome: 'failed' });
+      throw error;
+    }
 
     req.session.documentsToken = {
       accessToken: token.access_token!,
@@ -41,15 +51,17 @@ export class DocumentsManagementTokenService {
     return token.access_token!;
   }
 
+  /**
+   * One POST to the token endpoint, through the IDP's circuit breaker. Not retried: a lost
+   * answer only costs the officer a reload, and a failing IDP must not be hammered.
+   */
   private async exchange(subjectToken: string): Promise<TokenResponse> {
-    let lastError: unknown;
-
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 5000);
-
-      try {
-        const response = await fetch(`${this.options.authority}/connect/token`, {
+    let response: globalThis.Response;
+    try {
+      response = await resilientFetch(
+        breakers.identityProvider,
+        `${this.options.authority}/connect/token`,
+        {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: new URLSearchParams({
@@ -59,45 +71,25 @@ export class DocumentsManagementTokenService {
             subject_token: subjectToken,
             subject_token_type: ACCESS_TOKEN_TYPE,
             scope: 'documents-management.read',
-          }),
-          signal: controller.signal,
-        });
-
-        const body = await response.text();
-
-        if (!response.ok) {
-          if (attempt < 3 && [408, 429, 500, 502, 503, 504].includes(response.status)) {
-            await this.delay(250 * attempt);
-            continue;
-          }
-
-          // The body names the OAuth error (e.g. invalid_grant), never a token.
-          throw new Error(`The Documents Management token exchange failed with HTTP ${response.status}: ${body}`);
-        }
-
-        const token = JSON.parse(body) as TokenResponse;
-        if (!token.access_token) {
-          throw new Error('IdentityServer did not return an access_token.');
-        }
-
-        return token;
-      } catch (error) {
-        lastError = error;
-        if (attempt < 3) {
-          await this.delay(250 * attempt);
-          continue;
-        }
-      } finally {
-        clearTimeout(timer);
-      }
+          }).toString(),
+        },
+        { timeoutMs: 5000 },
+      );
+    } catch (error) {
+      if (error instanceof ServiceUnavailableException) throw error;
+      throw new ServiceUnavailableException('Documents cannot be shown right now: the sign-in service did not answer. Please try again shortly.');
     }
 
-    throw new ServiceUnavailableException(
-      lastError instanceof Error ? lastError.message : 'The Documents Management token exchange failed.',
-    );
-  }
+    const body = await response.text();
+    if (!response.ok) {
+      // The body names the OAuth error (e.g. invalid_grant), never a token.
+      throw new ServiceUnavailableException(`The Documents Management token exchange failed with HTTP ${response.status}: ${body}`);
+    }
 
-  private delay(milliseconds: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, milliseconds));
+    const token = JSON.parse(body) as TokenResponse;
+    if (!token.access_token) {
+      throw new ServiceUnavailableException('IdentityServer did not return an access_token.');
+    }
+    return token;
   }
 }

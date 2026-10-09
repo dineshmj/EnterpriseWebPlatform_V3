@@ -8,6 +8,8 @@ import {
 import { Request } from 'express';
 import { KycBffOptions } from '../configuration/kyc-bff-options';
 import { DocumentsManagementTokenService } from './documents-management-token.service';
+import { breakers } from '../resilience/breakers';
+import { resilientFetch } from '../resilience/resilient-fetch';
 
 const DOCUMENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -108,34 +110,18 @@ export class DocumentsManagementService {
     }
 
     const accessToken = await this.tokens.getToken(req);
-    let lastError: unknown;
 
-    // GET requests only: safe to retry on transient failures.
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 5000);
-
-      try {
-        const response = await fetch(url, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-          signal: controller.signal,
-        });
-
-        if (![408, 429, 500, 502, 503, 504].includes(response.status) || attempt === 3) {
-          return response;
-        }
-      } catch (error) {
-        lastError = error;
-        if (attempt === 3) throw error;
-      } finally {
-        clearTimeout(timer);
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 150 * attempt));
+    // GET requests only: safe to retry on transient failures (through the circuit breaker).
+    try {
+      return await resilientFetch(
+        breakers.documentsManagement,
+        url,
+        { method: 'GET', headers: { Authorization: `Bearer ${accessToken}` } },
+        { timeoutMs: 5000, attempts: 3 },
+      );
+    } catch (error) {
+      if (error instanceof ServiceUnavailableException) throw error;
+      throw new ServiceUnavailableException('The Documents Management service is temporarily unavailable. Please try again shortly.');
     }
-
-    throw lastError instanceof Error
-      ? lastError
-      : new ServiceUnavailableException('Documents Management request failed.');
   }
 }

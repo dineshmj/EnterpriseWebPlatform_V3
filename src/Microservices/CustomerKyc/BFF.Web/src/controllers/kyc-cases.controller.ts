@@ -159,7 +159,9 @@ export class KycCasesController {
     let response: globalThis.Response;
     try {
       response = await this.api.decideStage(req, caseId, stage, action, remarks);
-    } catch {
+    } catch (error) {
+      // An open circuit: the decision was not sent at all (the message says so).
+      if (error instanceof ServiceUnavailableException) throw error;
       // Sent once, never retried: the answer was lost, not necessarily the decision.
       throw new ServiceUnavailableException('The KYC service did not answer in time. Reload the case to see whether your decision was applied.');
     }

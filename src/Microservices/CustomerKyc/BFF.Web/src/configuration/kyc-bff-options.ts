@@ -7,6 +7,10 @@ export interface KycBffOptions {
   postLogoutRedirectUri: string;
   apiBaseUrl: string;
   sessionSecret: string;
+  /** AES-256-GCM key (32 bytes) that encrypts the sessions at rest; never in the database. */
+  sessionKey: Buffer;
+  /** EwpBffStateDb as ewp_kyc_bff (schema kyc_bff). */
+  databaseUrl: string;
   tlsPfxPath?: string;
   tlsPfxPassword?: string;
   staticRoot: string;
@@ -36,6 +40,8 @@ export function loadOptions(): KycBffOptions {
     postLogoutRedirectUri: process.env.KYC_BFF_POST_LOGOUT_REDIRECT_URI ?? 'https://kyc.dev.localhost:33800/signout-callback-oidc',
     apiBaseUrl: process.env.KYC_API_BASE_URL ?? 'https://kyc-api.dev.localhost:46305',
     sessionSecret: required('KYC_BFF_SESSION_SECRET'),
+    sessionKey: Buffer.from(required('KYC_BFF_SESSION_KEY'), 'base64'),
+    databaseUrl: required('KYC_BFF_DATABASE_URL'),
     tlsPfxPath: process.env.KYC_BFF_TLS_PFX_PATH,
     tlsPfxPassword: process.env.KYC_BFF_TLS_PFX_PASSWORD,
     staticRoot: process.env.KYC_BFF_STATIC_ROOT ?? 'client-app/out',

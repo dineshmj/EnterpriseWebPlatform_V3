@@ -24,6 +24,8 @@ declare module 'express-session' {
     idToken?: string;
     accessTokenExpiresAt?: number;
     csrfToken?: string;
+    /** The IDP session ID (sid): back-channel logout ends every session of it. */
+    idpSid?: string;
     /** Documents Management token for this officer (token exchange), kept until shortly before it expires. */
     documentsToken?: { accessToken: string; expiresAt: number };
   }

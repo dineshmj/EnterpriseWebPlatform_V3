@@ -204,7 +204,8 @@ What the platform is, how it is designed and what each component must do are doc
 			EwpAuditDb					src\Microservices\Audit\API\AuditDb\EwpAuditDb.sql   (append-only; recreating it
 										empties the trail - see section 8 to re-record it from Kafka)
 			EwpBffStateDb				db\EwpBffStateDb.sql   (sessions and Data Protection keys of the .NET BFFs, and the
-										Audit web app's sessions (schema audit_bff); re-running it signs everybody out)
+										sessions of the KYC BFF and the Audit web app (schemas kyc_bff, audit_bff);
+										re-running it signs everybody out)
 
 		WARNING:
 			Running a script erases that database's data. Each script must run while connected to ITS OWN database.
@@ -238,7 +239,7 @@ What the platform is, how it is designed and what each component must do are doc
 		Each service connects with its own user (ewp_idp, ewp_shell, ewp_customer_onboarding_api, ewp_customer_outbox_relay,
 		ewp_kyc_api, ewp_documents_api, ewp_compliance_api, ewp_accounts_api, ewp_notifications_api, ewp_payments_api,
 		ewp_audit_api (SELECT and INSERT only); the BFFs ewp_co_bff, ewp_compliance_bff, ewp_accounts_bff, ewp_payments_bff,
-		ewp_audit_web and ewp_shell each own one schema of EwpBffStateDb) that may read and write ITS OWN database only: no
+		ewp_kyc_bff, ewp_audit_web and ewp_shell each own one schema of EwpBffStateDb) that may read and write ITS OWN database only: no
 		DDL and no access to other services' databases; the CO outbox relay may only read and update outbox_messages. The
 		database scripts still run as postgres; the grants survive re-running them. Without the users the services cannot connect.
 
@@ -421,6 +422,8 @@ What the platform is, how it is designed and what each component must do are doc
 		  user_mfa_recovery_codes): src\IDP\IdentityAccessDB\Upgrade-6c-Mfa.sql
 		- EwpAccountsDb for Payments (keeps its accounts; adds balances and funds holds, and gives existing accounts the demo
 		  opening deposit): src\Microservices\Accounts\API\AccountsDb\Upgrade-5a-Funds.sql
+		- EwpBffStateDb for the KYC BFF's sessions (M6; signs everybody out, nothing else is lost):
+		  .\ps\database\Apply-EwpServiceDbUsers.ps1 (creates ewp_kyc_bff), then db\EwpBffStateDb.sql (creates kyc_bff).
 
 	b) Recreating databases means emptying Kafka. Database IDs restart at 1 when a database is recreated, but Kafka keeps
 	   the old messages: consumer groups could replay them against the new data (e.g. an old "application 1" event applied to
@@ -453,6 +456,7 @@ What the platform is, how it is designed and what each component must do are doc
 	a) Health endpoints (as used by Kubernetes liveness / readiness probes):
 
 			APIs, BFFs, IDP:              https://<host>/health/live   and   https://<host>/health/ready
+			                              (the KYC BFF too: https://kyc.dev.localhost:33800/health/ready checks its session database)
 			CustomerOutboxPublisher:      http://localhost:5101/health/live | /health/ready
 			KycCaseOpeningSubscriber:     http://localhost:5102/health/live | /health/ready
 			OnboardingOutcomeSubscriber:  http://localhost:5103/health/live | /health/ready
@@ -483,8 +487,9 @@ What the platform is, how it is designed and what each component must do are doc
 
 		Alternative: the .NET Aspire dashboard (docker run -p 18888:18888 -p 4317:18889 mcr.microsoft.com/dotnet/aspire-dashboard).
 		Log lines carry the same TraceId, so a log entry can be matched to its trace.
-		The Node.js services (KYC BFF, Audit Journey API, Audit web) are not instrumented yet: a request through them starts a
-		new trace at the .NET API behind them.
+		The KYC BFF passes the trace on (traceparent) but exports no spans of its own, so its calls appear from the KYC API
+		onwards. The Audit Journey API and the Audit web app are not instrumented yet: a request through them starts a new
+		trace at the .NET API behind them.
 
 	c) Logs and metrics (Serilog, Prometheus):
 
@@ -497,6 +502,9 @@ What the platform is, how it is designed and what each component must do are doc
 
 		Metrics - every .NET component serves a Prometheus scrape endpoint, GET /metrics (workers on their health port):
 			https://payments-api.dev.localhost:44488/metrics          (an API; every BFF and API the same)
+			https://kyc.dev.localhost:33800/metrics                   (the KYC BFF, Node.js: the same HTTP metric names, plus
+			                                                           ewp_circuit_breaker_state and ewp_token_exchanges_total;
+			                                                           KYC_BFF_LOG_FORMAT=Json / KYC_BFF_METRICS_ENABLED as above)
 			http://localhost:5109/metrics                              (a worker, e.g. PaymentsSagaReplySubscriber)
 		What is in it: HTTP requests and durations (http_server_request_duration_seconds), rate-limited requests
 		(aspnetcore_rate_limiting_*), sign-ins and authorization decisions, outgoing calls, retries and circuit breakers
