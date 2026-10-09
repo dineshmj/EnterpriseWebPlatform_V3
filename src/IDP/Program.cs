@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
+using Duende.IdentityServer.EntityFramework.Stores;
 using Npgsql;
 using OpenTelemetry.Trace;
 using Serilog;
@@ -79,6 +80,12 @@ try
             options.Events.RaiseInformationEvents = true;
             options.Events.RaiseFailureEvents = true;
             options.Events.RaiseSuccessEvents = true;
+
+            // Server-side sessions (below): the session's display name for administration, and an
+            // expired IDP session also ends the clients' sessions (back-channel logout).
+            options.ServerSideSessions.UserDisplayNameClaimType = "name";
+            options.ServerSideSessions.RemoveExpiredSessions = true;
+            options.ServerSideSessions.ExpiredSessionsTriggerBackchannelLogout = true;
         })
         .AddInMemoryIdentityResources(Config.IdentityResources)
         .AddInMemoryApiScopes(Config.ApiScopes)
@@ -97,6 +104,14 @@ try
         //              removed hourly.
         // 🡡__ IF NOT: The in-memory default: after a restart no refresh token works, and everybody must sign in
         //              again once their access token expires.
+        .AddServerSideSessions<ServerSideSessionStore>()
+        // 🡡__ WHY   : The IDP's sign-in session is a row in PostgreSQL (identity_server."ServerSideSessions"), and
+        //              the cookie only refers to it. Sign-out deletes the row, so a copy of the cookie taken before
+        //              sign-out (malware, a shared machine) is refused afterwards; sessions can also be listed and
+        //              ended by the IDP. The EF store is named explicitly: Duende would otherwise fall back to an
+        //              in-memory store, which forgets every session on restart.
+        // 🡡__ IF NOT: The cookie IS the session: deleting it in the browser signs the person out, but a copied
+        //              cookie keeps working until it expires (Duende's default: 10 hours).
         .AddProfileService<CustomProfileService>()
         // OAuth 2.0 Token Exchange (RFC 8693): a service swaps a person's token for one aimed at
         // the next service, keeping the person as subject and naming itself in "act".

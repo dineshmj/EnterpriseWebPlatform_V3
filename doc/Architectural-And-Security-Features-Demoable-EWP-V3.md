@@ -549,6 +549,7 @@ The IDP (Duende IdentityServer 8) applies the standard defences of a sign-in ser
 - **Pages:** framing is forbidden (`frame-ancestors 'none'`); the pages use no CDN and no inline script or style, so their CSP has no `'unsafe-inline'`.
 - **Passwords:** password managers are supported (`autocomplete="current-password"`).
 - **State that survives:** refresh tokens (only a hash of each is stored, the details encrypted), pushed authorization requests and signing keys are kept in PostgreSQL by Duende's operational store, with hourly clean-up. An IDP restart signs nobody out, and several IDP instances share them.
+- **Sign-in sessions on the server:** each IDP sign-in session is a row in PostgreSQL (Duende's server-side sessions); the browser's cookie only refers to it. Signing out deletes the row, so a copy of the cookie taken before sign-out (malware, a shared machine) is refused afterwards instead of working for up to ten hours; an IDP session that expires also ends the clients' sessions through back-channel logout.
 - **Keys never stored readable:** the IDP's and every .NET BFF's Data Protection key ring is encrypted at rest - with a certificate (`DataProtection:CertificatePath`), or DPAPI in Development on Windows. Without either, the application refuses to start.
 
 **Where to look at:**
@@ -556,7 +557,7 @@ The IDP (Duende IdentityServer 8) applies the standard defences of a sign-in ser
 - Lockout and dummy hash: [UserRepository.cs](../src/IDP/Repositories/UserRepository.cs), [PasswordManager.cs](../src/IDP/Security/PasswordManager.cs)
 - Throttling: `AddRateLimiter` in [IDP Program.cs](../src/IDP/Program.cs)
 - Headers and CSP: [SecurityHeadersAttribute.cs](../src/IDP/SecurityHeadersAttribute.cs)
-- Operational store: `AddOperationalStore` in [IDP Program.cs](../src/IDP/Program.cs), tables in [IdentityAccessDb.sql](../src/IDP/IdentityAccessDB/IdentityAccessDb.sql) (schema `identity_server`)
+- Operational store and server-side sessions: `AddOperationalStore`, `AddServerSideSessions` in [IDP Program.cs](../src/IDP/Program.cs), tables in [IdentityAccessDb.sql](../src/IDP/IdentityAccessDB/IdentityAccessDb.sql) (schema `identity_server`)
 - Key-ring encryption, fail closed: [PersistentDataProtection.cs](../src/Common/WebUtilities/Security/PersistentDataProtection.cs)
 
 **Two-step sign-in and step-up (MFA), switched off by default.** With `Mfa:Enabled` on, every user signs in with the password AND the 6-digit code from Google Authenticator; someone without one enrols at their next sign-in (QR code, one confirming code, ten single-use recovery codes). The authenticator secret is stored only encrypted with the IDP's key ring, recovery codes only as hashes; a wrong code counts towards the lockout, and a code is never accepted twice. Every token then says how the person signed in (`amr`), and the APIs require `mfa` for the risky actions - a payments officer's approval or rejection, operations' "Retry release", and the KYC, Compliance and account-opening decisions - answering 403 with a clear reason otherwise (step-up, in the spirit of RFC 9470).
@@ -569,7 +570,7 @@ The IDP (Duende IdentityServer 8) applies the standard defences of a sign-in ser
 
 #### 2.1.4 Single sign-out
 
-Signing out ends the session everywhere. The IDP notifies every client: through the browser (front-channel, a hidden iframe on the signed-out page) and server-to-server (back-channel, a signed logout token posted to each BFF). Back-channel logout works even when the browser blocks third-party iframes. The KYC BFF also revokes its refresh token at logout, so the token cannot be used after the session ends.
+Signing out ends the session everywhere, on the server too: the IDP deletes its own session record, so its sign-in cookie cannot be replayed. The IDP notifies every client: through the browser (front-channel, a hidden iframe on the signed-out page) and server-to-server (back-channel, a signed logout token posted to each BFF). Back-channel logout works even when the browser blocks third-party iframes. The KYC BFF also revokes its refresh token at logout, so the token cannot be used after the session ends.
 
 **Where to look at:**
 
