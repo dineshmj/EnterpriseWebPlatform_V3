@@ -97,6 +97,18 @@ machine token obtained: True
 
 `invalid_client` on 1 or 2 means the IDP running is older than this step; "Unable to connect" means that service is not running; any `SUCCEEDED` is a real problem.
 
+## Security controls
+
+What this project does to stay secure: each control, what would go wrong without it, the threat it stops, and where to find it in the code. The platform-wide picture: [Architectural and security features §2](../../../../doc/Architectural-And-Security-Features-Demoable-EWP-V3.md#2-security-features).
+
+| # | Security control | If it were missing | Threat prevented | Where to look |
+|---|---|---|---|---|
+| 1 | Only delegated tokens: right issuer and audience, `typ: at+jwt`, scope `audit-journey.read`, a person as `sub`, and `act` = the Audit web app | Any token, or a machine token without a person, would be accepted | Broken authentication; calls without a person behind them | [delegated-token.guard.ts](src/auth/delegated-token.guard.ts) |
+| 2 | The person's permission (`audit.search` / `audit.view`) checked per endpoint | Any signed-in person could read the audit trail | Broken function-level authorization (OWASP API5) | `RequiresPermission` in [audit-journeys.controller.ts](src/controllers/audit-journeys.controller.ts) |
+| 3 | Exchange-only client: no client-credentials grant; one exchanged token per downstream API | The Journey API could call Domain APIs as itself; a token for one API could be replayed at another | Privilege escalation without a person; cross-API token replay | [AuditJourneyApiTokenExchange.cs](../../../IDP/ConfigRegistration/Clients/M2M/AuditJourneyApiTokenExchange.cs), [token-exchange.service.ts](src/services/token-exchange.service.ts) |
+| 4 | Downstream answers mapped, never passed through (401/403 → 403, unavailable → 503) | Internal error details of the Domain APIs would reach the browser | Information disclosure | [domain-api.client.ts](src/services/domain-api.client.ts) |
+| 5 | `nosniff`; no data stored | Responses could be sniffed as another type; a breach would expose stored data | MIME sniffing; data exposure | [main.ts](src/main.ts) |
+
 ## Not yet
 
 - Structured logs, metrics and traces in this Node tier (the .NET services have them).

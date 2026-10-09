@@ -1,0 +1,23 @@
+# Customer KYC API
+
+KYC cases: identity and document verification decided by KYC officers.
+
+## Security controls
+
+What this project does to stay secure: each control, what would go wrong without it, the threat it stops, and where to find it in the code. The platform-wide picture: [Architectural and security features §2](../../../../doc/Architectural-And-Security-Features-Demoable-EWP-V3.md#2-security-features).
+
+| # | Security control | If it were missing | Threat prevented | Where to look |
+|---|---|---|---|---|
+| 1 | Strict access-token validation: issuer, audience, lifetime, signature against the IDP's keys, and only `typ: at+jwt` access tokens (RFC 9068); original claim names kept (`MapInboundClaims = false`) | A token issued for another API, an ID token or an expired token would be accepted | Token confusion and replay across APIs (OWASP API2 Broken Authentication) | `AddJwtBearer` in [Program.cs](Program.cs) |
+| 2 | Deny by default: every endpoint needs an authorization policy | A new endpoint added without an attribute would be public | Broken function-level authorization (OWASP API5) | `RequireAuthorization` in [Program.cs](Program.cs) |
+| 3 | Step-up: KYC stage decisions require a two-step sign-in (`amr` contains `mfa`) while `Mfa:Enabled` is on | A stolen password alone would be enough to approve or reject | Account takeover leading to fraudulent decisions | [MfaStepUp.cs](../../../Common/WebUtilities/Security/MfaStepUp.cs), `stepUpPolicies` in [Program.cs](Program.cs) |
+| 4 | ABAC per stage: KYC officer role, KYC department, clearance 3+, the decision permission and the stage permission | Any officer could decide any stage | Excessive privilege (OWASP API5) | [KycCaseDecisionAuthorization.cs](Authorization/KycCaseDecisionAuthorization.cs), stage policies in [Program.cs](Program.cs) |
+| 5 | Branch scope on every read and decision; lists filtered in the database | An officer could open another branch's case by its ID | BOLA / IDOR (OWASP API1) | [KycCaseQueries.cs](Infrastructure/KycCaseQueries.cs) |
+| 6 | Separation of duties inside the aggregate: the initiator can neither take nor decide the case; unknown initiator = denied | An agent could approve their own customer | Self-approval and insider fraud | `EnsureSeparationOfDuties` in [KycCase.cs](Domain/Aggregates/KycCase.cs) |
+| 7 | Assigned officer: only the assignee decides; claim and release are explicit | Two officers could act on one case | Unauthorised or conflicting decisions (ReBAC) | [AssignKycCaseCommandHandler.cs](Application/Commands/AssignKycCase/AssignKycCaseCommandHandler.cs) |
+| 8 | Row lock and version check on every decision | Two concurrent decisions could both win | Race conditions that bypass the rules | `GetForDecisionAsync` in [KycCaseRepository.cs](Infrastructure/KycCaseRepository.cs) |
+| 9 | Internal endpoints accept only the one machine client meant to call them (`client_id` pinned, not just the scope) | Any service holding the scope could post fake workflow steps (e.g. a forged "application submitted" message) | Service impersonation and spoofed workflow events | Policy `KycCaseOpeningSubscriberWrite` in [Program.cs](Program.cs); [InternalKycCasesController.cs](Controllers/InternalKycCasesController.cs) |
+| 10 | Problem responses without internals (a `traceId` only; details are logged on the server) | Stack traces, SQL or exception messages would reach the caller | Information disclosure that helps an attacker (CWE-209, OWASP A05) | [ApiExceptionHandler.cs](Controllers/ApiExceptionHandler.cs) |
+| 11 | Per-caller rate limits (person, machine client, IP), 429 with `Retry-After` | One caller, or a stolen token, could flood the API for everybody | Unrestricted resource consumption (OWASP API4) | [RateLimiting.cs](../../../Common/WebUtilities/Security/RateLimiting.cs), `AddEwpRateLimiting` in [Program.cs](Program.cs) |
+| 12 | Own least-privilege database user `ewp_kyc_api`: its own database only, no DDL | A compromised API or leaked connection string would expose other contexts' data or let the schema be changed | Lateral movement and blast radius of a breach | [EwpServiceDbUsers.sql](../../../../db/EwpServiceDbUsers.sql) |
+| 13 | HTTPS only (HSTS outside Development) and host filtering (`AllowedHosts`) | Tokens could travel over plain HTTP; a forged `Host` header could poison generated links | Interception (OWASP A02) and host-header attacks | `UseHsts` in [Program.cs](Program.cs); `AllowedHosts` in [appsettings.Development.json](appsettings.Development.json) |

@@ -60,6 +60,20 @@ ALTER TABLE audit_entries ENABLE TRIGGER trg_audit_entries_no_change;
 
 Within a minute the API logs `AUDIT CHAIN BROKEN at entry 1`, `/health/ready` shows the `audit-chain` check Degraded, and `/metrics` shows `brokenAtSequence` 1. Recreate the trail afterwards with `EwpAuditDb.sql` (and reset the consumer group to the earliest offset, see ReadMe.txt) - a broken chain cannot be repaired, only re-recorded, which is the point.
 
+## Security controls
+
+What this project does to stay secure: each control, what would go wrong without it, the threat it stops, and where to find it in the code. The platform-wide picture: [Architectural and security features §2](../../../../doc/Architectural-And-Security-Features-Demoable-EWP-V3.md#2-security-features).
+
+| # | Security control | If it were missing | Threat prevented | Where to look |
+|---|---|---|---|---|
+| 1 | Reads only with a delegated token: the person is an auditor (`audit.view` / `audit.search`) AND the acting client is the Audit Journey API | Any service, or a person without the permission, could read the trail | Unauthorised access to the audit trail | [DelegatedAuditorAuthorization.cs](Authorization/DelegatedAuditorAuthorization.cs) |
+| 2 | Every read recorded as an `ACCESS` entry | Auditors' own look-ups would leave no trace | Unaccountable access to sensitive history | [AuditTrailController.cs](Controllers/AuditTrailController.cs) |
+| 3 | Hash chain: each entry's SHA-256 covers the previous entry; re-verified on a schedule (readiness Degraded on a break) | An edit made directly in the database would go unnoticed | Undetected tampering (repudiation) | [AuditEntry.cs](Domain/AuditEntry.cs), [AuditTrailAppender.cs](Infrastructure/AuditTrailAppender.cs), [AuditChainVerifier.cs](Application/AuditChainVerifier.cs) |
+| 4 | Append-only: the database user may only insert and read; a trigger refuses updates and deletes for everybody | A compromised API or an operator could rewrite history | Tampering with evidence | [EwpAuditDb.sql](AuditDb/EwpAuditDb.sql) |
+| 5 | Only identifiers and outcomes kept, plus the SHA-256 of the original message; no names or addresses | The trail would become a second store of personal data | Personal-data exposure (privacy by design) | [AuditEventMapper.cs](Application/AuditEventMapper.cs) |
+| 6 | Strict token validation (`typ: at+jwt`, audience, issuer), deny by default, problem responses without internals, rate limits, host filtering | Wrong tokens accepted; endpoints public by mistake; details leaked | Broken authentication and information disclosure | [Program.cs](Program.cs) |
+| 7 | Own Kafka user that may only read the business topics | The consumer could publish events | Event spoofing through the audit consumer | [Setup-KafkaSecurity.ps1](../../../../ps/kafka/Setup-KafkaSecurity.ps1) |
+
 ## Not yet
 
 - Operations' "Retry release" on a payment publishes no event, so it is not in the trail yet.

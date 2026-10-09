@@ -38,3 +38,13 @@ Invoke-RestMethod $sim
 ## Configuration
 
 `Simulator:Behaviour` (start-up behaviour), `Simulator:SlowDelaySeconds`, and `Simulator:ApiKey` (Development value in `appsettings.Development.json`; it must match the Compliance API's `ScreeningProvider:ApiKey`). The simulator refuses to start without an API key.
+
+## Security controls
+
+What this project does to stay secure: each control, what would go wrong without it, the threat it stops, and where to find it in the code. The platform-wide picture: [Architectural and security features §2](../../../doc/Architectural-And-Security-Features-Demoable-EWP-V3.md#2-security-features).
+
+| # | Security control | If it were missing | Threat prevented | Where to look |
+|---|---|---|---|---|
+| 1 | An API key on every business call, compared in constant time; no key configured = no start | Anyone on the network could call the "external" system | Unauthenticated use of a partner API; timing attacks on the key | `Simulator:ApiKey`, `CryptographicOperations.FixedTimeEquals` in [Program.cs](Program.cs) |
+| 2 | The behaviour switch (`/admin/behaviour`) answers only loopback callers | Anyone could switch the provider to Down | Unauthorised control of a test dependency | `IsLoopback` in [Program.cs](Program.cs) |
+| 3 | Host filtering: `localhost` only | Requests addressed to other host names would be served | Host-header attacks | [appsettings.Development.json](appsettings.Development.json) |

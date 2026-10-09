@@ -21,3 +21,11 @@ The look of the fictitious organisation **Four Walls Inc.**: colours, typography
 - Brick colours (`--ewp-brick-*`) are for the mark only. UI states use success/warning/danger/info.
 - System fonts only, so no external font requests (CSP `font-src 'self'`).
 - Styles are compiled or served as files. No inline styles and no runtime CSS-in-JS, which keeps the strict Content-Security-Policy intact (the IDP's CSP has no `'unsafe-inline'` at all).
+
+## Security controls
+
+What this project does to stay secure: each control, what would go wrong without it, the threat it stops, and where to find it in the code. The platform-wide picture: [Architectural and security features §2](../../../doc/Architectural-And-Security-Features-Demoable-EWP-V3.md#2-security-features).
+
+| # | Security control | If it were missing | Threat prevented | Where to look |
+|---|---|---|---|---|
+| 1 | Styles shipped as compiled files; no inline styles, no runtime CSS-in-JS | The front ends' CSP would have to allow `'unsafe-inline'` styles | CSS injection (data theft through selectors, fake overlays) | [ewp-theme.css](ewp-theme.css) |

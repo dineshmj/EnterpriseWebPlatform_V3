@@ -42,13 +42,23 @@ The rules live in [Domain/NotificationRules.cs](Domain/NotificationRules.cs). Pe
 | `/hubs/notifications` (SignalR) | the person (via the Shell BFF) | Live channel; the server sends `notification` messages |
 | `POST internal/v1/notifications/events` | NotificationsSubscriber only (pinned M2M client) | Hand over one workflow event; idempotent per MessageId |
 
-## Security
+## Security controls
 
-- **Audiences come from the token only.** The hub joins a connection to `user:{sub}` and to `staff:{role}:{branch}` for each work-queue role in the person's token (KYC, Compliance, account and payments officers), plus `staff:operations_administrator:*` for operations staff, whose work spans every branch; it exposes no method a client could use to join another group. The REST queries filter by the same audiences, and marking read checks that the notification is addressed to the caller.
-- **No token in the browser, none in a URL.** The Shell BFF proxies REST and the hub and adds the access token as an `Authorization` header, also on the WebSocket upgrade. Because a browser cannot add Duende's anti-forgery header to a WebSocket, the Shell checks the `Origin` of hub requests instead (cross-site WebSocket hijacking).
-- **A connection never outlives its token:** the hub closes it when the access token expires (`CloseOnAuthenticationExpiration`); the Shell reconnects through the BFF with a fresh token.
-- **Stored first, pushed second.** A failed push loses nothing: the Shell loads unread notifications over REST when it starts or reconnects.
-- Least-privilege database user `ewp_notifications_api`; problem details without internals.
+What this project does to stay secure: each control, what would go wrong without it, the threat it stops, and where to find it in the code. The platform-wide picture: [Architectural and security features §2](../../../../doc/Architectural-And-Security-Features-Demoable-EWP-V3.md#2-security-features).
+
+| # | Security control | If it were missing | Threat prevented | Where to look |
+|---|---|---|---|---|
+| 1 | Strict access-token validation: issuer, audience, lifetime, signature against the IDP's keys, and only `typ: at+jwt` access tokens (RFC 9068); original claim names kept (`MapInboundClaims = false`) | A token issued for another API, an ID token or an expired token would be accepted | Token confusion and replay across APIs (OWASP API2 Broken Authentication) | `AddJwtBearer` in [Program.cs](Program.cs) |
+| 2 | Deny by default: every endpoint needs an authorization policy | A new endpoint added without an attribute would be public | Broken function-level authorization (OWASP API5) | `RequireAuthorization` in [Program.cs](Program.cs) |
+| 3 | Internal endpoints accept only the one machine client meant to call them (`client_id` pinned, not just the scope) | Any service holding the scope could post fake workflow steps (e.g. a forged "notify" message) | Service impersonation and spoofed workflow events | Policy `NotificationsSubscriberWrite` in [Program.cs](Program.cs); [InternalNotificationsController.cs](Controllers/InternalNotificationsController.cs) |
+| 4 | Audiences come from the token only: the hub joins a connection to the person's own groups and offers no method to join another | A client could listen to other people's or other branches' notifications | Information disclosure across people and branches | [NotificationsHub.cs](Hubs/NotificationsHub.cs) |
+| 5 | REST queries filter by the same audiences; marking read checks the addressee | Changing an ID could read or mark someone else's notification | BOLA / IDOR (OWASP API1) | [NotificationsController.cs](Controllers/NotificationsController.cs) |
+| 6 | A hub connection is closed when its access token expires | A connection could outlive a revoked or expired session | Access after logout or deactivation | `CloseOnAuthenticationExpiration` in [Program.cs](Program.cs) |
+| 7 | No token in the browser or in a URL: the Shell proxies REST and the hub and adds the token server-side | Tokens would sit in JavaScript or in query strings (and logs) | Token theft and leakage | [Shell Program.cs](../../../Shell/Program.cs) |
+| 8 | Problem responses without internals (a `traceId` only; details are logged on the server) | Stack traces, SQL or exception messages would reach the caller | Information disclosure that helps an attacker (CWE-209, OWASP A05) | [ApiExceptionHandler.cs](Controllers/ApiExceptionHandler.cs) |
+| 9 | Per-caller rate limits (person, machine client, IP), 429 with `Retry-After` | One caller, or a stolen token, could flood the API for everybody | Unrestricted resource consumption (OWASP API4) | [RateLimiting.cs](../../../Common/WebUtilities/Security/RateLimiting.cs), `AddEwpRateLimiting` in [Program.cs](Program.cs) |
+| 10 | Own least-privilege database user `ewp_notifications_api`: its own database only, no DDL | A compromised API or leaked connection string would expose other contexts' data or let the schema be changed | Lateral movement and blast radius of a breach | [EwpServiceDbUsers.sql](../../../../db/EwpServiceDbUsers.sql) |
+| 11 | HTTPS only (HSTS outside Development) and host filtering (`AllowedHosts`) | Tokens could travel over plain HTTP; a forged `Host` header could poison generated links | Interception (OWASP A02) and host-header attacks | `UseHsts` in [Program.cs](Program.cs); `AllowedHosts` in [appsettings.Development.json](appsettings.Development.json) |
 
 ## Scale-out
 

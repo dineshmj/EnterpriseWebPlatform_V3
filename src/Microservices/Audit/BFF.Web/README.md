@@ -37,6 +37,22 @@ Every search and every record opened is itself recorded in the trail.
 3. `.\ps\run\Start-NodeServices.ps1` in the repository root starts it with the other Node services (after the Journey API). Or by hand: `..\JourneyApi\runnow.bat`, then `runnow.bat` here (installs, builds, starts). Every setting is an environment variable (`lib/server/config.ts`); the development values are in `runnow.bat`, elsewhere from a secret store.
 4. Debugging: `runnow.bat dev` in VS Code's **JavaScript Debug Terminal** runs Next.js in development mode (no build, source maps, reload on save): breakpoints in server actions, route handlers and `lib/server` are hit; client code is debugged in the browser's DevTools.
 
+## Security controls
+
+What this project does to stay secure: each control, what would go wrong without it, the threat it stops, and where to find it in the code. The platform-wide picture: [Architectural and security features §2](../../../../doc/Architectural-And-Security-Features-Demoable-EWP-V3.md#2-security-features).
+
+| # | Security control | If it were missing | Threat prevented | Where to look |
+|---|---|---|---|---|
+| 1 | Tokens only on the server; the browser calls server actions, which Next.js accepts only from this app's own origin | Any XSS bug could read the tokens; another site could invoke the actions | Token theft; cross-site action calls | [actions.ts](app/v1/audit/actions.ts) |
+| 2 | Authorization code + PKCE, `state`, `nonce`; the sign-in token carries no API scope (it is good only for being exchanged) | A stolen code could be redeemed; a stolen sign-in token could call APIs directly | Code interception; token misuse | [oidc.ts](lib/server/oidc.ts) |
+| 3 | Token exchange (RFC 8693) for a short-lived token aimed at the Journey API only, with this app as `act` | A broad token could be replayed at any API, and the API could not tell who is calling | Token replay across services; loss of the caller chain | [oidc.ts](lib/server/oidc.ts), [TokenExchangeGrantValidator.cs](../../../IDP/Security/TokenExchangeGrantValidator.cs) |
+| 4 | Sessions in PostgreSQL keyed by the SHA-256 of the cookie, tokens encrypted with AES-256-GCM (key not in the database) | Anyone who can read the table could hijack sessions or read tokens | Session hijacking from a database leak | [session-store.ts](lib/server/session-store.ts), [EwpBffStateDb.sql](../../../../db/EwpBffStateDb.sql) |
+| 5 | Strict Content-Security-Policy with a per-request nonce for scripts (`'strict-dynamic'`) and styles; framed only by the Shell and the IDP; `nosniff`, referrer policy | Injected scripts or styles would run; any site could frame the screens | Cross-site scripting, CSS injection, clickjacking | [proxy.ts](proxy.ts) |
+| 6 | Sign-in returns only to allow-listed pages | A crafted link could bounce the auditor to a phishing site | Open redirect (CWE-601) | [return-url.ts](lib/server/return-url.ts) |
+| 7 | Front-channel and signed back-channel logout | A session would survive signing out in the Shell | Session reuse after logout | [backchannel-logout/route.ts](app/api/auth/backchannel-logout/route.ts), [frontchannel-logout/route.ts](app/api/auth/frontchannel-logout/route.ts) |
+| 8 | Shell–MFE messages accepted only from the Shell's origin and the parent window; own not-found page | A hostile framing page could pose as the Shell | Cross-origin message spoofing | [MfeShell.tsx](app/components/MfeShell.tsx) |
+| 9 | Every setting from the environment, required; development values only in `runnow.bat` | Defaults could ship to production | Leaked defaults | [config.ts](lib/server/config.ts) |
+
 ## Not yet
 
 - Structured logs, metrics and traces in the Node tier.

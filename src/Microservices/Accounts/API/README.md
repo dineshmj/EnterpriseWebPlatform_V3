@@ -1,0 +1,22 @@
+# Accounts API
+
+Account applications and accounts: opening at core banking, and funds holds for Payments.
+
+## Security controls
+
+What this project does to stay secure: each control, what would go wrong without it, the threat it stops, and where to find it in the code. The platform-wide picture: [Architectural and security features §2](../../../../doc/Architectural-And-Security-Features-Demoable-EWP-V3.md#2-security-features).
+
+| # | Security control | If it were missing | Threat prevented | Where to look |
+|---|---|---|---|---|
+| 1 | Strict access-token validation: issuer, audience, lifetime, signature against the IDP's keys, and only `typ: at+jwt` access tokens (RFC 9068); original claim names kept (`MapInboundClaims = false`) | A token issued for another API, an ID token or an expired token would be accepted | Token confusion and replay across APIs (OWASP API2 Broken Authentication) | `AddJwtBearer` in [Program.cs](Program.cs) |
+| 2 | Deny by default: every endpoint needs an authorization policy | A new endpoint added without an attribute would be public | Broken function-level authorization (OWASP API5) | `RequireAuthorization` in [Program.cs](Program.cs) |
+| 3 | Step-up: account-opening decisions require a two-step sign-in (`amr` contains `mfa`) while `Mfa:Enabled` is on | A stolen password alone would be enough to approve or reject | Account takeover leading to fraudulent decisions | [MfaStepUp.cs](../../../Common/WebUtilities/Security/MfaStepUp.cs), `stepUpPolicies` in [Program.cs](Program.cs) |
+| 4 | Officer attributes and branch scope per request | Another branch's officer could open accounts | BOLA and excessive privilege (OWASP API1, API5) | [AccountOfficerAuthorization.cs](Authorization/AccountOfficerAuthorization.cs) |
+| 5 | Cross-context separation of duties: the account officer is neither the initiator nor the Compliance approver | One person could approve compliance and open the account | Insider fraud | `EnsureOfficerMayAct` in [AccountApplication.cs](Domain/Aggregates/AccountApplication.cs) |
+| 6 | Core-banking calls with an API key and an `Idempotency-Key`; a refusal is final, not retried | A retried request after a timeout could open a second account | Duplicated accounts | [CoreBankingClient.cs](Infrastructure/CoreBanking/CoreBankingClient.cs) |
+| 7 | Payments may look up accounts only for a person allowed to initiate payments (`payment.initiate`) | Any caller could enumerate accounts | Data harvesting | Policy `PaymentAccountLookup` in [Program.cs](Program.cs) |
+| 8 | Internal endpoints accept only the one machine client meant to call them (`client_id` pinned, not just the scope) | Any service holding the scope could post fake workflow steps (e.g. a forged "compliance approved" message) | Service impersonation and spoofed workflow events | Policies `AccountApplicationOpeningSubscriberWrite` / `AccountsCommandSubscriberWrite` in [Program.cs](Program.cs); [InternalAccountApplicationsController.cs](Controllers/InternalAccountApplicationsController.cs), [InternalFundsCommandsController.cs](Controllers/InternalFundsCommandsController.cs) |
+| 9 | Problem responses without internals (a `traceId` only; details are logged on the server) | Stack traces, SQL or exception messages would reach the caller | Information disclosure that helps an attacker (CWE-209, OWASP A05) | [ApiExceptionHandler.cs](Controllers/ApiExceptionHandler.cs) |
+| 10 | Per-caller rate limits (person, machine client, IP), 429 with `Retry-After` | One caller, or a stolen token, could flood the API for everybody | Unrestricted resource consumption (OWASP API4) | [RateLimiting.cs](../../../Common/WebUtilities/Security/RateLimiting.cs), `AddEwpRateLimiting` in [Program.cs](Program.cs) |
+| 11 | Own least-privilege database user `ewp_accounts_api`: its own database only, no DDL | A compromised API or leaked connection string would expose other contexts' data or let the schema be changed | Lateral movement and blast radius of a breach | [EwpServiceDbUsers.sql](../../../../db/EwpServiceDbUsers.sql) |
+| 12 | HTTPS only (HSTS outside Development) and host filtering (`AllowedHosts`) | Tokens could travel over plain HTTP; a forged `Host` header could poison generated links | Interception (OWASP A02) and host-header attacks | `UseHsts` in [Program.cs](Program.cs); `AllowedHosts` in [appsettings.Development.json](appsettings.Development.json) |

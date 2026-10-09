@@ -1,0 +1,20 @@
+# BSS Shell (BFF + Next.js host)
+
+The business-neutral host: signs the person in, shows the menu their roles allow, frames each context's MFE and shows notifications.
+
+## Security controls
+
+What this project does to stay secure: each control, what would go wrong without it, the threat it stops, and where to find it in the code. The platform-wide picture: [Architectural and security features §2](../../doc/Architectural-And-Security-Features-Demoable-EWP-V3.md#2-security-features).
+
+| # | Security control | If it were missing | Threat prevented | Where to look |
+|---|---|---|---|---|
+| 1 | Tokens stay on the server (Duende BFF); the browser holds only an HttpOnly session cookie, and the Shell attaches the token to the Notifications calls it proxies | Any XSS bug could read the tokens | Token theft (OWASP A07) | `AddBff`, the Notifications proxy in [Program.cs](Program.cs) |
+| 2 | Session cookie `__Host-`, HttpOnly, Secure, `SameSite=Lax`, 30 minutes sliding; sessions and key ring in PostgreSQL (`shell_bff`), key ring encrypted at rest | Cookie readable by script or sent cross-site; restart signs everyone out; stolen key ring forges cookies | Session theft, CSRF and session forgery | `AddCookie` in [Program.cs](Program.cs), [PersistentDataProtection.cs](../Common/WebUtilities/Security/PersistentDataProtection.cs), [EwpBffStateDb.sql](../../db/EwpBffStateDb.sql) |
+| 3 | Duende's anti-forgery header on every `/bff` API call (`UseBff` before `UseAuthorization`) | A hostile page could call the Shell's API with the user's cookie | Cross-site request forgery | `UseBff` in [Program.cs](Program.cs); [auth.ts](client-app/app/lib/auth.ts) |
+| 4 | The notifications WebSocket accepts only the Shell's own origin (a browser cannot add the anti-forgery header to a WebSocket upgrade) | Another site could open the hub with the user's cookie and read their notifications | Cross-site WebSocket hijacking | Origin check before the hub in [Program.cs](Program.cs) |
+| 5 | Strict Content-Security-Policy (scripts and styles by hash, no `'unsafe-inline'`); `frame-src` limited to the MFEs and the IDP | Injected scripts or styles would run; the Shell could be made to frame any site | Cross-site scripting, CSS injection, framing of hostile content | [ContentSecurityPolicy.cs](../Common/WebUtilities/Security/ContentSecurityPolicy.cs), `ContentSecurityPolicy.Build` in [Program.cs](Program.cs) |
+| 6 | Never framed: `frame-ancestors 'none'` and `X-Frame-Options: DENY` | Another site could overlay the Shell to trick a click | Clickjacking | Security-header middleware in [Program.cs](Program.cs) |
+| 7 | Messages from a frame accepted only from that frame's window and origin; messages to an MFE sent to its origin only | A hostile frame or window could pose as an MFE, or receive workspace context | Cross-origin message spoofing and data leakage | [page.tsx](client-app/app/page.tsx) |
+| 8 | Menu built on the server from the person's role claims; every controller requires a signed-in user | Menu data would be served to anyone | Information disclosure; but note that the menu is not authorization: every API checks again | [MenuController.cs](Controllers/MenuController.cs), [MenuRepository.cs](Data/MenuRepository.cs) |
+| 9 | No inline styles: the sign-in spinner and the not-found page are styled by class | The CSP would need `'unsafe-inline'` for styles | CSS injection | [AuthGuard.tsx](client-app/app/components/AuthGuard.tsx), [not-found.tsx](client-app/app/not-found.tsx), [globals.css](client-app/app/globals.css) |
+| 10 | `nosniff`, referrer policy, HSTS, host filtering, per-caller rate limits | MIME sniffing, URL leakage, HTTP downgrade, host-header attacks, floods | Several smaller browser and transport attacks; resource exhaustion | [Program.cs](Program.cs), [RateLimiting.cs](../Common/WebUtilities/Security/RateLimiting.cs), [appsettings.Development.json](appsettings.Development.json) |
