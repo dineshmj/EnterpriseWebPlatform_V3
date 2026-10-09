@@ -5,8 +5,9 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { KycBffOptions } from '../configuration/kyc-bff-options';
-import { DocumentsManagementM2mService } from './documents-management-m2m.service';
+import { DocumentsManagementTokenService } from './documents-management-token.service';
 
 const DOCUMENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -25,19 +26,19 @@ export interface SelectedKycDocument extends DocumentListItem {
 }
 
 /**
- * Reads KYC evidence from Documents Management with this BFF's M2M identity.
+ * Reads KYC evidence from Documents Management for the signed-in officer: every call carries
+ * a token exchanged for the officer (RFC 8693), from which Documents Management takes the
+ * officer's branch (branch-scoped object-level authorization) and sees this BFF as the acting
+ * client. No machine identity and no branch header asserted by the BFF.
  *
  * Evidence is resolved ONLY by the document IDs the KYC case recorded from the
  * application's submission. There is deliberately no fallback that searches the
  * customer's other documents: a missing document is reported as missing.
- *
- * Every call states the signed-in user's branch (X-Actor-Branch), so DM applies
- * branch-scoped object-level authorization to the human behind the M2M call.
  */
 @Injectable()
 export class DocumentsManagementService {
   constructor(
-    private readonly m2m: DocumentsManagementM2mService,
+    private readonly tokens: DocumentsManagementTokenService,
     @Inject('KYC_BFF_OPTIONS') private readonly options: KycBffOptions,
   ) {}
 
@@ -46,18 +47,18 @@ export class DocumentsManagementService {
    * officer reviews exactly what was submitted, never "the latest" of the customer.
    */
   async getEvidence(
+    req: Request,
     documentId: string,
     label: string,
     applicationNumber: string,
-    actorBranch: string | undefined,
   ): Promise<SelectedKycDocument> {
     if (!DOCUMENT_ID.test(documentId)) {
       throw new NotFoundException(`The case names no valid ${label.toLowerCase()} document.`);
     }
 
     const response = await this.fetchWithRetry(
+      req,
       `${this.options.documentsManagementApiBaseUrl}/v1/documents/${documentId}`,
-      actorBranch,
     );
 
     if (response.status === 404) {
@@ -77,14 +78,14 @@ export class DocumentsManagementService {
     };
   }
 
-  async getContent(documentId: string, actorBranch: string | undefined): Promise<globalThis.Response> {
+  async getContent(req: Request, documentId: string): Promise<globalThis.Response> {
     if (!DOCUMENT_ID.test(documentId)) {
       throw new NotFoundException('Invalid document ID.');
     }
 
     const response = await this.fetchWithRetry(
+      req,
       `${this.options.documentsManagementApiBaseUrl}/v1/documents/${documentId}/content`,
-      actorBranch,
     );
 
     if (response.status === 404) {
@@ -100,13 +101,13 @@ export class DocumentsManagementService {
     return response;
   }
 
-  private async fetchWithRetry(url: string, actorBranch: string | undefined): Promise<globalThis.Response> {
-    if (!actorBranch) {
-      // Fail closed: without the user's branch DM cannot authorize the read.
+  private async fetchWithRetry(req: Request, url: string): Promise<globalThis.Response> {
+    if (!req.session.user?.branch) {
+      // Stop early with a clear message: without a branch, Documents Management denies the read.
       throw new ForbiddenException('Your profile has no branch; documents cannot be shown.');
     }
 
-    const accessToken = await this.m2m.getAccessToken();
+    const accessToken = await this.tokens.getToken(req);
     let lastError: unknown;
 
     // GET requests only: safe to retry on transient failures.
@@ -116,10 +117,7 @@ export class DocumentsManagementService {
 
       try {
         const response = await fetch(url, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'X-Actor-Branch': actorBranch,
-          },
+          headers: { Authorization: `Bearer ${accessToken}` },
           signal: controller.signal,
         });
 

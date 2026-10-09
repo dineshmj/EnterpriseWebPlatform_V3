@@ -16,8 +16,8 @@ public static class Config
             new (name: "roles", displayName: "User Roles", userClaims: [ "role" ]),
 
             // Organizational (ABAC) attributes of an employee. BFFs request this
-            // scope so they know the acting user's branch, e.g. to pass it to
-            // Documents Management for branch-scoped document access.
+            // scope so they know the acting user's branch (e.g. to stop early when a
+            // user has none). Documents Management reads it from its own token.
             new (name: "organization", displayName: "Organization", userClaims:
                 [ "employee_id", "lan_id", "department", "branch", "branch_city", "branch_country_code", "region", "clearance_level", "employment_type" ])
         ];
@@ -91,7 +91,6 @@ public static class Config
             MfeAudit.Client,
 
             // M2M Clients
-            CustomerOnboardingBFFToDocumentsManagementM2M.Client,
             KycCaseOpeningSubscriberToCustomerKycApiM2M.Client,
             OnboardingOutcomeSubscriberToCustomerOnboardingApiM2M.Client,
             ComplianceCaseOpeningSubscriberToComplianceApiM2M.Client,
@@ -100,7 +99,6 @@ public static class Config
             NotificationsSubscriberToNotificationsApiM2M.Client,
             AccountsCommandSubscriberToAccountsApiM2M.Client,
             PaymentsSagaReplySubscriberToPaymentsApiM2M.Client,
-            KycBFFToDocumentsManagementM2M.Client,
 
             // Token exchange only (delegation): the Audit Journey API acts for a signed-in person.
             AuditJourneyApiTokenExchange.Client

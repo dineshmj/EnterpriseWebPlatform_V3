@@ -33,9 +33,10 @@ public sealed class TokenExchangeGrantValidator(
     public string GrantType => OidcConstants.GrantTypes.TokenExchange;
 
     /// <summary>
-    /// Who may exchange what. The Audit web BFF: only a person's token it obtained itself at
-    /// sign-in (not yet delegated). The Audit Journey API: only a token the Audit web BFF
-    /// exchanged for the Journey API.
+    /// Who may exchange what. A BFF (Audit web, Customer Onboarding, KYC): only a person's token
+    /// it obtained itself at sign-in (not yet delegated). The Audit Journey API: only a token the
+    /// Audit web BFF exchanged for the Journey API. The scopes a client may ask for are its
+    /// AllowedScopes (e.g. the KYC BFF: documents-management.read only).
     /// </summary>
     private static readonly Dictionary<string, Func<SubjectToken, bool>> AllowedExchanges = new()
     {
@@ -44,7 +45,15 @@ public sealed class TokenExchangeGrantValidator(
 
         [AuditMicroservice.CLIENT_ID_FOR_IDP_FOR_AUDIT_JOURNEY_API] = token =>
             token.Audiences.Contains(MicroserviceApiResourceNames.AUDIT_JOURNEY_API) &&
-            token.ActingClientId == AuditMicroservice.CLIENT_ID_FOR_IDP
+            token.ActingClientId == AuditMicroservice.CLIENT_ID_FOR_IDP,
+
+        // Documents Management for the signed-in agent (upload, clean-up of an unfinished submission).
+        [CustomerOnboardingMicroservice.CLIENT_ID_FOR_IDP] = token =>
+            token.ClientId == CustomerOnboardingMicroservice.CLIENT_ID_FOR_IDP && token.ActingClientId is null,
+
+        // Documents Management for the signed-in KYC officer (reading the evidence).
+        [CustomerKycMicroservice.CLIENT_ID_FOR_IDP] = token =>
+            token.ClientId == CustomerKycMicroservice.CLIENT_ID_FOR_IDP && token.ActingClientId is null
     };
 
     public async Task ValidateAsync(ExtensionGrantValidationContext context, CancellationToken cancellationToken)

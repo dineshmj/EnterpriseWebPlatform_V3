@@ -1,4 +1,5 @@
-﻿using Duende.IdentityServer;
+﻿using Duende.IdentityModel;
+using Duende.IdentityServer;
 using Duende.IdentityServer.Models;
 
 using EnterpriseWebPlatform.Common.Landscape.Microservices;
@@ -23,11 +24,14 @@ public sealed class MfeCustomerOnboarding
                     ClientName = CustomerOnboardingMicroservice.CLIENT_NAME_FOR_IDP,
                     ClientSecrets = { ClientSecretStore.For(CustomerOnboardingMicroservice.CLIENT_ID_FOR_IDP) },
 
-                    AllowedGrantTypes = GrantTypes.Code,
+                    AllowedGrantTypes = { GrantType.AuthorizationCode, OidcConstants.GrantTypes.TokenExchange },
                     // 🡡__ WHY   : The CustomerOnboarding microservice (if acting as a confidential client or BFF) should use Authorization Code to keep tokens
                     //              private on the server and to benefit from the standard OIDC/OAuth flow, including PKCE if applicable.
                     // 🡡__ IF NOT: Using non-confidential or browser flows could expose tokens to the client-side, allowing token theft via XSS
                     //              and making secure API access more difficult to enforce.
+                    //              Token exchange (RFC 8693): for Documents Management the BFF swaps the agent's token for one
+                    //              aimed at Documents Management, in which the agent stays the subject (their own branch) and
+                    //              this BFF is the acting client ("act") - no machine identity asserting the agent's branch.
 
                     RequirePkce = true,
 
@@ -58,7 +62,9 @@ public sealed class MfeCustomerOnboarding
                             // 🡡__ IF NOT: If this scope is not included, tokens issued to the client will not be valid for calling the CustomerOnboarding Microservice API, so CustomerOnboarding Microservice API calls
                             //              will be denied (insufficient scope). The microservice would not be authorized to access protected endpoints.
                         CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_READ,
-                        CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_WRITE
+                        CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_WRITE,
+                        // Requested only in the token exchange, never at sign-in.
+                        DocumentsManagementApiScopesRequired.DOCUMENTS_MANAGEMENT_WRITE
                     },
 
                     UpdateAccessTokenClaimsOnRefresh = true,

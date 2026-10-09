@@ -28,14 +28,14 @@ Business requirements for this context: [CustomerKyc-Requirements.md](../doc/Cus
 | `GET /bff/api/kyc/cases/:caseId` | KYC API, user token |
 | `POST /bff/api/kyc/cases/:caseId/identity-verification/approve` / `reject` | KYC API, user token |
 | `POST /bff/api/kyc/cases/:caseId/document-verification/approve` / `reject` | KYC API, user token |
-| `GET /bff/api/kyc/cases/:caseId/identity-proof` and `/content` | Documents Management, M2M token |
-| `GET /bff/api/kyc/cases/:caseId/tax-proof` and `/content` | Documents Management, M2M token |
+| `GET /bff/api/kyc/cases/:caseId/identity-proof` and `/content` | Documents Management, the officer's token exchanged |
+| `GET /bff/api/kyc/cases/:caseId/tax-proof` and `/content` | Documents Management, the officer's token exchanged |
 | `GET /api/auth/login`, `silent-login`, `callback` | IDP (Authorization Code + PKCE; session regenerated at sign-in; `organization` scope gives the user's branch) |
 | `POST /api/auth/logout` (CSRF token required) | Revokes the refresh token, ends the session, returns the IDP end-session URL |
 | `GET /signout-oidc` | Front-channel logout target called by the IDP |
 | `GET /signout-callback-oidc` | Post-logout redirect target |
 
-Every call to Documents Management carries the signed-in user's branch (`X-Actor-Branch`), and DM only returns that branch's documents. Evidence is streamed: verified PDF inline, any other type as a download.
+Every call to Documents Management carries a token exchanged for the signed-in officer, from which DM takes their branch: it only returns that branch's documents. Evidence is streamed: verified PDF inline, any other type as a download.
 
 ## HTTPS development certificate
 
@@ -58,7 +58,7 @@ The certificate must cover `*.dev.localhost`.
 
 The BFF reads environment variables only; `src/configuration/kyc-bff-options.ts` lists them all, and `.env.example` shows every name with development values. `runnow.bat` sets them for local development and starts the BFF.
 
-The secrets `KYC_BFF_CLIENT_SECRET`, `KYC_BFF_SESSION_SECRET` and `KYC_DOCUMENTS_MANAGEMENT_M2M_CLIENT_SECRET` have **no defaults**: if any is missing, the BFF refuses to start.
+The secrets `KYC_BFF_CLIENT_SECRET` and `KYC_BFF_SESSION_SECRET` have **no defaults**: if any is missing, the BFF refuses to start.
 
 ## Install and run
 
@@ -84,9 +84,9 @@ pnpm run start
 
 `ps\build\CompileAndExportBFFClients_V3.ps1` runs the MFE export and the BFF build together.
 
-## Documents Management M2M
+## Documents Management (token exchange)
 
-The BFF uses its own client-credentials identity (`Kyc.BFF.To.DocumentsManagement.M2M.ClientID`, scope `documents-management.read`). It keeps the M2M token server-side and relays document content to the browser (currently buffered in memory, not streamed).
+The BFF has no machine identity for Documents Management. For the signed-in officer it exchanges their access token at the IDP (RFC 8693, its own client, scope `documents-management.read`): the officer stays the subject, with their own branch, and this BFF is the acting client (`act`). The exchanged token is kept in the officer's session until a minute before it expires. Document content is relayed to the browser (currently buffered in memory, not streamed).
 
 ## Security controls
 
@@ -104,7 +104,8 @@ What this project does to stay secure: each control, what would go wrong without
 | 8 | Sign-in returns only to allow-listed routes | A crafted link could bounce the user to a phishing site | Open redirect (CWE-601) | `safeReturnUrl` in [auth.controller.ts](src/auth/auth.controller.ts) |
 | 9 | Logout revokes the refresh token; signed back-channel logout tokens (verified, one-time `jti`) end every session of the IDP session | A refresh token would keep working after logout; signing out in the Shell would leave this session alive | Session and token reuse after logout | [auth.controller.ts](src/auth/auth.controller.ts), [backchannel-logout.controller.ts](src/auth/backchannel-logout.controller.ts), [session-registry.ts](src/auth/session-registry.ts) |
 | 10 | An officer's decision is sent exactly once (10-second timeout, no retry); GETs may be retried | A retried decision could arrive twice or show a misleading "already decided" | Duplicated or confusing decisions | `postOnce` in [kyc-api.service.ts](src/services/kyc-api.service.ts) |
-| 11 | Secrets required, no fallbacks | The BFF could start with a default or empty secret | Leaked defaults | `required` in [kyc-bff-options.ts](src/configuration/kyc-bff-options.ts) |
-| 12 | Shell–MFE messages accepted only from the Shell's origin and the parent window; own not-found page (no inline CSS) | A hostile framing page could pose as the Shell | Cross-origin message spoofing; CSS injection | [MfeShell.tsx](client-app/app/components/MfeShell.tsx), [not-found.tsx](client-app/app/not-found.tsx) |
+| 11 | Documents Management called for the signed-in officer by token exchange (RFC 8693, read only); the exchanged token is kept in the officer's own session | A service would assert the officer's branch itself, with a token shared by every officer | Confused deputy; cross-branch document access (BOLA) | [documents-management-token.service.ts](src/services/documents-management-token.service.ts), [documents-management.service.ts](src/services/documents-management.service.ts) |
+| 12 | Secrets required, no fallbacks | The BFF could start with a default or empty secret | Leaked defaults | `required` in [kyc-bff-options.ts](src/configuration/kyc-bff-options.ts) |
+| 13 | Shell–MFE messages accepted only from the Shell's origin and the parent window; own not-found page (no inline CSS) | A hostile framing page could pose as the Shell | Cross-origin message spoofing; CSS injection | [MfeShell.tsx](client-app/app/components/MfeShell.tsx), [not-found.tsx](client-app/app/not-found.tsx) |
 
-**Not yet:** sessions are in memory (one instance only); no circuit breaker, structured logs or metrics (planned: M6). Documents Management receives the officer's branch as an asserted header from this BFF's machine client, not by token exchange (planned: M5).
+**Not yet:** sessions are in memory (one instance only); no circuit breaker, structured logs or metrics (planned: M6).

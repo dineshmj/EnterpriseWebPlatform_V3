@@ -109,7 +109,7 @@ export class KycCasesController {
     this.requireSession(req);
     const caseId = this.parseCaseId(caseIdRaw);
     const evidence = await this.getCaseEvidence(req, caseId);
-    res.json(await this.documents.getEvidence(evidence.identityProofDocumentId, 'Identity proof', evidence.applicationNumber, req.session.user?.branch));
+    res.json(await this.documents.getEvidence(req, evidence.identityProofDocumentId, 'Identity proof', evidence.applicationNumber));
   }
 
   @Get('cases/:caseId/tax-proof')
@@ -117,28 +117,26 @@ export class KycCasesController {
     this.requireSession(req);
     const caseId = this.parseCaseId(caseIdRaw);
     const evidence = await this.getCaseEvidence(req, caseId);
-    res.json(await this.documents.getEvidence(evidence.taxProofDocumentId, 'Tax proof', evidence.applicationNumber, req.session.user?.branch));
+    res.json(await this.documents.getEvidence(req, evidence.taxProofDocumentId, 'Tax proof', evidence.applicationNumber));
   }
 
   @Get('cases/:caseId/identity-proof/content')
   async identityProofContent(@Param('caseId') caseIdRaw: string, @Req() req: Request, @Res() res: Response) {
     this.requireSession(req);
-    const branch = req.session.user?.branch;
     const caseId = this.parseCaseId(caseIdRaw);
     const evidence = await this.getCaseEvidence(req, caseId);
-    const document = await this.documents.getEvidence(evidence.identityProofDocumentId, 'Identity proof', evidence.applicationNumber, branch);
-    const documentResponse = await this.documents.getContent(document.documentId, branch);
+    const document = await this.documents.getEvidence(req, evidence.identityProofDocumentId, 'Identity proof', evidence.applicationNumber);
+    const documentResponse = await this.documents.getContent(req, document.documentId);
     return this.forwardDocumentContent(documentResponse, res, document.fileName);
   }
 
   @Get('cases/:caseId/tax-proof/content')
   async taxProofContent(@Param('caseId') caseIdRaw: string, @Req() req: Request, @Res() res: Response) {
     this.requireSession(req);
-    const branch = req.session.user?.branch;
     const caseId = this.parseCaseId(caseIdRaw);
     const evidence = await this.getCaseEvidence(req, caseId);
-    const document = await this.documents.getEvidence(evidence.taxProofDocumentId, 'Tax proof', evidence.applicationNumber, branch);
-    const documentResponse = await this.documents.getContent(document.documentId, branch);
+    const document = await this.documents.getEvidence(req, evidence.taxProofDocumentId, 'Tax proof', evidence.applicationNumber);
+    const documentResponse = await this.documents.getContent(req, document.documentId);
     return this.forwardDocumentContent(documentResponse, res, document.fileName);
   }
 

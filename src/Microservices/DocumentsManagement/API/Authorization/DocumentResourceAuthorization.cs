@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 
 using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 using EnterpriseWebPlatform.DocumentsManagement.Domain.Aggregates;
@@ -9,65 +10,72 @@ namespace EnterpriseWebPlatform.DocumentsManagement.API.Authorization;
 /// <summary>
 /// Object-level (branch-scoped) authorization for documents.
 ///
-/// A human token carries its own "branch" claim. An M2M token has no human,
-/// so only the BFF clients that are registered to call DM may state the
-/// acting user's branch, through the X-Actor-Branch header. Any other M2M
-/// client gets no actor branch and is therefore denied.
+/// Every call carries a PERSON: the Customer Onboarding and KYC BFFs exchange the signed-in
+/// user's token for a Documents Management token (OAuth 2.0 Token Exchange, RFC 8693). That
+/// token keeps the user as subject, with their own "branch" claim issued by the IDP, and names
+/// the BFF in "act". So the branch comes from the IDP, never from a request header, and the
+/// acting application is known:
 ///
-/// NOTE: the header is asserted by a trusted, pinned client. The target design
-/// replaces it with delegated user context (token exchange / signed actor claim).
+///   - a person acting through the Customer Onboarding or KYC BFF: their own branch;
+///   - a person's token without one of those BFFs as the acting client (signed in elsewhere,
+///     or requested directly): no branch, so denied;
+///   - a machine token (no person): no branch, so denied. The Document Invalidation
+///     Subscriber uses only its own pinned internal endpoints.
+///
+/// Only the Customer Onboarding BFF removes documents (cleanup of an unfinished submission).
 /// </summary>
 public sealed class DocumentResourceAuthorization
 {
-    public const string ActorBranchHeader = "X-Actor-Branch";
-
-    private static readonly HashSet<string> BranchAssertingClients = new(StringComparer.Ordinal)
+    private static readonly HashSet<string> ActingClients = new(StringComparer.Ordinal)
     {
-        DocumentsManagementMicroservice.CLIENT_ID_FOR_IDP_FOR_CUST_ONBOARDING_BFF_TO_DOC_MGMT_M2M,
-        DocumentsManagementMicroservice.CLIENT_ID_FOR_IDP_FOR_KYC_BFF_TO_DOC_MGMT_M2M
+        CustomerOnboardingMicroservice.CLIENT_ID_FOR_IDP,
+        CustomerKycMicroservice.CLIENT_ID_FOR_IDP
     };
 
-    // Only the Customer Onboarding BFF removes documents (cleanup of an
-    // unfinished submission). No other caller may delete.
     private static readonly HashSet<string> DeletingClients = new(StringComparer.Ordinal)
     {
-        DocumentsManagementMicroservice.CLIENT_ID_FOR_IDP_FOR_CUST_ONBOARDING_BFF_TO_DOC_MGMT_M2M
+        CustomerOnboardingMicroservice.CLIENT_ID_FOR_IDP
     };
 
-    public string? GetActorBranch(ClaimsPrincipal user, HttpRequest request)
+    /// <summary>The acting person's branch, or null (fail closed).</summary>
+    public string? GetActorBranch(ClaimsPrincipal user)
     {
-        var clientId = user.FindFirst("client_id")?.Value;
-        var isM2m = user.FindFirst("sub") is null;
+        if (user.FindFirst("sub") is null)
+            return null;
 
-        string? branch;
+        if (ActingClientOf(user) is not { } actingClient || !ActingClients.Contains(actingClient))
+            return null;
 
-        if (isM2m)
-        {
-            if (clientId is null || !BranchAssertingClients.Contains(clientId))
-                return null;
-
-            branch = request.Headers[ActorBranchHeader].FirstOrDefault();
-        }
-        else
-        {
-            branch = user.FindFirst("branch")?.Value;
-        }
+        var branch = user.FindFirst("branch")?.Value;
 
         return string.IsNullOrWhiteSpace(branch)
             ? null
             : branch.Trim().ToUpperInvariant();
     }
 
-    public bool CanAccess(Document document, ClaimsPrincipal user, HttpRequest request) =>
-        BranchCode.TryCreate(GetActorBranch(user, request), out var actorBranch) &&
+    public bool CanAccess(Document document, ClaimsPrincipal user) =>
+        BranchCode.TryCreate(GetActorBranch(user), out var actorBranch) &&
         document.BelongsTo(actorBranch);
 
-    public bool CanDelete(Document document, ClaimsPrincipal user, HttpRequest request)
-    {
-        var clientId = user.FindFirst("client_id")?.Value;
+    public bool CanDelete(Document document, ClaimsPrincipal user) =>
+        ActingClientOf(user) is { } actingClient &&
+        DeletingClients.Contains(actingClient) &&
+        CanAccess(document, user);
 
-        return clientId is not null &&
-            DeletingClients.Contains(clientId) &&
-            CanAccess(document, user, request);
+    /// <summary>The client acting for the person (the outermost "act" of a delegated token), or null.</summary>
+    private static string? ActingClientOf(ClaimsPrincipal user)
+    {
+        if (user.FindFirst("act")?.Value is not { } act)
+            return null;
+
+        try
+        {
+            using var document = JsonDocument.Parse(act);
+            return document.RootElement.TryGetProperty("client_id", out var client) ? client.GetString() : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 }

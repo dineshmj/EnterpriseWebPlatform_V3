@@ -37,11 +37,11 @@ DM is called only by services, never directly by browsers:
 
 | Caller | Identity | Scope | Purpose |
 |---|---|---|---|
-| Customer Onboarding BFF | M2M `CustomerOnboarding.BFF.To.DocumentsManagement.M2M.ClientID` | `documents-management.write` | Upload onboarding evidence; remove documents of a failed submission |
-| Customer KYC BFF | M2M `Kyc.BFF.To.DocumentsManagement.M2M.ClientID` | `documents-management.read` | Read evidence for KYC review |
+| Customer Onboarding BFF | The signed-in agent, by token exchange (`act` = `CustomerOnboarding.Microservice.BFF.ClientID`) | `documents-management.write` | Upload onboarding evidence; remove documents of a failed submission |
+| Customer KYC BFF | The signed-in officer, by token exchange (`act` = `CustomerKYC.Microservice.BFF.ClientID`) | `documents-management.read` | Read evidence for KYC review |
 | DocumentInvalidationSubscriber | M2M `DocumentsManagement.InvalidationSubscriber.To.DocumentsManagementApi.M2M.ClientID` | `documents-management.write` | Invalidate the evidence of a rejected onboarding application (internal endpoint, pinned to this client) |
 
-No human persona works in DM directly. Human authorization for document access is decided by the calling context, and in the target also re-checked by DM using delegated user context (§5).
+No human persona works in DM directly: a person reaches it only through the CO or KYC BFF, which exchanges their token (RFC 8693). The calling context decides what the person may do there, and DM re-checks the person's branch from the exchanged token (§5).
 
 ---
 
@@ -90,9 +90,9 @@ ATTACHED / INVALIDATED ──retention period ends──► DISPOSED
 | Upload | `documents-management.write` + an actor branch is required (it becomes the document's resource branch) | A narrowly scoped upload grant (document type + business reference) |
 | Delete | `documents-management.write` + only the Customer Onboarding BFF client + same branch + the document is AVAILABLE (attached and invalidated documents are retained) | Restricted to documents not yet part of a submitted application |
 | Invalidate (internal) | `documents-management.write` + only the DocumentInvalidationSubscriber client; only documents of the event's branch | — |
-| Actor branch | A human token's `branch` claim; for M2M, the `X-Actor-Branch` header, accepted **only** from the pinned CO and KYC BFF clients. Any other caller has no branch and is denied (fail closed). | Delegated user context (token exchange or a signed actor claim) instead of an asserted header. See [Authorization-Model §9.3](../../../../doc/Authorization-Model.md#93-delegated-user-context). |
+| Actor branch | The `branch` claim of a delegated token: a person (`sub`) with the CO or KYC BFF as the acting client (`act`). A person's own token, a machine token or any other acting client has no branch and is denied (fail closed). See [Authorization-Model §9.3](../../../../doc/Authorization-Model.md#93-delegated-user-context). | — |
 
-Upload path: currently the BFF uploads on the user's behalf with an M2M token. The target is a direct, narrowly authorized upload (for example a pre-signed object-storage URL issued by DM), so that large files bypass the BFF and the user's context is preserved.
+Upload path: currently the BFF uploads on the user's behalf with a token exchanged for the user. The target is a direct, narrowly authorized upload (for example a pre-signed object-storage URL issued by DM), so that large files bypass the BFF and the user's context is preserved.
 
 ---
 
@@ -107,7 +107,7 @@ Upload path: currently the BFF uploads on the user's behalf with an M2M token. T
 | Delete restricted to the CO BFF client | Present |
 | Content-type allow-list, magic-byte check, `nosniff` / attachment delivery | Present |
 | Malware scanning | Planned |
-| Delegated user context instead of `X-Actor-Branch` | Planned |
+| Delegated user context (token exchange) instead of `X-Actor-Branch` | Present |
 | Lifecycle: AVAILABLE / ATTACHED (evidence, retained) / INVALIDATED (compensation, retained), Inbox | Present |
 | Quarantine, disposal after a retention period | Planned |
 | Encryption at rest, read audit | Planned |

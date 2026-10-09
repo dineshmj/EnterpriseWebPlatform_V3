@@ -57,12 +57,9 @@ set "KYC_API_BASE_URL=https://kyc-api.dev.localhost:46305"
 set "KYC_BFF_SESSION_SECRET=8091a396-fdf8-4a2c-8535-18d8b3483fba"
 
 REM ============================================================
-REM Documents Management M2M
+REM Documents Management (called for the officer by token exchange; no secret of its own)
 REM ============================================================
 
-set "KYC_DOCUMENTS_MANAGEMENT_IDP_AUTHORITY=https://idp.dev.localhost:46392"
-set "KYC_DOCUMENTS_MANAGEMENT_M2M_CLIENT_ID=Kyc.BFF.To.DocumentsManagement.M2M.ClientID"
-set "KYC_DOCUMENTS_MANAGEMENT_M2M_CLIENT_SECRET=d1f3e5a2-7c4b-4e8f-9b6d-1a2c3e4f5b6a"
 set "KYC_DOCUMENTS_MANAGEMENT_API_BASE_URL=https://documents-management-api.dev.localhost:49486"
 
 REM ============================================================
@@ -81,8 +78,6 @@ echo       KYC_BFF_POST_LOGOUT_REDIRECT_URI=%KYC_BFF_POST_LOGOUT_REDIRECT_URI%
 echo       KYC_API_BASE_URL=%KYC_API_BASE_URL%
 echo       KYC_BFF_TLS_PFX_PATH=%KYC_BFF_TLS_PFX_PATH%
 echo       NODE_EXTRA_CA_CERTS=%NODE_EXTRA_CA_CERTS%
-echo       KYC_DOCUMENTS_MANAGEMENT_IDP_AUTHORITY=%KYC_DOCUMENTS_MANAGEMENT_IDP_AUTHORITY%
-echo       KYC_DOCUMENTS_MANAGEMENT_M2M_CLIENT_ID=%KYC_DOCUMENTS_MANAGEMENT_M2M_CLIENT_ID%
 echo       KYC_DOCUMENTS_MANAGEMENT_API_BASE_URL=%KYC_DOCUMENTS_MANAGEMENT_API_BASE_URL%
 echo.
 

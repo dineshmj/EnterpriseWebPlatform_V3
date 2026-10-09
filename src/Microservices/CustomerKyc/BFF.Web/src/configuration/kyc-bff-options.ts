@@ -12,9 +12,6 @@ export interface KycBffOptions {
   staticRoot: string;
   shellOrigin: string;
   documentsManagementApiBaseUrl: string;
-  documentsManagementIdpAuthority: string;
-  documentsManagementM2mClientId: string;
-  documentsManagementM2mClientSecret: string;
 }
 
 /**
@@ -45,10 +42,5 @@ export function loadOptions(): KycBffOptions {
     shellOrigin: process.env.KYC_BFF_SHELL_ORIGIN ?? 'https://shell.dev.localhost:46367',
     documentsManagementApiBaseUrl:
       process.env.KYC_DOCUMENTS_MANAGEMENT_API_BASE_URL ?? 'https://documents-management-api.dev.localhost:49486',
-    documentsManagementIdpAuthority:
-      process.env.KYC_DOCUMENTS_MANAGEMENT_IDP_AUTHORITY ?? process.env.KYC_IDP_AUTHORITY ?? 'https://idp.dev.localhost:46392',
-    documentsManagementM2mClientId:
-      process.env.KYC_DOCUMENTS_MANAGEMENT_M2M_CLIENT_ID ?? 'Kyc.BFF.To.DocumentsManagement.M2M.ClientID',
-    documentsManagementM2mClientSecret: required('KYC_DOCUMENTS_MANAGEMENT_M2M_CLIENT_SECRET'),
   };
 }

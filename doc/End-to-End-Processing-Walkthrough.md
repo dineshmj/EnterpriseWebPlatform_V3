@@ -41,7 +41,7 @@ CO BFF (ASP.NET Core + Duende BFF)                          OnboardingController
   │
   ├─①  POST CO API /v1/customers   (Sophie's USER token + X-Workflow-Id / Correlation / Causation)
   ├─②  POST CO API /v1/onboarding/applications {customerId}
-  ├─③  POST DM API /v1/documents ×2 (KYCProof, TaxProof)  (BFF's M2M token + X-Actor-Branch: SYD001)
+  ├─③  POST DM API /v1/documents ×2 (KYCProof, TaxProof)  (Sophie's token EXCHANGED for DM: sub Sophie, branch SYD001, act CO BFF)
   ├─④  GET  CO API /v1/onboarding/applications/{id}   (read Version)
   └─⑤  POST CO API /v1/onboarding/applications/{id}/submit {expectedVersion}
        (if ③–⑤ fail: compensate = delete the uploaded documents)
@@ -77,12 +77,12 @@ JWT validation [AuthN] → global "ApiScope" policy
   CustomerStatusChanged is raised but internal, so no outbox row
 ```
 
-### ③ Upload the documents (Documents Management API, M2M)
+### ③ Upload the documents (Documents Management API, token exchange)
 
 ```text
 "DocumentWrite" policy (scope) [RBAC]
-→ DocumentResourceAuthorization: M2M caller is a PINNED BFF client [client pinning]
-     → X-Actor-Branch trusted only from that client → BranchCode SYD001 (else 403)
+→ DocumentResourceAuthorization: a person (sub) AND act.client_id = CO or KYC BFF [delegation, RFC 8693]
+     → branch claim of the exchanged token (issued by the IDP) → BranchCode SYD001 (else 403)
 → UploadDocumentCommandHandler: FileName VO (path / reserved characters stripped), BranchCode VO
 → DocumentContentPolicy: magic bytes must be PDF/PNG/JPEG and match the declared type [Domain]
 → storage (SHA-256) → Document.Upload(…, branch) → DocumentUploaded (internal) → documents row
@@ -155,7 +155,7 @@ GET /v1/kyc/cases
   "KycCaseView": read scope + kyc_officer + kyc.case.view [RBAC] + department KYC [ABAC]
   → controller: Ethan's branch claim, else 403 [ABAC, fails closed]
   → IKycCaseQueries.GetCasesAsync(SYD001, …): only SYD001 cases [ABAC]
-GET evidence: KYC BFF → DM (M2M + X-Actor-Branch SYD001) → branch match, else 404 [ABAC]
+GET evidence: KYC BFF → DM (Ethan's token exchanged: branch SYD001, act KYC BFF, read only) → branch match, else 404 [ABAC]
   → verified PDF only shown inline (nosniff); other types downloaded
 ```
 
@@ -277,7 +277,7 @@ kyc.case.approved|rejected, compliance.case.*, accounts.application.rejected, ac
 | **ABAC** | Policy handlers, resource-authorization classes, query filters | Department / clearance (KYC policy); branch scope (CO `CustomerAccessScope`, KYC `InBranch`, DM `Document.BelongsTo`) |
 | **ReBAC** | Customer Onboarding: `CustomerResourceAuthorization`, against the customer's managing agent. KYC: inside the `KycCase` aggregate. | Managing agent; assigned officer |
 | **SoD** | Inside the `KycCase` aggregate | The initiator can't claim or decide; an unknown initiator is denied |
-| **Client pinning** | Policies on internal endpoints and DM | Only named M2M clients; trusted headers (`X-Actor-Branch`, `X-Initiated-By-User-Id`) accepted only from them |
+| **Client pinning** | Policies on internal endpoints; the acting client (`act`) in DM | Only named M2M clients on internal endpoints, trusted headers (`X-Initiated-By-User-Id`) accepted only from them; in DM only the CO and KYC BFFs may act for a person |
 | **Workflow state** | Aggregates | Transition table, terminal states, version checks |
 
 ## Known gaps on this path

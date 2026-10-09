@@ -48,16 +48,16 @@ The IDP authenticates humans and services and issues the tokens and claims that 
 | Client ID | Kind | Used by | Status |
 |---|---|---|---|
 | `BSS.Shell.BFF.ClientID` | Interactive (confidential) | Shell BFF | Present |
-| `CustomerOnboarding.Microservice.BFF.ClientID` | Interactive (confidential) | CO BFF | Present |
-| `CustomerKYC.Microservice.BFF.ClientID` | Interactive (confidential) | KYC BFF | Present |
+| `CustomerOnboarding.Microservice.BFF.ClientID` | Interactive (confidential) **+ token exchange** | CO BFF; exchanges the agent's token for Documents Management (`documents-management.write`) | Present |
+| `CustomerKYC.Microservice.BFF.ClientID` | Interactive (confidential) **+ token exchange** | KYC BFF; exchanges the officer's token for Documents Management (`documents-management.read`) | Present |
 | `Compliance.Microservice.BFF.ClientID` | Interactive (confidential) | Compliance BFF | Present |
 | `Accounts.Microservice.BFF.ClientID` | Interactive (confidential) | Accounts BFF | Present |
 | `Payments.Microservice.BFF.ClientID` | Interactive (confidential) | Payments BFF | Present |
 | `Audit.Microservice.Web.ClientID` | Interactive (confidential) **+ token exchange** | Audit web BFF (Next.js): signs the person in, then exchanges their token for one aimed at the Audit Journey API (`audit-journey.read`) | Present (front end in 6e-3) |
 | `Audit.JourneyApi.ClientID` | **Token exchange only** (no client credentials) | Audit Journey API (NestJS) → Audit API (`audit.read`) and Payments API (`payments.read`), always for a person | Present |
 | ~~`DocumentsManagement.Microservice.BFF.ClientID`~~ | — | — | Removed: DM has no MFE by design |
-| `CustomerOnboarding.BFF.To.DocumentsManagement.M2M.ClientID` | M2M | CO BFF → DM (`documents-management.write`) | Present |
-| `Kyc.BFF.To.DocumentsManagement.M2M.ClientID` | M2M | KYC BFF → DM (`documents-management.read`) | Present |
+| ~~`CustomerOnboarding.BFF.To.DocumentsManagement.M2M.ClientID`~~ | — | — | Removed: the CO BFF exchanges the agent's token instead |
+| ~~`Kyc.BFF.To.DocumentsManagement.M2M.ClientID`~~ | — | — | Removed: the KYC BFF exchanges the officer's token instead |
 | `CustomerKyc.CaseOpeningSubscriber.To.CustomerKycApi.M2M.ClientID` | M2M | KYC Case Opening Subscriber → KYC API (`customer-kyc.write`) | Present |
 | `CustomerOnboarding.OutcomeSubscriber.To.CustomerOnboardingApi.M2M.ClientID` | M2M | Onboarding Outcome Subscriber → CO API internal endpoint (`customer-onboarding.write`) | Present |
 | `Compliance.CaseOpeningSubscriber.To.ComplianceApi.M2M.ClientID` | M2M | Compliance Case Opening Subscriber → Compliance API (`compliance.write`) | Present |

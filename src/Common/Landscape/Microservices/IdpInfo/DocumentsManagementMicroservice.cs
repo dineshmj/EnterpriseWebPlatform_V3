@@ -6,28 +6,13 @@ public static class DocumentsManagementMicroservice
 
 	public const string CLIENT_ID_FOR_IDP = "DocumentsManagement.Microservice.BFF.ClientID";
 
-
-
-    // Customer Onboarding BFF to Documents Management API M2M
-    public const string CLIENT_NAME_FOR_IDP_FOR_CUST_ONBOARDING_BFF_TO_DOC_MGMT_M2M = "Customer Onboarding BFF to Documents Management M2M Client";
-
-    public const string CLIENT_ID_FOR_IDP_FOR_CUST_ONBOARDING_BFF_TO_DOC_MGMT_M2M = "CustomerOnboarding.BFF.To.DocumentsManagement.M2M.ClientID";
-
-
-    // KYC BFF to Documents Management API M2M
-    public const string CLIENT_NAME_FOR_IDP_FOR_KYC_BFF_TO_DOC_MGMT_M2M = "KYC BFF to Documents Management M2M Client";
-
-    public const string CLIENT_ID_FOR_IDP_FOR_KYC_BFF_TO_DOC_MGMT_M2M = "Kyc.BFF.To.DocumentsManagement.M2M.ClientID";
-
-
-
 	// Document Invalidation Subscriber to Documents Management API M2M (consumes
 	// onboarding.application.rejected and invalidates the application's evidence).
 	public const string CLIENT_NAME_FOR_IDP_FOR_DOCUMENT_INVALIDATION_SUBSCRIBER_TO_DOC_MGMT_API_M2M = "Document Invalidation Subscriber to Documents Management API M2M Client";
 
 	public const string CLIENT_ID_FOR_IDP_FOR_DOCUMENT_INVALIDATION_SUBSCRIBER_TO_DOC_MGMT_API_M2M = "DocumentsManagement.InvalidationSubscriber.To.DocumentsManagementApi.M2M.ClientID";
 
-	// No BFF / MFE: Documents Management is an API-only supporting service, used by the
-	// Customer Onboarding and KYC BFFs over M2M.
+	// No BFF / MFE: Documents Management is an API-only supporting service. The Customer
+	// Onboarding and KYC BFFs call it for the signed-in person (token exchange, RFC 8693).
 	public const string MICROSERVICE_API_BASE_URL = "https://documents-management-api.dev.localhost:49486";
 }

@@ -529,7 +529,10 @@ Humans and services authenticate differently. Workers and BFFs use OAuth 2.0 Cli
 - Grant and allow-list: [TokenExchangeGrantValidator.cs](../src/IDP/Security/TokenExchangeGrantValidator.cs); `act` in the access token: [CustomProfileService.cs](../src/IDP/Services/CustomProfileService.cs)
 - Checking person and caller: [DelegatedAuditorAuthorization.cs](../src/Microservices/Audit/API/Authorization/DelegatedAuditorAuthorization.cs); the Journey API side: [Audit Journey API README](../src/Microservices/Audit/JourneyApi/README.md)
 
-**Not yet:** Documents Management still receives the acting user's branch as an asserted header from a pinned BFF client, not by token exchange.
+**Documents Management** works the same way. The Customer Onboarding BFF (upload, and clean-up of an unfinished submission) and the KYC BFF (reading evidence) each exchange the signed-in person's token for a short-lived Documents Management token: write for Customer Onboarding, read only for KYC. Documents Management takes the branch from that token, as issued by the IDP, and accepts a person only when one of those two BFFs is the acting client; only Customer Onboarding may delete. No service asserts a person's branch on their behalf any more, and a person's own token, or a machine token, gets no documents.
+
+- Branch from the token, acting client checked: [DocumentResourceAuthorization.cs](../src/Microservices/DocumentsManagement/API/Authorization/DocumentResourceAuthorization.cs)
+- The exchanges: [DocumentsManagementTokenService.cs](../src/Microservices/CustomerOnboarding/BFF.Web/Services/DocumentsManagementTokenService.cs) (CO BFF), [documents-management-token.service.ts](../src/Microservices/CustomerKyc/BFF.Web/src/services/documents-management-token.service.ts) (KYC BFF)
 
 #### 2.1.3 Identity provider hardening
 

@@ -1,4 +1,5 @@
-﻿using Duende.IdentityServer;
+﻿using Duende.IdentityModel;
+using Duende.IdentityServer;
 using Duende.IdentityServer.Models;
 
 using EnterpriseWebPlatform.Common.Landscape.Microservices;
@@ -23,11 +24,14 @@ public sealed class MfeCustomerKyc
                     ClientName = CustomerKycMicroservice.CLIENT_NAME_FOR_IDP,
                     ClientSecrets = { ClientSecretStore.For(CustomerKycMicroservice.CLIENT_ID_FOR_IDP) },
 
-                    AllowedGrantTypes = GrantTypes.Code,
+                    AllowedGrantTypes = { GrantType.AuthorizationCode, OidcConstants.GrantTypes.TokenExchange },
                     // 🡡__ WHY   : The CustomerKyc microservice (if acting as a confidential client or BFF) should use Authorization Code to keep tokens
                     //              private on the server and to benefit from the standard OIDC/OAuth flow, including PKCE if applicable.
                     // 🡡__ IF NOT: Using non-confidential or browser flows could expose tokens to the client-side, allowing token theft via XSS
                     //              and making secure API access more difficult to enforce.
+                    //              Token exchange (RFC 8693): to read KYC evidence the BFF swaps the officer's token for one
+                    //              aimed at Documents Management (read only), in which the officer stays the subject (their own
+                    //              branch) and this BFF is the acting client ("act").
                     RequirePkce = true,
 
                     RedirectUris = { $"{CustomerKycMicroservice.BFF_CLIENT_BASE_URL}/api/auth/callback" },
@@ -53,7 +57,9 @@ public sealed class MfeCustomerKyc
                         "organization",
                         MicroserviceApiResourceNames.CUSTOMER_KYC_API,
                         CustomerKycApiScopesRequired.CUSTOMER_KYC_READ,
-                        CustomerKycApiScopesRequired.CUSTOMER_KYC_WRITE
+                        CustomerKycApiScopesRequired.CUSTOMER_KYC_WRITE,
+                        // Requested only in the token exchange, never at sign-in.
+                        DocumentsManagementApiScopesRequired.DOCUMENTS_MANAGEMENT_READ
                             // 🡡__ WHY   : Including the CUSTOMER_KYC_API scope permits the CustomerKyc Microservice BFF client to request access tokens that include scope permissions for the
                             //              CustomerKyc Microservice API. The CustomerKyc Microservice API will validate the access token and require the corresponding scope to authorize API calls.
                             // 🡡__ IF NOT: If this scope is not included, tokens issued to the client will not be valid for calling the CustomerKyc Microservice API, so CustomerKyc Microservice API calls

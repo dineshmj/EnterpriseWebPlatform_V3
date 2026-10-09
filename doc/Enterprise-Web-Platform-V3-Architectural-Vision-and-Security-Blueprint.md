@@ -135,7 +135,7 @@ Customer Onboarding ──(published events)──► Customer KYC ──► Com
         ▲                                         │               │             │
         └──────────── decisions as events ────────┴───────────────┴─────────────┘
 
-CO BFF, KYC BFF ──(Open Host Service, M2M)──► Documents Management
+CO BFF, KYC BFF ──(Open Host Service, token exchange for the person)──► Documents Management
 Payments orchestrator ──(commands / replies)──► Accounts
 Every component ──(conformist)──► IDP claims and scopes
 ```
@@ -503,7 +503,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [ ] Key rotation
 - [x] CSP and security headers
 - [x] Rate limiting
-- [x] Delegated user context (token exchange, RFC 8693: Audit; Documents Management still on a pinned header)
+- [x] Delegated user context (token exchange, RFC 8693: Audit, and the CO and KYC BFFs → Documents Management)
 - [x] MFA (TOTP, Google Authenticator) and step-up for officer decisions - off by default
 - [ ] Sender-constrained tokens where justified
 

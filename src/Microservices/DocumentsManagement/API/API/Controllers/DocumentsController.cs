@@ -32,7 +32,7 @@ public sealed class DocumentsController(
         CancellationToken cancellationToken = default)
     {
         // Listing is always confined to the actor's own branch.
-        var actorBranch = resourceAuthorization.GetActorBranch(User, Request);
+        var actorBranch = resourceAuthorization.GetActorBranch(User);
         if (actorBranch is null)
             return Forbid();
 
@@ -54,7 +54,7 @@ public sealed class DocumentsController(
         var document = await repository.GetAsync(id, cancellationToken);
 
         // 404 rather than 403, so a caller cannot probe which documents exist.
-        if (document is null || !resourceAuthorization.CanAccess(document, User, Request))
+        if (document is null || !resourceAuthorization.CanAccess(document, User))
             return NotFound();
 
         return Ok(await getDocumentHandler.HandleAsync(id, cancellationToken));
@@ -67,7 +67,7 @@ public sealed class DocumentsController(
         CancellationToken cancellationToken)
     {
         var document = await repository.GetAsync(id, cancellationToken);
-        if (document is null || !resourceAuthorization.CanAccess(document, User, Request))
+        if (document is null || !resourceAuthorization.CanAccess(document, User))
             return NotFound();
 
         var stream = await storage.OpenReadAsync(
@@ -98,7 +98,7 @@ public sealed class DocumentsController(
         [FromHeader(Name = "X-Business-Reference")] string? businessReference,
         CancellationToken cancellationToken)
     {
-        var actorBranch = resourceAuthorization.GetActorBranch(User, Request);
+        var actorBranch = resourceAuthorization.GetActorBranch(User);
         if (actorBranch is null)
             return Forbid();
 
@@ -133,10 +133,10 @@ public sealed class DocumentsController(
         CancellationToken cancellationToken)
     {
         var document = await repository.GetAsync(id, cancellationToken);
-        if (document is null || !resourceAuthorization.CanAccess(document, User, Request))
+        if (document is null || !resourceAuthorization.CanAccess(document, User))
             return NotFound();
 
-        if (!resourceAuthorization.CanDelete(document, User, Request))
+        if (!resourceAuthorization.CanDelete(document, User))
             return Forbid();
 
         // Retention over deletion: evidence of a submitted application, and any

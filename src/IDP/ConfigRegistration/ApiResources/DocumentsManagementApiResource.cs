@@ -22,7 +22,9 @@ public sealed class DocumentsManagementApiResource : IDuendeApiResource
                 {
                     "role",
                     "name",
-                    "email"
+                    "email",
+                    // The acting person's branch (token exchange): documents are branch-scoped.
+                    "branch"
                 }
         };
 }

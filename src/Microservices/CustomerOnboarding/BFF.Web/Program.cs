@@ -113,7 +113,8 @@ builder.Services
         options.Scope.Add("customer-onboarding.read");
         options.Scope.Add("customer-onboarding.write");
         options.ClaimActions.MapJsonKey("role", "role", "role");
-        // The acting user's branch, sent to Documents Management (X-Actor-Branch).
+        // The user's branch: a submission stops early when the user has none (Documents
+        // Management reads the branch from its own token, obtained by token exchange).
         options.ClaimActions.MapJsonKey("branch", "branch");
         options.TokenValidationParameters.NameClaimType = "name";
         options.TokenValidationParameters.RoleClaimType = "role";
@@ -143,7 +144,7 @@ builder.Services
         };
     });
 
-builder.Services.AddSingleton<IM2MAccessTokenService, M2MAccessTokenService>();
+builder.Services.AddSingleton<IDocumentsManagementTokenService, DocumentsManagementTokenService>();
 
 // Calls to the APIs, like the other .NET BFFs: a timeout per attempt and in total, a circuit
 // breaker (a struggling API gets room to recover), and retries for GET only - creating a

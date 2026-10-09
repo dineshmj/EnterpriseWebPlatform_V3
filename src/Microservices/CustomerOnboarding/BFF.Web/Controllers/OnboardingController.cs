@@ -17,7 +17,7 @@ namespace EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.Con
 [Route("bff/api/onboarding")]
 public sealed class OnboardingController(
     IHttpClientFactory httpClientFactory,
-    IM2MAccessTokenService m2mAccessTokenService,
+    IDocumentsManagementTokenService documentsTokenService,
     ILogger<OnboardingController> logger) : ControllerBase
 {
     [HttpGet("applications")]
@@ -124,14 +124,16 @@ public sealed class OnboardingController(
 
         try
         {
-            string m2mToken;
+            // A Documents Management token for THIS agent (token exchange): Documents Management
+            // takes the agent's branch from it, and sees this BFF as the acting client.
+            string documentsToken;
             try
             {
-                m2mToken = await m2mAccessTokenService.GetAccessTokenAsync(cancellationToken);
+                documentsToken = await documentsTokenService.GetTokenAsync(HttpContext, cancellationToken);
             }
             catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or ExecutionRejectedException)
             {
-                logger.LogError(ex, "Unable to obtain the Documents Management M2M access token.");
+                logger.LogError(ex, "Unable to obtain a Documents Management token for the agent.");
                 return StatusCode(StatusCodes.Status502BadGateway, new
                 {
                     message = "Documents Management authorization could not be established. The onboarding application remains available for retry."
@@ -142,7 +144,7 @@ public sealed class OnboardingController(
                 request.KycProof,
                 "KYCProof",
                 customerNumber,
-                m2mToken,
+                documentsToken,
                 cancellationToken);
 
             if (!kycDocument.Success)
@@ -156,12 +158,12 @@ public sealed class OnboardingController(
                 request.TaxProof,
                 "TaxProof",
                 customerNumber,
-                m2mToken,
+                documentsToken,
                 cancellationToken);
 
             if (!taxDocument.Success)
             {
-                await TryCompensateDocumentsAsync(uploadedDocumentIds, m2mToken, cancellationToken);
+                await TryCompensateDocumentsAsync(uploadedDocumentIds, documentsToken, cancellationToken);
                 return taxDocument.Result!;
             }
 
@@ -173,7 +175,7 @@ public sealed class OnboardingController(
 
             if (!applicationDetails.Success)
             {
-                await TryCompensateDocumentsAsync(uploadedDocumentIds, m2mToken, cancellationToken);
+                await TryCompensateDocumentsAsync(uploadedDocumentIds, documentsToken, cancellationToken);
                 return applicationDetails.Result!;
             }
 
@@ -193,7 +195,7 @@ public sealed class OnboardingController(
 
             if (!submit.Success)
             {
-                await TryCompensateDocumentsAsync(uploadedDocumentIds, m2mToken, cancellationToken);
+                await TryCompensateDocumentsAsync(uploadedDocumentIds, documentsToken, cancellationToken);
                 return submit.Result!;
             }
 
@@ -315,7 +317,7 @@ public sealed class OnboardingController(
         IFormFile file,
         string documentType,
         string businessReference,
-        string m2mToken,
+        string documentsToken,
         CancellationToken cancellationToken)
     {
         var client = httpClientFactory.CreateClient("DocumentsManagementApi");
@@ -329,10 +331,9 @@ public sealed class OnboardingController(
         {
             Content = content
         };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", m2mToken);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", documentsToken);
         request.Headers.Add("X-Document-Type", documentType);
         request.Headers.Add("X-Business-Reference", businessReference);
-        request.Headers.Add("X-Actor-Branch", ActorBranch);
         // IMPORTANT: this POST is deliberately not retried automatically. The current
         // DM API has no idempotency-key contract, so a retry could create a duplicate file.
         using var response = await client.SendAsync(request, cancellationToken);
@@ -393,7 +394,7 @@ public sealed class OnboardingController(
 
     private async Task TryCompensateDocumentsAsync(
         IEnumerable<Guid> documentIds,
-        string m2mToken,
+        string documentsToken,
         CancellationToken cancellationToken)
     {
         var client = httpClientFactory.CreateClient("DocumentsManagementApi");
@@ -405,8 +406,7 @@ public sealed class OnboardingController(
                 using var request = new HttpRequestMessage(
                     HttpMethod.Delete,
                     $"/v1/documents/{documentId}");
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", m2mToken);
-                request.Headers.Add("X-Actor-Branch", ActorBranch);
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", documentsToken);
 
                 using var response = await client.SendAsync(request, cancellationToken);
                 if (!response.IsSuccessStatusCode)
@@ -442,8 +442,8 @@ public sealed class OnboardingController(
     }
 
     /// <summary>
-    /// The signed-in user's branch. Documents Management trusts it only from this
-    /// BFF's pinned M2M client and uses it for branch-scoped document access.
+    /// The signed-in user's branch - checked here only to stop early with a clear message;
+    /// Documents Management reads the branch from its own (exchanged) token.
     /// </summary>
     private string? ActorBranch =>
         User.FindFirst("branch")?.Value is { Length: > 0 } branch

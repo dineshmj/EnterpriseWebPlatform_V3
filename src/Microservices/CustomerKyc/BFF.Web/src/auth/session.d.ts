@@ -11,7 +11,7 @@ export interface KycUserSession {
   subject: string;
   name?: string;
   roles: string[];
-  /** The user's branch code (ABAC). Sent to Documents Management as the acting branch. */
+  /** The user's branch code (ABAC). Checked to stop early; Documents Management reads it from its own token. */
   branch?: string;
 }
 
@@ -24,5 +24,7 @@ declare module 'express-session' {
     idToken?: string;
     accessTokenExpiresAt?: number;
     csrfToken?: string;
+    /** Documents Management token for this officer (token exchange), kept until shortly before it expires. */
+    documentsToken?: { accessToken: string; expiresAt: number };
   }
 }

@@ -8,7 +8,4 @@ public sealed class CustomerOnboardingBffOptions
     public string CustomerOnboardingApiBaseUrl { get; init; } = "https://customer-api.dev.localhost:46363";
     public string DocumentsManagementApiBaseUrl { get; init; } = "https://documents-management-api.dev.localhost:49486";
     public string IdentityServerAuthority { get; init; } = "https://idp.dev.localhost:46392";
-    public string M2MClientId { get; init; } = string.Empty;
-    public string M2MClientSecret { get; init; } = string.Empty;
-    public int M2MTokenRefreshSkewSeconds { get; init; } = 60;
 }
