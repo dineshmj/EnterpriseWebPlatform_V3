@@ -51,6 +51,7 @@ public sealed class CreateOnboardingApplicationCommandHandler
                 $"Customer '{command.CustomerId}' was not found.");
         }
 
+        // Idempotency: if the customer is already onboarding, and the branch code matches, return the existing draft instead of creating a new one.
         if (customer.Status == CustomerStatus.Onboarding &&
             await _applicationRepository.GetDraftForCustomerAsync(customer.Id, cancellationToken) is { } draft &&
             draft.BranchCode.Value == BranchCode.Create(command.BranchCode).Value)

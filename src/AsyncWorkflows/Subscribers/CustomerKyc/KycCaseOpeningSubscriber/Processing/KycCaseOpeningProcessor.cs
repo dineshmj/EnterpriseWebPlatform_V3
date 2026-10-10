@@ -72,6 +72,7 @@ public sealed class KycCaseOpeningProcessor(
         HttpResponseMessage response;
         try
         {
+            // The KYC Processing subscriber attempts to call the Customer KYC API with a cached M2M token. If the call fails with 401, it invalidates the token and retries once.
             response = await SendAsync(message, cancellationToken);
 
             if (response.StatusCode == HttpStatusCode.Unauthorized)
