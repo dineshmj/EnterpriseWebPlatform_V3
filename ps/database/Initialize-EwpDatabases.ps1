@@ -70,7 +70,9 @@ try {
     $existing = & $PsqlPath -h $HostName -p $Port -U postgres -d postgres -At -c 'SELECT datname FROM pg_database;'
     if ($LASTEXITCODE -ne 0) { throw "Cannot connect to PostgreSQL on ${HostName}:$Port as postgres." }
     foreach ($name in $databases.Keys | Where-Object { $_ -notin $existing }) {
-        & $PsqlPath -h $HostName -p $Port -U postgres -d postgres -q -c "CREATE DATABASE `"$name`";"
+        # Through standard input, not -c: Windows PowerShell 5.1 strips the double quotes inside a
+        # native program's arguments, and the unquoted name would be created in lowercase.
+        "CREATE DATABASE `"$name`";" | & $PsqlPath -h $HostName -p $Port -U postgres -d postgres -q -f -
         if ($LASTEXITCODE -ne 0) { throw "CREATE DATABASE $name failed." }
         Write-Host "Created database $name." -ForegroundColor Green
     }

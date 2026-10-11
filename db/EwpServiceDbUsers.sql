@@ -122,8 +122,14 @@ GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_customer_on
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ewp_customer_onboarding_api;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ewp_customer_onboarding_api;
 -- The outbox relay may only read and mark Outbox rows (granted per table, so it
--- is (re)applied at the end of EwpCustomerDb.sql as well).
-GRANT SELECT, UPDATE ON outbox_messages TO ewp_customer_outbox_relay;
+-- is (re)applied at the end of EwpCustomerDb.sql as well). On a new, empty
+-- database the table does not exist yet: EwpCustomerDb.sql grants it then.
+DO $$
+BEGIN
+    IF to_regclass('public.outbox_messages') IS NOT NULL THEN
+        GRANT SELECT, UPDATE ON outbox_messages TO ewp_customer_outbox_relay;
+    END IF;
+END $$;
 
 \connect EwpKycDb
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;

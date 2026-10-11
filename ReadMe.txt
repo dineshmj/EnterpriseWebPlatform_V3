@@ -427,14 +427,22 @@ What the platform is, how it is designed and what each component must do are doc
 	   a new application 1), and the audit trail - which starts at the earliest offset - would record history about customers
 	   that no longer exist.
 
-	   EVERYTHING FROM SCRATCH, one command (PostgreSQL running; it stops the platform and Kafka itself):
+	   ONE COMMAND, three levels (PostgreSQL running; it stops the platform itself):
 
-			.\ps\Reset.ps1
+			.\ps\Reset.ps1                    (shows a menu)
+			.\ps\Reset.ps1 -Level 3 -Force    (no questions)
 
-	   It wipes and re-formats Kafka (every topic, message, consumer group, user and ACL) and recreates the Kafka users,
-	   topics, consumer groups and ACLs; drops and recreates the 11 databases and every ewp_* user; empties the documents
-	   store and the Playwright sign-ins. Then start Visual Studio and .\ps\run\Start-NodeServices.ps1, and sign in again.
-	   It asks one YES (or pass -Force); no connection string is ever asked.
+	   1  Data only              drops and recreates the 11 databases and every ewp_* user, empties the documents store
+	                             and the Playwright sign-ins. Kafka is not touched: its old messages stay, but every
+	                             consumer group has already read them, so nothing is replayed.
+	   2  Data + Kafka security  level 1, plus the Kafka users, topics, consumer groups and ACLs recreated / refreshed
+	                             (Setup-KafkaSecurity Prepare + Acls; Kafka is started first if it is not running).
+	                             Use it after adding a topic, a subscriber or a Kafka user.
+	   3  Everything             level 2, with Kafka stopped, wiped and re-formatted first (every topic, message,
+	                             consumer group, user and ACL gone, then recreated). The full fresh start.
+
+	   Then start Visual Studio and .\ps\run\Start-NodeServices.ps1, and sign in again. It asks one YES (or pass -Force);
+	   no connection string is ever asked.
 
 	   A LIGHTER CLEAN SLATE, keeping Kafka's topics and groups, in this order (stop Visual Studio and
 	   .\ps\run\Start-NodeServices.ps1 -Stop first; Kafka and PostgreSQL running):
