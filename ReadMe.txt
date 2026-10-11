@@ -425,8 +425,19 @@ What the platform is, how it is designed and what each component must do are doc
 	b) Recreating databases means emptying Kafka. Database IDs restart at 1 when a database is recreated, but Kafka keeps
 	   the old messages: consumer groups could replay them against the new data (e.g. an old "application 1" event applied to
 	   a new application 1), and the audit trail - which starts at the earliest offset - would record history about customers
-	   that no longer exist. A CLEAN SLATE, in this order (stop Visual Studio and .\ps\run\Start-NodeServices.ps1 -Stop first;
-	   Kafka and PostgreSQL running):
+	   that no longer exist.
+
+	   EVERYTHING FROM SCRATCH, one command (PostgreSQL running; it stops the platform and Kafka itself):
+
+			.\ps\Reset.ps1
+
+	   It wipes and re-formats Kafka (every topic, message, consumer group, user and ACL) and recreates the Kafka users,
+	   topics, consumer groups and ACLs; drops and recreates the 11 databases and every ewp_* user; empties the documents
+	   store and the Playwright sign-ins. Then start Visual Studio and .\ps\run\Start-NodeServices.ps1, and sign in again.
+	   It asks one YES (or pass -Force); no connection string is ever asked.
+
+	   A LIGHTER CLEAN SLATE, keeping Kafka's topics and groups, in this order (stop Visual Studio and
+	   .\ps\run\Start-NodeServices.ps1 -Stop first; Kafka and PostgreSQL running):
 
 			.\ps\kafka\Reset-KafkaRecords.ps1               (empties every topic; topics, ACLs and consumer groups stay)
 			.\ps\database\Initialize-EwpDatabases.ps1        (recreates every database)
