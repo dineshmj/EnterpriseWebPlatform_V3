@@ -427,22 +427,27 @@ What the platform is, how it is designed and what each component must do are doc
 	   a new application 1), and the audit trail - which starts at the earliest offset - would record history about customers
 	   that no longer exist.
 
-	   ONE COMMAND, three levels (PostgreSQL running; it stops the platform itself):
+	   ONE COMMAND, six levels (PostgreSQL running; the levels that erase data stop the platform themselves):
 
 			.\ps\Reset.ps1                    (shows a menu)
-			.\ps\Reset.ps1 -Level 3 -Force    (no questions)
+			.\ps\Reset.ps1 -Level 6 -Force    (no questions)
 
 	   1  Data only              drops and recreates the 11 databases and every ewp_* user, empties the documents store
 	                             and the Playwright sign-ins. Kafka is not touched: its old messages stay, but every
 	                             consumer group has already read them, so nothing is replayed.
-	   2  Data + Kafka security  level 1, plus the Kafka users, topics, consumer groups and ACLs recreated / refreshed
-	                             (Setup-KafkaSecurity Prepare + Acls; Kafka is started first if it is not running).
-	                             Use it after adding a topic, a subscriber or a Kafka user.
-	   3  Everything             level 2, with Kafka stopped, wiped and re-formatted first (every topic, message,
+	   2  PostgreSQL users only  the ewp_* users and their grants created / refreshed (Apply-EwpServiceDbUsers). Use it
+	                             after adding a service user. Nothing erased.
+	   3  Kafka security only    the Kafka users, topics, consumer groups and ACLs created / refreshed (Setup-KafkaSecurity
+	                             Prepare + Acls; Kafka is started first if it is not running). Use it after adding a
+	                             topic, a subscriber or a Kafka user. Nothing erased.
+	   4  PostgreSQL + Kafka     levels 2 and 3 together. Nothing erased.
+	   5  Data + Kafka security  levels 1 and 3 together.
+	   6  Everything             level 5, with Kafka stopped, wiped and re-formatted first (every topic, message,
 	                             consumer group, user and ACL gone, then recreated). The full fresh start.
 
-	   Then start Visual Studio and .\ps\run\Start-NodeServices.ps1, and sign in again. It asks one YES (or pass -Force);
-	   no connection string is ever asked.
+	   After 1, 5 or 6: start Visual Studio and .\ps\run\Start-NodeServices.ps1, and sign in again. Those three ask one
+	   YES (or pass -Force); levels 2-4 erase nothing, leave the platform running and ask nothing. No connection string
+	   is ever asked.
 
 	   A LIGHTER CLEAN SLATE, keeping Kafka's topics and groups, in this order (stop Visual Studio and
 	   .\ps\run\Start-NodeServices.ps1 -Stop first; Kafka and PostgreSQL running):

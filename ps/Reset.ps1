@@ -1,38 +1,49 @@
 <#
 .SYNOPSIS
-    Resets the local EWP V3 platform to a clean start, at one of three levels. No connection strings
-    to type: PostgreSQL is reached as the postgres superuser, Kafka as its admin user.
+    Resets or refreshes the local EWP V3 platform, at one of six levels. No connection strings to
+    type: PostgreSQL is reached as the postgres superuser, Kafka as its admin user.
 .DESCRIPTION
     Run it with PostgreSQL running. Without -Level it shows a menu:
 
       1  Data only               the 11 databases and every ewp_* user dropped and recreated (tables,
                                  grants, seed data), the stored documents emptied. Kafka is left as
                                  it is: its messages stay, but every consumer has already read them.
-      2  Data + Kafka security   level 1, plus the Kafka users, topics, consumer groups and ACLs
-                                 recreated or refreshed (Setup-KafkaSecurity Prepare + Acls) on the
-                                 running broker - e.g. after adding a topic or a subscriber.
-      3  Everything              level 2, with Kafka itself wiped and re-formatted first: every topic,
+      2  PostgreSQL users only   the ewp_* users and their grants created or refreshed
+                                 (Apply-EwpServiceDbUsers) - e.g. after adding a service user. No data
+                                 erased.
+      3  Kafka security only     the Kafka users, topics, consumer groups and ACLs created or refreshed
+                                 (Setup-KafkaSecurity Prepare + Acls; Kafka started if needed) - e.g.
+                                 after adding a topic or a subscriber. No data erased.
+      4  PostgreSQL + Kafka      levels 2 and 3 together. No data erased.
+      5  Data + Kafka security   levels 1 and 3 together.
+
+    1 and 2 touch PostgreSQL only and are quick; 3 to 6 involve Kafka and take longer.
+      6  Everything              level 5, with Kafka itself wiped and re-formatted first: every topic,
                                  message, consumer group, user and ACL gone, then recreated - nothing
                                  stale, nothing unknown. The full "new laptop" start.
 
-    Every level first stops the platform (the Node.js services, and every process listening on a
+    Levels 1, 5 and 6 first stop the platform (the Node.js services, and every process listening on a
     platform port - Visual Studio's debugging session simply ends): databases cannot be dropped while
-    services hold connections. Every level also deletes the Playwright saved sign-ins and results.
+    services hold connections. They also delete the Playwright saved sign-ins and results. Levels 2-4
+    leave the platform running.
 
-    Afterwards: start the solution in Visual Studio (this also restarts the simulators, whose state is
-    in memory), then .\ps\run\Start-NodeServices.ps1, and sign in again (old sessions are gone; with
+    After 1, 5 or 6: start the solution in Visual Studio (this also restarts the simulators, whose state
+    is in memory), then .\ps\run\Start-NodeServices.ps1, and sign in again (old sessions are gone; with
     Mfa:Enabled on, everybody enrols again). The demo customers come from the Playwright seed scenarios.
 
-    DEVELOPMENT ONLY. It ERASES platform data on this machine. It asks for YES (or pass -Force).
+    DEVELOPMENT ONLY. Levels 1, 5 and 6 ERASE platform data on this machine: they ask for YES (or pass
+    -Force).
 .EXAMPLE
     .\ps\Reset.ps1                      # menu
 .EXAMPLE
     .\ps\Reset.ps1 -Level 1             # data only, asks YES
 .EXAMPLE
-    .\ps\Reset.ps1 -Level 3 -Force      # everything, no questions
+    .\ps\Reset.ps1 -Level 4             # refresh PostgreSQL users and Kafka security, no data erased
+.EXAMPLE
+    .\ps\Reset.ps1 -Level 6 -Force      # everything, no questions
 #>
 param(
-    [ValidateSet(1, 2, 3)]
+    [ValidateSet(1, 2, 3, 4, 5, 6)]
     [int] $Level,
     [switch] $Force,
     [string] $KafkaHome = 'C:\Kafka',
@@ -196,6 +207,12 @@ function Reset-Databases {
     & (Join-Path $PSScriptRoot 'database\Initialize-EwpDatabases.ps1') -Force -PsqlPath $PsqlPath -PostgresPassword $PostgresPassword -HostName $HostName -Port $Port
 }
 
+function Update-PostgresUsers {
+    Write-Step 'PostgreSQL users and grants (no data erased)'
+    & (Join-Path $PSScriptRoot 'database\Apply-EwpServiceDbUsers.ps1') -PsqlPath $PsqlPath -PostgresPassword $PostgresPassword -HostName $HostName -Port $Port
+    if ($LASTEXITCODE -ne 0) { throw 'Apply-EwpServiceDbUsers.ps1 failed (a database is missing? Level 1 recreates them).' }
+}
+
 function Clear-DocumentStorage {
     Write-Step "Emptying Documents Management's file store"
     if (Test-Path $storage) {
@@ -218,35 +235,59 @@ function Clear-PlaywrightState {
 # ===================================================================================================
 # Which level
 # ===================================================================================================
+# A plain hashtable: an [ordered] one reads an integer index as a POSITION ($names[1] = the second entry).
+$levelNames = @{
+    1 = 'Data only'
+    2 = 'PostgreSQL users only'
+    3 = 'Kafka security only'
+    4 = 'PostgreSQL users + Kafka security'
+    5 = 'Data + Kafka security'
+    6 = 'Everything (a fresh start)'
+}
+
 if (-not $Level) {
+    $hints = @{
+        1 = 'Databases and their users recreated, stored documents emptied. Kafka untouched.'
+        2 = 'PostgreSQL ewp_* users and their grants created / refreshed. No data erased.'
+        3 = 'Kafka users, topics, consumer groups and ACLs created / refreshed. No data erased.'
+        4 = 'Levels 2 and 3 together. No data erased.'
+        5 = 'Levels 1 and 3 together.'
+        6 = 'Level 5, with Kafka wiped and re-formatted first: no message, topic or group left over.'
+    }
     Write-Host 'EWP V3 - reset the local platform' -ForegroundColor Cyan
     Write-Host ''
-    Write-Host '  [1]  Data only'
-    Write-Host '       Databases and their users recreated, stored documents emptied. Kafka untouched.' -ForegroundColor DarkGray
-    Write-Host '  [2]  Data + Kafka security'
-    Write-Host '       Level 1, plus Kafka users, topics, consumer groups and ACLs recreated / refreshed.' -ForegroundColor DarkGray
-    Write-Host '  [3]  Everything (a fresh start)'
-    Write-Host '       Level 2, with Kafka wiped and re-formatted first: no message, topic or group left over.' -ForegroundColor DarkGray
+    foreach ($key in 1..6) {
+        Write-Host "  [$key]  $($levelNames[$key])"
+        Write-Host "       $($hints[$key])" -ForegroundColor DarkGray
+    }
     Write-Host ''
-    $choice = Read-Host 'Choose 1, 2 or 3 (anything else cancels)'
-    if ($choice -notin @('1', '2', '3')) { Write-Host 'Nothing changed.'; exit 1 }
+    $choice = Read-Host 'Choose 1 to 6 (anything else cancels)'
+    if ($choice -notin @('1', '2', '3', '4', '5', '6')) { Write-Host 'Nothing changed.'; exit 1 }
     $Level = [int] $choice
 }
 
-$levelName = @{ 1 = 'Data only'; 2 = 'Data + Kafka security'; 3 = 'Everything (a fresh start)' }[$Level]
+$levelName = $levelNames[$Level]
+
+# What the chosen level does.
+$erasesData = $Level -in 1, 5, 6       # stop the platform, recreate the databases, empty documents and Playwright state
+$kafkaSecurity = $Level -in 3, 4, 5, 6 # Kafka users, topics, groups and ACLs
+$wipesKafka = $Level -eq 6             # Kafka wiped and re-formatted first
+$postgresUsers = $Level -in 2, 4       # ewp_* users and grants refreshed in place (levels 1/5/6 recreate them anyway)
 
 # ===================================================================================================
 # Pre-flight: everything the chosen level needs is where it should be - before anything is stopped.
 # ===================================================================================================
-if (-not (Test-Path $PsqlPath)) {
-    $onPath = Get-Command psql.exe -ErrorAction SilentlyContinue
-    if (-not $onPath) { throw "psql.exe not found at '$PsqlPath' or on PATH. Pass -PsqlPath." }
-    $PsqlPath = $onPath.Source
+if ($erasesData -or $postgresUsers) {
+    if (-not (Test-Path $PsqlPath)) {
+        $onPath = Get-Command psql.exe -ErrorAction SilentlyContinue
+        if (-not $onPath) { throw "psql.exe not found at '$PsqlPath' or on PATH. Pass -PsqlPath." }
+        $PsqlPath = $onPath.Source
+    }
+    $env:PGPASSWORD = $PostgresPassword
+    Invoke-Psql 'postgres' 'SELECT 1;' | Out-Null
 }
-$env:PGPASSWORD = $PostgresPassword
-Invoke-Psql 'postgres' 'SELECT 1;' | Out-Null
 
-if ($Level -ge 2) {
+if ($kafkaSecurity) {
     foreach ($required in @($serverProps, $adminProps)) {
         if (-not (Test-Path $required)) {
             throw "$required not found. Kafka must have been secured once (ps\kafka\Setup-KafkaSecurity.ps1, ReadMe.txt section 5)."
@@ -255,40 +296,52 @@ if ($Level -ge 2) {
     $script:adminPassword = [regex]::Match((Get-Content $adminProps -Raw), 'password="([^"]+)"').Groups[1].Value
     if (-not $script:adminPassword) { throw "The admin password was not found in $adminProps." }
 }
-if ($Level -eq 3) {
+if ($wipesKafka) {
     $line = Get-Content $serverProps | Where-Object { $_ -match '^\s*log\.dirs\s*=' } | Select-Object -First 1
     if (-not $line) { throw "log.dirs is not set in $serverProps." }
     $script:logDirs = ($line -split '=', 2)[1].Trim().Replace('\\', '\')
 }
 
-if (-not $Force) {
+# Only the levels that erase data ask: refreshing users and permissions is safe to re-run.
+if ($erasesData -and -not $Force) {
     Write-Host "`nLevel $Level - $levelName. This ERASES:" -ForegroundColor Yellow
     Write-Host '  - the running platform is stopped (Visual Studio session, Node.js services, workers, simulators)'
-    if ($Level -eq 3) { Write-Host "  - Kafka: everything in $script:logDirs (topics, messages, consumer groups, users, ACLs)" }
+    if ($wipesKafka) { Write-Host "  - Kafka: everything in $script:logDirs (topics, messages, consumer groups, users, ACLs)" }
     Write-Host '  - PostgreSQL: the 11 EWP databases and every ewp_* user (recreated empty, with seed data)'
     Write-Host "  - the stored documents ($storage)"
     Write-Host '  - the Playwright saved sign-ins and test results'
-    if ($Level -ge 2) { Write-Host '  Kafka users, topics, consumer groups and ACLs are then recreated / refreshed.' }
-    if ($Level -eq 1) { Write-Host '  Kafka is not touched.' }
+    if ($kafkaSecurity) { Write-Host '  Kafka users, topics, consumer groups and ACLs are then recreated / refreshed.' }
+    else { Write-Host '  Kafka is not touched.' }
     if ((Read-Host 'Type YES to continue') -ne 'YES') { Write-Host 'Nothing changed.'; exit 1 }
 }
 
 # ===================================================================================================
 # Run the chosen level
 # ===================================================================================================
-$script:stepCount = @{ 1 = 5; 2 = 7; 3 = 10 }[$Level]
+$script:stepCount = 0
+if ($erasesData) { $script:stepCount += 5 }      # stop, drop, create, documents, Playwright
+if ($wipesKafka) { $script:stepCount += 3 }      # stop Kafka, wipe, format
+if ($kafkaSecurity) { $script:stepCount += 2 }   # Kafka running, security
+if ($postgresUsers) { $script:stepCount += 1 }
 try {
-    Stop-Platform
-    if ($Level -eq 3) { Reset-KafkaStorage }
-    if ($Level -ge 2) { Start-KafkaIfNeeded; Restore-KafkaSecurity }
-    Reset-Databases
-    Clear-DocumentStorage
-    Clear-PlaywrightState
+    if ($erasesData) { Stop-Platform }
+    if ($wipesKafka) { Reset-KafkaStorage }
+    if ($postgresUsers) { Update-PostgresUsers }
+    if ($kafkaSecurity) { Start-KafkaIfNeeded; Restore-KafkaSecurity }
+    if ($erasesData) {
+        Reset-Databases
+        Clear-DocumentStorage
+        Clear-PlaywrightState
+    }
 }
 finally {
     Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
 }
 
-Write-Host "`nThe platform is reset (level $Level - $levelName)." -ForegroundColor Green
-Write-Host 'Next: start the solution in Visual Studio, then .\ps\run\Start-NodeServices.ps1.'
-Write-Host 'Sign in again in the browser (old sessions are gone); run the Playwright seed scenarios for demo customers.'
+Write-Host "`nDone (level $Level - $levelName)." -ForegroundColor Green
+if ($erasesData) {
+    Write-Host 'Next: start the solution in Visual Studio, then .\ps\run\Start-NodeServices.ps1.'
+    Write-Host 'Sign in again in the browser (old sessions are gone); run the Playwright seed scenarios for demo customers.'
+} else {
+    Write-Host 'Nothing was erased; running services pick the changes up on their next connection.'
+}
