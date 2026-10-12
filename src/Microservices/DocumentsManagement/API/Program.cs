@@ -81,8 +81,16 @@ if (string.IsNullOrWhiteSpace(storageRoot))
         "DocumentStorage:RootPath was not configured.");
 }
 
+// Encryption at rest (envelope, AES-256-GCM): fail closed - without a valid key ring the API
+// does not start. The Development key is in appsettings.Development.json; elsewhere the keys come
+// from a secret store (e.g. DocumentStorage__Encryption__Keys__<id>), never from a file.
+var encryption = builder.Configuration.GetSection("DocumentStorage:Encryption");
+var documentKeys = new DocumentKeyRing(
+    encryption["CurrentKeyId"] ?? string.Empty,
+    encryption.GetSection("Keys").GetChildren().ToDictionary(k => k.Key, k => k.Value ?? string.Empty, StringComparer.Ordinal));
+
 builder.Services.AddSingleton<IDocumentStorage>(
-    new LocalFileSystemDocumentStorage(storageRoot));
+    new EncryptedDocumentStorage(new LocalFileSystemDocumentStorage(storageRoot), documentKeys));
 
 var authority =
     builder.Configuration["Authentication:Authority"]

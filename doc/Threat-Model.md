@@ -101,7 +101,7 @@ Abbreviations: **S** spoofing, **T** tampering, **R** repudiation, **I** informa
 |---|---|---|---|
 | E/I | A compromised service reads or changes other contexts' data | One database per context; one login role per deployable with data access to its own database only, no DDL | [EwpServiceDbUsers.sql](../db/EwpServiceDbUsers.sql); every API README (own database user) |
 | T/R | Rewriting the audit trail | Append-only (trigger + SELECT/INSERT-only user); hash chain verified continuously; readiness degrades on a break | [Audit API README](../src/Microservices/Audit/API/README.md) |
-| I | Reading KYC documents from storage | Documents served only after authorization, magic-byte checks, attachment disposition. **Not encrypted at rest** — see R-2 | DM API README |
+| I/T | Reading or replacing KYC documents in storage | Envelope encryption at rest (per-document AES-256-GCM key, wrapped by a rotatable key-encryption key; document ID bound in); served only after authorization, magic-byte checks, attachment disposition | [DM API README](../src/Microservices/DocumentsManagement/API/README.md) #6, #12 |
 
 ### TB5 — Services ↔ Kafka
 
@@ -147,7 +147,7 @@ Abbreviations: **S** spoofing, **T** tampering, **R** repudiation, **I** informa
 | ID | Risk | Rating | Status |
 |---|---|---|---|
 | R-1 | The payment network call ran inside a database transaction (row lock held up to 20 s) | Medium (availability) | **Fixed**: claim (short transaction, 60 s lease) → call with no transaction → record (short transaction, only if the saga's Version is unchanged) — `RunDueSagaStep.cs` |
-| R-2 | KYC documents are not encrypted at rest | High (PII) | Planned (M4) |
+| R-2 | KYC documents were not encrypted at rest | High (PII) | **Fixed**: envelope encryption in `EncryptedDocumentStorage.cs`. Remaining in production: key-encryption keys in a key vault / HSM instead of configuration |
 | R-3 | The audit hash chain has no anchor outside its database: a privileged administrator could recompute the whole chain | Medium | Planned |
 | R-4 | Approvals require MFA at sign-in, not a fresh challenge (no `max_age` / `acr`) | Medium | Planned |
 | R-5 | No operator tool to resend parked Outbox messages; no reconciliation with the payment network for unknown outcomes | Medium (operations) | Planned |
