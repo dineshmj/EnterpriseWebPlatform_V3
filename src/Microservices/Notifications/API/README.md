@@ -31,7 +31,7 @@ Shell BFF  ── proxies /bff/notifications and /hubs/notifications with the pe
 | `PaymentCompleted` / `PaymentRejected` / `PaymentFailed` | The initiator | "Payment completed — $4,750.00 to Jane Citizen (PAY-…) was sent (approved by emcar)." |
 | `PaymentCompensationFailed` | The initiator, the branch's payments officers, and **operations in every branch** (`staff:operations_administrator:*`) | "Payment needs attention — …"; operations: "Release to retry — … Open it and retry the release." |
 
-The rules live in [Domain/NotificationRules.cs](Domain/NotificationRules.cs). People are named by LAN ID, customers by name; every notification also stores a **target**, the page a click opens: new work opens the record (e.g. `{"mfe":"kyc","path":"/v1/kyc/cases/view-details?caseId=3","recordId":3}`), progress opens the initiator's application list (`/v1/onboarding/applications/view-all`). It holds no server name: the Shell opens the path only through a microservice in the person's own menu, and that BFF checks it against its allow-list.
+The rules live in [Domain/NotificationRules.cs](Domain/NotificationRules.cs). People are named by LAN ID, customers by name; every notification also stores a **target**, the page a click opens: new work opens the record (e.g. `{"mfe":"kyc","path":"/v1/kyc/cases/view-details?caseId=3","recordId":3}`), progress opens the initiator's applications list with that application selected (`/v1/onboarding/applications/view-all?applicationNumber=APP-20261012-000001`; the plain list when the event carries no well-formed number). It holds no server name: the Shell opens the path only through a microservice in the person's own menu, and that BFF checks it against its allow-list.
 
 ## Endpoints
 

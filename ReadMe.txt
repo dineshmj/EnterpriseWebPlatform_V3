@@ -427,7 +427,9 @@ What the platform is, how it is designed and what each component must do are doc
 	   a new application 1), and the audit trail - which starts at the earliest offset - would record history about customers
 	   that no longer exist.
 
-	   ONE COMMAND, six levels (PostgreSQL running; the levels that erase data stop the platform themselves):
+	   ONE COMMAND, six levels (PostgreSQL running; close every console window first - the Kafka window, the three
+	   Node.js windows (.\ps\run\Start-NodeServices.ps1 -Stop) and the .NET ones (stop debugging in Visual Studio) -
+	   otherwise the script lists what is still open and exits; options 3 to 6 start Kafka again themselves):
 
 			.\ps\Reset.ps1                    (shows a menu)
 			.\ps\Reset.ps1 -Level 6 -Force    (no questions)

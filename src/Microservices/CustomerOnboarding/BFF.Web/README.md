@@ -20,7 +20,8 @@ The browser never receives either downstream access token.
 The MFE implements the exact Customer Onboarding paths already seeded in `src/Shell/MenuDB/EwpBssShellDb.sql`:
 
 - `/v1/customers/view-all`
-- `/v1/onboarding/applications/view-all`
+- `/v1/onboarding/applications/new` - the onboarding form (customer service agents)
+- `/v1/onboarding/applications/view-all` - the branch's applications and their status; a progress notification opens it at its application (`?applicationNumber=APP-yyyyMMdd-nnnnnn`)
 - `/v1/onboarding/workflow/view-all`
 
 **No Shell Menu DB SQL change is required for this package.** The onboarding form is intentionally part of the existing Onboarding Applications screen, so no fourth menu item is necessary.
@@ -110,7 +111,7 @@ What this project does to stay secure: each control, what would go wrong without
 | 6 | Strict Content-Security-Policy: scripts and styles only from this BFF plus the exported inline blocks by SHA-256 hash; no `'unsafe-inline'`; `object-src 'none'`; `form-action 'self'` | An injected script or style would run (steal data, fake the screen) | Cross-site scripting and CSS injection (OWASP A03) | [ContentSecurityPolicy.cs](../../../Common/WebUtilities/Security/ContentSecurityPolicy.cs), `ContentSecurityPolicy.Build` in [Program.cs](Program.cs) |
 | 7 | Framing allowed only for the Shell and the IDP (`frame-ancestors`) | Any site could frame the screens and trick a click | Clickjacking | `frameAncestors` in [Program.cs](Program.cs) |
 | 8 | `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin` | The browser could guess a response as script; full URLs would leak to other sites | MIME sniffing; information leakage via the Referer header | Security-header middleware in [Program.cs](Program.cs) |
-| 9 | Sign-in returns only to allow-listed routes | A crafted link could bounce a signed-in user to a phishing site | Open redirect (CWE-601) | [BffRouteCatalog.cs](Configuration/BffRouteCatalog.cs), `SilentLogin` in [AuthController.cs](Controllers/AuthController.cs) |
+| 9 | Sign-in returns only to allow-listed routes: the four menu pages, and the applications list with exactly one `applicationNumber` of the shape `APP-yyyyMMdd-nnnnnn` | A crafted link could bounce a signed-in user to a phishing site, or carry script or extra parameters into the page | Open redirect (CWE-601); parameter injection | [BffRouteCatalog.cs](Configuration/BffRouteCatalog.cs), `SilentLogin` in [AuthController.cs](Controllers/AuthController.cs) |
 | 10 | Uploads checked before forwarding: both documents required, PDF only | Arbitrary files would be forwarded to Documents Management | Malicious file upload (first line; Documents Management verifies the signature again) | [OnboardingController.cs](Controllers/OnboardingController.cs) |
 | 11 | Documents Management called for the signed-in agent by token exchange (RFC 8693): the agent stays the subject with their own branch, this BFF is the acting client; no machine identity, no branch header | A service would assert the agent's branch itself; a bug or a compromised BFF could claim any branch | Confused deputy; cross-branch document access (BOLA) | [DocumentsManagementTokenService.cs](Services/DocumentsManagementTokenService.cs), [DocumentResourceAuthorization.cs](../../DocumentsManagement/API/Authorization/DocumentResourceAuthorization.cs) |
 | 12 | Shell–MFE messages accepted only from the configured Shell origin and the parent window | A hostile page that frames the MFE could pose as the Shell and steer it | Cross-origin message spoofing | [MfeShell.tsx](client-app/app/components/MfeShell.tsx) |

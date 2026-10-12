@@ -204,7 +204,8 @@ Event contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Ev
 | MFE route | Purpose |
 |---|---|
 | `/v1/customers/view-all` | Customer list and details |
-| `/v1/onboarding/applications/view-all` | Applications, plus the onboarding form (create customer, upload documents, submit) |
+| `/v1/onboarding/applications/new` | The onboarding form (create customer, upload documents, submit) - customer service agents |
+| `/v1/onboarding/applications/view-all` | The branch's applications and their status; progress notifications open it at their application (`?applicationNumber=`) |
 | `/v1/onboarding/workflow/view-all` | Workflow progress (Outbox activity and IDs) |
 
 ---

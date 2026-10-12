@@ -19,7 +19,7 @@ export interface Persona {
 }
 
 const customerServiceMenu = {
-  'Customer Onboarding': ['View Customers', 'View Onboarding Applications', 'Onboarding Workflow Monitor'],
+  'Customer Onboarding': ['View Customers', 'New Onboarding Application', 'View Onboarding Applications', 'Onboarding Workflow Monitor'],
   Payments: ['New Payment', 'View Payments'],
 };
 const kycMenu = { 'Customer KYC': ['View KYC Cases', 'Identity Verification', 'Document Verification'] };
@@ -57,6 +57,7 @@ export const allContexts = ['Customer Onboarding', 'Customer KYC', 'Compliance',
 /** Where each menu item lives: context → area → item (the Shell's three menu levels). */
 export const menuAreas: Record<string, string> = {
   'View Customers': 'Customer Management',
+  'New Onboarding Application': 'Onboarding Applications',
   'View Onboarding Applications': 'Onboarding Applications',
   'Onboarding Workflow Monitor': 'Onboarding Workflow',
   'View KYC Cases': 'KYC Cases',

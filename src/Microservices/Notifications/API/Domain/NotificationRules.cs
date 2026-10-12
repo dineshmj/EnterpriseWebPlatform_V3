@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace EnterpriseWebPlatform.Notifications.Api.Domain;
 
@@ -22,12 +23,13 @@ namespace EnterpriseWebPlatform.Notifications.Api.Domain;
 ///     PaymentCompensationFailed → user:{initiator}, staff:payments_officer:{branch} and
 ///                                 staff:operations_administrator:* (the desk that retries the release)
 /// </summary>
-public static class NotificationRules
+public static partial class NotificationRules
 {
     public static IReadOnlyList<NotificationDraft> For(string eventType, JsonElement envelope)
     {
         var p = envelope.TryGetProperty("Payload", out var payload) ? payload : default;
         var app = Str(p, "ApplicationNumber") ?? "an application";
+        var applications = ApplicationsTarget(Str(p, "ApplicationNumber"));
         var branch = Str(p, "BranchCode");
         var initiator = Str(envelope, "InitiatedByUserId");
 
@@ -50,12 +52,12 @@ public static class NotificationRules
             "KycCaseApproved" => Progress(
                 "KYC approved",
                 $"{By(p, "DecisionByLanId")} approved KYC for {Applicant(p)} ({app}). Compliance review is next.",
-                Applications),
+                applications),
 
             "KycCaseRejected" => Progress(
                 "KYC rejected",
                 $"{By(p, "DecisionByLanId")} rejected KYC for {Applicant(p)} ({app}){Reason(p, "DecisionRemarks")}",
-                Applications),
+                applications),
 
             "ComplianceCaseScreened" => NewWork("compliance_officer",
                 Str(p, "ScreeningOutcome") == "CLEAR" ? "New compliance case" : "New compliance case - screening alert",
@@ -65,12 +67,12 @@ public static class NotificationRules
             "ComplianceCaseApproved" => Progress(
                 "Compliance approved",
                 $"{By(p, "DecisionByLanId")} cleared {Applicant(p)} ({app}) for compliance{Risk(p)}. Account opening is next.",
-                Applications),
+                applications),
 
             "ComplianceCaseRejected" => Progress(
                 "Compliance rejected",
                 $"{By(p, "DecisionByLanId")} rejected {Applicant(p)} ({app}) in compliance{Reason(p, "DecisionRemarks")}",
-                Applications),
+                applications),
 
             "AccountApplicationCreated" => NewWork("account_officer",
                 "New account application",
@@ -80,17 +82,17 @@ public static class NotificationRules
             "AccountApplicationRejected" => Progress(
                 "Account opening rejected",
                 $"{By(p, "DecisionByLanId")} rejected the account for {Str(p, "HolderName") ?? "the customer"} ({app}){Reason(p, "DecisionRemarks")}",
-                Applications),
+                applications),
 
             "AccountOpened" => Progress(
                 "Account opened",
                 $"Account {Str(p, "Bsb")} {Str(p, "AccountNumber")} is open for {Str(p, "HolderName") ?? "the customer"} ({app}). Onboarding is complete.",
-                Applications),
+                applications),
 
             "AccountOpeningFailed" => Progress(
                 "Account could not be opened",
                 $"Core banking could not open the account for {Str(p, "HolderName") ?? "the customer"} ({app}). The onboarding has ended and can be started again.",
-                Applications),
+                applications),
 
             _ => null
         };
@@ -181,13 +183,29 @@ public static class NotificationRules
     /// <summary>
     /// What a click opens: a path of the owning MFE (the Shell opens it only through a
     /// microservice in the person's own menu, and the MFE's BFF checks it against its
-    /// allow-list). New work opens the record; progress opens the initiator's application list.
+    /// allow-list). New work opens the record; progress opens the initiator's applications list
+    /// with that application selected.
     /// </summary>
     private static string? Record(string mfe, string page, string idParameter, long? recordId) =>
         recordId is null ? null : JsonSerializer.Serialize(new { mfe, path = $"{page}?{idParameter}={recordId}", recordId });
 
-    private static readonly string Applications =
-        JsonSerializer.Serialize(new { mfe = "customer-onboarding", path = "/v1/onboarding/applications/view-all" });
+    private const string ApplicationsPage = "/v1/onboarding/applications/view-all";
+
+    /// <summary>
+    /// The applications list, opened at the application the event is about. The number travels
+    /// only in its exact shape (APP-yyyyMMdd-nnnnnn); anything else opens the plain list.
+    /// </summary>
+    private static string ApplicationsTarget(string? applicationNumber) =>
+        JsonSerializer.Serialize(new
+        {
+            mfe = "customer-onboarding",
+            path = applicationNumber is not null && ApplicationNumberShape().IsMatch(applicationNumber)
+                ? $"{ApplicationsPage}?applicationNumber={applicationNumber}"
+                : ApplicationsPage
+        });
+
+    [GeneratedRegex(@"^APP-\d{8}-\d{6}\z", RegexOptions.CultureInvariant)]
+    private static partial Regex ApplicationNumberShape();
 
     private static string? Str(JsonElement element, string name) =>
         element.ValueKind == JsonValueKind.Object &&

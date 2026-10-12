@@ -131,6 +131,11 @@ $ToolWorkingDir = Join-Path $env:TEMP 'ewp-kafka-tools'
 New-Item -ItemType Directory -Force $ToolWorkingDir | Out-Null
 
 function Invoke-KafkaTool([string] $Tool, [string] $Arguments, [switch] $AllowFailure) {
+    # A tool that talks to the broker waits about 60 s when the broker is gone (and the .bat
+    # still exits 0): when Kafka was closed mid-run, stop at once instead.
+    if ($Arguments -match '--bootstrap-server' -and -not (Test-KafkaPort)) {
+        throw "Kafka stopped answering on $Bootstrap (was its window closed?). Start it again and re-run this script."
+    }
     $exe = Join-Path $Bin $Tool
     $output = cmd.exe /d /c "cd /d `"$ToolWorkingDir`" && `"$exe`" $Arguments 2>&1"
     if ($LASTEXITCODE -ne 0 -and -not $AllowFailure) {

@@ -11,7 +11,7 @@ import type { ShellPage } from '../pages/ShellPage';
 export async function submitApplication(agent: ShellPage, customer: NewCustomer, evidence?: Evidence): Promise<Submitted> {
   return test.step(`Sophie submits ${customer.firstName} ${customer.lastName}`, async () => {
     const onboarding = new OnboardingMfe(agent);
-    await onboarding.open();
+    await onboarding.openNew();
     return onboarding.submitNewCustomer(customer, evidence);
   });
 }
@@ -52,7 +52,7 @@ export async function accountDecision(officer: ShellPage, applicationNumber: str
 export async function expectOnboardingStatus(agent: ShellPage, applicationNumber: string, status: string): Promise<void> {
   await test.step(`Sophie sees the application "${status}"`, async () => {
     const onboarding = new OnboardingMfe(agent);
-    await onboarding.open();
+    await onboarding.openApplications();
     await onboarding.expectStatus(applicationNumber, status);
   });
 }

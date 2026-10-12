@@ -92,7 +92,7 @@ export default function CustomersPage() {
       });
     }
 
-    router.push('/v1/onboarding/applications/view-all');
+    router.push('/v1/onboarding/applications/new');
   }
 
   return (
@@ -103,7 +103,7 @@ export default function CustomersPage() {
           title="Customer directory"
           description="Customers of your branch. Onboarding can start for a prospect (new, or after a rejected application); onboarded customers and those with an application in progress are read-only."
           actions={
-            <Link className={buttonVariants({ variant: 'accent', size: 'sm' })} href="/v1/onboarding/applications/view-all">
+            <Link className={buttonVariants({ variant: 'accent', size: 'sm' })} href="/v1/onboarding/applications/new">
               <UserPlus aria-hidden="true" />New customer
             </Link>
           }

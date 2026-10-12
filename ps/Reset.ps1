@@ -72,6 +72,7 @@ $platformPorts = @(
     5101, 5102, 5103, 5104, 5105, 5106, 5107, 5108, 5109
 )
 
+$kafkaWindowTitle = 'Kafka - started by Reset.ps1, keep open'
 $serverProps = Join-Path $KafkaHome 'config\server.properties'
 $adminProps = Join-Path $KafkaHome 'config\admin.properties'
 $storage = Join-Path $root 'src\Microservices\DocumentsManagement\API\DocumentStorage'
@@ -167,13 +168,13 @@ function Start-KafkaIfNeeded {
     Write-Step 'Kafka running and accepting the admin user'
     if (Test-KafkaAdmin) { Write-Host '     already running.'; return }
 
-    $startBat = Join-Path $KafkaHome 'StartKafka.bat'
-    if (Test-Path $startBat) {
-        Start-Process -FilePath $startBat -WorkingDirectory $KafkaHome
-    } else {
-        Start-Process -FilePath 'cmd.exe' -ArgumentList '/k', 'bin\windows\kafka-server-start.bat config\server.properties' -WorkingDirectory $KafkaHome
-    }
-    Write-Host '     started in its own window; waiting ...'
+    # The window gets a title of its own: in the taskbar it groups with the other consoles, and
+    # closing it while this script runs would pull Kafka away from under the remaining steps.
+    $startCommand = if (Test-Path (Join-Path $KafkaHome 'StartKafka.bat')) { 'StartKafka.bat' }
+                    else { 'bin\windows\kafka-server-start.bat config\server.properties' }
+    Start-Process -FilePath 'cmd.exe' -WorkingDirectory $KafkaHome `
+        -ArgumentList '/c', "title $kafkaWindowTitle && $startCommand"
+    Write-Host "     started in its own window (`"$kafkaWindowTitle`"); waiting ..."
     $deadline = (Get-Date).AddSeconds(120)
     while ((Get-Date) -lt $deadline) {
         Start-Sleep -Seconds 3
@@ -182,10 +183,19 @@ function Start-KafkaIfNeeded {
     throw 'Kafka did not accept the admin user within 120 s. Look at the Kafka window for the reason.'
 }
 
+function Assert-KafkaRunning {
+    if (-not (Test-KafkaPort)) {
+        throw "Kafka stopped answering on localhost:9092 - was the `"$kafkaWindowTitle`" window closed? Nothing more was done to Kafka; run this script again (same option)."
+    }
+}
+
 function Restore-KafkaSecurity {
     Write-Step 'Kafka users, topics, consumer groups and ACLs'
+    Assert-KafkaRunning
     & (Join-Path $PSScriptRoot 'kafka\Setup-KafkaSecurity.ps1') -Phase Prepare -KafkaHome $KafkaHome
+    Assert-KafkaRunning
     & (Join-Path $PSScriptRoot 'kafka\Setup-KafkaSecurity.ps1') -Phase Acls -KafkaHome $KafkaHome | Out-Null
+    Assert-KafkaRunning
     $topics = (Invoke-KafkaTool 'kafka-topics.bat' "--bootstrap-server localhost:9092 --command-config `"$adminProps`" --list").Output -split "`n" |
         ForEach-Object { $_.Trim() } | Where-Object { $_ -and $_ -notlike '__*' }
     Write-Host "     $(@($topics).Count) topics; ACLs applied (internal topics such as __consumer_offsets not counted)."
@@ -233,6 +243,58 @@ function Clear-PlaywrightState {
 }
 
 # ===================================================================================================
+# First: no console window of the platform may be open - the person closes them, so that nothing
+# is cut off mid-work:
+#   (a) Kafka: the broker (java ... kafka.Kafka) and its StartKafka.bat window;
+#   (b) the Node.js services: node.exe from this repository and their runnow.bat windows;
+#   (c) the .NET solution: every EnterpriseWebPlatform.* process, and Visual Studio's debug
+#       console windows (VsDebugConsole) still open for one of them.
+# Anything else still listening on a platform port is reported too. PostgreSQL is not counted.
+# ===================================================================================================
+$consoles = [System.Collections.Generic.List[object]]::new()
+function Add-Console([int] $ProcessId, [string] $What) {
+    if ($ProcessId -le 0 -or ($consoles | Where-Object Id -eq $ProcessId)) { return }
+    $title = (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue).MainWindowTitle
+    $consoles.Add([pscustomobject]@{ Id = $ProcessId; What = $What; Title = $title })
+}
+
+$processes = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Select-Object ProcessId, ParentProcessId, Name, CommandLine)
+$rootPattern = [regex]::Escape($root)
+# The java launcher starts the broker's JVM as a child with the same command line: one broker, listed once.
+$kafkaJava = @($processes | Where-Object { $_.Name -eq 'java.exe' -and "$($_.CommandLine)" -match 'kafka\.Kafka' } |
+    Select-Object -ExpandProperty ProcessId)
+foreach ($p in $processes) {
+    $commandLine = "$($p.CommandLine)"
+    switch -Regex ($p.Name) {
+        '^java\.exe$'           { if ($p.ProcessId -in $kafkaJava -and $p.ParentProcessId -notin $kafkaJava) { Add-Console $p.ProcessId 'Kafka broker' } }
+        '^cmd\.exe$'            {
+                                    if ($commandLine -match 'StartKafka\.bat|kafka-server-start') { Add-Console $p.ProcessId 'Kafka console' }
+                                    elseif ($commandLine -match 'runnow\.bat') { Add-Console $p.ProcessId 'Node.js console' }
+                                }
+        '^node\.exe$'           { if ($commandLine -match $rootPattern) { Add-Console $p.ProcessId 'Node.js service' } }
+        '^EnterpriseWebPlatform' { Add-Console $p.ProcessId '.NET service' }
+        '^VsDebugConsole\.exe$' { if ($commandLine -match 'EnterpriseWebPlatform') { Add-Console $p.ProcessId 'Visual Studio debug console' } }
+    }
+}
+foreach ($listener in @(Get-NetTCPConnection -LocalPort $platformPorts -State Listen -ErrorAction SilentlyContinue)) {
+    Add-Console $listener.OwningProcess "listening on platform port $($listener.LocalPort)"
+}
+
+if ($consoles.Count -gt 0) {
+    Write-Host 'The platform is still running. Close these console windows first, then run this script again:' -ForegroundColor Yellow
+    foreach ($console in $consoles | Sort-Object What, Id) {
+        $name = (Get-Process -Id $console.Id -ErrorAction SilentlyContinue).ProcessName
+        $title = if ($console.Title) { " - `"$($console.Title)`"" } else { '' }
+        Write-Host ("  - {0,-28} {1} (PID {2}){3}" -f $console.What, $name, $console.Id, $title)
+    }
+    Write-Host ''
+    Write-Host 'Tip: stop debugging in Visual Studio (Shift+F5), run .\ps\run\Start-NodeServices.ps1 -Stop,'
+    Write-Host '     and close the Kafka window (Ctrl+C, then Y). Options 3 to 6 start Kafka again themselves.'
+    Write-Host 'Nothing changed.'
+    exit 1
+}
+
+# ===================================================================================================
 # Which level
 # ===================================================================================================
 # A plain hashtable: an [ordered] one reads an integer index as a POSITION ($names[1] = the second entry).
@@ -267,6 +329,9 @@ if (-not $Level) {
 }
 
 $levelName = $levelNames[$Level]
+
+Clear-Host
+Write-Host "EWP V3 - reset the local platform: option $Level - $levelName" -ForegroundColor Cyan
 
 # What the chosen level does.
 $erasesData = $Level -in 1, 5, 6       # stop the platform, recreate the databases, empty documents and Playwright state

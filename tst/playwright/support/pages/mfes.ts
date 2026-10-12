@@ -32,15 +32,26 @@ export interface Submitted {
   applicationNumber: string;
 }
 
-/** Customer Onboarding: "View Onboarding Applications" - the form and the agent's recent applications. */
+/**
+ * Customer Onboarding: "New Onboarding Application" (the form) and "View Onboarding Applications"
+ * (the branch's applications and their status - where the bell's progress notifications lead).
+ */
 export class OnboardingMfe {
-  static readonly title = 'New onboarding application';
+  static readonly newTitle = 'New onboarding application';
+  static readonly listTitle = 'Onboarding applications';
 
   constructor(private readonly shell: ShellPage) {}
 
-  async open(): Promise<void> {
+  /** The form for a new onboarding. */
+  async openNew(): Promise<void> {
+    await this.shell.openMenuItem('Customer Onboarding', 'New Onboarding Application');
+    await this.shell.waitForScreen(OnboardingMfe.newTitle);
+  }
+
+  /** The applications list. */
+  async openApplications(): Promise<void> {
     await this.shell.openMenuItem('Customer Onboarding', 'View Onboarding Applications');
-    await this.shell.waitForScreen(OnboardingMfe.title);
+    await this.shell.waitForScreen(OnboardingMfe.listTitle);
   }
 
   /**

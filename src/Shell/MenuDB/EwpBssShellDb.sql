@@ -254,6 +254,16 @@ VALUES
                 WHERE name = 'Customer Onboarding'))
     ),
     (
+        'New Onboarding Application',
+        '/v1/onboarding/applications/new',
+        'fa-file-circle-plus',
+        (SELECT id FROM management_areas
+         WHERE name = 'Onboarding Applications'
+           AND microservice_id =
+               (SELECT id FROM microservices
+                WHERE name = 'Customer Onboarding'))
+    ),
+    (
         'View Onboarding Applications',
         '/v1/onboarding/applications/view-all',
         'fa-file-lines',
@@ -457,6 +467,18 @@ CROSS JOIN
         ('platform_administrator')
 ) AS r(role_short_name)
 WHERE mi.task_name = 'View Customers';
+
+-- New Onboarding Application: the customer service agent starts an onboarding (the
+-- customer.onboarding.create permission); the others follow applications only.
+INSERT INTO menu_items_and_roles (menu_item_id, role_short_name)
+SELECT mi.id, r.role_short_name
+FROM menu_items mi
+CROSS JOIN
+(
+    VALUES
+        ('customer_service_agent')
+) AS r(role_short_name)
+WHERE mi.task_name = 'New Onboarding Application';
 
 -- Onboarding Applications
 INSERT INTO menu_items_and_roles (menu_item_id, role_short_name)
