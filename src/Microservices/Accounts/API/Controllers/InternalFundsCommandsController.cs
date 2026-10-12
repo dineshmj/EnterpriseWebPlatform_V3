@@ -20,7 +20,8 @@ public sealed record FundsCommandRequest(
     string? Currency,
     string? InitiatedByUserId,
     Guid? WorkflowId,
-    Guid? CorrelationId);
+    Guid? CorrelationId,
+    string? BranchCode = null);
 
 /// <summary>
 /// Machine-only endpoint: called by the AccountsCommandSubscriber (pinned M2M client) for
@@ -56,6 +57,12 @@ public sealed class InternalFundsCommandsController(FundsCommandHandler handler)
             return ValidationProblem("PaymentNumber, CustomerNumber, Bsb and AccountNumber are required.");
         }
 
+        // A reservation names the initiator's branch: the funds may only be held on an account
+        // of that branch (the payment screen's account search is not the control - this is).
+        BranchCode? branch = null;
+        if (type == FundsCommandType.Reserve && !BranchCode.TryCreate(request.BranchCode, out branch))
+            return ValidationProblem("ReserveFunds requires the initiator's BranchCode.");
+
         try
         {
             var result = await handler.HandleAsync(
@@ -64,7 +71,7 @@ public sealed class InternalFundsCommandsController(FundsCommandHandler handler)
                     request.Bsb, request.AccountNumber,
                     type == FundsCommandType.Reserve ? Money.ValidAmount(request.Amount) : request.Amount,
                     Money.ValidCurrency(request.Currency ?? Money.Aud),
-                    request.InitiatedByUserId, request.WorkflowId, request.CorrelationId),
+                    request.InitiatedByUserId, request.WorkflowId, request.CorrelationId, branch),
                 cancellationToken);
 
             return Ok(new { holdStatus = result.HoldStatus, alreadyProcessed = result.AlreadyProcessed });

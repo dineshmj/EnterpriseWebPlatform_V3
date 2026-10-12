@@ -71,7 +71,7 @@ app.MapPost("/v1/payee-confirmations", (HttpContext http, PayeeConfirmationReque
         : number.EndsWith('9') ? new PayeeConfirmation("CLOSE_MATCH", CloseMatchOf(name))
         : new PayeeConfirmation("MATCH", null);
 
-    log.LogInformation("Confirmation of Payee for {Bsb} {Account} \"{Name}\": {Result}.", request.Bsb, number, name, result.Result);
+    log.LogInformation("Confirmation of Payee for {Bsb} {Account} \"{Name}\": {Result}.", request.Bsb, Masked(number), name, result.Result);
     return Results.Ok(result);
 });
 
@@ -122,8 +122,8 @@ app.MapPost("/v1/payments", async (HttpContext http, PaymentRequest request, Can
         DateTimeOffset.UtcNow));
 
     log.LogInformation("Sent payment {EndToEndId}: {Amount} {Currency} from {FromBsb} {FromAccount} to {Payee} ({ToBsb} {ToAccount}), reference {Reference}.",
-        request.EndToEndId, request.Amount, request.Currency, request.Debtor?.Bsb, request.Debtor?.AccountNumber,
-        request.Creditor?.Name, request.Creditor?.Bsb, request.Creditor?.AccountNumber, payment.NetworkReference);
+        request.EndToEndId, request.Amount, request.Currency, request.Debtor?.Bsb, Masked(request.Debtor?.AccountNumber),
+        request.Creditor?.Name, request.Creditor?.Bsb, Masked(request.Creditor?.AccountNumber), payment.NetworkReference);
     return Results.Created($"/v1/payments/{payment.NetworkReference}", payment);
 });
 
@@ -161,6 +161,13 @@ static string CloseMatchOf(string name)
 
 static bool IsLocal(HttpContext http) =>
     http.Connection.RemoteIpAddress is { } ip && IPAddress.IsLoopback(ip);
+
+// Logs show the last four digits only, like every platform component (LogMasking).
+static string Masked(string? accountNumber)
+{
+    var value = accountNumber?.Trim() ?? string.Empty;
+    return value.Length <= 4 ? new string('*', value.Length) : $"****{value[^4..]}";
+}
 
 enum Behaviour { Healthy, Slow, Failing, Down, Refusing }
 

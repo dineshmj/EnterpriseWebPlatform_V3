@@ -46,7 +46,9 @@ try
 
     // Two-step sign-in (TOTP - Google Authenticator). "Mfa:Enabled" is false by default; when
     // true it applies to EVERY user: enrolment at the next sign-in, then the code each time.
+    // Off is allowed in Development only: elsewhere the IDP refuses to start without it.
     builder.Services.Configure<MfaOptions>(builder.Configuration.GetSection(MfaOptions.SectionName));
+    builder.RequireMfaOutsideDevelopment();
     builder.Services.AddSingleton(TimeProvider.System);
     builder.Services.AddScoped<MfaService>();
 

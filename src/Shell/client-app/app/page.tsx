@@ -83,6 +83,11 @@ function HomeContent() {
 
   const currentFrameOriginRef = useRef<string | null>(null);
 
+  // The origin of the MFE the Shell itself loaded (from its menu's baseURL). Only that origin
+  // may announce itself as ready: a frame navigated elsewhere keeps the same window, so the
+  // message's source alone proves nothing (CSP frame-src is the second layer).
+  const expectedFrameOriginRef = useRef<string | null>(null);
+
   // The Shell is only a transport/rendering host for workspace context.
   const currentContextRef = useRef<WorkspaceContext>(EMPTY_WORKSPACE_CONTEXT);
 
@@ -106,6 +111,7 @@ function HomeContent() {
       if (!iframe || event.source !== iframe.contentWindow) return;
 
       if (event.data?.type === 'BSS_MFE_READY') {
+        if (event.origin !== expectedFrameOriginRef.current) return;
         currentFrameOriginRef.current = event.origin;
 
         (event.source as Window).postMessage(
@@ -119,6 +125,7 @@ function HomeContent() {
       }
 
       if (event.data?.type === 'BSS_CONTEXT_UPDATE') {
+        if (!currentFrameOriginRef.current || event.origin !== currentFrameOriginRef.current) return;
         const nextContext =
           (event.data.context ?? EMPTY_WORKSPACE_CONTEXT) as WorkspaceContext;
 
@@ -174,8 +181,16 @@ function HomeContent() {
     }
 
     // The new MFE will announce BSS_MFE_READY. At that point the Shell
-    // hands it the latest opaque workspace context.
+    // hands it the latest opaque workspace context - if it comes from this origin.
     currentFrameOriginRef.current = null;
+    try {
+      expectedFrameOriginRef.current = new URL(item.baseURL, window.location.href).origin;
+    } catch {
+      expectedFrameOriginRef.current = null;
+      setError('Internal error: the microservice address is not valid.');
+      setLoading(false);
+      return;
+    }
 
     const silentLoginUrl =
       `${item.baseURL}/api/auth/silent-login` +
@@ -215,6 +230,7 @@ function HomeContent() {
     const currentOrigin = currentFrameOriginRef.current;
     if (iframe && currentOrigin && !(await requestNavigationPermission(iframe, currentOrigin))) return;
     currentFrameOriginRef.current = null;
+    expectedFrameOriginRef.current = null;
     if (iframe) { iframe.onload = null; iframe.src = 'about:blank'; }
     setError(null);
     setLoading(false);

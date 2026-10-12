@@ -13,7 +13,8 @@ public sealed record SagaReplyRequest(
     Guid PaymentRef,
     string? ReasonCode,
     string? Reason,
-    bool? NothingWasHeld);
+    bool? NothingWasHeld,
+    Guid? CausationId = null);
 
 /// <summary>
 /// Machine-only endpoint: called by the PaymentsSagaReplySubscriber (pinned M2M client) for
@@ -30,13 +31,17 @@ public sealed class InternalPaymentSagaRepliesController(HandleSagaReplyCommandH
     [Authorize(Policy = "PaymentsSagaReplySubscriberWrite")]
     public async Task<IActionResult> Handle([FromBody] SagaReplyRequest request, CancellationToken cancellationToken)
     {
-        if (request.MessageId == Guid.Empty || request.PaymentRef == Guid.Empty || string.IsNullOrWhiteSpace(request.ReplyType))
-            return ValidationProblem("MessageId, ReplyType and PaymentRef are required.");
+        // CausationId: the command the reply answers - the saga accepts only the answer to its current command.
+        if (request.MessageId == Guid.Empty || request.PaymentRef == Guid.Empty || string.IsNullOrWhiteSpace(request.ReplyType) ||
+            request.CausationId is not { } causationId || causationId == Guid.Empty)
+        {
+            return ValidationProblem("MessageId, CausationId, ReplyType and PaymentRef are required.");
+        }
 
         try
         {
             var outcome = await handler.HandleAsync(
-                new SagaReplyCommand(request.MessageId, request.ReplyType, request.PaymentRef, request.ReasonCode,
+                new SagaReplyCommand(request.MessageId, causationId, request.ReplyType, request.PaymentRef, request.ReasonCode,
                     request.Reason, request.NothingWasHeld ?? false),
                 cancellationToken);
 

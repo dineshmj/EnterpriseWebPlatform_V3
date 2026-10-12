@@ -27,7 +27,7 @@ public sealed record PaymentsMessageEnvelope<TPayload>(
     TPayload Payload,
     string? InitiatedByLanId = null);
 
-/// <summary>What Accounts needs to reserve, settle or release the payment's funds.</summary>
+/// <summary>What Accounts needs to reserve, settle or release the payment's funds (BranchCode: the initiator's branch).</summary>
 public sealed record FundsCommandPayload(
     Guid PaymentRef,
     string PaymentNumber,
@@ -35,7 +35,8 @@ public sealed record FundsCommandPayload(
     string Bsb,
     string AccountNumber,
     decimal Amount,
-    string Currency);
+    string Currency,
+    string BranchCode);
 
 /// <summary>A payment's outcome (payments.payment.events).</summary>
 public sealed record PaymentOutcomePayload(
@@ -97,7 +98,7 @@ internal static class PaymentsMessageMapper
                 causationId = command.CausationId;
                 payload = Envelope(messageId, eventType, command.OccurredAt, saga, causationId, initiatorLanId,
                     new FundsCommandPayload(command.PaymentRef, command.PaymentNumber, command.CustomerNumber,
-                        command.Bsb, command.AccountNumber, command.Amount, command.Currency));
+                        command.Bsb, command.AccountNumber, command.Amount, command.Currency, command.BranchCode));
                 break;
 
             case PaymentApprovalRequiredDomainEvent waiting:

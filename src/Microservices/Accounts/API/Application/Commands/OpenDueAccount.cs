@@ -1,6 +1,7 @@
 using EnterpriseWebPlatform.Accounts.Api.Application.Abstractions;
 using EnterpriseWebPlatform.Accounts.Api.Domain.Aggregates;
 using EnterpriseWebPlatform.Accounts.Api.Domain.ValueObjects;
+using EnterpriseWebPlatform.Common.Observability;
 
 namespace EnterpriseWebPlatform.Accounts.Api.Application.Commands;
 
@@ -77,8 +78,8 @@ public sealed class OpenDueAccountCommandHandler(
             outcome = OpeningRunOutcome.Opened;
 
             logger.LogInformation(
-                "Account {Bsb} {AccountNumber} opened for application {ApplicationNumber} ({Product}).",
-                response.Bsb, response.AccountNumber, application.ApplicationNumber, application.Product!.Value.ToCode());
+                "Account {Account} opened for application {ApplicationNumber} ({Product}).",
+                LogMasking.Account(response.Bsb, response.AccountNumber), application.ApplicationNumber, application.Product!.Value.ToCode());
         }
         catch (CoreBankingRefusedException ex)
         {

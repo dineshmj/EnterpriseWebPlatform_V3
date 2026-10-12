@@ -112,18 +112,23 @@ builder.Services.AddScoped<DecidePaymentCommandHandler>();
 builder.Services.AddScoped<RetryReleaseCommandHandler>();
 
 // The approval tier and the saga's limits are configuration, never constants in a screen.
+// Financial controls fail closed: a missing or blank setting stops the start-up instead of
+// silently becoming a default (or, worse, "no limit").
 var payments = builder.Configuration.GetSection("Payments");
-var approvalThreshold = payments.GetValue<decimal?>("ApprovalThreshold") ?? 1_000m;
+var approvalThreshold = payments.GetValue<decimal?>("ApprovalThreshold")
+    ?? throw new InvalidOperationException("Payments:ApprovalThreshold is not configured.");
 if (approvalThreshold <= 0)
     throw new InvalidOperationException("Payments:ApprovalThreshold must be positive.");
 builder.Services.AddSingleton(new ApprovalTier(approvalThreshold));
 
-// ABAC: what each clearance level may approve (Payments:ApprovalLimits:{level}; empty = no limit).
+// ABAC: what each clearance level may approve (Payments:ApprovalLimits:{level}: an amount, or
+// the deliberate word "Unlimited"; anything else - including blank - stops the start-up).
 var limits = payments.GetSection("ApprovalLimits").GetChildren()
     .ToDictionary(
         level => int.TryParse(level.Key, out var l) ? l : throw new InvalidOperationException($"Payments:ApprovalLimits key '{level.Key}' is not a clearance level."),
-        level => string.IsNullOrWhiteSpace(level.Value) ? (decimal?)null
-            : decimal.Parse(level.Value, System.Globalization.CultureInfo.InvariantCulture));
+        level => string.Equals(level.Value?.Trim(), "Unlimited", StringComparison.OrdinalIgnoreCase) ? (decimal?)null
+            : decimal.TryParse(level.Value, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var max) && max > 0 ? max
+            : throw new InvalidOperationException($"Payments:ApprovalLimits:{level.Key} must be a positive amount or \"Unlimited\" (was '{level.Value}')."));
 if (limits.Count == 0)
     throw new InvalidOperationException("Payments:ApprovalLimits is not configured.");
 builder.Services.AddSingleton(new ApprovalLimits(limits));
@@ -210,6 +215,7 @@ builder.Services.AddHealthChecks()
 // OWASP API4: per-caller rate limits on the API surface (429 + Retry-After); configuration "RateLimiting".
 builder.Services.AddEwpRateLimiting(builder.Configuration, "/v1");
 builder.Services.AddEwpMfaStepUp();   // the step-up requirement and its clear 403 ("mfa_required")
+builder.RequireMfaOutsideDevelopment();   // fail closed: MFA can be off on a developer's machine only
 
 var app = builder.Build();
 

@@ -150,10 +150,10 @@ public sealed class PaymentSaga : AggregateRoot
 
     // ------------------------------------------------------------------ replies from Accounts
 
-    /// <summary>Accounts reserved the funds.</summary>
-    public void OnFundsReserved(Payment payment, Guid messageId, DateTimeOffset now)
+    /// <summary>Accounts reserved the funds (in answer to the current ReserveFunds: causationId).</summary>
+    public void OnFundsReserved(Payment payment, Guid messageId, Guid causationId, DateTimeOffset now)
     {
-        if (!Expecting(SagaStep.ReserveFunds, "FundsReserved", messageId, now))
+        if (!Expecting(SagaStep.ReserveFunds, "FundsReserved", messageId, causationId, now))
             return;
 
         Record(now, "REPLY_RECEIVED", "FundsReserved: the funds are held for this payment.", messageId);
@@ -173,9 +173,9 @@ public sealed class PaymentSaga : AggregateRoot
     }
 
     /// <summary>Accounts could not reserve the funds: the payment is rejected, nothing to undo.</summary>
-    public void OnFundsReservationFailed(Payment payment, Guid messageId, string reasonCode, string reason, DateTimeOffset now)
+    public void OnFundsReservationFailed(Payment payment, Guid messageId, Guid causationId, string reasonCode, string reason, DateTimeOffset now)
     {
-        if (!Expecting(SagaStep.ReserveFunds, "FundsReservationFailed", messageId, now))
+        if (!Expecting(SagaStep.ReserveFunds, "FundsReservationFailed", messageId, causationId, now))
             return;
 
         Record(now, "REPLY_RECEIVED", $"FundsReservationFailed ({reasonCode}): {reason}", messageId);
@@ -185,9 +185,9 @@ public sealed class PaymentSaga : AggregateRoot
     }
 
     /// <summary>Accounts debited the held funds: the payment is complete.</summary>
-    public void OnFundsSettled(Payment payment, Guid messageId, DateTimeOffset now)
+    public void OnFundsSettled(Payment payment, Guid messageId, Guid causationId, DateTimeOffset now)
     {
-        if (!Expecting(SagaStep.SettleFunds, "FundsSettled", messageId, now))
+        if (!Expecting(SagaStep.SettleFunds, "FundsSettled", messageId, causationId, now))
             return;
 
         Record(now, "REPLY_RECEIVED", "FundsSettled: the funds were debited.", messageId);
@@ -198,11 +198,12 @@ public sealed class PaymentSaga : AggregateRoot
 
     /// <summary>
     /// Accounts released the held funds: the compensation is complete. Also accepted when
-    /// the saga had already given up (STUCK): the release did happen after all.
+    /// the saga had already given up (STUCK), and whichever ReleaseFunds attempt it answers:
+    /// a confirmed release of this payment's hold is the fact the saga waits for.
     /// </summary>
-    public void OnFundsReleased(Payment payment, Guid messageId, bool nothingWasHeld, DateTimeOffset now)
+    public void OnFundsReleased(Payment payment, Guid messageId, Guid causationId, bool nothingWasHeld, DateTimeOffset now)
     {
-        if (!Expecting(SagaStep.ReleaseFunds, "FundsReleased", messageId, now, alsoWhenStuck: true))
+        if (!Expecting(SagaStep.ReleaseFunds, "FundsReleased", messageId, causationId, now, alsoWhenStuck: true, anyAttempt: true))
             return;
 
         Record(now, "REPLY_RECEIVED", nothingWasHeld
@@ -374,21 +375,33 @@ public sealed class PaymentSaga : AggregateRoot
 
         RaiseDomainEvent(new FundsCommandIssuedDomainEvent(
             commandType, messageId, LastMessageId, PaymentRef, payment.PaymentNumber, payment.CustomerNumber,
-            payment.From.Bsb, payment.From.AccountNumber, payment.Amount, payment.Currency, now));
+            payment.From.Bsb, payment.From.AccountNumber, payment.Amount, payment.Currency, payment.BranchCode.Value, now));
         Record(now, "COMMAND_SENT", Attempts == 1 ? $"{commandType} sent to Accounts." : $"{commandType} sent to Accounts again (attempt {Attempts}).", messageId);
     }
 
     /// <summary>
-    /// A reply counts only at the step that waits for it. A late or duplicated reply (after
-    /// a resend, or redelivered by Kafka) changes nothing; it is recorded and ignored.
+    /// A reply counts only at the step that waits for it, and - for a reservation or a
+    /// settlement - only as the answer to the command the saga sent LAST (its CausationId is
+    /// that command's MessageId). A late or duplicated reply (after a resend, or redelivered
+    /// by Kafka), or one answering an earlier attempt, changes nothing; it is recorded and
+    /// ignored, and the answer to the current command follows (Accounts answers every command).
     /// </summary>
-    private bool Expecting(SagaStep step, string replyType, Guid messageId, DateTimeOffset now, bool alsoWhenStuck = false)
+    private bool Expecting(SagaStep step, string replyType, Guid messageId, Guid causationId, DateTimeOffset now,
+        bool alsoWhenStuck = false, bool anyAttempt = false)
     {
-        if (Step == step && (Status == SagaStatus.Running || (alsoWhenStuck && Status == SagaStatus.Stuck)))
-            return true;
+        if (Step != step || !(Status == SagaStatus.Running || (alsoWhenStuck && Status == SagaStatus.Stuck)))
+        {
+            Record(now, "REPLY_IGNORED", $"{replyType} arrived at step {Step.ToCode()} ({Status.ToCode()}): late or duplicate, ignored.", messageId);
+            return false;
+        }
 
-        Record(now, "REPLY_IGNORED", $"{replyType} arrived at step {Step.ToCode()} ({Status.ToCode()}): late or duplicate, ignored.", messageId);
-        return false;
+        if (!anyAttempt && causationId != CurrentCommandId)
+        {
+            Record(now, "REPLY_IGNORED", $"{replyType} answers an earlier command ({causationId}), not the current one: ignored.", messageId);
+            return false;
+        }
+
+        return true;
     }
 
     private void EnsureStep(SagaStep step)

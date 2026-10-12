@@ -212,6 +212,7 @@ builder.Services.AddHealthChecks()
 // OWASP API4: per-caller rate limits on the API surface (429 + Retry-After); configuration "RateLimiting".
 builder.Services.AddEwpRateLimiting(builder.Configuration, "/v1");
 builder.Services.AddEwpMfaStepUp();   // the step-up requirement and its clear 403 ("mfa_required")
+builder.RequireMfaOutsideDevelopment();   // fail closed: MFA can be off on a developer's machine only
 
 var app = builder.Build();
 

@@ -38,14 +38,23 @@ public sealed class MfaService(IdentityDbContext db, IDataProtectionProvider dat
 
     /// <summary>
     /// Confirms an enrolment with the first code from the app; saves the (encrypted) secret and
-    /// returns the recovery codes - shown once, never stored readable. Null when the code is wrong.
+    /// returns the recovery codes - shown once, never stored readable. Null when the code is wrong
+    /// (which counts towards the lockout, like a wrong code at sign-in) or the user is locked out.
     /// </summary>
-    public async Task<IReadOnlyList<string>?> ConfirmEnrolmentAsync(long userId, byte[] secret, string code, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<string>?> ConfirmEnrolmentAsync(User user, byte[] secret, string code, CancellationToken cancellationToken)
     {
-        var step = Totp.MatchingTimeStep(secret, code.Trim(), time.GetUtcNow());
-        if (step is null)
+        var now = time.GetUtcNow();
+        if (user.LockoutEnd > now)
             return null;
 
+        var step = Totp.MatchingTimeStep(secret, code.Trim(), now);
+        if (step is null)
+        {
+            await CountFailureAsync(user.Id, now, cancellationToken);
+            return null;
+        }
+
+        var userId = user.Id;
         db.UserMfaRecoveryCodes.RemoveRange(db.UserMfaRecoveryCodes.Where(c => c.UserId == userId));
         var existing = await db.UserMfa.FindAsync([userId], cancellationToken);
         if (existing is not null)
@@ -55,7 +64,7 @@ public sealed class MfaService(IdentityDbContext db, IDataProtectionProvider dat
         {
             UserId = userId,
             SecretProtected = _protector.Protect(Convert.ToBase64String(secret)),
-            EnrolledAt = time.GetUtcNow(),
+            EnrolledAt = now,
             LastUsedTimeStep = step.Value
         });
 
@@ -67,7 +76,9 @@ public sealed class MfaService(IdentityDbContext db, IDataProtectionProvider dat
 
     /// <summary>
     /// Checks a code from the app (or an unused recovery code) for an enrolled, unlocked user.
-    /// A code is accepted once only; a wrong one counts towards the lockout.
+    /// A code is accepted once only - also when two requests carry it at the same moment: each
+    /// one-time value is claimed with ONE conditional UPDATE, and only the request whose UPDATE
+    /// changed the row wins. A wrong code counts towards the lockout.
     /// </summary>
     public async Task<bool> VerifyAsync(User user, string input, CancellationToken cancellationToken)
     {
@@ -75,44 +86,57 @@ public sealed class MfaService(IdentityDbContext db, IDataProtectionProvider dat
         if (user.LockoutEnd > now)
             return false;
 
-        var mfa = await db.UserMfa.SingleOrDefaultAsync(m => m.UserId == user.Id, cancellationToken);
+        var mfa = await db.UserMfa.AsNoTracking().SingleOrDefaultAsync(m => m.UserId == user.Id, cancellationToken);
         if (mfa is null)
             return false;
 
         var code = input.Replace(" ", string.Empty).Replace("-", string.Empty).Trim();
+        var secret = Convert.FromBase64String(_protector.Unprotect(mfa.SecretProtected));
         var accepted = false;
 
-        var secret = Convert.FromBase64String(_protector.Unprotect(mfa.SecretProtected));
-        if (Totp.MatchingTimeStep(secret, code, now) is { } step && step > mfa.LastUsedTimeStep)
+        if (Totp.MatchingTimeStep(secret, code, now) is { } step)
         {
-            mfa.LastUsedTimeStep = step;   // the same code can never be replayed
-            accepted = true;
+            // The time step moves forward only: the same code (or an older one) never counts twice.
+            accepted = await db.UserMfa
+                .Where(m => m.UserId == user.Id && m.LastUsedTimeStep < step)
+                .ExecuteUpdateAsync(s => s.SetProperty(m => m.LastUsedTimeStep, step), cancellationToken) == 1;
         }
         else if (code.Length == 10)
         {
             var hash = HashOf(code.ToUpperInvariant());
-            var recovery = await db.UserMfaRecoveryCodes
-                .SingleOrDefaultAsync(c => c.UserId == user.Id && c.CodeHash == hash && c.UsedAt == null, cancellationToken);
-            if (recovery is not null)
-            {
-                recovery.UsedAt = now;
-                accepted = true;
-            }
+            accepted = await db.UserMfaRecoveryCodes
+                .Where(c => c.UserId == user.Id && c.CodeHash == hash && c.UsedAt == null)
+                .ExecuteUpdateAsync(s => s.SetProperty(c => c.UsedAt, now), cancellationToken) == 1;
         }
 
         if (accepted)
         {
-            user.AccessFailedCount = 0;
+            await db.Users
+                .Where(u => u.Id == user.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(u => u.AccessFailedCount, 0).SetProperty(u => u.UpdatedAt, now), cancellationToken);
         }
-        else if (++user.AccessFailedCount >= MaxFailedAttempts)
+        else
         {
-            user.LockoutEnd = now.Add(LockoutDuration);
-            user.AccessFailedCount = 0;
+            await CountFailureAsync(user.Id, now, cancellationToken);
         }
 
-        user.UpdatedAt = now;
-        await db.SaveChangesAsync(cancellationToken);
         return accepted;
+    }
+
+    /// <summary>
+    /// One more wrong code, counted in ONE UPDATE (concurrent wrong codes cannot under-count): the
+    /// fifth locks the account for 15 minutes and starts the count again. Every SET reads the
+    /// row's values from before the UPDATE.
+    /// </summary>
+    private Task CountFailureAsync(long userId, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        DateTimeOffset? lockoutEnd = now.Add(LockoutDuration);
+        return db.Users
+            .Where(u => u.Id == userId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(u => u.LockoutEnd, u => u.AccessFailedCount + 1 >= MaxFailedAttempts ? lockoutEnd : u.LockoutEnd)
+                .SetProperty(u => u.AccessFailedCount, u => u.AccessFailedCount + 1 >= MaxFailedAttempts ? 0 : u.AccessFailedCount + 1)
+                .SetProperty(u => u.UpdatedAt, now), cancellationToken);
     }
 
     /// <summary>Ten characters from an alphabet without look-alikes (no 0/O, 1/I/L), shown as XXXXX-XXXXX.</summary>

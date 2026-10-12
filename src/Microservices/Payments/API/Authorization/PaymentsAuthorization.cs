@@ -26,21 +26,10 @@ public sealed class PaymentsStaffAuthorizationHandler : AuthorizationHandler<Pay
     protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, PaymentsStaffRequirement requirement)
     {
         var user = context.User;
-        var permissions = user.Claims.Where(c => c.Type == "permission").Select(c => c.Value).ToHashSet(StringComparer.Ordinal);
-        var granted = requirement.AnyOfPermissions.Where(permissions.Contains).ToList();
+        var permissions = EffectivePermissionsOf(user);
 
-        if (granted.Count == 0 || BranchOf(user) is null)
+        if (!requirement.AnyOfPermissions.Any(permissions.Contains) || BranchOf(user) is null)
             return Task.CompletedTask;
-
-        // Auditors read payments only THROUGH the Audit context, where every look is itself
-        // recorded: a grant that rests on the auditor's permission alone needs a delegated token
-        // whose acting client is the Audit Journey API (token exchange). The Payments screens
-        // therefore refuse an auditor, while the Audit Trail's "where it stands now" works.
-        if (granted.All(p => p == AuditReadPermission) &&
-            ActingClientOf(user) != AuditMicroservice.CLIENT_ID_FOR_IDP_FOR_AUDIT_JOURNEY_API)
-        {
-            return Task.CompletedTask;
-        }
 
         context.Succeed(requirement);
         return Task.CompletedTask;
@@ -48,6 +37,22 @@ public sealed class PaymentsStaffAuthorizationHandler : AuthorizationHandler<Pay
 
     /// <summary>The auditor's permission on payments: read-only, all branches, and only through the Audit context.</summary>
     public const string AuditReadPermission = "payment.history.view";
+
+    /// <summary>
+    /// The person's permissions as they count HERE. Auditors read payments only THROUGH the
+    /// Audit context, where every look is itself recorded: the auditor's permission counts only
+    /// in a delegated token whose acting client is the Audit Journey API (token exchange). It is
+    /// dropped otherwise - also for a person holding it next to another role, who must not gain
+    /// the auditor's all-branches reach on the Payments screens.
+    /// </summary>
+    public static IReadOnlySet<string> EffectivePermissionsOf(ClaimsPrincipal user)
+    {
+        var viaAuditContext = ActingClientOf(user) == AuditMicroservice.CLIENT_ID_FOR_IDP_FOR_AUDIT_JOURNEY_API;
+        return user.Claims
+            .Where(c => c.Type == "permission" && (viaAuditContext || c.Value != AuditReadPermission))
+            .Select(c => c.Value)
+            .ToHashSet(StringComparer.Ordinal);
+    }
 
     /// <summary>The client acting for the person (the outermost "act" of a delegated token), or null.</summary>
     public static string? ActingClientOf(ClaimsPrincipal user)
@@ -79,7 +84,7 @@ public sealed class PaymentsStaffAuthorizationHandler : AuthorizationHandler<Pay
     /// </summary>
     public static (bool Allowed, BranchCode? Branch) ReadScopeOf(ClaimsPrincipal user)
     {
-        if (user.Claims.Any(c => c.Type == "permission" && AllBranchesPermissions.Contains(c.Value)))
+        if (EffectivePermissionsOf(user).Overlaps(AllBranchesPermissions))
             return (true, null);
         var branch = BranchOf(user);
         return (branch is not null, branch);

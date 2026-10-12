@@ -64,7 +64,7 @@ app.MapPost("/v1/accounts", async (HttpContext http, OpenAccountRequest request,
     // the opening happened, only the answer was lost.
     if (opened.TryGetValue(idempotencyKey, out var existing))
     {
-        log.LogInformation("Repeated request (key {Key}): returning account {Bsb} {Account} again.", idempotencyKey, existing.Bsb, existing.AccountNumber);
+        log.LogInformation("Repeated request (key {Key}): returning account {Bsb} {Account} again.", idempotencyKey, existing.Bsb, Masked(existing.AccountNumber));
         return Results.Ok(existing);
     }
 
@@ -94,7 +94,7 @@ app.MapPost("/v1/accounts", async (HttpContext http, OpenAccountRequest request,
         DateTimeOffset.UtcNow));
 
     log.LogInformation("Opened account {Bsb} {Account} ({Product}) for {Customer} in the name of {AccountName}, branch {Branch}.",
-        account.Bsb, account.AccountNumber, account.Product, request.CustomerNumber, request.AccountName, request.BranchCode);
+        account.Bsb, Masked(account.AccountNumber), account.Product, request.CustomerNumber, request.AccountName, request.BranchCode);
     return Results.Created($"/v1/accounts/{account.AccountNumber}", account);
 });
 
@@ -118,6 +118,13 @@ app.Run();
 
 static bool IsLocal(HttpContext http) =>
     http.Connection.RemoteIpAddress is { } ip && IPAddress.IsLoopback(ip);
+
+// Logs show the last four digits only, like every platform component (LogMasking).
+static string Masked(string? accountNumber)
+{
+    var value = accountNumber?.Trim() ?? string.Empty;
+    return value.Length <= 4 ? new string('*', value.Length) : $"****{value[^4..]}";
+}
 
 enum Behaviour { Healthy, Slow, Failing, Down, Refusing }
 

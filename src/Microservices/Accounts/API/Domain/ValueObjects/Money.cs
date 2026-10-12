@@ -52,7 +52,10 @@ public enum FundsRefusalReason
     InsufficientFunds = 5,
 
     /// <summary>A release for this payment arrived first: the reservation must not happen any more.</summary>
-    AlreadyReleased = 6
+    AlreadyReleased = 6,
+
+    /// <summary>The account is held at another branch than the initiating staff member's.</summary>
+    AccountNotInBranch = 7
 }
 
 public static class FundsCodes
@@ -83,6 +86,7 @@ public static class FundsCodes
         FundsRefusalReason.CurrencyNotSupported => "CURRENCY_NOT_SUPPORTED",
         FundsRefusalReason.InsufficientFunds => "INSUFFICIENT_FUNDS",
         FundsRefusalReason.AlreadyReleased => "ALREADY_RELEASED",
+        FundsRefusalReason.AccountNotInBranch => "ACCOUNT_NOT_IN_BRANCH",
         _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, null)
     };
 
@@ -94,6 +98,7 @@ public static class FundsCodes
         "CURRENCY_NOT_SUPPORTED" => FundsRefusalReason.CurrencyNotSupported,
         "INSUFFICIENT_FUNDS" => FundsRefusalReason.InsufficientFunds,
         "ALREADY_RELEASED" => FundsRefusalReason.AlreadyReleased,
+        "ACCOUNT_NOT_IN_BRANCH" => FundsRefusalReason.AccountNotInBranch,
         _ => throw new ArgumentOutOfRangeException(nameof(code), code, "Unknown funds refusal reason code.")
     };
 
@@ -106,6 +111,7 @@ public static class FundsCodes
         FundsRefusalReason.CurrencyNotSupported => "The paying account is held in another currency.",
         FundsRefusalReason.InsufficientFunds => "Insufficient available funds.",
         FundsRefusalReason.AlreadyReleased => "The payment was already cancelled.",
+        FundsRefusalReason.AccountNotInBranch => "The paying account is held at another branch.",
         _ => reason.ToString()
     };
 }

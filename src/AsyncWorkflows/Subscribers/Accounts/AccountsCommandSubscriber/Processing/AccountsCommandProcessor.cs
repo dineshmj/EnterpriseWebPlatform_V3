@@ -6,6 +6,7 @@ using System.Text.Json;
 using Polly;
 
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Subscribers;
+using EnterpriseWebPlatform.Common.Observability;
 
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.Accounts.AccountsCommandSubscriber.Processing;
 
@@ -55,8 +56,8 @@ public sealed class AccountsCommandProcessor(
         }
 
         logger.LogInformation(
-            "Received {Command} MessageId={MessageId} Payment={PaymentNumber} ({PaymentRef}) Account={Bsb} {AccountNumber} Amount={Amount} {Currency}.",
-            envelope.EventType, envelope.MessageId, p.PaymentNumber, p.PaymentRef, p.Bsb, p.AccountNumber, p.Amount, p.Currency);
+            "Received {Command} MessageId={MessageId} Payment={PaymentNumber} ({PaymentRef}) Account={Account} Amount={Amount} {Currency}.",
+            envelope.EventType, envelope.MessageId, p.PaymentNumber, p.PaymentRef, LogMasking.Account(p.Bsb, p.AccountNumber), p.Amount, p.Currency);
 
         HttpResponseMessage response;
         try
@@ -110,6 +111,7 @@ public sealed class AccountsCommandProcessor(
                 accountNumber = p.AccountNumber,
                 amount = p.Amount,
                 currency = p.Currency,
+                branchCode = p.BranchCode,
                 initiatedByUserId = envelope.InitiatedByUserId,
                 workflowId = envelope.WorkflowId,
                 correlationId = envelope.CorrelationId
@@ -135,5 +137,6 @@ public sealed class AccountsCommandProcessor(
         string? Bsb,
         string? AccountNumber,
         decimal Amount,
-        string? Currency);
+        string? Currency,
+        string? BranchCode);
 }

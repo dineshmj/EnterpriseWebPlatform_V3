@@ -24,6 +24,8 @@ public sealed record PaymentCompensationFailedDomainEvent(string Reason, DateTim
 /// <summary>
 /// The orchestrator asks Accounts to reserve, settle or release the payment's funds. The
 /// command's MessageId is chosen here, so the saga knows which command it waits for.
+/// BranchCode is the initiating staff member's branch: Accounts refuses to reserve funds on
+/// an account held at another branch.
 /// </summary>
 public sealed record FundsCommandIssuedDomainEvent(
     string CommandType,
@@ -36,4 +38,5 @@ public sealed record FundsCommandIssuedDomainEvent(
     string AccountNumber,
     decimal Amount,
     string Currency,
+    string BranchCode,
     DateTimeOffset OccurredAt) : IDomainEvent;

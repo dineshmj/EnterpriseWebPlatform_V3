@@ -4,9 +4,13 @@ using EnterpriseWebPlatform.Payments.Api.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.Payments.Api.Application.Commands;
 
-/// <summary>A reply from Accounts (accounts.funds.replies), as the reply courier hands it over.</summary>
+/// <summary>
+/// A reply from Accounts (accounts.funds.replies), as the reply courier hands it over.
+/// CausationId: the MessageId of the command it answers.
+/// </summary>
 public sealed record SagaReplyCommand(
     Guid MessageId,
+    Guid CausationId,
     string ReplyType,
     Guid PaymentRef,
     string? ReasonCode,
@@ -49,17 +53,17 @@ public sealed class HandleSagaReplyCommandHandler(
         switch (reply.ReplyType)
         {
             case "FundsReserved":
-                saga.OnFundsReserved(payment, reply.MessageId, now);
+                saga.OnFundsReserved(payment, reply.MessageId, reply.CausationId, now);
                 break;
             case "FundsReservationFailed":
-                saga.OnFundsReservationFailed(payment, reply.MessageId, reply.ReasonCode ?? "FUNDS_NOT_RESERVED",
+                saga.OnFundsReservationFailed(payment, reply.MessageId, reply.CausationId, reply.ReasonCode ?? "FUNDS_NOT_RESERVED",
                     reply.Reason ?? "Accounts could not reserve the funds.", now);
                 break;
             case "FundsSettled":
-                saga.OnFundsSettled(payment, reply.MessageId, now);
+                saga.OnFundsSettled(payment, reply.MessageId, reply.CausationId, now);
                 break;
             case "FundsReleased":
-                saga.OnFundsReleased(payment, reply.MessageId, reply.NothingWasHeld, now);
+                saga.OnFundsReleased(payment, reply.MessageId, reply.CausationId, reply.NothingWasHeld, now);
                 break;
             default:
                 throw new DomainRuleViolationException($"Unknown reply type '{reply.ReplyType}'.");

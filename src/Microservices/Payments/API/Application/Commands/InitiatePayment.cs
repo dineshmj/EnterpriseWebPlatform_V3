@@ -4,6 +4,7 @@ using EnterpriseWebPlatform.Payments.Api.Application.Abstractions;
 using EnterpriseWebPlatform.Payments.Api.Domain.Aggregates;
 using EnterpriseWebPlatform.Payments.Api.Domain.Exceptions;
 using EnterpriseWebPlatform.Payments.Api.Domain.ValueObjects;
+using EnterpriseWebPlatform.Common.Observability;
 
 namespace EnterpriseWebPlatform.Payments.Api.Application.Commands;
 
@@ -72,7 +73,8 @@ public sealed class InitiatePaymentCommandHandler(
 
             logger.LogInformation(
                 "Payment {PaymentNumber} initiated by {UserId} (branch {Branch}): {Amount} AUD {From} -> {To}; approval required: {ApprovalRequired}. Saga {SagaId} started.",
-                payment.PaymentNumber, command.InitiatedByUserId, command.Branch, payment.Amount, from, to, payment.ApprovalRequired, saga.Id);
+                payment.PaymentNumber, command.InitiatedByUserId, command.Branch, payment.Amount,
+                LogMasking.Account(from.Bsb, from.AccountNumber), LogMasking.Account(to.Bsb, to.AccountNumber), payment.ApprovalRequired, saga.Id);
 
             return new InitiatePaymentResult(payment.Id, payment.PaymentNumber, payment.Status.ToCode(), Created: true);
         }
@@ -93,8 +95,23 @@ public sealed class InitiatePaymentCommandHandler(
         if (!string.Equals(existing.InitiatedByUserId, command.InitiatedByUserId, StringComparison.Ordinal))
             throw new DomainConflictException("This Idempotency-Key was already used for another request.");
 
+        // A retry repeats the SAME payment. The same key with other details is not a retry - it
+        // is refused rather than silently answered with the first payment.
+        if (!IsSamePayment(existing, command))
+            throw new DomainConflictException("This Idempotency-Key was already used for a payment with other details. Start a new payment instead.");
+
         return new InitiatePaymentResult(existing.Id, existing.PaymentNumber, existing.Status.ToCode(), Created: false);
     }
+
+    /// <summary>The request's details, normalised exactly as the payment stored them, equal the payment's.</summary>
+    private static bool IsSamePayment(Payment existing, InitiatePaymentCommand command) =>
+        existing.CustomerNumber == PaymentRules.ValidCustomerNumber(command.CustomerNumber) &&
+        existing.From == BankAccountRef.Create(command.FromBsb, command.FromAccountNumber, "paying") &&
+        existing.To == BankAccountRef.Create(command.ToBsb, command.ToAccountNumber, "payee") &&
+        existing.PayeeName == PaymentRules.ValidPayeeName(command.PayeeName) &&
+        existing.Amount == command.Amount &&
+        existing.Reference == PaymentRules.ValidReference(command.Reference) &&
+        existing.BranchCode == command.Branch;
 
     /// <summary>PAY-yyMMdd-XXXXXX: date plus 6 random characters (no 0/O/1/I to avoid misreading).</summary>
     private static string NewPaymentNumber(DateTimeOffset now)

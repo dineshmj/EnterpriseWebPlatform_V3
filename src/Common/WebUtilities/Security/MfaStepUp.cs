@@ -2,9 +2,11 @@ using System.Text.Json;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace EnterpriseWebPlatform.Common.WebUtilities.Security;
 
@@ -35,6 +37,23 @@ public static class MfaStepUp
     public const string ErrorCode = "mfa_required";
 
     public static bool IsEnabled(IConfiguration configuration) => configuration.GetValue<bool>(EnabledKey);
+
+    /// <summary>
+    /// Fail closed: MFA may be off on a developer's machine only. Outside Development the host
+    /// refuses to start unless "Mfa:Enabled" is explicitly true - a forgotten or mistyped
+    /// setting can never silently switch off the second factor or the step-up. Called by the
+    /// IDP and by every API that requires step-up, so all of them hold the same policy.
+    /// </summary>
+    public static WebApplicationBuilder RequireMfaOutsideDevelopment(this WebApplicationBuilder builder)
+    {
+        if (!builder.Environment.IsDevelopment() && !IsEnabled(builder.Configuration))
+        {
+            throw new InvalidOperationException(
+                $"\"{EnabledKey}\" must be true outside Development ({builder.Environment.EnvironmentName}): MFA and the step-up for risky actions cannot be switched off there.");
+        }
+
+        return builder;
+    }
 
     /// <summary>Adds the step-up requirement to a policy (no effect while MFA is off).</summary>
     public static AuthorizationPolicyBuilder RequireMfa(this AuthorizationPolicyBuilder policy) =>

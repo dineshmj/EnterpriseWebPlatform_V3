@@ -102,6 +102,7 @@ public sealed class PaymentsSagaReplyProcessor(
             Content = JsonContent.Create(new
             {
                 messageId = envelope.MessageId,
+                causationId = envelope.CausationId,
                 replyType = envelope.EventType,
                 paymentRef = p.PaymentRef,
                 reasonCode = p.Reason,

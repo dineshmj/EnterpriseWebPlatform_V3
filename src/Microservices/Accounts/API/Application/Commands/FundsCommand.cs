@@ -1,6 +1,7 @@
 using EnterpriseWebPlatform.Accounts.Api.Application.Abstractions;
 using EnterpriseWebPlatform.Accounts.Api.Domain.Aggregates;
 using EnterpriseWebPlatform.Accounts.Api.Domain.ValueObjects;
+using EnterpriseWebPlatform.Common.Observability;
 
 namespace EnterpriseWebPlatform.Accounts.Api.Application.Commands;
 
@@ -13,7 +14,8 @@ public enum FundsCommandType
 
 /// <summary>
 /// A funds command from the Payments saga orchestrator (via accounts.commands). MessageId is
-/// the command's own ID: the Inbox key and the CausationId of the reply.
+/// the command's own ID: the Inbox key and the CausationId of the reply. Branch (the
+/// initiator's branch) is required for a reservation; settle and release follow the hold.
 /// </summary>
 public sealed record FundsCommand(
     FundsCommandType Type,
@@ -27,7 +29,8 @@ public sealed record FundsCommand(
     string Currency,
     string? InitiatedByUserId,
     Guid? WorkflowId,
-    Guid? CorrelationId);
+    Guid? CorrelationId,
+    BranchCode? Branch = null);
 
 public sealed record FundsCommandResult(string HoldStatus, bool AlreadyProcessed);
 
@@ -89,7 +92,7 @@ public sealed class FundsCommandHandler(
                     ? FundsHold.RefuseUnknownAccount(command.PaymentRef, command.PaymentNumber, command.Bsb, command.AccountNumber,
                         command.CustomerNumber, command.Amount, command.Currency, command.InitiatedByUserId, now)
                     : FundsHold.Reserve(command.PaymentRef, command.PaymentNumber, account, command.CustomerNumber,
-                        command.Amount, command.Currency, command.InitiatedByUserId, now);
+                        command.Amount, command.Currency, command.Branch, command.InitiatedByUserId, now);
                 holds.Add(hold);
                 break;
 
@@ -120,8 +123,8 @@ public sealed class FundsCommandHandler(
         await transaction.CommitAsync(cancellationToken);
 
         logger.LogInformation(
-            "{Command} funds for payment {PaymentNumber} ({Amount} {Currency}, {Bsb} {AccountNumber}): hold is {Status}{Reason}.",
-            command.Type, command.PaymentNumber, command.Amount, command.Currency, command.Bsb, command.AccountNumber,
+            "{Command} funds for payment {PaymentNumber} ({Amount} {Currency}, {Account}): hold is {Status}{Reason}.",
+            command.Type, command.PaymentNumber, command.Amount, command.Currency, LogMasking.Account(command.Bsb, command.AccountNumber),
             hold.Status.ToCode(), hold.RefusalReason is { } r ? $" ({r.ToCode()})" : string.Empty);
 
         return new FundsCommandResult(hold.Status.ToCode(), AlreadyProcessed: false);

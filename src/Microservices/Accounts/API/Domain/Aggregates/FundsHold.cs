@@ -68,17 +68,18 @@ public sealed class FundsHold : AggregateRoot
 
     /// <summary>
     /// Reserves the funds on the account, or records why not. Either way the result is a
-    /// hold row (the record of the answer) and a reply event.
+    /// hold row (the record of the answer) and a reply event. The initiator's branch must be
+    /// the account's branch.
     /// </summary>
     public static FundsHold Reserve(
         Guid paymentRef, string paymentNumber, Account account, string customerNumber,
-        decimal amount, string currency, string? initiatedByUserId, DateTimeOffset now)
+        decimal amount, string currency, BranchCode? initiatorBranch, string? initiatedByUserId, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(account);
         var hold = New(paymentRef, paymentNumber, account.Bsb, account.AccountNumber, customerNumber, amount, currency, initiatedByUserId, now);
         hold.AccountId = account.Id;
 
-        if (account.RefusalToHold(hold.Amount, hold.Currency, hold.CustomerNumber) is { } refusal)
+        if (account.RefusalToHold(hold.Amount, hold.Currency, hold.CustomerNumber, initiatorBranch) is { } refusal)
         {
             hold.Refuse(refusal, now);
             return hold;

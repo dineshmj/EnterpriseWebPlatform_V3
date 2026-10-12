@@ -77,7 +77,7 @@ public sealed class MfaSetupModel(
         if (user is null || !user.IsActive)
             return RedirectToPage("/Account/Login");
 
-        var codes = await mfa.ConfirmEnrolmentAsync(user.Id, Convert.FromBase64String(pending.EnrolmentSecret!), Code ?? string.Empty, HttpContext.RequestAborted);
+        var codes = await mfa.ConfirmEnrolmentAsync(user, Convert.FromBase64String(pending.EnrolmentSecret!), Code ?? string.Empty, HttpContext.RequestAborted);
         if (codes is null)
         {
             ModelState.AddModelError(string.Empty, "That code does not match. Check that the phone's time is set automatically, then enter the current code.");

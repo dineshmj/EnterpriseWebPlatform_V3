@@ -107,10 +107,13 @@ public sealed class Account
     /// <summary>
     /// Why these funds may NOT be held for a payment, or null when they may. Checked and
     /// applied under the account's row lock, so two payments can never both spend the
-    /// same money.
+    /// same money. The initiator's branch comes first: staff may only move money from an
+    /// account of their own branch, whatever they know of other accounts.
     /// </summary>
-    public FundsRefusalReason? RefusalToHold(decimal amount, string currency, string customerNumber)
+    public FundsRefusalReason? RefusalToHold(decimal amount, string currency, string customerNumber, BranchCode? initiatorBranch)
     {
+        if (!IsInBranch(initiatorBranch))
+            return FundsRefusalReason.AccountNotInBranch;
         if (!string.Equals(CustomerNumber, customerNumber?.Trim(), StringComparison.OrdinalIgnoreCase))
             return FundsRefusalReason.AccountNotOwned;
         if (Status != AccountStatus.Active)
