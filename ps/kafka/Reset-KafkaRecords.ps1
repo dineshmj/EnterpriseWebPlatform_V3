@@ -37,7 +37,14 @@ $AdminProps = Join-Path $KafkaHome 'config\admin.properties'
 $ToolWorkingDir = Join-Path $env:TEMP 'ewp-kafka-tools'
 New-Item -ItemType Directory -Force $ToolWorkingDir | Out-Null
 
+function Test-KafkaPort {
+    $probe = New-Object System.Net.Sockets.TcpClient
+    try { $probe.Connect('localhost', 9092); return $true } catch { return $false } finally { $probe.Dispose() }
+}
+
 function Invoke-KafkaTool([string] $Tool, [string] $Arguments) {
+    # Without a broker a tool waits about 60 s (and the .bat still exits 0): stop at once instead.
+    if (-not (Test-KafkaPort)) { throw "Kafka stopped answering on $Bootstrap (was its window closed?). Start it again and re-run this script." }
     $exe = Join-Path $Bin $Tool
     $output = cmd.exe /d /c "cd /d `"$ToolWorkingDir`" && `"$exe`" $Arguments 2>&1"
     if ($LASTEXITCODE -ne 0) { throw "$Tool failed (exit $LASTEXITCODE):`n$($output -join "`n")" }

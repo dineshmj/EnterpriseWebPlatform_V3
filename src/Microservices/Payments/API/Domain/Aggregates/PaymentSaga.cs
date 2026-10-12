@@ -253,6 +253,23 @@ public sealed class PaymentSaga : AggregateRoot
     public bool IsDueForNetwork(DateTimeOffset now) =>
         Status == SagaStatus.Running && Step == SagaStep.SendToNetwork && NextCheckAt <= now;
 
+    /// <summary>
+    /// Takes the network attempt before calling the network: the timer moves on by the lease, so
+    /// no other step runner picks this saga while the call is on its way - and the call needs no
+    /// open transaction or row lock. Should this process die mid-call, the lease runs out and the
+    /// attempt is made again (the PaymentRef is the network's Idempotency-Key: never paid twice).
+    /// Returns the claim: the saga's Version, which must be unchanged when the answer is recorded.
+    /// </summary>
+    public long ClaimNetworkAttempt(TimeSpan lease, DateTimeOffset now)
+    {
+        if (!IsDueForNetwork(now))
+            throw new DomainConflictException($"The saga is at {Step.ToCode()} ({Status.ToCode()}): no network attempt is due.");
+
+        NextCheckAt = now + lease;
+        Touch(now);
+        return Version;
+    }
+
     public void OnNetworkAccepted(Payment payment, string networkReference, SagaPolicy policy, DateTimeOffset now)
     {
         EnsureStep(SagaStep.SendToNetwork);

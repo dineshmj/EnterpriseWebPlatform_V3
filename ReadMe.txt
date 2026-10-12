@@ -222,12 +222,7 @@ What the platform is, how it is designed and what each component must do are doc
 			& $psql -h localhost -U postgres -d EwpBssShellDb -v ON_ERROR_STOP=1 -f .\src\Shell\MenuDB\EwpBssShellDb.sql
 
 		pgAdmin's Query Tool, opened on the right database, works as well (its warnings appear in the Messages tab, not the
-		result grid). With the docker-compose PostgreSQL container instead, prefix the same psql commands with
-		"docker exec -i ewp-postgres" and pipe the script in, e.g.:
-
-			Get-Content .\src\Shell\MenuDB\EwpBssShellDb.sql -Raw | docker exec -i ewp-postgres psql -U postgres -d EwpBssShellDb -v ON_ERROR_STOP=1
-
-		(The container creates EwpIdentityAccessDb automatically.)
+		result grid).
 
 		After recreating the IDP database, sign out and sign in again so that new claims are issued.
 
@@ -427,40 +422,34 @@ What the platform is, how it is designed and what each component must do are doc
 	   a new application 1), and the audit trail - which starts at the earliest offset - would record history about customers
 	   that no longer exist.
 
-	   ONE COMMAND, six levels (PostgreSQL running; close every console window first - the Kafka window, the three
+	   ONE COMMAND, seven levels (PostgreSQL running; close every console window first - the Kafka window, the three
 	   Node.js windows (.\ps\run\Start-NodeServices.ps1 -Stop) and the .NET ones (stop debugging in Visual Studio) -
-	   otherwise the script lists what is still open and exits; options 3 to 6 start Kafka again themselves):
+	   otherwise the script lists what is still open and exits; options 2 and 4 to 7 start Kafka again themselves):
 
 			.\ps\Reset.ps1                    (shows a menu)
-			.\ps\Reset.ps1 -Level 6 -Force    (no questions)
+			.\ps\Reset.ps1 -Level 7 -Force    (everything, no questions)
 
 	   1  Data only              drops and recreates the 11 databases and every ewp_* user, empties the documents store
 	                             and the Playwright sign-ins. Kafka is not touched: its old messages stay, but every
 	                             consumer group has already read them, so nothing is replayed.
-	   2  PostgreSQL users only  the ewp_* users and their grants created / refreshed (Apply-EwpServiceDbUsers). Use it
+	   2  Data + Kafka messages  level 1, plus every Kafka topic emptied (ps\kafka\Reset-KafkaRecords.ps1); the topics,
+	                             consumer groups, users and ACLs stay exactly as they are. The quick clean slate.
+	   3  PostgreSQL users only  the ewp_* users and their grants created / refreshed (Apply-EwpServiceDbUsers). Use it
 	                             after adding a service user. Nothing erased.
-	   3  Kafka security only    the Kafka users, topics, consumer groups and ACLs created / refreshed (Setup-KafkaSecurity
+	   4  Kafka security only    the Kafka users, topics, consumer groups and ACLs created / refreshed (Setup-KafkaSecurity
 	                             Prepare + Acls; Kafka is started first if it is not running). Use it after adding a
 	                             topic, a subscriber or a Kafka user. Nothing erased.
-	   4  PostgreSQL + Kafka     levels 2 and 3 together. Nothing erased.
-	   5  Data + Kafka security  levels 1 and 3 together.
-	   6  Everything             level 5, with Kafka stopped, wiped and re-formatted first (every topic, message,
+	   5  PostgreSQL + Kafka     levels 3 and 4 together. Nothing erased.
+	   6  Data + Kafka security  levels 1 and 4 together.
+	   7  Everything             level 6, with Kafka stopped, wiped and re-formatted first (every topic, message,
 	                             consumer group, user and ACL gone, then recreated). The full fresh start.
 
-	   After 1, 5 or 6: start Visual Studio and .\ps\run\Start-NodeServices.ps1, and sign in again. Those three ask one
-	   YES (or pass -Force); levels 2-4 erase nothing, leave the platform running and ask nothing. No connection string
-	   is ever asked.
+	   After 1, 2, 6 or 7: start Visual Studio and .\ps\run\Start-NodeServices.ps1, and sign in again. Those four ask
+	   one YES (or pass -Force); levels 3-5 erase nothing and ask nothing. No connection string is ever asked.
 
-	   A LIGHTER CLEAN SLATE, keeping Kafka's topics and groups, in this order (stop Visual Studio and
-	   .\ps\run\Start-NodeServices.ps1 -Stop first; Kafka and PostgreSQL running):
-
-			.\ps\kafka\Reset-KafkaRecords.ps1               (empties every topic; topics, ACLs and consumer groups stay)
-			.\ps\database\Initialize-EwpDatabases.ps1        (recreates every database)
-
-	   then start Visual Studio and the Node.js services. Reset-KafkaRecords.ps1 deletes each topic's records up to its
-	   current end (kafka-delete-records): offsets do not restart at 0, so every consumer group simply has nothing old to
-	   read. (The heavier alternative - deleting and recreating the topics with Kafka UI or kafka-topics.bat --delete, then
-	   ps\kafka\Setup-KafkaSecurity.ps1 -Phase Prepare - also discards the consumer groups' offsets.)
+	   How option 2 empties Kafka: Reset-KafkaRecords.ps1 deletes each topic's records up to its current end
+	   (kafka-delete-records). Offsets do not restart at 0, so every consumer group simply has nothing old to read.
+	   (Option 7 instead deletes the topics themselves, which also discards the consumer groups' offsets.)
 
 	c) Re-recording the audit trail after recreating EwpAuditDb: stop the Audit API, then reset its consumer group to the
 	   start of every topic it reads, and start the API again (it records everything Kafka still holds):

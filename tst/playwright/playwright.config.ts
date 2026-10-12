@@ -10,6 +10,7 @@ import './support/env';
  *   seed        demo records (Camilla Parker, Jason Millers, payments) after a database re-create
  *   functional  one screen or feature at a time
  *   journeys    several people end to end (agent → KYC → Compliance → Accounts; maker → checker)
+ *   resilience  the same journeys while a simulated external system refuses, is down or is slow
  *   security    headers, sessions, CSRF, authorization, browser boundary, input, rate limits, MFA
  *
  * One worker: the tests share one platform and its data (sagas, work queues), so they run in turn.
@@ -44,6 +45,7 @@ export default defineConfig({
     { name: 'seed', testDir: './tests/10-seed', dependencies: ['smoke'] },
     { name: 'functional', testDir: './tests/20-functional', dependencies: ['smoke'] },
     { name: 'journeys', testDir: './tests/30-journeys', dependencies: ['smoke'] },
+    { name: 'resilience', testDir: './tests/35-resilience', dependencies: ['smoke'] },
     { name: 'security', testDir: './tests/40-security', dependencies: ['smoke'] },
   ],
 });

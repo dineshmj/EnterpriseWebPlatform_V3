@@ -41,6 +41,7 @@ playwright\
     10-seed\           demo records after a database re-create (Camilla Parker, Jason Millers, payments)
     20-functional\     one screen or feature at a time (authentication, onboarding, kyc, ...)
     30-journeys\       several people end to end (agent → KYC → Compliance → Accounts; maker → checker)
+    35-resilience\     the journeys while a simulated external system refuses, is down or is slow
     40-security\       headers, session, csrf, authorization, browser, input, rate-limiting, mfa
   support\
     personas.ts        the demo users, their roles and the menu each role must see

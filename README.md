@@ -50,6 +50,7 @@ Each document has one purpose. A fact is written in exactly one place; other doc
 | [Architectural Vision & Security Blueprint](doc/Enterprise-Web-Platform-V3-Architectural-Vision-and-Security-Blueprint.md) | Vision, principles, landscape, context map, DDD and deployability rules, cross-cutting security and operations targets, **capability matrix**, roadmap, status legend |
 | [Architectural & Security Features (demoable)](doc/Architectural-And-Security-Features-Demoable-EWP-V3.md) | What can be seen working today: patterns, security controls and avoided anti-patterns, each with where to look in the code; starts with a "common questions" index (DLQ handling, pod replacement, IDOR, tokens…) |
 | [Application Personas](doc/Application-Personas.md) | The persona catalogue, role codes, cross-persona principles |
+| [Threat Model](doc/Threat-Model.md) | Assets, threat actors, trust boundaries, STRIDE threats per boundary with the control that stops each, banking abuse cases, and the residual risks still open or accepted for the PoC |
 | [Authorization Model](doc/Authorization-Model.md) | How authorization decisions are made: pipeline, scopes vs permissions, ABAC / ReBAC / SoD mechanics, platform-level permissions |
 | [Saga Plans](doc/EWP-V3-Saga-Choreography-and-Orchestration-Plans.md) | Cross-context workflows: event chain, compensation, saga rules |
 | [Integration Event Catalogue](doc/Integration-Event-Catalogue.md) | Event envelope, topics, keys, producers, consumers |
@@ -98,6 +99,6 @@ How to build, configure and run one deployable:
 - Optional: Jaeger for viewing traces; Kafka UI for browsing topics
 - Visual Studio 2026 and / or VS Code
 
-`docker-compose.yml` is an older alternative for PostgreSQL and Kafka. Its Kafka runs **without authentication**, so it does not match the components' SASL settings; to use it, set `Kafka:SecurityProtocol` to `Plaintext` in each component.
+There is deliberately no Docker Compose stack: the only supported local set-up is the secured one (Kafka with SASL/SCRAM users and ACLs, least-privilege PostgreSQL users), so nobody learns or ships an unauthenticated default. Kafka UI, when wanted, runs from the hardened [kafka/kafka-ui.yml](kafka/kafka-ui.yml).
 
 Start with [ReadMe.txt](ReadMe.txt).

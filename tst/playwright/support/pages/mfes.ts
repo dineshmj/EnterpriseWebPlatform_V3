@@ -197,3 +197,139 @@ export class AccountsMfe extends CaseQueueMfe {
   protected readonly queueTitle = 'Account applications';
   protected readonly approveLabel = 'Approve and open account';
 }
+
+// ---------------------------------------------------------------- Payments
+
+/** A payee as the customer gives it. The payment network simulator decides Confirmation of Payee by the account's last digit. */
+export interface Payee {
+  bsb: string;
+  accountNumber: string;
+  name: string;
+}
+
+/** What the payment's page says when it has ended (the outcome's title). */
+export type PaymentOutcome =
+  | 'Payment completed'
+  | 'Payment rejected'
+  | 'Payment failed - funds released'
+  | 'Waiting for a payments officer';
+
+/** The page of one payment: "Payment · PAY-yymmdd-XXXXXX". */
+const PAYMENT_HEADING = /^Payment · (PAY-\d{6}-[A-Z0-9]{6})$/;
+
+/** Payments: "New Payment" (the assisted channel) and the payment's own page, which follows the saga live. */
+export class PaymentsMfe {
+  static readonly newTitle = 'New payment';
+
+  constructor(private readonly shell: ShellPage) {}
+
+  async openNew(): Promise<void> {
+    await this.shell.openMenuItem('Payments', 'New Payment');
+    await this.shell.waitForScreen(PaymentsMfe.newTitle);
+  }
+
+  /** 1 · From: finds the customer (by customer number) and chooses their account. */
+  async choosePayer(customerNumber: string): Promise<void> {
+    const mfe = this.shell.workspace();
+    await mfe.locator('#payer-search').fill(customerNumber);
+    const account = mfe.getByRole('list', { name: 'Matching accounts' }).getByRole('button').filter({ hasText: customerNumber });
+    await expect(account.first()).toBeVisible({ timeout: 15_000 });
+    await account.first().click();
+  }
+
+  /**
+   * 2 · To: BSB (checked against the directory), account number and name, then Confirmation of
+   * Payee. Leaving the name field runs the check - but only once the BSB lookup has answered; when
+   * the name was typed faster than that (headless), the screen offers "Check payee name" instead,
+   * which is clicked, as a person would.
+   */
+  async enterPayee(payee: Payee): Promise<void> {
+    const mfe = this.shell.workspace();
+    await mfe.locator('#payee-bsb').fill(payee.bsb);
+    await mfe.locator('#payee-account').fill(payee.accountNumber);
+    await mfe.locator('#payee-name').fill(payee.name);
+    await mfe.locator('#payee-name').press('Tab');
+    const checkButton = mfe.getByRole('button', { name: 'Check payee name', exact: true });
+    await expect(async () => {
+      if (await checkButton.isVisible()) await checkButton.click();
+      await expect(this.confirmationOfPayee()).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 20_000 });
+  }
+
+  /** The Confirmation of Payee result shown for the payee entered. */
+  confirmationOfPayee(): Locator {
+    return this.shell.workspace().getByText(/^Confirmation of Payee: (match|close match|no match)$/);
+  }
+
+  /** Close match: takes over the name the payee's bank holds (the "Use “…”" button). */
+  async useHeldName(): Promise<void> {
+    await this.shell.workspace().getByRole('button', { name: /^Use “.+”$/ }).click();
+  }
+
+  /** 3 · Amount and an optional reference. */
+  async enterAmount(amount: string, reference?: string): Promise<void> {
+    const mfe = this.shell.workspace();
+    await mfe.locator('#amount').fill(amount);
+    if (reference) await mfe.locator('#reference').fill(reference);
+  }
+
+  transferButton(): Locator {
+    return this.shell.workspace().getByRole('button', { name: 'Transfer', exact: true });
+  }
+
+  /** What still blocks the transfer (the Review card's "Still to do" list). */
+  stillToDo(): Locator {
+    return this.shell.workspace().getByRole('list', { name: 'Still to do' });
+  }
+
+  /** Transfers and returns the payment number from the payment's page, where the screen goes next. */
+  async transfer(): Promise<string> {
+    await this.transferButton().click();
+    const heading = this.shell.workspace().getByRole('heading', { level: 1, name: PAYMENT_HEADING });
+    await expect(heading).toBeVisible({ timeout: 30_000 });
+    const paymentNumber = PAYMENT_HEADING.exec((await heading.textContent())?.trim() ?? '')?.[1];
+    if (!paymentNumber) throw new Error('The payment page did not show a payment number.');
+    return paymentNumber;
+  }
+
+  /** The payment's page (open after a transfer) reaches `outcome`; it follows the saga by itself. */
+  async expectOutcome(outcome: PaymentOutcome, timeout = 60_000): Promise<void> {
+    await expect(this.shell.workspace().getByText(outcome, { exact: true })).toBeVisible({ timeout });
+  }
+
+  /** A line of the saga's timeline on the payment's page (e.g. "The payment network did not answer"). */
+  timeline(): Locator {
+    return this.shell.workspace().locator('ol li');
+  }
+}
+
+/** Payments: the officer's "Payment Approvals" queue → the payment's page → approve or reject. */
+export class PaymentApprovalsMfe {
+  static readonly queueTitle = 'Payment approvals';
+
+  constructor(private readonly shell: ShellPage) {}
+
+  /** Opens the queue, waits for the payment (it arrives once the funds are reserved) and opens it. */
+  async openPayment(paymentNumber: string): Promise<void> {
+    await this.shell.openMenuItem('Payments', 'Payment Approvals');
+    await this.shell.waitForScreen(PaymentApprovalsMfe.queueTitle);
+    const link = () => this.shell.workspace().getByRole('link', { name: paymentNumber, exact: true });
+    await waitFor(this.shell, PaymentApprovalsMfe.queueTitle, link);
+    await link().click();
+    await this.shell.waitForScreen(`Payment · ${paymentNumber}`);
+  }
+
+  async approve(remarks?: string): Promise<void> {
+    const mfe = this.shell.workspace();
+    if (remarks) await mfe.locator('#decision-remarks').fill(remarks);
+    await mfe.getByRole('button', { name: 'Approve and send', exact: true }).first().click();
+    await mfe.getByRole('alertdialog').getByRole('button', { name: 'Approve and send', exact: true }).click();
+  }
+
+  async reject(remarks: string): Promise<void> {
+    const mfe = this.shell.workspace();
+    await mfe.locator('#decision-remarks').fill(remarks);
+    await mfe.getByRole('button', { name: 'Reject', exact: true }).first().click();
+    await mfe.getByRole('alertdialog').getByRole('button', { name: 'Reject', exact: true }).click();
+  }
+}

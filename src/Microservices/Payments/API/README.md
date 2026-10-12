@@ -25,6 +25,8 @@ URL: `https://payments-api.dev.localhost:44488`. Database: `EwpPaymentsDb` (user
 
 Nothing waits in memory. `POST /v1/payments` saves the payment, the saga and the first command in **one transaction** and answers **202 Accepted** in milliseconds. Each later step is a short, separate piece of work (a reply arrived, a timer is due) that loads the saga row, decides, and saves the new state with the next command in one transaction. A restart resumes from the saved step.
 
+The payment network call is the exception: no transaction stays open across it. The step runner **claims** the attempt (short transaction: the saga's timer moves on by a 60-second lease, so no other instance takes it), **calls** the network with no lock held, then **records** the answer (short transaction, applied only if the saga's Version is still the claimed one). If the process dies mid-call, the lease runs out and the attempt is repeated - safely, because the PaymentRef is the network's Idempotency-Key.
+
 ## The saga
 
 ```text
