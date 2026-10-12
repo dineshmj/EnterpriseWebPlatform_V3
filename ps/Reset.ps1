@@ -81,6 +81,7 @@ $kafkaWindowTitle = 'Kafka - started by Reset.ps1, keep open'
 $serverProps = Join-Path $KafkaHome 'config\server.properties'
 $adminProps = Join-Path $KafkaHome 'config\admin.properties'
 $storage = Join-Path $root 'src\Microservices\DocumentsManagement\API\DocumentStorage'
+$auditAnchors = Join-Path $root 'src\Microservices\Audit\API\AuditAnchors'
 $playwright = Join-Path $root 'tst\playwright'
 
 # ===================================================================================================
@@ -236,13 +237,17 @@ function Update-PostgresUsers {
 }
 
 function Clear-DocumentStorage {
-    Write-Step "Emptying Documents Management's file store"
-    if (Test-Path $storage) {
-        $items = @(Get-ChildItem $storage -Force | Where-Object { $_.Name -ne '.gitignore' })
-        $items | Remove-Item -Recurse -Force
-        Write-Host "     $($items.Count) item(s) removed (.gitignore kept)."
-    } else {
-        Write-Host '     nothing stored yet.'
+    # The stored documents, and the audit chain's checkpoints: a recreated audit database starts its
+    # chain again at entry 1, so the old checkpoints would report it as truncated.
+    Write-Step "Emptying the file stores (documents, audit checkpoints)"
+    foreach ($store in @($storage, $auditAnchors)) {
+        if (Test-Path $store) {
+            $items = @(Get-ChildItem $store -Force | Where-Object { $_.Name -ne '.gitignore' })
+            $items | Remove-Item -Recurse -Force
+            Write-Host "     $($store.Substring($root.Length + 1)): $($items.Count) item(s) removed (.gitignore kept)."
+        } else {
+            Write-Host "     $($store.Substring($root.Length + 1)): nothing stored yet."
+        }
     }
 }
 
@@ -390,6 +395,7 @@ if ($erasesData -and -not $Force) {
     if ($clearsKafkaMessages) { Write-Host '  - Kafka: every message on every topic (the topics, consumer groups, users and ACLs stay)' }
     Write-Host '  - PostgreSQL: the 11 EWP databases and every ewp_* user (recreated empty, with seed data)'
     Write-Host "  - the stored documents ($storage)"
+    Write-Host "  - the audit chain's checkpoints ($auditAnchors)"
     Write-Host '  - the Playwright saved sign-ins and test results'
     if ($kafkaSecurity) { Write-Host '  Kafka users, topics, consumer groups and ACLs are then recreated / refreshed.' }
     elseif (-not $clearsKafkaMessages) { Write-Host '  Kafka is not touched.' }

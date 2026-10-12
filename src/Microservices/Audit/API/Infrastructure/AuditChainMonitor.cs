@@ -14,11 +14,15 @@ public sealed class AuditChainStatus
 /// Re-verifies the whole chain on a schedule ("Audit:VerifyIntervalMinutes"), so tampering is
 /// noticed without anyone asking: readiness turns Degraded and the metrics show where the
 /// chain broke (ewp_health_value{check="audit-chain",key="brokenAtSequence"}) - an alert can
-/// fire on it.
+/// fire on it. After every verification that passes, the chain's newest entry is anchored: a
+/// signed checkpoint is written OUTSIDE the database. A broken chain is never anchored.
 /// </summary>
 public sealed class AuditChainMonitor(
     IServiceScopeFactory scopeFactory,
     AuditChainStatus status,
+    AuditAnchorStore anchors,
+    AuditCheckpointSigner signer,
+    TimeProvider time,
     IConfiguration configuration,
     ILogger<AuditChainMonitor> logger) : BackgroundService
 {
@@ -36,7 +40,16 @@ public sealed class AuditChainMonitor(
                 status.Latest = result;
 
                 if (result.Intact)
-                    logger.LogInformation("Audit chain intact: {Entries} entries verified.", result.EntriesChecked);
+                {
+                    logger.LogInformation("Audit chain intact: {Entries} entries verified, {Checkpoints} checkpoint(s) matched.",
+                        result.EntriesChecked, result.CheckpointsChecked);
+
+                    if (result.LastEntryHash is { } lastHash && result.LastSequence > await anchors.LatestSequenceAsync(stoppingToken))
+                    {
+                        await anchors.AppendAsync(signer.Sign(result.LastSequence, lastHash, time.GetUtcNow()), stoppingToken);
+                        logger.LogInformation("Audit chain anchored outside the database at entry {Sequence}.", result.LastSequence);
+                    }
+                }
                 else
                     logger.LogCritical("AUDIT CHAIN BROKEN at entry {Sequence}: {Problem}.", result.BrokenAtSequence, result.Problem);
             }

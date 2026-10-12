@@ -100,7 +100,7 @@ Abbreviations: **S** spoofing, **T** tampering, **R** repudiation, **I** informa
 | | Threat | Control | Where |
 |---|---|---|---|
 | E/I | A compromised service reads or changes other contexts' data | One database per context; one login role per deployable with data access to its own database only, no DDL | [EwpServiceDbUsers.sql](../db/EwpServiceDbUsers.sql); every API README (own database user) |
-| T/R | Rewriting the audit trail | Append-only (trigger + SELECT/INSERT-only user); hash chain verified continuously; readiness degrades on a break | [Audit API README](../src/Microservices/Audit/API/README.md) |
+| T/R | Rewriting the audit trail | Append-only (trigger + SELECT/INSERT-only user); hash chain verified continuously; readiness degrades on a break; signed checkpoints outside the database catch a complete rewrite | [Audit API README](../src/Microservices/Audit/API/README.md) #3, #4, #8 |
 | I/T | Reading or replacing KYC documents in storage | Envelope encryption at rest (per-document AES-256-GCM key, wrapped by a rotatable key-encryption key; document ID bound in); served only after authorization, magic-byte checks, attachment disposition | [DM API README](../src/Microservices/DocumentsManagement/API/README.md) #6, #12 |
 
 ### TB5 — Services ↔ Kafka
@@ -131,7 +131,7 @@ Abbreviations: **S** spoofing, **T** tampering, **R** repudiation, **I** informa
 | An auditor browses payments unrecorded | Only through the Audit Journey API, where every look is itself audited | Code; journey asserts pending |
 | A forged "funds held" message moves a payment | Kafka ACLs + pinned `client_id` on internal endpoints | Code, ACLs |
 | A slow network makes a retry pay twice | Idempotency-Key at the network | Playwright `35-resilience` (paid once) |
-| An admin rewrites the audit trail | Detected by the hash chain — **unless the whole chain is recomputed** (R-3) | Integrity monitor |
+| An admin rewrites the audit trail | Detected by the hash chain; a complete recomputation is detected by the signed checkpoints kept outside the database | Integrity monitor |
 
 ## 6. Security testing
 
@@ -148,7 +148,7 @@ Abbreviations: **S** spoofing, **T** tampering, **R** repudiation, **I** informa
 |---|---|---|---|
 | R-1 | The payment network call ran inside a database transaction (row lock held up to 20 s) | Medium (availability) | **Fixed**: claim (short transaction, 60 s lease) → call with no transaction → record (short transaction, only if the saga's Version is unchanged) — `RunDueSagaStep.cs` |
 | R-2 | KYC documents were not encrypted at rest | High (PII) | **Fixed**: envelope encryption in `EncryptedDocumentStorage.cs`. Remaining in production: key-encryption keys in a key vault / HSM instead of configuration |
-| R-3 | The audit hash chain has no anchor outside its database: a privileged administrator could recompute the whole chain | Medium | Planned |
+| R-3 | The audit hash chain had no anchor outside its database: a privileged administrator could recompute the whole chain | Medium | **Fixed**: signed checkpoints (ECDSA P-256) in write-once files, checked by every verification - `AuditAnchors.cs`. Remaining in production: the signing key in a key vault / HSM and the checkpoints in immutable storage under another administrator |
 | R-4 | Approvals require MFA at sign-in, not a fresh challenge (no `max_age` / `acr`) | Medium | Planned |
 | R-5 | No operator tool to resend parked Outbox messages; no reconciliation with the payment network for unknown outcomes | Medium (operations) | Planned |
 | R-6 | Audit actor fields come from producer envelopes (trusted producers, Kafka ACLs) — not signed | Low | Accepted for PoC |

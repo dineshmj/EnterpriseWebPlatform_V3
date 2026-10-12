@@ -27,6 +27,14 @@ builder.Services.AddDbContext<AuditDbContext>(o => o.UseNpgsql(connectionString)
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<AuditTrailAppender>();
 builder.Services.AddScoped<AuditChainVerifier>();
+
+// The chain's anchor outside the database: signed checkpoints in write-once storage. Fail closed -
+// without a signing key and a directory the API does not start. Development values are in
+// appsettings.Development.json; elsewhere the key comes from a key vault / HSM and the directory
+// is immutable storage under another administrator.
+var anchorSettings = builder.Configuration.GetSection("Audit:Anchors");
+builder.Services.AddSingleton(new AuditCheckpointSigner(anchorSettings["KeyId"] ?? string.Empty, anchorSettings["SigningKey"] ?? string.Empty));
+builder.Services.AddSingleton(new AuditAnchorStore(anchorSettings["Directory"] ?? string.Empty));
 builder.Services.AddScoped<AuditTrailQueries>();
 builder.Services.AddControllers();
 builder.Services.AddProblemDetails();

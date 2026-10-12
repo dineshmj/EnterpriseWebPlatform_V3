@@ -429,8 +429,8 @@ What the platform is, how it is designed and what each component must do are doc
 			.\ps\Reset.ps1                    (shows a menu)
 			.\ps\Reset.ps1 -Level 7 -Force    (everything, no questions)
 
-	   1  Data only              drops and recreates the 11 databases and every ewp_* user, empties the documents store
-	                             and the Playwright sign-ins. Kafka is not touched: its old messages stay, but every
+	   1  Data only              drops and recreates the 11 databases and every ewp_* user, empties the documents store,
+	                             the audit chain's checkpoints (Audit API\AuditAnchors) and the Playwright sign-ins. Kafka is not touched: its old messages stay, but every
 	                             consumer group has already read them, so nothing is replayed.
 	   2  Data + Kafka messages  level 1, plus every Kafka topic emptied (ps\kafka\Reset-KafkaRecords.ps1); the topics,
 	                             consumer groups, users and ACLs stay exactly as they are. The quick clean slate.
