@@ -11,13 +11,16 @@ using System.Text.Json.Serialization;
 // circuit breaker, and compensation (releasing the reserved funds) after a failure.
 //
 // POST /v1/payments              send a payment (needs X-Api-Key and Idempotency-Key)
+// GET  /v1/payments/by-idempotency-key/{key}   status enquiry: was this payment sent? (X-Api-Key)
 // GET  /v1/bsb/{bsb}             BSB directory: bank, branch, state (needs X-Api-Key)
 // POST /v1/payee-confirmations   Confirmation of Payee: does the name match the account? (X-Api-Key)
 // GET  /admin/behaviour          current behaviour            } localhost only
 // PUT  /admin/behaviour          change behaviour at runtime  }
 //
 // Behaviour: Healthy | Slow (answers after SlowDelaySeconds) | Failing (HTTP 500)
-//            | Down (HTTP 503) | Refusing (HTTP 422: a permanent "no").
+//            | Down (HTTP 503) | Refusing (HTTP 422: a permanent "no")
+//            | LosingAnswers (the payment IS sent, but every answer is lost: HTTP 504 - only
+//              the status enquiry tells the truth; the case reconciliation exists for).
 // Whatever the behaviour, a payee BSB starting with 999 is refused ("account closed"),
 // so one payment can show the compensation path without changing the behaviour; a BSB
 // that is not in the directory is refused as well.
@@ -40,6 +43,7 @@ var state = new SimulatorState(
 // Payments sent (or refused) so far, by idempotency key (in memory: a simulator, not a clearing house).
 var results = new ConcurrentDictionary<string, IResult>(StringComparer.Ordinal);
 var sent = new ConcurrentDictionary<string, SentPayment>(StringComparer.Ordinal);
+var refusedReasons = new ConcurrentDictionary<string, string>(StringComparer.Ordinal);
 
 // Behaviour travels as text ("Down"), not as a number.
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
@@ -84,6 +88,16 @@ app.MapPost("/v1/payments", async (HttpContext http, PaymentRequest request, Can
     if (string.IsNullOrWhiteSpace(idempotencyKey))
         return Results.BadRequest(new { reason = "An Idempotency-Key header is required." });
 
+    // LosingAnswers: the payment goes out (once - the key decides), but no answer comes back,
+    // not even to a repeated request. The sender can only learn the truth from the status enquiry.
+    if (state.Behaviour == Behaviour.LosingAnswers && !results.ContainsKey(idempotencyKey) && BsbDirectory.Find(request.Creditor?.Bsb) is { Npp: true })
+    {
+        var lost = sent.GetOrAdd(idempotencyKey, _ => new SentPayment(
+            $"NPP{DateTimeOffset.UtcNow:yyMMdd}{Convert.ToHexString(RandomNumberGenerator.GetBytes(5))}", "SETTLED", DateTimeOffset.UtcNow));
+        log.LogWarning("Payment {EndToEndId}: SENT as {Reference}, but the answer is LOST (504).", request.EndToEndId, lost.NetworkReference);
+        return Results.StatusCode((int)HttpStatusCode.GatewayTimeout);
+    }
+
     // A repeated request returns the first answer, whatever the behaviour now: the payment
     // was already sent (or refused); only the answer was lost.
     if (sent.TryGetValue(idempotencyKey, out var existing))
@@ -127,6 +141,30 @@ app.MapPost("/v1/payments", async (HttpContext http, PaymentRequest request, Can
     return Results.Created($"/v1/payments/{payment.NetworkReference}", payment);
 });
 
+// Status enquiry by the sender's Idempotency-Key - how a participant reconciles an unknown
+// outcome before deciding anything. It answers while the network is merely losing answers; when
+// the network is down or failing, so is the enquiry.
+app.MapGet("/v1/payments/by-idempotency-key/{idempotencyKey}", (HttpContext http, string idempotencyKey) =>
+{
+    if (!Authorised(http))
+        return Results.Unauthorized();
+    if (state.Behaviour is Behaviour.Down)
+        return Results.StatusCode((int)HttpStatusCode.ServiceUnavailable);
+    if (state.Behaviour is Behaviour.Failing)
+        return Results.StatusCode((int)HttpStatusCode.InternalServerError);
+
+    if (sent.TryGetValue(idempotencyKey, out var payment))
+    {
+        log.LogInformation("Status enquiry {Key}: SENT ({Reference}).", idempotencyKey, payment.NetworkReference);
+        return Results.Ok(new { status = "SENT", networkReference = payment.NetworkReference });
+    }
+    if (refusedReasons.TryGetValue(idempotencyKey, out var reason))
+        return Results.Ok(new { status = "REFUSED", reason });
+
+    log.LogInformation("Status enquiry {Key}: never received.", idempotencyKey);
+    return Results.NotFound(new { status = "NOT_FOUND" });
+});
+
 // Administration: loopback only (the demo operator on this machine).
 app.MapGet("/admin/behaviour", (HttpContext http) =>
     IsLocal(http) ? Results.Ok(state) : Results.NotFound());
@@ -149,6 +187,7 @@ app.Run();
 IResult Refuse(string idempotencyKey, PaymentRequest request, string reason)
 {
     log.LogWarning("Payment {EndToEndId}: REFUSED (422): {Reason}", request.EndToEndId, reason);
+    refusedReasons.TryAdd(idempotencyKey, reason);
     return results.GetOrAdd(idempotencyKey, _ => Results.UnprocessableEntity(new { reason }));
 }
 
@@ -169,7 +208,7 @@ static string Masked(string? accountNumber)
     return value.Length <= 4 ? new string('*', value.Length) : $"****{value[^4..]}";
 }
 
-enum Behaviour { Healthy, Slow, Failing, Down, Refusing }
+enum Behaviour { Healthy, Slow, Failing, Down, Refusing, LosingAnswers }
 
 sealed record SimulatorState(Behaviour Behaviour, int SlowDelaySeconds);
 

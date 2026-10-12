@@ -15,7 +15,8 @@ export const simulators = {
 } as const;
 
 export type SimulatorName = keyof typeof simulators;
-export type Behaviour = 'Healthy' | 'Slow' | 'Failing' | 'Down' | 'Refusing';
+/** LosingAnswers: the Payment Network only (the payment is sent, every answer is lost). */
+export type Behaviour = 'Healthy' | 'Slow' | 'Failing' | 'Down' | 'Refusing' | 'LosingAnswers';
 
 export interface BehaviourSettings {
   behaviour: Behaviour;

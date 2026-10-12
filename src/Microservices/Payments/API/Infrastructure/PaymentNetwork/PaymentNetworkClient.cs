@@ -84,6 +84,28 @@ public sealed class PaymentNetworkClient(HttpClient http, IOptions<PaymentNetwor
         }
     }
 
+    /// <summary>
+    /// The network's record of the payment, by its Idempotency-Key: 200 SENT (with the reference) or
+    /// REFUSED (with the reason), 404 never received; anything else means it cannot tell yet.
+    /// </summary>
+    public async Task<NetworkPaymentStatus> GetStatusAsync(Guid idempotencyKey, CancellationToken cancellationToken)
+    {
+        using var message = new HttpRequestMessage(HttpMethod.Get, $"/v1/payments/by-idempotency-key/{idempotencyKey}");
+        using var response = await SendReadAsync(message, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+            return new NetworkPaymentStatus(NetworkPaymentState.NotReceived, null, null);
+        if (!response.IsSuccessStatusCode)
+            throw new PaymentNetworkUnavailableException($"Payment network status enquiry returned HTTP {(int)response.StatusCode}.");
+
+        var body = await TryReadAsync<StatusAnswer>(response, cancellationToken);
+        return body?.Status switch
+        {
+            "SENT" when !string.IsNullOrWhiteSpace(body.NetworkReference) => new NetworkPaymentStatus(NetworkPaymentState.Sent, body.NetworkReference, null),
+            "REFUSED" => new NetworkPaymentStatus(NetworkPaymentState.Refused, null, body.Reason ?? "The payment network refused the payment."),
+            _ => throw new PaymentNetworkUnavailableException("Payment network status enquiry gave no usable answer.")
+        };
+    }
+
     public async Task<BsbInfo?> LookupBsbAsync(string bsb, CancellationToken cancellationToken)
     {
         using var message = new HttpRequestMessage(HttpMethod.Get, $"/v1/bsb/{Uri.EscapeDataString(bsb)}");
@@ -142,6 +164,11 @@ public sealed class PaymentNetworkClient(HttpClient http, IOptions<PaymentNetwor
     private sealed record Accepted([property: JsonPropertyName("networkReference")] string? NetworkReference);
 
     private sealed record Refusal([property: JsonPropertyName("reason")] string? Reason);
+
+    private sealed record StatusAnswer(
+        [property: JsonPropertyName("status")] string? Status,
+        [property: JsonPropertyName("networkReference")] string? NetworkReference,
+        [property: JsonPropertyName("reason")] string? Reason);
 
     private sealed record BsbEntry(
         [property: JsonPropertyName("bsb")] string? Bsb,

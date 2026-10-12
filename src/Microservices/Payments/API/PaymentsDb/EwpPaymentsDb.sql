@@ -124,7 +124,7 @@ CREATE TABLE payment_sagas (
 
     CONSTRAINT uq_payment_sagas_payment_id UNIQUE (payment_id),
     CONSTRAINT uq_payment_sagas_payment_ref UNIQUE (payment_ref),
-    CONSTRAINT ck_payment_sagas_step CHECK (step IN ('RESERVE_FUNDS', 'AWAIT_APPROVAL', 'SEND_TO_NETWORK', 'SETTLE_FUNDS', 'RELEASE_FUNDS', 'DONE')),
+    CONSTRAINT ck_payment_sagas_step CHECK (step IN ('RESERVE_FUNDS', 'AWAIT_APPROVAL', 'SEND_TO_NETWORK', 'CONFIRM_WITH_NETWORK', 'SETTLE_FUNDS', 'RELEASE_FUNDS', 'DONE')),
     CONSTRAINT ck_payment_sagas_status CHECK (status IN ('RUNNING', 'WAITING_FOR_PERSON', 'FINISHED', 'STUCK')),
     -- A running saga always has a timer; a finished one never; DONE exactly when FINISHED.
     CONSTRAINT ck_payment_sagas_timer CHECK ((status = 'RUNNING') = (next_check_at IS NOT NULL)),

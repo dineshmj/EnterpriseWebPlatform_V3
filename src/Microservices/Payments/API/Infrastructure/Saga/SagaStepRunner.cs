@@ -35,7 +35,7 @@ public sealed class SagaStepRunner(
 
                     // Stop this round when nothing is due, or the network is failing: the other
                     // sagas keep their own retry times.
-                    if (outcome is SagaStepRunOutcome.NothingDue or SagaStepRunOutcome.NetworkUnavailable)
+                    if (outcome is SagaStepRunOutcome.NothingDue or SagaStepRunOutcome.NetworkUnavailable or SagaStepRunOutcome.NetworkStatusUnknown)
                         break;
                 }
             }

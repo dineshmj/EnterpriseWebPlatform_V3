@@ -9,7 +9,7 @@ import { Table, Td, Th } from '@/app/components/ui/data';
 import { Alert, Badge } from '@/app/components/ui/feedback';
 import { Select } from '@/app/components/ui/form';
 import {
-  BEHAVIOURS, type Behaviour, type ComponentHealth, type HealthStatus, type PlatformHealth, type SimulatorState,
+  type Behaviour, type ComponentHealth, type HealthStatus, type PlatformHealth, type SimulatorState,
 } from '@/lib/operations-types';
 import { changeSimulator, loadPlatformHealth, loadSimulators } from '../../actions';
 
@@ -20,7 +20,12 @@ const TONE: Record<HealthStatus, 'success' | 'warning' | 'danger' | 'neutral'> =
 };
 
 const BEHAVIOUR_TONE: Record<Behaviour | 'Unknown', 'success' | 'warning' | 'danger' | 'neutral'> = {
-  Healthy: 'success', Slow: 'warning', Failing: 'danger', Down: 'danger', Refusing: 'warning', Unknown: 'neutral',
+  Healthy: 'success', Slow: 'warning', Failing: 'danger', Down: 'danger', Refusing: 'warning', LosingAnswers: 'danger', Unknown: 'neutral',
+};
+
+const BEHAVIOUR_LABEL: Record<Behaviour, string> = {
+  Healthy: 'Healthy', Slow: 'Slow', Failing: 'Failing', Down: 'Down', Refusing: 'Refusing',
+  LosingAnswers: 'Losing answers (sends, never replies)',
 };
 
 /**
@@ -147,7 +152,7 @@ export default function PlatformHealthPage() {
                             onChange={(event) => void change(simulator, event.target.value as Behaviour)}
                           >
                             {simulator.behaviour === 'Unknown' && <option value="">Not answering</option>}
-                            {BEHAVIOURS.map((b) => <option key={b} value={b}>{b}</option>)}
+                            {simulator.behaviours.map((b) => <option key={b} value={b}>{BEHAVIOUR_LABEL[b]}</option>)}
                           </Select>
                         </Td>
                         <Td className="text-ink-muted">

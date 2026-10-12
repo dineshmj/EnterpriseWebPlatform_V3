@@ -330,8 +330,13 @@ function timelineLook(kind: string) {
   switch (kind) {
     case 'FINISHED':
     case 'NETWORK_ACCEPTED':
+    case 'NETWORK_CONFIRMED_SENT':
     case 'APPROVED':
       return { icon: CheckCircle2, tone: 'text-success-700' };
+    case 'NETWORK_CONFIRMED_NOT_SENT':
+      return { icon: XCircle, tone: 'text-danger-700' };
+    case 'NETWORK_STATUS_UNKNOWN':
+      return { icon: CircleAlert, tone: 'text-warning-700' };
     case 'NETWORK_REFUSED':
     case 'COMPENSATION_FAILED':
     case 'REJECTED_BY_APPROVER':

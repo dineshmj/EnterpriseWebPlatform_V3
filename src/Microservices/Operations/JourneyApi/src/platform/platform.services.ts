@@ -51,6 +51,8 @@ export interface SimulatorState {
   name: string;
   affects: string;
   behaviour: Behaviour | 'Unknown';
+  /** The behaviours this simulator knows. */
+  behaviours: readonly Behaviour[];
   /** When a changed behaviour goes back to Healthy by itself. */
   revertsAt: string | null;
   changedBy: string | null;
@@ -84,7 +86,7 @@ export class SimulatorService implements OnModuleDestroy {
       }
       const revert = this.reverts.get(simulator.key);
       return {
-        key: simulator.key, name: simulator.name, affects: simulator.affects, behaviour,
+        key: simulator.key, name: simulator.name, affects: simulator.affects, behaviour, behaviours: simulator.behaviours,
         revertsAt: revert?.at.toISOString() ?? null, changedBy: revert?.by ?? null,
       };
     }));

@@ -16,7 +16,7 @@ export interface PlatformHealth {
   simulatorControls: boolean;
 }
 
-export const BEHAVIOURS = ['Healthy', 'Slow', 'Failing', 'Down', 'Refusing'] as const;
+export const BEHAVIOURS = ['Healthy', 'Slow', 'Failing', 'Down', 'Refusing', 'LosingAnswers'] as const;
 export type Behaviour = (typeof BEHAVIOURS)[number];
 
 export interface SimulatorState {
@@ -24,6 +24,8 @@ export interface SimulatorState {
   name: string;
   affects: string;
   behaviour: Behaviour | 'Unknown';
+  /** The behaviours this simulator knows (LosingAnswers: the Payment Network only). */
+  behaviours: Behaviour[];
   revertsAt: string | null;
   changedBy: string | null;
 }

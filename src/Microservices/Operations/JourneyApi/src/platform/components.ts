@@ -47,14 +47,20 @@ export const components: PlatformComponent[] = [
   { name: 'Payment Network (simulator)', group: 'Simulators', readiness: 'https://localhost:46386/health' },
 ];
 
-/** The simulators whose behaviour can be switched (PUT /admin/behaviour, loopback callers only). */
+export const behaviours = ['Healthy', 'Slow', 'Failing', 'Down', 'Refusing', 'LosingAnswers'] as const;
+export type Behaviour = (typeof behaviours)[number];
+
+const common: readonly Behaviour[] = ['Healthy', 'Slow', 'Failing', 'Down', 'Refusing'];
+
+/**
+ * The simulators whose behaviour can be switched (PUT /admin/behaviour, loopback callers only),
+ * each with the behaviours it knows. LosingAnswers (the payment goes out, every answer is lost)
+ * is the Payment Network's only: the case its status enquiry - reconciliation - exists for.
+ */
 export const simulators = [
-  { key: 'screening-provider', name: 'Screening Provider', baseUrl: 'https://localhost:46366', affects: 'Compliance screening' },
-  { key: 'core-banking', name: 'Core Banking', baseUrl: 'https://localhost:46376', affects: 'Account opening' },
-  { key: 'payment-network', name: 'Payment Network', baseUrl: 'https://localhost:46386', affects: 'Sending payments' },
+  { key: 'screening-provider', name: 'Screening Provider', baseUrl: 'https://localhost:46366', affects: 'Compliance screening', behaviours: common },
+  { key: 'core-banking', name: 'Core Banking', baseUrl: 'https://localhost:46376', affects: 'Account opening', behaviours: common },
+  { key: 'payment-network', name: 'Payment Network', baseUrl: 'https://localhost:46386', affects: 'Sending payments', behaviours: [...common, 'LosingAnswers'] as readonly Behaviour[] },
 ] as const;
 
 export type SimulatorKey = (typeof simulators)[number]['key'];
-
-export const behaviours = ['Healthy', 'Slow', 'Failing', 'Down', 'Refusing'] as const;
-export type Behaviour = (typeof behaviours)[number];

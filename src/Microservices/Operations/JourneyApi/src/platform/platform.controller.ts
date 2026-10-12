@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Param, Put, Req, UseGuards } from '@nestjs/common';
 import { DelegatedRequest, DelegatedTokenGuard, Requires } from '../auth/delegated-token.guard';
-import { Behaviour, behaviours, SimulatorKey, simulators } from './components';
+import { Behaviour, SimulatorKey, simulators } from './components';
 import { HealthProbeService, SimulatorService } from './platform.services';
 
 const READ = { scope: 'operations-journey.read', permission: 'service.health.view' };
@@ -33,11 +33,12 @@ export class PlatformController {
   @Put('simulators/:key/behaviour')
   @Requires(CHANGE)
   async changeBehaviour(@Req() request: DelegatedRequest, @Param('key') key: string, @Body() body: { behaviour?: unknown }) {
-    if (!simulators.some((s) => s.key === key)) {
+    const simulator = simulators.find((s) => s.key === key);
+    if (!simulator) {
       throw new BadRequestException('Unknown simulator.');
     }
-    if (typeof body?.behaviour !== 'string' || !(behaviours as readonly string[]).includes(body.behaviour)) {
-      throw new BadRequestException(`Behaviour must be one of ${behaviours.join(', ')}.`);
+    if (typeof body?.behaviour !== 'string' || !(simulator.behaviours as readonly string[]).includes(body.behaviour)) {
+      throw new BadRequestException(`Behaviour must be one of ${simulator.behaviours.join(', ')}.`);
     }
     const by = request.delegation!.lanId ?? request.delegation!.sub;
     await this.simulators.change(key as SimulatorKey, body.behaviour as Behaviour, by);

@@ -108,11 +108,27 @@ public interface IPaymentNetwork
 {
     Task<string> SendAsync(NetworkPaymentRequest request, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Status enquiry by Idempotency-Key, for an unknown outcome: did the network send this payment?
+    /// Throws <see cref="PaymentNetworkUnavailableException"/> when it cannot answer that either.
+    /// </summary>
+    Task<NetworkPaymentStatus> GetStatusAsync(Guid idempotencyKey, CancellationToken cancellationToken);
+
     /// <summary>The bank and branch a BSB belongs to (the network's BSB directory); null when the BSB is unknown.</summary>
     Task<BsbInfo?> LookupBsbAsync(string bsb, CancellationToken cancellationToken);
 
     /// <summary>Confirmation of Payee: does this name match the account at the payee's bank?</summary>
     Task<PayeeConfirmation> ConfirmPayeeAsync(string bsb, string accountNumber, string accountName, CancellationToken cancellationToken);
+}
+
+/// <summary>The network's own record of a payment: sent (with its reference), refused (with why), or never received.</summary>
+public sealed record NetworkPaymentStatus(NetworkPaymentState State, string? NetworkReference, string? Reason);
+
+public enum NetworkPaymentState
+{
+    Sent = 1,
+    Refused = 2,
+    NotReceived = 3
 }
 
 /// <summary>A BSB as the directory knows it.</summary>

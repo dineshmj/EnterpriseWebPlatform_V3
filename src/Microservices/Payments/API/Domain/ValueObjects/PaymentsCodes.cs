@@ -34,7 +34,10 @@ public enum SagaStep
     SendToNetwork = 3,
     SettleFunds = 4,
     ReleaseFunds = 5,
-    Done = 6
+    Done = 6,
+
+    /// <summary>The network never answered: ask it whether it sent the payment before releasing anything.</summary>
+    ConfirmWithNetwork = 7
 }
 
 public enum SagaStatus
@@ -90,6 +93,7 @@ public static class PaymentsCodes
         SagaStep.SettleFunds => "SETTLE_FUNDS",
         SagaStep.ReleaseFunds => "RELEASE_FUNDS",
         SagaStep.Done => "DONE",
+        SagaStep.ConfirmWithNetwork => "CONFIRM_WITH_NETWORK",
         _ => throw new ArgumentOutOfRangeException(nameof(step), step, null)
     };
 

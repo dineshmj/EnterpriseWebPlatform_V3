@@ -11,7 +11,10 @@ public enum SagaStepRunOutcome
     NetworkRefused,
     NetworkUnavailable,
     ReplyTimedOut,
-    NetworkAnswerDiscarded
+    NetworkAnswerDiscarded,
+    NetworkConfirmedSent,
+    NetworkConfirmedNotSent,
+    NetworkStatusUnknown
 }
 
 /// <summary>
@@ -49,7 +52,9 @@ public sealed class RunDueSagaStepCommandHandler(
             return claim is ReplyTimeoutHandled ? SagaStepRunOutcome.ReplyTimedOut : SagaStepRunOutcome.NothingDue;
 
         using var trace = sagaTrace.Continue(networkClaim.Saga);
-        var answer = await CallNetworkAsync(networkClaim.Request, cancellationToken);
+        var answer = networkClaim.IsStatusEnquiry
+            ? await AskNetworkAsync(networkClaim.Request.IdempotencyKey, cancellationToken)
+            : await CallNetworkAsync(networkClaim.Request, cancellationToken);
         return await RecordAnswerAsync(networkClaim, answer, cancellationToken);
     }
 
@@ -59,7 +64,8 @@ public sealed class RunDueSagaStepCommandHandler(
 
     private sealed record ReplyTimeoutHandled : Claim;
 
-    private sealed record NetworkClaim(PaymentSaga Saga, Guid PaymentRef, long Version, string PaymentNumber, NetworkPaymentRequest Request) : Claim;
+    /// <summary>A claimed network call: the send itself, or (IsStatusEnquiry) the enquiry after the sends got no answer.</summary>
+    private sealed record NetworkClaim(PaymentSaga Saga, Guid PaymentRef, long Version, string PaymentNumber, NetworkPaymentRequest Request, bool IsStatusEnquiry) : Claim;
 
     private async Task<Claim?> ClaimNextDueAsync(CancellationToken cancellationToken)
     {
@@ -74,12 +80,13 @@ public sealed class RunDueSagaStepCommandHandler(
         var now = clock.GetUtcNow();
         Claim claim;
 
-        if (saga.IsDueForNetwork(now))
+        if (saga.IsDueForNetwork(now) || saga.IsDueForNetworkCheck(now))
         {
+            var isStatusEnquiry = saga.IsDueForNetworkCheck(now);
             var version = saga.ClaimNetworkAttempt(NetworkLease, now);
             claim = new NetworkClaim(saga, saga.PaymentRef, version, payment.PaymentNumber, new NetworkPaymentRequest(
                 payment.PaymentRef, payment.PaymentNumber, payment.From.Bsb, payment.From.AccountNumber, payment.PayeeName,
-                payment.To.Bsb, payment.To.AccountNumber, payment.Amount, payment.Currency, payment.Reference));
+                payment.To.Bsb, payment.To.AccountNumber, payment.Amount, payment.Currency, payment.Reference), isStatusEnquiry);
         }
         else if (saga.IsWaitingForReply(now))
         {
@@ -107,6 +114,30 @@ public sealed class RunDueSagaStepCommandHandler(
     private sealed record Refused(string Reason) : NetworkAnswer;
 
     private sealed record Unavailable(string Error) : NetworkAnswer;
+
+    private sealed record ConfirmedSent(string Reference) : NetworkAnswer;
+
+    private sealed record ConfirmedNotSent(string? RefusalReason) : NetworkAnswer;
+
+    private sealed record StatusUnknown(string Error) : NetworkAnswer;
+
+    private async Task<NetworkAnswer> AskNetworkAsync(Guid idempotencyKey, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var status = await network.GetStatusAsync(idempotencyKey, cancellationToken);
+            return status.State switch
+            {
+                NetworkPaymentState.Sent => new ConfirmedSent(status.NetworkReference!),
+                NetworkPaymentState.Refused => new ConfirmedNotSent(status.Reason ?? "refused"),
+                _ => new ConfirmedNotSent(null)
+            };
+        }
+        catch (PaymentNetworkUnavailableException ex)
+        {
+            return new StatusUnknown(ex.Message);
+        }
+    }
 
     private async Task<NetworkAnswer> CallNetworkAsync(NetworkPaymentRequest request, CancellationToken cancellationToken)
     {
@@ -168,6 +199,27 @@ public sealed class RunDueSagaStepCommandHandler(
                     payment.PaymentNumber, saga.Step == SagaStep.SendToNetwork ? saga.Attempts : policy.MaxNetworkAttempts,
                     policy.MaxNetworkAttempts, unavailable.Error, saga.Step.ToCode());
                 outcome = SagaStepRunOutcome.NetworkUnavailable;
+                break;
+
+            case ConfirmedSent confirmed:
+                saga.OnNetworkConfirmedSent(payment, confirmed.Reference, policy, now);
+                logger.LogWarning("Payment {PaymentNumber}: the network never answered, but confirms it SENT the payment ({Reference}); settling, not releasing.",
+                    payment.PaymentNumber, confirmed.Reference);
+                outcome = SagaStepRunOutcome.NetworkConfirmedSent;
+                break;
+
+            case ConfirmedNotSent notSent:
+                saga.OnNetworkConfirmedNotSent(payment, notSent.RefusalReason, policy, now);
+                logger.LogWarning("Payment {PaymentNumber}: the network confirms it did not send the payment{Reason}; releasing the funds.",
+                    payment.PaymentNumber, notSent.RefusalReason is null ? string.Empty : $" (refused: {notSent.RefusalReason})");
+                outcome = SagaStepRunOutcome.NetworkConfirmedNotSent;
+                break;
+
+            case StatusUnknown unknown:
+                saga.OnNetworkStatusUnknown(unknown.Error, policy, now);
+                logger.LogWarning("Payment {PaymentNumber}: the network cannot say whether it sent the payment ({Reason}); funds stay reserved, asking again.",
+                    payment.PaymentNumber, unknown.Error);
+                outcome = SagaStepRunOutcome.NetworkStatusUnknown;
                 break;
 
             default:

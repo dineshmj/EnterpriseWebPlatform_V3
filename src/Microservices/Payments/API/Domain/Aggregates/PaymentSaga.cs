@@ -57,7 +57,9 @@ public sealed class SagaHistoryEntry
 ///
 ///   RESERVE_FUNDS ─FundsReserved─► (AWAIT_APPROVAL) ─► SEND_TO_NETWORK ─accepted─► SETTLE_FUNDS ─FundsSettled─► DONE (COMPLETED)
 ///   RESERVE_FUNDS ─FundsReservationFailed─► DONE (REJECTED, nothing to undo)
-///   SEND_TO_NETWORK ─refused / gave up─► RELEASE_FUNDS ─FundsReleased─► DONE (FAILED)
+///   SEND_TO_NETWORK ─refused─► RELEASE_FUNDS ─FundsReleased─► DONE (FAILED)
+///   SEND_TO_NETWORK ─no answer after N tries─► CONFIRM_WITH_NETWORK (status enquiry, asked until it answers)
+///       ─sent─► SETTLE_FUNDS (the money left: never released)   ─not sent / refused─► RELEASE_FUNDS (FAILED)
 ///   RELEASE_FUNDS ─no reply after N tries─► STUCK (COMPENSATION_FAILED: operations retry)
 ///
 /// Every call is a short, separate piece of work (a reply arrived, a timer is due); the
@@ -253,16 +255,20 @@ public sealed class PaymentSaga : AggregateRoot
     public bool IsDueForNetwork(DateTimeOffset now) =>
         Status == SagaStatus.Running && Step == SagaStep.SendToNetwork && NextCheckAt <= now;
 
+    /// <summary>The status enquiry is due (the network never answered the send).</summary>
+    public bool IsDueForNetworkCheck(DateTimeOffset now) =>
+        Status == SagaStatus.Running && Step == SagaStep.ConfirmWithNetwork && NextCheckAt <= now;
+
     /// <summary>
-    /// Takes the network attempt before calling the network: the timer moves on by the lease, so
-    /// no other step runner picks this saga while the call is on its way - and the call needs no
-    /// open transaction or row lock. Should this process die mid-call, the lease runs out and the
-    /// attempt is made again (the PaymentRef is the network's Idempotency-Key: never paid twice).
-    /// Returns the claim: the saga's Version, which must be unchanged when the answer is recorded.
+    /// Takes the network call (a send, or a status enquiry) before making it: the timer moves on by
+    /// the lease, so no other step runner picks this saga while the call is on its way - and the
+    /// call needs no open transaction or row lock. Should this process die mid-call, the lease runs
+    /// out and the call is made again (the PaymentRef is the network's Idempotency-Key: never paid
+    /// twice). Returns the claim: the saga's Version, which must be unchanged when the answer is recorded.
     /// </summary>
     public long ClaimNetworkAttempt(TimeSpan lease, DateTimeOffset now)
     {
-        if (!IsDueForNetwork(now))
+        if (!IsDueForNetwork(now) && !IsDueForNetworkCheck(now))
             throw new DomainConflictException($"The saga is at {Step.ToCode()} ({Status.ToCode()}): no network attempt is due.");
 
         NextCheckAt = now + lease;
@@ -291,8 +297,9 @@ public sealed class PaymentSaga : AggregateRoot
 
     /// <summary>
     /// The network did not answer. Retried with back-off (the PaymentRef is the network's
-    /// Idempotency-Key, so a retry can never pay twice); after the last attempt the funds
-    /// are released. With a real network, a status enquiry would come before giving up.
+    /// Idempotency-Key, so a retry can never pay twice). After the last attempt the outcome is
+    /// UNKNOWN - the payment may have gone out with only its answer lost - so nothing is released
+    /// yet: the saga asks the network whether it sent the payment (CONFIRM_WITH_NETWORK).
     /// </summary>
     public void OnNetworkUnavailable(Payment payment, string error, SagaPolicy policy, DateTimeOffset now)
     {
@@ -302,9 +309,9 @@ public sealed class PaymentSaga : AggregateRoot
 
         if (Attempts >= policy.MaxNetworkAttempts)
         {
-            Record(now, "NETWORK_UNAVAILABLE", $"Attempt {Attempts} of {policy.MaxNetworkAttempts} failed: {LastError}. Giving up.", null);
-            BeginCompensation(payment, PaymentStatus.Failed, "NETWORK_UNAVAILABLE",
-                $"The payment network did not answer after {Attempts} attempts.", policy, now);
+            Record(now, "NETWORK_UNAVAILABLE", $"Attempt {Attempts} of {policy.MaxNetworkAttempts} failed: {LastError}. No more sends.", null);
+            MoveTo(SagaStep.ConfirmWithNetwork, SagaStatus.Running, nextCheckAt: now, now);
+            Record(now, "DECIDED", "The outcome is unknown: ask the payment network whether it sent the payment before releasing anything.", null);
             return;
         }
 
@@ -312,6 +319,51 @@ public sealed class PaymentSaga : AggregateRoot
         NextCheckAt = now + delay;
         Touch(now);
         Record(now, "NETWORK_UNAVAILABLE", $"Attempt {Attempts} of {policy.MaxNetworkAttempts} failed: {LastError}. Next attempt in {delay.TotalSeconds:F0} s.", null);
+    }
+
+    // ------------------------------------------------------------------ reconciliation: the status enquiry (called by the step runner)
+
+    /// <summary>The network confirms it SENT the payment - only the answer was lost: the money left, so settle, never release.</summary>
+    public void OnNetworkConfirmedSent(Payment payment, string networkReference, SagaPolicy policy, DateTimeOffset now)
+    {
+        EnsureStep(SagaStep.ConfirmWithNetwork);
+        Record(now, "NETWORK_CONFIRMED_SENT", $"The payment network confirms it sent the payment (reference {networkReference}): settling the funds, not releasing them.", null);
+        payment.SentToNetwork(networkReference, now);
+        MoveTo(SagaStep.SettleFunds, SagaStatus.Running, null, now);
+        SendFundsCommand(SettleFundsCommand, payment, policy, now);
+    }
+
+    /// <summary>The network confirms it did NOT send the payment (never received, or refused): releasing is now safe.</summary>
+    public void OnNetworkConfirmedNotSent(Payment payment, string? refusalReason, SagaPolicy policy, DateTimeOffset now)
+    {
+        EnsureStep(SagaStep.ConfirmWithNetwork);
+        if (refusalReason is null)
+        {
+            Record(now, "NETWORK_CONFIRMED_NOT_SENT", "The payment network confirms it never received the payment: releasing the funds.", null);
+            BeginCompensation(payment, PaymentStatus.Failed, "NETWORK_UNAVAILABLE",
+                "The payment network did not answer, and confirms it never received the payment.", policy, now);
+        }
+        else
+        {
+            Record(now, "NETWORK_CONFIRMED_NOT_SENT", $"The payment network confirms it refused the payment: {refusalReason}", null);
+            BeginCompensation(payment, PaymentStatus.Failed, "NETWORK_REFUSED", $"The payment network refused the payment: {refusalReason}", policy, now);
+        }
+    }
+
+    /// <summary>
+    /// The network cannot answer the enquiry either. The outcome stays unknown, so the funds stay
+    /// reserved and the network is asked again, with back-off - for as long as it takes. The saga
+    /// shows as overdue (health check, Processing Monitor) while this goes on.
+    /// </summary>
+    public void OnNetworkStatusUnknown(string error, SagaPolicy policy, DateTimeOffset now)
+    {
+        EnsureStep(SagaStep.ConfirmWithNetwork);
+        Attempts++;
+        LastError = Truncate(error);
+        var delay = policy.NetworkRetryDelayFor(Attempts);
+        NextCheckAt = now + delay;
+        Touch(now);
+        Record(now, "NETWORK_STATUS_UNKNOWN", $"Status enquiry {Attempts} failed: {LastError}. Asking again in {delay.TotalSeconds:F0} s; nothing is released until the network answers.", null);
     }
 
     // ------------------------------------------------------------------ timeouts (called by the step runner)

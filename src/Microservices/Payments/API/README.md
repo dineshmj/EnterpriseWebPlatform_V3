@@ -32,7 +32,10 @@ The payment network call is the exception: no transaction stays open across it. 
 ```text
 RESERVE_FUNDS ─FundsReserved─► (AWAIT_APPROVAL ─approved─►) SEND_TO_NETWORK ─accepted─► SETTLE_FUNDS ─FundsSettled─► DONE   payment COMPLETED
 RESERVE_FUNDS ─FundsReservationFailed─► DONE                                                                     payment REJECTED (nothing to undo)
-SEND_TO_NETWORK ─refused / gave up─► RELEASE_FUNDS ─FundsReleased─► DONE                                         payment FAILED (funds released)
+SEND_TO_NETWORK ─refused─► RELEASE_FUNDS ─FundsReleased─► DONE                                                   payment FAILED (funds released)
+SEND_TO_NETWORK ─no answer after 4 tries─► CONFIRM_WITH_NETWORK (status enquiry, repeated until the network answers)
+    ─sent─► SETTLE_FUNDS ─FundsSettled─► DONE                                                                    payment COMPLETED (the answer was only lost)
+    ─never received / refused─► RELEASE_FUNDS ─FundsReleased─► DONE                                              payment FAILED (funds released)
 AWAIT_APPROVAL ─rejected by the officer─► RELEASE_FUNDS ─FundsReleased─► DONE                                     payment REJECTED (funds released)
 RELEASE_FUNDS ─no reply after N tries─► STUCK                                                                    payment COMPENSATION_FAILED
 ```
@@ -43,7 +46,8 @@ RELEASE_FUNDS ─no reply after N tries─► STUCK                             
 | Reservation never confirmed (5 tries) | Releases, to be sure, and the payment ends FAILED. |
 | Settlement not confirmed | Keeps trying: the money already left through the network, so settlement is never abandoned. |
 | Release not confirmed (5 tries) | Stops (STUCK) and the payment is **COMPENSATION_FAILED**: it never claims an undo that did not happen. A late `FundsReleased` still resolves it; operations can also **Retry release** (a fresh `ReleaseFunds` with fresh attempts) from the payment page. |
-| Network unavailable | Retries with back-off (5 s doubling, 4 attempts), then compensates. The PaymentRef is the network's Idempotency-Key, so a retry can never pay twice. |
+| Network unavailable | Retries with back-off (5 s doubling, 4 attempts). The PaymentRef is the network's Idempotency-Key, so a retry can never pay twice. After the last attempt the outcome is **unknown** - the payment may have gone out with only the answer lost - so nothing is released yet (next row). |
+| Outcome unknown (reconciliation) | Asks the network by Idempotency-Key whether it sent the payment (`GET /v1/payments/by-idempotency-key/{key}`): **sent** → settles (the money left; releasing it would pay twice); **never received** or **refused** → releases. While the network cannot answer that either, the funds stay reserved and the enquiry is repeated with back-off (up to 60 s) for as long as it takes - the saga shows as overdue. Demonstrate it with the Payment Network simulator's **LosingAnswers** behaviour (Operations → Platform Health). |
 | Network refuses (HTTP 422) | Compensates at once. |
 | Late or duplicate reply | Recorded as REPLY_IGNORED in the timeline; changes nothing. |
 
