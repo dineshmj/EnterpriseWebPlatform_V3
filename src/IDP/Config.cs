@@ -54,7 +54,11 @@ public static class Config
 
             // Audit (Domain API and Journey API)
             AuditApiScope.Read,
-            AuditApiScope.JourneyRead
+            AuditApiScope.JourneyRead,
+
+            // Operations (Journey API only)
+            OperationsApiScope.JourneyRead,
+            OperationsApiScope.JourneyWrite
         ];
 
     public static IEnumerable<ApiResource> ApiResources =>
@@ -67,7 +71,8 @@ public static class Config
             PaymentsApiResource.ApiResource,
             NotificationsApiResource.ApiResource,
             AuditApiResource.ApiResource,
-            AuditApiResource.JourneyApiResource
+            AuditApiResource.JourneyApiResource,
+            OperationsApiResource.ApiResource
         ];
 
     /// <summary>
@@ -89,6 +94,7 @@ public static class Config
             MfeAccounts.Client,
             MfePayments.Client,
             MfeAudit.Client,
+            MfeOperations.Client,
 
             // M2M Clients
             KycCaseOpeningSubscriberToCustomerKycApiM2M.Client,

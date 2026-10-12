@@ -93,7 +93,8 @@ Abbreviations: **S** spoofing, **T** tampering, **R** repudiation, **I** informa
 | S | A stolen machine token posts fake workflow steps | Internal endpoints pin the exact `client_id`, not only the scope | Every API README (internal endpoints) |
 | T | Duplicate or tampered retries create a second payment | Idempotency-Key bound to the person and the payment's details (409 otherwise); unique constraints | Payments README #7, #13 |
 | I | Internals in error responses | Problem details with a trace ID only | Every API README (problem responses) |
-| D | One caller floods an API | Per-caller rate limits (person, client, IP) | Every API README (token validation)0 |
+| D | One caller floods an API | Per-caller rate limits (person, client, IP) | Every API README (rate limits) |
+| D/E | An operator (or a stolen session) switches off an external system | The simulators' switch exists only in Development / test (unset = off), needs `simulator.behaviour.manage` and a recent MFA sign-in, is logged with the LAN ID and reverts to Healthy after 15 minutes; the simulators accept it from loopback only | [Operations Journey API README](../src/Microservices/Operations/JourneyApi/README.md) |
 
 ### TB4 — APIs ↔ PostgreSQL
 

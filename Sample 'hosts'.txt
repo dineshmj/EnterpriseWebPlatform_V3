@@ -41,6 +41,8 @@
 127.0.0.1    audit.dev.localhost
 127.0.0.1    audit-journey.dev.localhost
 127.0.0.1    audit-api.dev.localhost
+127.0.0.1    operations.dev.localhost
+127.0.0.1    operations-journey.dev.localhost
 
 127.0.0.1    documents-management-api.dev.localhost
 127.0.0.1    notifications-api.dev.localhost

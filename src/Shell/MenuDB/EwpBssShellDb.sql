@@ -152,7 +152,8 @@ VALUES
     ('Accounts',            'https://accounts.dev.localhost:45456'),
     ('Payments',            'https://payments.dev.localhost:46388'),
     -- The customer's pattern: a Next.js app (SPA + light BFF), not an ASP.NET Core BFF.
-    ('Audit',               'https://audit.dev.localhost:46380');
+    ('Audit',               'https://audit.dev.localhost:46380'),
+    ('Operations',          'https://operations.dev.localhost:46381');
 
 -- ============================================================
 -- Seed: Management Areas
@@ -230,6 +231,11 @@ VALUES
         'Audit',
         'Search the tamper-evident audit trail and follow one record end to end.',
         (SELECT id FROM microservices WHERE name = 'Audit')
+    ),
+    (
+        'Platform',
+        'The health of every component and, in development and test, the simulated external systems.',
+        (SELECT id FROM microservices WHERE name = 'Operations')
     );
 
 -- ============================================================
@@ -436,6 +442,16 @@ VALUES
            AND microservice_id =
                (SELECT id FROM microservices
                 WHERE name = 'Audit'))
+    ),
+    (
+        'Platform Health',
+        '/v1/operations/platform/view-all',
+        'fa-heart-pulse',
+        (SELECT id FROM management_areas
+         WHERE name = 'Platform'
+           AND microservice_id =
+               (SELECT id FROM microservices
+                WHERE name = 'Operations'))
     );
 
 -- ============================================================
@@ -643,6 +659,18 @@ CROSS JOIN
         ('auditor')
 ) AS r(role_short_name)
 WHERE mi.task_name = 'Audit Trail';
+
+-- Platform Health: the operations administrator (service.health.view; the simulators' switch,
+-- Development only, also needs simulator.behaviour.manage).
+INSERT INTO menu_items_and_roles (menu_item_id, role_short_name)
+SELECT mi.id, r.role_short_name
+FROM menu_items mi
+CROSS JOIN
+(
+    VALUES
+        ('operations_administrator')
+) AS r(role_short_name)
+WHERE mi.task_name = 'Platform Health';
 
 -- ============================================================
 -- Verification queries

@@ -46,13 +46,14 @@ export const personas: Record<PersonaName, Persona> = {
     menu: {
       'Customer Onboarding': ['View Customers', 'View Onboarding Applications', 'Onboarding Workflow Monitor'],
       Payments: ['View Payments', 'Payment Processing Monitor'],
+      Operations: ['Platform Health'],
     },
   },
   'sarah.audit': { username: 'sarah.audit', role: 'auditor', menu: { Audit: ['Audit Trail'] } },
 };
 
 /** Every context the Shell knows; a persona must see exactly the ones in its menu. */
-export const allContexts = ['Customer Onboarding', 'Customer KYC', 'Compliance', 'Accounts', 'Payments', 'Audit'];
+export const allContexts = ['Customer Onboarding', 'Customer KYC', 'Compliance', 'Accounts', 'Payments', 'Audit', 'Operations'];
 
 /** Where each menu item lives: context → area → item (the Shell's three menu levels). */
 export const menuAreas: Record<string, string> = {
@@ -73,6 +74,7 @@ export const menuAreas: Record<string, string> = {
   'Manage Beneficiaries': 'Beneficiaries',
   'Payment Processing Monitor': 'Payment Processing',
   'Audit Trail': 'Audit',
+  'Platform Health': 'Platform',
 };
 
 /** The password from .env: EWP_PASSWORD_<USER> (dots → underscores), else EWP_PASSWORD_DEFAULT. */

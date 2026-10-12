@@ -43,6 +43,10 @@ public sealed class TokenExchangeGrantValidator(
         [AuditMicroservice.CLIENT_ID_FOR_IDP] = token =>
             token.ClientId == AuditMicroservice.CLIENT_ID_FOR_IDP && token.ActingClientId is null,
 
+        // The Operations web BFF: only the person's own token from its sign-in, for its Journey API.
+        [OperationsMicroservice.CLIENT_ID_FOR_IDP] = token =>
+            token.ClientId == OperationsMicroservice.CLIENT_ID_FOR_IDP && token.ActingClientId is null,
+
         [AuditMicroservice.CLIENT_ID_FOR_IDP_FOR_AUDIT_JOURNEY_API] = token =>
             token.Audiences.Contains(MicroserviceApiResourceNames.AUDIT_JOURNEY_API) &&
             token.ActingClientId == AuditMicroservice.CLIENT_ID_FOR_IDP,
@@ -98,16 +102,26 @@ public sealed class TokenExchangeGrantValidator(
         if (token.Actor is not null)
             actor["act"] = JsonNode.Parse(token.Actor);
 
-        context.Result = new GrantValidationResult(
-            subject: token.Subject,
-            authenticationMethod: GrantType,
-            claims: [new Claim(JwtClaimTypes.Actor, actor.ToJsonString(), IdentityServerConstants.ClaimValueTypes.Json)]);
+        // The delegated token acts for the person's ORIGINAL sign-in: it keeps that sign-in's time
+        // (auth_time) and methods (amr: pwd / otp / mfa) next to the exchange itself, so a
+        // downstream API can still require a recent MFA sign-in (step-up) - an exchange is never
+        // a new authentication of the person.
+        List<Claim> claims = [new Claim(JwtClaimTypes.Actor, actor.ToJsonString(), IdentityServerConstants.ClaimValueTypes.Json)];
+        claims.AddRange(token.AuthenticationMethods
+            .Where(m => m != GrantType)
+            .Select(m => new Claim(JwtClaimTypes.AuthenticationMethod, m)));
+
+        context.Result = token.AuthTime is { } authTime
+            ? new GrantValidationResult(subject: token.Subject, authenticationMethod: GrantType, authTime: authTime.UtcDateTime, claims: claims)
+            : new GrantValidationResult(subject: token.Subject, authenticationMethod: GrantType, claims: claims);
 
         logger.LogInformation("Token exchange: {Requester} now acts for subject {Subject} (chain {Actor}).", requester, token.Subject, actor.ToJsonString());
     }
 
     /// <summary>The parts of the presented token the rules look at.</summary>
-    private sealed record SubjectToken(string? Subject, string? ClientId, IReadOnlySet<string> Audiences, string? Actor, string? ActingClientId)
+    private sealed record SubjectToken(
+        string? Subject, string? ClientId, IReadOnlySet<string> Audiences, string? Actor, string? ActingClientId,
+        IReadOnlyList<string> AuthenticationMethods, DateTimeOffset? AuthTime)
     {
         public static SubjectToken From(IEnumerable<Claim> claims)
         {
@@ -125,7 +139,11 @@ public sealed class TokenExchangeGrantValidator(
                 list.FirstOrDefault(c => c.Type == JwtClaimTypes.ClientId)?.Value,
                 list.Where(c => c.Type == JwtClaimTypes.Audience).Select(c => c.Value).ToHashSet(),
                 actor,
-                actingClient);
+                actingClient,
+                list.Where(c => c.Type == JwtClaimTypes.AuthenticationMethod).Select(c => c.Value).Distinct().ToList(),
+                long.TryParse(list.FirstOrDefault(c => c.Type == JwtClaimTypes.AuthenticationTime)?.Value, out var seconds)
+                    ? DateTimeOffset.FromUnixTimeSeconds(seconds)
+                    : null);
         }
     }
 }

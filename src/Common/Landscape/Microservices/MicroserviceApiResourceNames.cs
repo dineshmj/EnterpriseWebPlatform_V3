@@ -29,4 +29,7 @@ public static class MicroserviceApiResourceNames
 
     public const string AUDIT_JOURNEY_API =
         "audit-journey-api";
+
+    public const string OPERATIONS_JOURNEY_API =
+        "operations-journey-api";
 }

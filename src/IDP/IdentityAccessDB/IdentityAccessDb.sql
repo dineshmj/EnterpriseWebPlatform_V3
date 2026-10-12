@@ -304,6 +304,7 @@ INSERT INTO permissions (name, code, description) VALUES
 ('Retry Workflow','workflow.retry','Retry an eligible workflow'),
 ('Pause Workflow','workflow.pause','Pause an eligible workflow'),
 ('Resume Workflow','workflow.resume','Resume a paused workflow'),
+('Manage Simulator Behaviour','simulator.behaviour.manage','Switch an external-system simulator to healthy, slow, failing, down or refusing (development and test environments only)'),
 ('Reprocess Workflow','workflow.reprocess','Reprocess an eligible workflow'),
 ('View Integration Status','integration.status.view','View integration status'),
 ('View Service Health','service.health.view','View service health information'),
@@ -610,7 +611,8 @@ JOIN permissions p ON p.code IN (
     'outbox.view',
     'inbox.view',
     'consumer.status.view',
-    'workflow.status.view'
+    'workflow.status.view',
+    'simulator.behaviour.manage'
 )
 WHERE r.code = 'operations_administrator';
 
