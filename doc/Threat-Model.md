@@ -152,7 +152,7 @@ Abbreviations: **S** spoofing, **T** tampering, **R** repudiation, **I** informa
 | R-4 | Approvals required MFA at sign-in, not a recent one | Medium | **Fixed**: step-up requires `amr` mfa AND `auth_time` at most `Mfa:StepUpMaxAgeMinutes` (default 15) old - `MfaStepUp.cs`. Possible polish: an automatic re-authentication (OIDC `max_age` / `acr_values`) instead of "sign out, sign in again" |
 | R-5 | No operator tool to resend parked Outbox messages; no reconciliation with the payment network for unknown outcomes | Medium (operations) | Planned |
 | R-6 | Audit actor fields come from producer envelopes (trusted producers, Kafka ACLs) — not signed | Low | Accepted for PoC |
-| R-7 | SignalR hub has no per-user connection quota | Low | Accepted for PoC |
+| R-7 | SignalR hub had no per-user connection quota | Low | **Fixed**: at most `Notifications:MaxConnectionsPerPerson` (default 10) connections per person, per instance - `NotificationsHub.cs` |
 | R-8 | `/metrics` and health endpoints are anonymous (network controls assumed) | Low | Accepted for PoC (deployment control) |
 | R-9 | No mTLS between services | Medium in production | Accepted for PoC (service mesh in production) |
 | R-10 | Development secrets and certificates in configuration; SASL_PLAINTEXT on localhost | High in production | Accepted for PoC: development only; production uses a secret store, TLS and fail-closed start-up |

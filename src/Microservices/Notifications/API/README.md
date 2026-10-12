@@ -59,6 +59,7 @@ What this project does to stay secure: each control, what would go wrong without
 | 9 | Per-caller rate limits (person, machine client, IP), 429 with `Retry-After` | One caller, or a stolen token, could flood the API for everybody | Unrestricted resource consumption (OWASP API4) | [RateLimiting.cs](../../../Common/WebUtilities/Security/RateLimiting.cs), `AddEwpRateLimiting` in [Program.cs](Program.cs) |
 | 10 | Own least-privilege database user `ewp_notifications_api`: its own database only, no DDL | A compromised API or leaked connection string would expose other contexts' data or let the schema be changed | Lateral movement and blast radius of a breach | [EwpServiceDbUsers.sql](../../../../db/EwpServiceDbUsers.sql) |
 | 11 | HTTPS only (HSTS outside Development) and host filtering (`AllowedHosts`) | Tokens could travel over plain HTTP; a forged `Host` header could poison generated links | Interception (OWASP A02) and host-header attacks | `UseHsts` in [Program.cs](Program.cs); `AllowedHosts` in [appsettings.Development.json](appsettings.Development.json) |
+| 12 | Live channel limits: at most `Notifications:MaxConnectionsPerPerson` (default 10) hub connections per person - one more is closed at once; incoming hub messages capped at 4 KB | A stolen session or a faulty client could hold thousands of sockets open and starve everybody else's notifications | Resource exhaustion through the WebSocket hub (OWASP API4) | `HubConnectionLimiter` in [NotificationsHub.cs](Hubs/NotificationsHub.cs), `AddSignalR` in [Program.cs](Program.cs) |
 
 ## Scale-out
 

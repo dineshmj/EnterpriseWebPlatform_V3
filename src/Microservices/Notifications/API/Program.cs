@@ -95,6 +95,10 @@ builder.Services.AddSignalR(options =>
     options.MaximumReceiveMessageSize = 4 * 1024;   // clients send nothing but pings
 });
 
+// OWASP API4 for the live channel: a capped number of connections per person.
+builder.Services.AddSingleton(new HubConnectionLimiter(
+    builder.Configuration.GetValue("Notifications:MaxConnectionsPerPerson", 10)));
+
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<EnterpriseWebPlatform.Notifications.Api.Controllers.ApiExceptionHandler>();
 
