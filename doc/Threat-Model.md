@@ -127,7 +127,7 @@ Abbreviations: **S** spoofing, **T** tampering, **R** repudiation, **I** informa
 | An agent pays from another branch's customer by calling the API directly | Accounts refuses the reservation (`ACCOUNT_NOT_IN_BRANCH`) | Code (R1); API test pending |
 | A payments officer approves their own payment | Separation of duties in the aggregate | Code; unit test held |
 | An officer approves above their clearance | Approval limits by clearance | Code; unit test held |
-| A stolen password approves a payment | Step-up MFA on decisions (on outside Development) | Code |
+| A stolen password approves a payment | Step-up MFA on decisions, signed in within the last 15 minutes (MFA on outside Development) | Code |
 | An auditor browses payments unrecorded | Only through the Audit Journey API, where every look is itself audited | Code; journey asserts pending |
 | A forged "funds held" message moves a payment | Kafka ACLs + pinned `client_id` on internal endpoints | Code, ACLs |
 | A slow network makes a retry pay twice | Idempotency-Key at the network | Playwright `35-resilience` (paid once) |
@@ -149,7 +149,7 @@ Abbreviations: **S** spoofing, **T** tampering, **R** repudiation, **I** informa
 | R-1 | The payment network call ran inside a database transaction (row lock held up to 20 s) | Medium (availability) | **Fixed**: claim (short transaction, 60 s lease) → call with no transaction → record (short transaction, only if the saga's Version is unchanged) — `RunDueSagaStep.cs` |
 | R-2 | KYC documents were not encrypted at rest | High (PII) | **Fixed**: envelope encryption in `EncryptedDocumentStorage.cs`. Remaining in production: key-encryption keys in a key vault / HSM instead of configuration |
 | R-3 | The audit hash chain had no anchor outside its database: a privileged administrator could recompute the whole chain | Medium | **Fixed**: signed checkpoints (ECDSA P-256) in write-once files, checked by every verification - `AuditAnchors.cs`. Remaining in production: the signing key in a key vault / HSM and the checkpoints in immutable storage under another administrator |
-| R-4 | Approvals require MFA at sign-in, not a fresh challenge (no `max_age` / `acr`) | Medium | Planned |
+| R-4 | Approvals required MFA at sign-in, not a recent one | Medium | **Fixed**: step-up requires `amr` mfa AND `auth_time` at most `Mfa:StepUpMaxAgeMinutes` (default 15) old - `MfaStepUp.cs`. Possible polish: an automatic re-authentication (OIDC `max_age` / `acr_values`) instead of "sign out, sign in again" |
 | R-5 | No operator tool to resend parked Outbox messages; no reconciliation with the payment network for unknown outcomes | Medium (operations) | Planned |
 | R-6 | Audit actor fields come from producer envelopes (trusted producers, Kafka ACLs) — not signed | Low | Accepted for PoC |
 | R-7 | SignalR hub has no per-user connection quota | Low | Accepted for PoC |

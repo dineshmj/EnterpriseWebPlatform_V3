@@ -13,16 +13,22 @@ namespace EnterpriseWebPlatform.Common.WebUtilities.Security;
 /// <summary>
 /// Step-up for risky actions (an officer's decision, an operations retry): when MFA is switched
 /// on ("Mfa:Enabled"), the person must have signed in WITH their authenticator code - the token's
-/// "amr" (authentication methods, RFC 8176) contains "mfa". When MFA is off, the requirement is met.
+/// "amr" (authentication methods, RFC 8176) contains "mfa" - and RECENTLY: the sign-in ("auth_time",
+/// which a token refresh does not move) is at most "Mfa:StepUpMaxAgeMinutes" old (default 15). A
+/// session that began with MFA in the morning does not approve a payment in the afternoon; a
+/// token without auth_time is refused. When MFA is off, the requirement is met.
 /// </summary>
 public sealed class MfaStepUpRequirement : IAuthorizationRequirement;
 
-public sealed class MfaStepUpAuthorizationHandler(IConfiguration configuration) : AuthorizationHandler<MfaStepUpRequirement>
+public sealed class MfaStepUpAuthorizationHandler(IConfiguration configuration, TimeProvider? time = null) : AuthorizationHandler<MfaStepUpRequirement>
 {
+    private readonly TimeProvider _time = time ?? TimeProvider.System;
+
     protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, MfaStepUpRequirement requirement)
     {
         if (!MfaStepUp.IsEnabled(configuration) ||
-            context.User.FindAll("amr").Any(c => string.Equals(c.Value, "mfa", StringComparison.Ordinal)))
+            (context.User.FindAll("amr").Any(c => string.Equals(c.Value, "mfa", StringComparison.Ordinal)) &&
+             MfaStepUp.IsRecent(context.User.FindFirst("auth_time")?.Value, MfaStepUp.MaxAge(configuration), _time.GetUtcNow())))
         {
             context.Succeed(requirement);
         }
@@ -34,9 +40,20 @@ public sealed class MfaStepUpAuthorizationHandler(IConfiguration configuration) 
 public static class MfaStepUp
 {
     public const string EnabledKey = "Mfa:Enabled";
+    public const string MaxAgeKey = "Mfa:StepUpMaxAgeMinutes";
     public const string ErrorCode = "mfa_required";
 
     public static bool IsEnabled(IConfiguration configuration) => configuration.GetValue<bool>(EnabledKey);
+
+    /// <summary>How old the MFA sign-in may be for a risky action: "Mfa:StepUpMaxAgeMinutes", 1 to 60, default 15.</summary>
+    public static TimeSpan MaxAge(IConfiguration configuration) =>
+        TimeSpan.FromMinutes(Math.Clamp(configuration.GetValue(MaxAgeKey, 15), 1, 60));
+
+    /// <summary>auth_time (Unix seconds, OIDC Core) is no older than maxAge; a missing or malformed value is not recent.</summary>
+    public static bool IsRecent(string? authTime, TimeSpan maxAge, DateTimeOffset now) =>
+        long.TryParse(authTime, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var seconds) &&
+        now - DateTimeOffset.FromUnixTimeSeconds(seconds) <= maxAge &&
+        DateTimeOffset.FromUnixTimeSeconds(seconds) <= now.AddMinutes(5);
 
     /// <summary>
     /// Fail closed: MFA may be off on a developer's machine only. Outside Development the host
@@ -87,11 +104,11 @@ public static class MfaStepUp
                 await context.Response.WriteAsync(JsonSerializer.Serialize(new
                 {
                     type = "https://datatracker.ietf.org/doc/html/rfc9470",
-                    title = "Authenticator code required",
+                    title = "Recent authenticator code required",
                     status = 403,
                     code = ErrorCode,
-                    error = "This action needs a sign-in with your authenticator code: sign out, then sign in again and enter the code from Google Authenticator.",
-                    detail = "Sign out, then sign in again and enter the code from Google Authenticator."
+                    error = "This action needs a recent sign-in with your authenticator code: sign out, then sign in again and enter the code from Google Authenticator.",
+                    detail = "Risky actions need a sign-in with the authenticator code within the last few minutes. Sign out, then sign in again and enter the code from Google Authenticator."
                 }));
                 return;
             }
