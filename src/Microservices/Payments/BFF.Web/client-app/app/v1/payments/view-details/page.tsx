@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  ArrowLeft, CheckCircle2, CircleAlert, CircleDot, Clock, Cog, FileText, Gavel, Inbox, LifeBuoy, Send, Undo2, Workflow, XCircle,
+  ArrowLeft, CheckCircle2, CircleAlert, CircleDot, Clock, Cog, FileText, Gavel, Inbox, LifeBuoy, Scale, Send, Undo2, Workflow, XCircle,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
@@ -12,7 +12,7 @@ import { cn } from '../../../components/ui/cn';
 import { ConfirmDialog } from '../../../components/ui/confirm-dialog';
 import { DescriptionList, formatDateTime } from '../../../components/ui/data';
 import { Alert, Skeleton, StatusBadge, statusLabel } from '../../../components/ui/feedback';
-import { Field, Textarea } from '../../../components/ui/form';
+import { Field, Input, Select, Textarea } from '../../../components/ui/form';
 import { getJson, postJson } from '../../../lib/api';
 import {
   type PaymentDetail, type PaymentPolicy, type SagaTimelineEntry, type StaffUser,
@@ -93,6 +93,10 @@ export default function PaymentDetailsPage() {
 
             {data.status === 'COMPENSATION_FAILED' && isOperations && (
               <RetryReleasePanel payment={data} onRetried={() => void load(data.paymentId)} />
+            )}
+
+            {saga?.step === 'CONFIRM_WITH_NETWORK' && saga.status === 'RUNNING' && isOperations && user && (
+              <ReconciliationPanel payment={data} user={user} onChanged={() => void load(data.paymentId)} />
             )}
 
             {data.status === 'PENDING_APPROVAL' && isOfficer && user && (
@@ -287,6 +291,161 @@ function RetryReleasePanel({ payment, onRetried }: { payment: PaymentDetail; onR
   );
 }
 
+/**
+ * Operations: a payment the payment network has not confirmed. The saga keeps asking the network;
+ * after the alert time, one operator may propose what the network's own records show (sent, with
+ * the network's reference - or not sent) with the evidence, and ANOTHER operator approves or
+ * rejects it. A time-out alone never releases anything.
+ */
+function ReconciliationPanel({ payment, user, onChanged }: { payment: PaymentDetail; user: StaffUser; onChanged: () => void }) {
+  const saga = payment.saga!;
+  const proposal = saga.proposal ?? null;
+  const [outcome, setOutcome] = useState<'SENT' | 'NOT_SENT'>('NOT_SENT');
+  const [networkReference, setNetworkReference] = useState('');
+  const [evidence, setEvidence] = useState('');
+  const [remarks, setRemarks] = useState('');
+  const [confirm, setConfirm] = useState<'propose' | 'approve' | 'reject' | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const evidenceOk = evidence.trim().length >= 10 && evidence.trim().length <= 500;
+  const referenceOk = outcome === 'NOT_SENT' || (networkReference.trim().length > 0 && networkReference.trim().length <= 100);
+  const remarksOk = remarks.trim().length >= 10 && remarks.trim().length <= 500;
+  const ownProposal = proposal?.proposedByUserId === user.sub;
+
+  /** Why a button is still disabled: shown under the field instead of leaving the person guessing. */
+  const lengthHint = (text: string, required: boolean) => {
+    const n = text.trim().length;
+    if (n === 0) return required ? 'Required: 10 to 500 characters.' : null;
+    return n < 10 ? `${10 - n} more character${10 - n === 1 ? '' : 's'} needed (${n} of at least 10).` : null;
+  };
+  const evidenceHint = lengthHint(evidence, true);
+  const remarksHint = lengthHint(remarks, false);
+
+  const run = async (action: 'propose' | 'approve' | 'reject') => {
+    setConfirm(null);
+    setBusy(true);
+    setActionError(null);
+    try {
+      if (action === 'propose') {
+        await postJson(`/bff/api/payments/${payment.paymentId}/network-resolution`, {
+          outcome, networkReference: outcome === 'SENT' ? networkReference.trim() : null, evidence: evidence.trim(),
+        });
+      } else {
+        await postJson(`/bff/api/payments/${payment.paymentId}/network-resolution/${action}`, { remarks: remarks.trim() || null });
+      }
+      setEvidence(''); setNetworkReference(''); setRemarks('');
+      onChanged();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'The action could not be completed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const describe = (o: string, reference?: string | null) =>
+    o === 'SENT' ? `the network SENT the payment (reference ${reference})` : 'the network did NOT send the payment';
+
+  return (
+    <Card>
+      <CardHeader
+        icon={<Scale />}
+        title="Reconciliation with the payment network"
+        description={`Unconfirmed since ${formatDateTime(saga.unconfirmedSince)}. The funds stay reserved, and the network is asked again and again; its own answer always wins.`}
+      />
+      <CardContent className="space-y-4">
+        {!saga.unconfirmedTooLong && (
+          <Alert tone="info">
+            The automatic enquiry is still running. If the network has not answered after {saga.unconfirmedAlertMinutes} minutes,
+            operations can resolve the payment by hand, with a second person approving.
+          </Alert>
+        )}
+
+        {saga.unconfirmedTooLong && !proposal && (
+          <>
+            <p className="text-sm text-ink-muted">
+              Check the network&apos;s own records (statement, the network&apos;s operations desk), then propose what happened.
+              A second operator must approve before anything changes.
+            </p>
+            <Field label="What the network's records show" htmlFor="resolution-outcome" required>
+              <Select id="resolution-outcome" value={outcome} onChange={e => setOutcome(e.target.value as 'SENT' | 'NOT_SENT')} disabled={busy}>
+                <option value="NOT_SENT">Not sent - release the reserved funds</option>
+                <option value="SENT">Sent - settle (debit) the reserved funds</option>
+              </Select>
+            </Field>
+            {outcome === 'SENT' && (
+              <Field label="The network's reference for the payment" htmlFor="resolution-reference" required>
+                <Input id="resolution-reference" value={networkReference} maxLength={100} onChange={e => setNetworkReference(e.target.value)} disabled={busy} />
+              </Field>
+            )}
+            <Field label="Evidence" htmlFor="resolution-evidence" required hint="Where you saw it, e.g. the statement line or ticket number (10 to 500 characters). Recorded with your LAN ID.">
+              <Textarea id="resolution-evidence" value={evidence} maxLength={500} onChange={e => setEvidence(e.target.value)} disabled={busy}
+                placeholder="e.g. NPP statement 13-OCT, no entry for this payment; ticket OPS-1234" aria-describedby="resolution-evidence-status" />
+              {evidenceHint && <p id="resolution-evidence-status" className="text-xs text-warning-700">{evidenceHint}</p>}
+            </Field>
+            {outcome === 'SENT' && !referenceOk && <p className="text-xs text-warning-700">The network&apos;s reference is required to resolve the payment as sent.</p>}
+          </>
+        )}
+
+        {proposal && (
+          <>
+            <Alert tone="warning" title="Waiting for a second person">
+              {proposal.proposedByLabel} proposes: {describe(proposal.proposedOutcome, proposal.networkReference)}.
+              Evidence: {proposal.evidence} ({formatDateTime(proposal.proposedAt)})
+            </Alert>
+            {ownProposal
+              ? <p className="text-sm text-ink-muted">You proposed this resolution: another operator must approve or reject it.</p>
+              : (
+                <Field label="Remarks" htmlFor="resolution-remarks" hint="Optional to approve; required to reject (10 to 500 characters).">
+                  <Textarea id="resolution-remarks" value={remarks} maxLength={500} onChange={e => setRemarks(e.target.value)} disabled={busy}
+                    aria-describedby="resolution-remarks-status" />
+                  {remarksHint && <p id="resolution-remarks-status" className="text-xs text-warning-700">{remarksHint} Remarks are required to reject.</p>}
+                </Field>
+              )}
+          </>
+        )}
+
+        {actionError && <Alert tone="danger">{actionError}</Alert>}
+      </CardContent>
+
+      {saga.unconfirmedTooLong && !proposal && (
+        <CardFooter>
+          <Button variant="accent" onClick={() => setConfirm('propose')} disabled={busy || !evidenceOk || !referenceOk}>
+            {busy ? 'Proposing…' : 'Propose resolution'}
+          </Button>
+        </CardFooter>
+      )}
+      {proposal && !ownProposal && (
+        <CardFooter className="gap-3">
+          <Button variant="secondary" onClick={() => setConfirm('reject')} disabled={busy || !remarksOk}>Reject</Button>
+          <Button variant="accent" onClick={() => setConfirm('approve')} disabled={busy}>{busy ? 'Working…' : 'Approve'}</Button>
+        </CardFooter>
+      )}
+
+      {confirm === 'propose' && (
+        <ConfirmDialog title="Propose this resolution?" cancelLabel="Cancel" confirmLabel="Propose"
+          onCancel={() => setConfirm(null)} onConfirm={() => void run('propose')}>
+          You state that {describe(outcome, networkReference.trim())}. Nothing changes until a second operator approves.
+        </ConfirmDialog>
+      )}
+      {confirm === 'approve' && proposal && (
+        <ConfirmDialog title="Approve this resolution?" cancelLabel="Cancel" confirmLabel="Approve"
+          onCancel={() => setConfirm(null)} onConfirm={() => void run('approve')}>
+          {proposal.proposedOutcome === 'SENT'
+            ? `The reserved ${formatMoney(payment.amount)} will be debited from the customer's account: the payment is treated as sent.`
+            : `The reserved ${formatMoney(payment.amount)} will be released to the customer: the payment is treated as never sent.`}
+        </ConfirmDialog>
+      )}
+      {confirm === 'reject' && proposal && (
+        <ConfirmDialog title="Reject this resolution?" cancelLabel="Cancel" confirmLabel="Reject"
+          onCancel={() => setConfirm(null)} onConfirm={() => void run('reject')}>
+          The proposal is dropped; the network is still asked, and a new resolution can be proposed.
+        </ConfirmDialog>
+      )}
+    </Card>
+  );
+}
+
 function Outcome({ payment }: { payment: PaymentDetail }) {
   switch (payment.status) {
     case 'COMPLETED':
@@ -351,6 +510,12 @@ function timelineLook(kind: string) {
     case 'RETRY':
     case 'MESSAGE_RESENT':
       return { icon: Undo2, tone: 'text-warning-700' };
+    case 'RESOLUTION_PROPOSED':
+    case 'RESOLUTION_REJECTED':
+    case 'RESOLUTION_SUPERSEDED':
+      return { icon: Scale, tone: 'text-warning-700' };
+    case 'RESOLUTION_APPROVED':
+      return { icon: Scale, tone: 'text-success-700' };
     case 'REPLY_IGNORED':
       return { icon: Clock, tone: 'text-ink-faint' };
     default:

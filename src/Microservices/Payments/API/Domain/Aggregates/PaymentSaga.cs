@@ -14,8 +14,12 @@ public sealed record SagaPolicy(
     int MaxCommandAttempts,
     TimeSpan NetworkRetryInitialDelay,
     TimeSpan NetworkRetryMaxDelay,
-    int MaxNetworkAttempts)
+    int MaxNetworkAttempts,
+    TimeSpan UnconfirmedAlertAfter)
 {
+    public const int MinEvidenceLength = 10;
+    public const int MaxEvidenceLength = 500;
+
     /// <summary>How long to wait for the reply to the n-th sending of a command (doubling, capped).</summary>
     public TimeSpan ReplyTimeoutFor(int attempt) => Doubling(ReplyTimeout, MaxReplyTimeout, attempt);
 
@@ -61,6 +65,9 @@ public sealed class SagaHistoryEntry
 ///   SEND_TO_NETWORK ─no answer after N tries─► CONFIRM_WITH_NETWORK (status enquiry, asked until it answers)
 ///       ─sent─► SETTLE_FUNDS (the money left: never released)   ─not sent / refused─► RELEASE_FUNDS (FAILED)
 ///   RELEASE_FUNDS ─no reply after N tries─► STUCK (COMPENSATION_FAILED: operations retry)
+///   CONFIRM_WITH_NETWORK unanswered for long ─► alert; operations may PROPOSE sent / not sent with
+///       evidence, a SECOND person approves (four eyes) ─► SETTLE_FUNDS or RELEASE_FUNDS. A time-out
+///       alone never releases anything; the enquiry goes on, and the network's own answer wins.
 ///
 /// Every call is a short, separate piece of work (a reply arrived, a timer is due); the
 /// saga is saved after each one together with the payment and the next command, in one
@@ -114,6 +121,20 @@ public sealed class PaymentSaga : AggregateRoot
     public DateTimeOffset UpdatedAt { get; private set; }
 
     public long Version { get; private set; }
+
+    /// <summary>Since when the saga has been asking the network about the payment (CONFIRM_WITH_NETWORK); null at any other step.</summary>
+    public DateTimeOffset? UnconfirmedSince { get; private set; }
+
+    /// <summary>When operations were alerted that the payment is unconfirmed for too long (once per wait); null before.</summary>
+    public DateTimeOffset? UnconfirmedAlertedAt { get; private set; }
+
+    // A manual resolution waiting for a second person's decision (null when none).
+    public NetworkOutcome? ProposedOutcome { get; private set; }
+    public string? ProposedNetworkReference { get; private set; }
+    public string? ProposedEvidence { get; private set; }
+    public string? ProposedByUserId { get; private set; }
+    public string? ProposedByLabel { get; private set; }
+    public DateTimeOffset? ProposedAt { get; private set; }
 
     public IReadOnlyList<SagaHistoryEntry> History => _history.AsReadOnly();
 
@@ -327,6 +348,7 @@ public sealed class PaymentSaga : AggregateRoot
     public void OnNetworkConfirmedSent(Payment payment, string networkReference, SagaPolicy policy, DateTimeOffset now)
     {
         EnsureStep(SagaStep.ConfirmWithNetwork);
+        SupersedeProposal(now);
         Record(now, "NETWORK_CONFIRMED_SENT", $"The payment network confirms it sent the payment (reference {networkReference}): settling the funds, not releasing them.", null);
         payment.SentToNetwork(networkReference, now);
         MoveTo(SagaStep.SettleFunds, SagaStatus.Running, null, now);
@@ -337,6 +359,7 @@ public sealed class PaymentSaga : AggregateRoot
     public void OnNetworkConfirmedNotSent(Payment payment, string? refusalReason, SagaPolicy policy, DateTimeOffset now)
     {
         EnsureStep(SagaStep.ConfirmWithNetwork);
+        SupersedeProposal(now);
         if (refusalReason is null)
         {
             Record(now, "NETWORK_CONFIRMED_NOT_SENT", "The payment network confirms it never received the payment: releasing the funds.", null);
@@ -364,6 +387,137 @@ public sealed class PaymentSaga : AggregateRoot
         NextCheckAt = now + delay;
         Touch(now);
         Record(now, "NETWORK_STATUS_UNKNOWN", $"Status enquiry {Attempts} failed: {LastError}. Asking again in {delay.TotalSeconds:F0} s; nothing is released until the network answers.", null);
+
+        // Unconfirmed for too long: tell operations - once - that it needs reconciling.
+        if (UnconfirmedAlertedAt is null && IsUnconfirmedTooLong(policy, now))
+        {
+            UnconfirmedAlertedAt = now;
+            Record(now, "UNCONFIRMED_ALERT",
+                $"Unconfirmed by the network for more than {policy.UnconfirmedAlertAfter.TotalMinutes:F0} minutes: operations are alerted and may now reconcile it (two people).", null);
+            RaiseDomainEvent(new PaymentUnconfirmedByNetworkDomainEvent(UnconfirmedSince!.Value, now));
+        }
+    }
+
+    // ------------------------------------------------------------------ reconciliation: by people, when the network cannot answer
+
+    /// <summary>The network has not confirmed the payment for longer than the alert time (an operations alert; manual resolution possible).</summary>
+    public bool IsUnconfirmedTooLong(SagaPolicy policy, DateTimeOffset now) =>
+        Status == SagaStatus.Running && Step == SagaStep.ConfirmWithNetwork &&
+        UnconfirmedSince is { } since && now - since >= policy.UnconfirmedAlertAfter;
+
+    /// <summary>
+    /// First pair of eyes: an operator who checked the network's own records (a statement, the
+    /// network's operations desk) proposes what happened - SENT, with the network's reference for
+    /// the payment, or NOT_SENT - with the evidence. Nothing changes yet: the enquiry goes on, and a
+    /// second person must approve. Possible only once the payment is unconfirmed for the alert time.
+    /// The saga's Version stays as it is, so an enquiry in flight still records its answer.
+    /// </summary>
+    public void ProposeNetworkResolution(NetworkOutcome outcome, string? networkReference, string evidence,
+        string proposerUserId, string proposerLabel, SagaPolicy policy, DateTimeOffset now)
+    {
+        EnsureStep(SagaStep.ConfirmWithNetwork);
+        if (!IsUnconfirmedTooLong(policy, now))
+            throw new DomainConflictException(
+                $"The payment network is still being asked. A manual resolution is possible once the payment has been unconfirmed for {policy.UnconfirmedAlertAfter.TotalMinutes:F0} minutes.");
+        if (ProposedOutcome is not null)
+            throw new DomainConflictException("A resolution is already waiting for a second person's decision.");
+        if (proposerUserId == InitiatedByUserId)
+            throw new SeparationOfDutiesViolationException("The person who initiated the payment cannot propose its resolution.");
+
+        var reference = networkReference?.Trim();
+        if (outcome == NetworkOutcome.Sent && (string.IsNullOrEmpty(reference) || reference.Length > 100))
+            throw new DomainRuleViolationException("To resolve the payment as sent, give the network's reference for it (up to 100 characters).");
+        var proof = RequiredText(evidence, "The evidence");
+
+        ProposedOutcome = outcome;
+        ProposedNetworkReference = outcome == NetworkOutcome.Sent ? reference : null;
+        ProposedEvidence = proof;
+        ProposedByUserId = proposerUserId;
+        ProposedByLabel = proposerLabel;
+        ProposedAt = now;
+        UpdatedAt = now;
+
+        Record(now, "RESOLUTION_PROPOSED", $"{proposerLabel} proposes: {Describe(outcome, ProposedNetworkReference)}. Evidence: {proof}. Waiting for a second person.", null);
+        RaiseDomainEvent(new NetworkResolutionDomainEvent(NetworkResolutionDomainEvent.Proposed, outcome, ProposedNetworkReference, proof,
+            proposerUserId, proposerUserId, null, now));
+    }
+
+    /// <summary>
+    /// Second pair of eyes: another person (never the proposer, never the payment's initiator)
+    /// approves - the payment is then settled (SENT) or its funds released (NOT_SENT) - or rejects
+    /// the proposal with remarks, and the enquiry simply goes on.
+    /// </summary>
+    public void DecideNetworkResolution(Payment payment, bool approve, string deciderUserId, string deciderLabel, string? remarks,
+        SagaPolicy policy, DateTimeOffset now)
+    {
+        EnsureStep(SagaStep.ConfirmWithNetwork);
+        if (ProposedOutcome is not { } outcome)
+            throw new DomainConflictException("No resolution is waiting for a decision.");
+        if (deciderUserId == ProposedByUserId)
+            throw new SeparationOfDutiesViolationException("Four eyes: the person who proposed the resolution cannot decide it.");
+        if (deciderUserId == InitiatedByUserId)
+            throw new SeparationOfDutiesViolationException("The person who initiated the payment cannot decide its resolution.");
+
+        var reference = ProposedNetworkReference;
+        var evidence = ProposedEvidence!;
+        var proposer = ProposedByUserId!;
+        var note = string.IsNullOrWhiteSpace(remarks) ? null : RequiredText(remarks, "The remarks");
+
+        if (!approve)
+        {
+            var why = RequiredText(remarks, "The reason for rejecting");
+            Record(now, "RESOLUTION_REJECTED", $"{deciderLabel} rejected the proposed resolution ({Describe(outcome, reference)}): {why}. The enquiry goes on.", null);
+            RaiseDomainEvent(new NetworkResolutionDomainEvent(NetworkResolutionDomainEvent.Rejected, outcome, reference, evidence, proposer, deciderUserId, why, now));
+            ClearProposal();
+            UpdatedAt = now;
+            return;
+        }
+
+        Record(now, "RESOLUTION_APPROVED", $"{deciderLabel} approved the resolution proposed by {ProposedByLabel}: {Describe(outcome, reference)}." +
+            (note is null ? string.Empty : $" Remarks: {note}"), null);
+        RaiseDomainEvent(new NetworkResolutionDomainEvent(NetworkResolutionDomainEvent.Approved, outcome, reference, evidence, proposer, deciderUserId, note, now));
+        ClearProposal();
+
+        if (outcome == NetworkOutcome.Sent)
+        {
+            payment.SentToNetwork(reference!, now);
+            MoveTo(SagaStep.SettleFunds, SagaStatus.Running, null, now);
+            SendFundsCommand(SettleFundsCommand, payment, policy, now);
+        }
+        else
+        {
+            BeginCompensation(payment, PaymentStatus.Failed, "NETWORK_NOT_SENT_CONFIRMED",
+                "The payment network never confirmed the payment; its records show it was not sent (confirmed by two people).", policy, now);
+        }
+    }
+
+    private void SupersedeProposal(DateTimeOffset now)
+    {
+        if (ProposedOutcome is not { } outcome)
+            return;
+        Record(now, "RESOLUTION_SUPERSEDED", $"The network answered: the proposed resolution ({Describe(outcome, ProposedNetworkReference)}) by {ProposedByLabel} is no longer needed.", null);
+        ClearProposal();
+    }
+
+    private void ClearProposal()
+    {
+        ProposedOutcome = null;
+        ProposedNetworkReference = null;
+        ProposedEvidence = null;
+        ProposedByUserId = null;
+        ProposedByLabel = null;
+        ProposedAt = null;
+    }
+
+    private static string Describe(NetworkOutcome outcome, string? reference) =>
+        outcome == NetworkOutcome.Sent ? $"the network SENT the payment (reference {reference})" : "the network did NOT send the payment";
+
+    private static string RequiredText(string? text, string what)
+    {
+        var value = text?.Trim() ?? string.Empty;
+        if (value.Length is < SagaPolicy.MinEvidenceLength or > SagaPolicy.MaxEvidenceLength)
+            throw new DomainRuleViolationException($"{what} must be {SagaPolicy.MinEvidenceLength} to {SagaPolicy.MaxEvidenceLength} characters.");
+        return value;
     }
 
     // ------------------------------------------------------------------ timeouts (called by the step runner)
@@ -494,6 +648,10 @@ public sealed class PaymentSaga : AggregateRoot
         {
             Attempts = 0;   // attempts count per step
             LastError = null;
+            UnconfirmedSince = step == SagaStep.ConfirmWithNetwork ? now : null;
+            UnconfirmedAlertedAt = null;
+            if (step != SagaStep.ConfirmWithNetwork)
+                ClearProposal();
         }
 
         Step = step;

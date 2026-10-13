@@ -6,6 +6,7 @@ using Npgsql;
 using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.Payments.Api.Application.Abstractions;
 using EnterpriseWebPlatform.Payments.Api.Domain.Aggregates;
+using EnterpriseWebPlatform.Payments.Api.Domain.Events;
 using EnterpriseWebPlatform.Payments.Api.Domain.ValueObjects;
 using EnterpriseWebPlatform.Payments.Api.Infrastructure.Messaging;
 
@@ -60,7 +61,9 @@ public sealed class PaymentsDbContext(DbContextOptions<PaymentsDbContext> option
             var payment = payments.SingleOrDefault(p => p.Id == saga.PaymentId)
                 ?? await Payments.SingleAsync(p => p.Id == saga.PaymentId, cancellationToken);
             // LAN IDs of the people the messages name (this context's staff directory).
-            var people = new[] { saga.InitiatedByUserId, payment.DecisionByUserId }.Where(x => x is not null).Distinct().ToList();
+            var people = new[] { saga.InitiatedByUserId, payment.DecisionByUserId }
+                .Concat(saga.DomainEvents.OfType<NetworkResolutionDomainEvent>().SelectMany(r => new[] { r.ProposedByUserId, r.ActorUserId }))
+                .Where(x => x is not null).Distinct().ToList();
             var lanIds = await StaffMembers.AsNoTracking()
                 .Where(x => people.Contains(x.UserId))
                 .ToDictionaryAsync(x => x.UserId, x => x.LanId, cancellationToken);
@@ -179,6 +182,15 @@ public sealed class PaymentsDbContext(DbContextOptions<PaymentsDbContext> option
             e.Property(x => x.CreatedAt).HasColumnName("created_at").IsRequired();
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at").IsRequired();
             e.Property(x => x.Version).HasColumnName("version").IsConcurrencyToken().IsRequired();
+            e.Property(x => x.UnconfirmedSince).HasColumnName("unconfirmed_since");
+            e.Property(x => x.UnconfirmedAlertedAt).HasColumnName("unconfirmed_alerted_at");
+            e.Property(x => x.ProposedOutcome).HasColumnName("proposed_outcome").HasMaxLength(10)
+                .HasConversion(v => v!.Value.ToCode(), v => PaymentsCodes.ParseNetworkOutcome(v));
+            e.Property(x => x.ProposedNetworkReference).HasColumnName("proposed_network_reference").HasMaxLength(100);
+            e.Property(x => x.ProposedEvidence).HasColumnName("proposed_evidence").HasMaxLength(500);
+            e.Property(x => x.ProposedByUserId).HasColumnName("proposed_by_user_id").HasMaxLength(200);
+            e.Property(x => x.ProposedByLabel).HasColumnName("proposed_by_label").HasMaxLength(200);
+            e.Property(x => x.ProposedAt).HasColumnName("proposed_at");
 
             e.HasMany(x => x.History).WithOne().HasForeignKey(x => x.SagaId);
             e.Navigation(x => x.History).HasField("_history").UsePropertyAccessMode(PropertyAccessMode.Field);

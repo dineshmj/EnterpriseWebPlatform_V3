@@ -2,7 +2,7 @@
 
 import { CheckCircle2, ShieldCheck } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { MfeShell, type ShellNotification, useShellNotifications } from '../../../../components/MfeShell';
+import { MfeShell, type ShellNotification, useShellNotifications, useVisibleRefresh } from '../../../../components/MfeShell';
 import { PaymentsTable } from '../../../../components/PaymentsTable';
 import { Card, CardHeader } from '../../../../components/ui/card';
 import { Alert, EmptyState } from '../../../../components/ui/feedback';
@@ -25,10 +25,11 @@ export default function PaymentApprovalsPage() {
     getJson<PaymentPolicy>('/bff/api/payments/policy').then(setPolicy).catch(() => setPolicy(null));
   }, []);
 
-  // New work (relayed by the Shell) reloads the queue.
+  // New work (relayed by the Shell) reloads the queue at once; otherwise every 30 s while visible.
   useShellNotifications(useCallback((n: ShellNotification) => {
     if (n.target?.mfe === 'payments') setRefresh(r => r + 1);
   }, []));
+  useVisibleRefresh(useCallback(() => setRefresh(r => r + 1), []));
 
   useEffect(() => {
     setError(null);

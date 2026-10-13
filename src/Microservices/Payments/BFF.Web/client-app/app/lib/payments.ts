@@ -45,6 +45,22 @@ export interface SagaView {
   workflowId: string;
   correlationId: string;
   timeline: SagaTimelineEntry[];
+  /** Since when the network has not confirmed the payment (CONFIRM_WITH_NETWORK only). */
+  unconfirmedSince?: string | null;
+  /** Unconfirmed for longer than the alert time: operations may resolve it by hand (four eyes). */
+  unconfirmedTooLong: boolean;
+  unconfirmedAlertMinutes: number;
+  proposal?: NetworkResolutionProposal | null;
+}
+
+/** A manual resolution waiting for a second person's decision. */
+export interface NetworkResolutionProposal {
+  proposedOutcome: 'SENT' | 'NOT_SENT';
+  networkReference?: string | null;
+  evidence: string;
+  proposedByUserId: string;
+  proposedByLabel: string;
+  proposedAt: string;
 }
 
 export interface PaymentDetail {
@@ -95,10 +111,15 @@ export interface ProcessingItem {
   lastError?: string | null;
   updatedAt: string;
   overdue: boolean;
+  unconfirmedSince?: string | null;
+  unconfirmedTooLong: boolean;
+  proposedOutcome?: string | null;
+  proposedByLabel?: string | null;
 }
 
 export interface ProcessingOverview {
   compensationFailed: number;
+  unconfirmedTooLong: number;
   overdue: number;
   retrying: number;
   waitingForApproval: number;
@@ -220,6 +241,11 @@ export const TIMELINE_KIND: Record<string, string> = {
   TIMEOUT: 'No answer in time',
   COMPENSATION_FAILED: 'Release not confirmed',
   RETRY: 'Release retried',
+  MESSAGE_RESENT: 'Parked message resent by operations',
+  RESOLUTION_PROPOSED: 'Manual resolution proposed',
+  RESOLUTION_APPROVED: 'Manual resolution approved (second person)',
+  RESOLUTION_REJECTED: 'Manual resolution rejected (second person)',
+  RESOLUTION_SUPERSEDED: 'Manual resolution no longer needed',
   APPROVED: 'Approved by a payments officer',
   REJECTED_BY_APPROVER: 'Rejected by a payments officer',
   FINISHED: 'Finished',

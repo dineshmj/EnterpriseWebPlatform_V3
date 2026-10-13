@@ -3,7 +3,7 @@
 import { ArrowRightLeft, CheckCircle2, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { MfeShell, type ShellNotification, useShellNotifications } from '../../../components/MfeShell';
+import { MfeShell, type ShellNotification, useShellNotifications, useVisibleRefresh } from '../../../components/MfeShell';
 import { PaymentsTable } from '../../../components/PaymentsTable';
 import { buttonVariants } from '../../../components/ui/button';
 import { Card, CardHeader } from '../../../components/ui/card';
@@ -32,13 +32,16 @@ export default function PaymentsPage() {
     getStaffUser().then(setUser).catch(() => setUser(null));
   }, []);
 
-  // News about payments (relayed by the Shell) reloads the list.
+  // News about payments (relayed by the Shell) reloads the list at once; otherwise every 30 s while visible.
   useShellNotifications(useCallback((n: ShellNotification) => {
     if (n.target?.mfe === 'payments') setRefresh(r => r + 1);
   }, []));
+  useVisibleRefresh(useCallback(() => setRefresh(r => r + 1), []));
+
+  // A new filter shows "loading"; a refresh of the same filter keeps the rows until the new ones arrive.
+  useEffect(() => { setData(null); }, [filter]);
 
   useEffect(() => {
-    setData(null);
     setError(null);
     const status = filter.key ? `&status=${filter.key}` : '';
     getJson<Page<PaymentSummary>>(`/bff/api/payments?pageNumber=1&pageSize=50${status}`)

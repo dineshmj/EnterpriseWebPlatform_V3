@@ -19,9 +19,13 @@ namespace EnterpriseWebPlatform.Notifications.Api.Domain;
 ///     AccountApplicationRejected, AccountOpened, AccountOpeningFailed → user:{initiator}
 ///   payments (orchestrated saga; the target opens the payment's status page)
 ///     PaymentApprovalRequired   → staff:payments_officer:{branch}   (new work)
-///     PaymentCompleted / Rejected / Failed → user:{initiator}
+///     PaymentCompleted / Rejected → user:{initiator}
+///     PaymentFailed             → user:{initiator}; staff:payments_officer:{branch} for information
 ///     PaymentCompensationFailed → user:{initiator}, staff:payments_officer:{branch} and
 ///                                 staff:operations_administrator:* (the desk that retries the release)
+///     PaymentUnconfirmedByNetwork        → staff:operations_administrator:* (new work: reconcile)
+///     PaymentNetworkResolutionProposed   → staff:operations_administrator:* (new work: a second person decides)
+///     PaymentNetworkResolutionRejected   → staff:operations_administrator:* (new work: propose again)
 /// </summary>
 public static partial class NotificationRules
 {
@@ -113,6 +117,15 @@ public static partial class NotificationRules
         var what = $"{Amount(p)} to {Str(p, "PayeeName") ?? "the payee"} ({number})";
         var target = Record("payments", "/v1/payments/view-details", "paymentId", Long(p, "PaymentId"));
         var reason = Str(p, "Reason");
+        var branch = Str(p, "BranchCode");
+
+        NotificationDraft OperationsWork(string title, string body) =>
+            new(NotificationAudiences.ForStaffInAllBranches("operations_administrator"), NotificationCategory.NewWork, title, body, target);
+
+        NotificationDraft? BranchOfficersInfo(string title, string body) =>
+            branch is null ? null : new(NotificationAudiences.ForStaff("payments_officer", branch), NotificationCategory.Progress, title, body, target);
+
+        string Outcome(string code) => code == "SENT" ? "sent (settle the funds)" : "not sent (release the funds)";
 
         IEnumerable<NotificationDraft?> drafts = eventType switch
         {
@@ -134,7 +147,24 @@ public static partial class NotificationRules
             "PaymentFailed" =>
             [
                 progress("Payment failed - funds released",
-                    $"{what} could not be sent{(reason is null ? "." : $": {reason}")} The reserved funds are available again.", target)
+                    $"{what} could not be sent{(reason is null ? "." : $": {reason}")} The reserved funds are available again.", target),
+                BranchOfficersInfo("Payment failed in your branch",
+                    $"{what} could not be sent{(reason is null ? "." : $": {reason}")} The reserved funds were released; nothing to do.")
+            ],
+            "PaymentUnconfirmedByNetwork" =>
+            [
+                OperationsWork("Payment to reconcile",
+                    $"{what} in branch {branch ?? "?"}: the payment network has not confirmed it for long and the funds stay reserved. Check the network's records and propose a resolution.")
+            ],
+            "PaymentNetworkResolutionProposed" =>
+            [
+                OperationsWork("Resolution to approve",
+                    $"{By(p, "ProposedByLanId")} proposes that {what} was {Outcome(Str(p, "ProposedOutcome") ?? "")}. Another operator must approve or reject it.")
+            ],
+            "PaymentNetworkResolutionRejected" =>
+            [
+                OperationsWork("Resolution rejected",
+                    $"{By(p, "DecisionByLanId")} rejected the resolution proposed by {By(p, "ProposedByLanId")} for {what}{Reason(p, "Remarks")}{(Str(p, "Remarks") is null ? string.Empty : ".")} The payment still needs reconciling.")
             ],
             "PaymentCompensationFailed" =>
             [

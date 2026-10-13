@@ -62,6 +62,31 @@ public sealed record PaymentOutcomePayload(
     string? DecisionRemarks);
 
 /// <summary>
+/// A manual reconciliation step (payments.payment.events): who proposed or decided what, with
+/// the evidence reference. DecisionBy* is the person who acted in THIS step (the audit trail's
+/// actor); Status is the stage and the outcome, e.g. "PROPOSED: NOT_SENT".
+/// </summary>
+public sealed record NetworkResolutionPayload(
+    long PaymentId,
+    Guid PaymentRef,
+    string PaymentNumber,
+    string CustomerNumber,
+    string BranchCode,
+    decimal Amount,
+    string Currency,
+    string PayeeName,
+    string Status,
+    string ReasonCode,
+    string ProposedOutcome,
+    string? NetworkReference,
+    string Evidence,
+    string ProposedByUserId,
+    string? ProposedByLanId,
+    string DecisionByUserId,
+    string? DecisionByLanId,
+    string? Remarks);
+
+/// <summary>
 /// Translates the saga's commands and the payment's facts into Outbox rows: the single
 /// place where the domain's language meets the published contracts. One aggregate stream
 /// per payment (type Payment, ID = PaymentRef, which is also the Kafka key), so all of a
@@ -78,6 +103,10 @@ internal static class PaymentsMessageMapper
     public const string PaymentRejected = "PaymentRejected";
     public const string PaymentFailed = "PaymentFailed";
     public const string PaymentCompensationFailed = "PaymentCompensationFailed";
+    public const string PaymentUnconfirmedByNetwork = "PaymentUnconfirmedByNetwork";
+    public const string PaymentNetworkResolutionProposed = "PaymentNetworkResolutionProposed";
+    public const string PaymentNetworkResolutionApproved = "PaymentNetworkResolutionApproved";
+    public const string PaymentNetworkResolutionRejected = "PaymentNetworkResolutionRejected";
 
     private const string Source = "payments";
     private const int SchemaVersion = 1;
@@ -127,6 +156,30 @@ internal static class PaymentsMessageMapper
                 (messageId, eventType, causationId) = (Guid.NewGuid(), PaymentCompensationFailed, saga.CurrentCommandId);
                 payload = Envelope(messageId, eventType, stuck.OccurredAt, saga, causationId, initiatorLanId,
                     Outcome(payment, "COMPENSATION_FAILED", stuck.Reason, lanOf));
+                break;
+
+            case PaymentUnconfirmedByNetworkDomainEvent unconfirmed:
+                (messageId, eventType, causationId) = (Guid.NewGuid(), PaymentUnconfirmedByNetwork, saga.LastMessageId);
+                payload = Envelope(messageId, eventType, unconfirmed.OccurredAt, saga, causationId, initiatorLanId,
+                    Outcome(payment, "NETWORK_UNCONFIRMED",
+                        $"The payment network has not confirmed the payment since {unconfirmed.UnconfirmedSince:u}; the funds stay reserved.", lanOf));
+                break;
+
+            case NetworkResolutionDomainEvent resolution:
+                messageId = Guid.NewGuid();
+                eventType = resolution.Stage switch
+                {
+                    NetworkResolutionDomainEvent.Proposed => PaymentNetworkResolutionProposed,
+                    NetworkResolutionDomainEvent.Approved => PaymentNetworkResolutionApproved,
+                    _ => PaymentNetworkResolutionRejected
+                };
+                causationId = saga.LastMessageId;
+                payload = Envelope(messageId, eventType, resolution.OccurredAt, saga, causationId, initiatorLanId,
+                    new NetworkResolutionPayload(payment.Id, payment.PaymentRef, payment.PaymentNumber, payment.CustomerNumber,
+                        payment.BranchCode.Value, payment.Amount, payment.Currency, payment.PayeeName, $"{resolution.Stage}: {resolution.Outcome.ToCode()}",
+                        "MANUAL_RECONCILIATION", resolution.Outcome.ToCode(), resolution.NetworkReference, resolution.Evidence,
+                        resolution.ProposedByUserId, lanOf(resolution.ProposedByUserId), resolution.ActorUserId, lanOf(resolution.ActorUserId),
+                        resolution.Remarks));
                 break;
 
             default:

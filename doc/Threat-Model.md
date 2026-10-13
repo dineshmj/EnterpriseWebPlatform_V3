@@ -89,7 +89,7 @@ Abbreviations: **S** spoofing, **T** tampering, **R** repudiation, **I** informa
 | E | Endpoint without authorization | Deny by default, one helper for every domain API (`MapEwpApiControllers` + authenticated fallback policy); the Journey APIs refuse an endpoint without an access rule | Every API README (deny by default); `ApiEndpointAuthorization.cs` |
 | E | Reading or changing another branch's records (BOLA) | Branch scope on every read and command; payment funds reserved only on an account of the initiator's branch | Payments README #4, #15; Accounts README #13; KYC / CO / DM READMEs |
 | E | Privilege combination (auditor + branch role) | The auditor's permission counts only through the Audit Journey API | Payments README #4 |
-| E | Insider fraud: self-approval, approval above authority | Separation of duties (maker ≠ checker, across contexts); approval limits by clearance; clearance by risk (Compliance) | Payments README #5, #6; Accounts README #5; Compliance README |
+| E | Insider fraud: self-approval, approval above authority; one person settling or releasing a payment of unknown outcome | Separation of duties (maker ≠ checker, across contexts); approval limits by clearance; clearance by risk (Compliance); four-eyes manual reconciliation | Payments README #5, #6, #19; Accounts README #5; Compliance README |
 | S | A stolen machine token posts fake workflow steps | Internal endpoints pin the exact `client_id`, not only the scope | Every API README (internal endpoints) |
 | T | Duplicate or tampered retries create a second payment | Idempotency-Key bound to the person and the payment's details (409 otherwise); unique constraints | Payments README #7, #13 |
 | I | Internals in error responses | Problem Details everywhere: a trace ID only in the .NET APIs, a generic detail for unexpected errors in the Journey APIs | Every API README (problem responses) |
@@ -176,7 +176,7 @@ When automated tests resume, both sides get the same token fixtures (expired, wr
 | R-9 | No mTLS between services | Medium in production | Accepted for PoC (service mesh in production) |
 | R-10 | Development secrets and certificates in configuration; SASL_PLAINTEXT on localhost | High in production | Accepted for PoC: development only; production uses a secret store, TLS and fail-closed start-up |
 | R-11 | Token rules are implemented twice (.NET and NestJS) and could drift | Medium | **Mitigated**: parity checklist in §4 (TB3); shared token fixtures for both stacks when automated tests resume |
-| R-12 | A payment can wait for the network's answer indefinitely: no age alert, no controlled manual resolution | Medium (operations) | Planned: age alert and four-eyes manual reconciliation with evidence (never a release on timeout) |
+| R-12 | A payment could wait for the network's answer indefinitely: no age alert, no controlled manual resolution | Medium (operations) | **Fixed**: past `Payments:Saga:UnconfirmedAlertMinutes` readiness degrades and the Processing Monitor flags it; operations may then resolve it with four eyes (proposal with evidence by one person, approval by another, recent MFA, `payment.reconcile`); never released on a time-out; each step on the timeline and in the audit trail - `PaymentSaga.cs` |
 | R-13 | A stale MFA sign-in is fixed only by signing out and in again (no OIDC step-up with `max_age` / `acr_values`) | Low (usability) | Planned: BFF-initiated re-authentication without losing the session |
 
 ## 8. Assumptions and out of scope

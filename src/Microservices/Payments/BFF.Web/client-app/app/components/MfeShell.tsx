@@ -134,6 +134,23 @@ export function useShellNotifications(listener: (notification: ShellNotification
   }, [listener]);
 }
 
+/**
+ * Re-reads a list while the person can see it: every `ms` while the tab is visible, and at once
+ * when it becomes visible again. A hidden tab asks nothing. Notifications still reload at once;
+ * this catches what was not addressed to this person (another officer's payment changing).
+ */
+export function useVisibleRefresh(refresh: () => void, ms = 30_000) {
+  useEffect(() => {
+    const tick = () => { if (document.visibilityState === 'visible') refresh(); };
+    const timer = window.setInterval(tick, ms);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, [refresh, ms]);
+}
+
 export function MfeShell({
   title = 'Payments',
   subtitle = 'Payments',

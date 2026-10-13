@@ -118,6 +118,21 @@ CREATE TABLE payment_sagas (
     -- W3C traceparent of the request that started the payment: background steps continue it.
     trace_parent VARCHAR(55) NULL,
 
+    -- Since when the saga has been asking the network about the payment (CONFIRM_WITH_NETWORK only):
+    -- past Payments:Saga:UnconfirmedAlertMinutes it is an operations alert.
+    unconfirmed_since TIMESTAMPTZ NULL,
+    -- When operations were alerted about it (once per wait: the PaymentUnconfirmedByNetwork event).
+    unconfirmed_alerted_at TIMESTAMPTZ NULL,
+
+    -- Manual reconciliation (four eyes): a resolution PROPOSED by one person with evidence,
+    -- waiting for a SECOND person's decision. SENT needs the network's reference for the payment.
+    proposed_outcome VARCHAR(10) NULL,
+    proposed_network_reference VARCHAR(100) NULL,
+    proposed_evidence VARCHAR(500) NULL,
+    proposed_by_user_id VARCHAR(200) NULL,
+    proposed_by_label VARCHAR(200) NULL,
+    proposed_at TIMESTAMPTZ NULL,
+
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
     version BIGINT NOT NULL,
@@ -130,7 +145,17 @@ CREATE TABLE payment_sagas (
     CONSTRAINT ck_payment_sagas_timer CHECK ((status = 'RUNNING') = (next_check_at IS NOT NULL)),
     CONSTRAINT ck_payment_sagas_done CHECK ((step = 'DONE') = (status = 'FINISHED')),
     CONSTRAINT ck_payment_sagas_attempts CHECK (attempts >= 0),
-    CONSTRAINT ck_payment_sagas_version CHECK (version > 0)
+    CONSTRAINT ck_payment_sagas_version CHECK (version > 0),
+    CONSTRAINT ck_payment_sagas_unconfirmed CHECK ((step = 'CONFIRM_WITH_NETWORK') = (unconfirmed_since IS NOT NULL)),
+    CONSTRAINT ck_payment_sagas_unconfirmed_alert CHECK (unconfirmed_alerted_at IS NULL OR unconfirmed_since IS NOT NULL),
+    CONSTRAINT ck_payment_sagas_proposed_outcome CHECK (proposed_outcome IS NULL OR proposed_outcome IN ('SENT', 'NOT_SENT')),
+    -- A proposal is complete or absent, exists only while asking the network, and SENT carries a reference.
+    CONSTRAINT ck_payment_sagas_proposal CHECK (
+        (proposed_outcome IS NULL AND proposed_network_reference IS NULL AND proposed_evidence IS NULL
+            AND proposed_by_user_id IS NULL AND proposed_by_label IS NULL AND proposed_at IS NULL)
+        OR (proposed_outcome IS NOT NULL AND proposed_evidence IS NOT NULL AND proposed_by_user_id IS NOT NULL
+            AND proposed_by_label IS NOT NULL AND proposed_at IS NOT NULL AND step = 'CONFIRM_WITH_NETWORK'
+            AND (proposed_outcome = 'NOT_SENT') = (proposed_network_reference IS NULL)))
 );
 
 -- The step runner's work list: running sagas by due time.

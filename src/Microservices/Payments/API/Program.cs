@@ -75,9 +75,9 @@ builder.Services.AddAuthorization(options =>
     });
 
     // Staff policies: scope for the kind of operation + any of the permissions + a branch.
-    // Step-up (MFA): a payments officer's decision and operations' "Retry release" and "Resend" need a sign-in with the authenticator code while "Mfa:Enabled"
+    // Step-up (MFA): a payments officer's decision and operations' "Retry release", "Resend" and reconciliation need a sign-in with the authenticator code while "Mfa:Enabled"
     // is true (the token's amr contains "mfa"); with MFA off, nothing changes.
-    string[] stepUpPolicies = ["PaymentApprove", "PaymentReject", "PaymentRetryRelease", "PaymentOutboxResend"];
+    string[] stepUpPolicies = ["PaymentApprove", "PaymentReject", "PaymentRetryRelease", "PaymentOutboxResend", "PaymentReconcile"];
 
     void AddStaffPolicy(string name, string scope, params string[] anyOfPermissions) =>
         options.AddPolicy(name, policy =>
@@ -97,6 +97,8 @@ builder.Services.AddAuthorization(options =>
     // Parked Outbox messages: operations see them (outbox.view) and resend one (workflow.reprocess).
     AddStaffPolicy("PaymentOutboxView", PaymentsApiScopesRequired.PAYMENTS_READ, "outbox.view");
     AddStaffPolicy("PaymentOutboxResend", PaymentsApiScopesRequired.PAYMENTS_WRITE, "workflow.reprocess");
+    // Manual reconciliation of a payment the network never confirmed (four eyes in the saga).
+    AddStaffPolicy("PaymentReconcile", PaymentsApiScopesRequired.PAYMENTS_WRITE, "payment.reconcile");
     AddStaffPolicy("PaymentApprove", PaymentsApiScopesRequired.PAYMENTS_WRITE, "payment.approve");
     AddStaffPolicy("PaymentReject", PaymentsApiScopesRequired.PAYMENTS_WRITE, "payment.reject");
 });
@@ -118,6 +120,7 @@ builder.Services.AddScoped<DecidePaymentCommandHandler>();
 builder.Services.AddScoped<RetryReleaseCommandHandler>();
 builder.Services.AddScoped<IParkedOutbox, ParkedOutbox>();
 builder.Services.AddScoped<ResendParkedMessageCommandHandler>();
+builder.Services.AddScoped<ReconcileNetworkOutcomeCommandHandler>();
 
 // The approval tier and the saga's limits are configuration, never constants in a screen.
 // Financial controls fail closed: a missing or blank setting stops the start-up instead of
@@ -148,9 +151,11 @@ var sagaPolicy = new SagaPolicy(
     saga.GetValue("MaxCommandAttempts", 5),
     TimeSpan.FromSeconds(saga.GetValue("NetworkRetryInitialDelaySeconds", 5)),
     TimeSpan.FromSeconds(saga.GetValue("NetworkRetryMaxDelaySeconds", 60)),
-    saga.GetValue("MaxNetworkAttempts", 4));
-if (sagaPolicy.ReplyTimeout <= TimeSpan.Zero || sagaPolicy.MaxCommandAttempts < 1 || sagaPolicy.MaxNetworkAttempts < 1)
-    throw new InvalidOperationException("Payments:Saga limits must be positive.");
+    saga.GetValue("MaxNetworkAttempts", 4),
+    TimeSpan.FromMinutes(saga.GetValue("UnconfirmedAlertMinutes", 60)));
+if (sagaPolicy.ReplyTimeout <= TimeSpan.Zero || sagaPolicy.MaxCommandAttempts < 1 || sagaPolicy.MaxNetworkAttempts < 1 ||
+    sagaPolicy.UnconfirmedAlertAfter < TimeSpan.FromMinutes(1))
+    throw new InvalidOperationException("Payments:Saga limits must be positive (UnconfirmedAlertMinutes at least 1).");
 builder.Services.AddSingleton(sagaPolicy);
 
 // ---------------------------------------------------------------- The payment network (external)
@@ -227,7 +232,7 @@ builder.Services.AddHealthChecks()
             TimeSpan.FromMinutes(2)),
         HealthStatus.Degraded, [HealthEndpoints.ReadyTag]))
     .Add(new HealthCheckRegistration("saga-backlog",
-        sp => new SagaBacklogHealthCheck(sp.GetRequiredService<PaymentsDbContext>()),
+        sp => new SagaBacklogHealthCheck(sp.GetRequiredService<PaymentsDbContext>(), sagaPolicy, sp.GetRequiredService<TimeProvider>()),
         HealthStatus.Degraded, [HealthEndpoints.ReadyTag]));
 
 // OWASP API4: per-caller rate limits on the API surface (429 + Retry-After); configuration "RateLimiting".

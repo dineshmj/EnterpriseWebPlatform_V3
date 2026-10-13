@@ -58,7 +58,7 @@ public sealed class PaymentSagaRepository(PaymentsDbContext db) : IPaymentSagaRe
     public void Add(PaymentSaga saga) => db.PaymentSagas.Add(saga);
 }
 
-public sealed class PaymentsQueries(PaymentsDbContext db) : IPaymentsQueries
+public sealed class PaymentsQueries(PaymentsDbContext db, SagaPolicy policy, TimeProvider time) : IPaymentsQueries
 {
     /// <summary>A RUNNING saga whose timer is this far past due is "overdue" (the step runner or a participant is not keeping up).</summary>
     private static readonly TimeSpan OverdueAfter = TimeSpan.FromMinutes(1);
@@ -109,25 +109,31 @@ public sealed class PaymentsQueries(PaymentsDbContext db) : IPaymentsQueries
             .Select(x => new
             {
                 x.p.Id, x.p.PaymentNumber, Branch = x.p.BranchCode, x.p.Amount, x.p.Currency, x.p.PayeeName, PaymentStatus = x.p.Status,
-                x.s.Step, SagaStatus = x.s.Status, x.s.Attempts, x.s.NextCheckAt, x.s.LastError, x.s.UpdatedAt
+                x.s.Step, SagaStatus = x.s.Status, x.s.Attempts, x.s.NextCheckAt, x.s.LastError, x.s.UpdatedAt,
+                x.s.UnconfirmedSince, x.s.ProposedOutcome, x.s.ProposedByLabel
             })
             .ToListAsync(cancellationToken);
 
         var cutoff = now - OverdueAfter;
+        var unconfirmedCutoff = now - policy.UnconfirmedAlertAfter;
         bool IsOverdue(SagaStatus status, DateTimeOffset? next) => status == SagaStatus.Running && next < cutoff;
-        int Urgency(SagaStatus status, DateTimeOffset? next, int attempts) =>
-            status == SagaStatus.Stuck ? 0 : IsOverdue(status, next) ? 1 : attempts > 1 ? 2 : status == SagaStatus.WaitingForPerson ? 3 : 4;
+        bool IsUnconfirmedTooLong(SagaStatus status, DateTimeOffset? since) => status == SagaStatus.Running && since <= unconfirmedCutoff;
+        int Urgency(SagaStatus status, DateTimeOffset? next, int attempts, DateTimeOffset? since) =>
+            status == SagaStatus.Stuck ? 0 : IsUnconfirmedTooLong(status, since) ? 1 : IsOverdue(status, next) ? 2
+            : attempts > 1 ? 3 : status == SagaStatus.WaitingForPerson ? 4 : 5;
 
         var items = rows
-            .OrderBy(r => Urgency(r.SagaStatus, r.NextCheckAt, r.Attempts)).ThenBy(r => r.UpdatedAt)
+            .OrderBy(r => Urgency(r.SagaStatus, r.NextCheckAt, r.Attempts, r.UnconfirmedSince)).ThenBy(r => r.UpdatedAt)
             .Select(r => new ProcessingItem(
                 r.Id, r.PaymentNumber, r.Branch.Value, r.Amount, r.Currency, r.PayeeName, r.PaymentStatus.ToCode(),
                 r.Step.ToCode(), r.SagaStatus.ToCode(), r.Attempts, r.NextCheckAt, r.LastError, r.UpdatedAt,
-                IsOverdue(r.SagaStatus, r.NextCheckAt)))
+                IsOverdue(r.SagaStatus, r.NextCheckAt), r.UnconfirmedSince, IsUnconfirmedTooLong(r.SagaStatus, r.UnconfirmedSince),
+                r.ProposedOutcome?.ToCode(), r.ProposedByLabel))
             .ToList();
 
         return new ProcessingOverview(
             CompensationFailed: rows.Count(r => r.SagaStatus == SagaStatus.Stuck),
+            UnconfirmedTooLong: rows.Count(r => IsUnconfirmedTooLong(r.SagaStatus, r.UnconfirmedSince)),
             Overdue: rows.Count(r => IsOverdue(r.SagaStatus, r.NextCheckAt)),
             Retrying: rows.Count(r => r.SagaStatus == SagaStatus.Running && r.Attempts > 1),
             WaitingForApproval: rows.Count(r => r.SagaStatus == SagaStatus.WaitingForPerson),
@@ -166,8 +172,14 @@ public sealed class PaymentsQueries(PaymentsDbContext db) : IPaymentsQueries
                 .Select(h => new SagaTimelineEntry(h.At, h.Step, h.Kind, h.Detail, h.MessageId))
                 .ToListAsync(cancellationToken);
 
+            var proposal = saga.ProposedOutcome is { } outcome
+                ? new NetworkResolutionView(outcome.ToCode(), saga.ProposedNetworkReference, saga.ProposedEvidence!,
+                    saga.ProposedByUserId!, saga.ProposedByLabel!, saga.ProposedAt!.Value)
+                : null;
             sagaView = new SagaView(saga.Id, saga.Step.ToCode(), saga.Status.ToCode(), saga.Attempts, saga.NextCheckAt,
-                saga.LastError, saga.WorkflowId, saga.CorrelationId, timeline);
+                saga.LastError, saga.WorkflowId, saga.CorrelationId, timeline,
+                saga.UnconfirmedSince, saga.IsUnconfirmedTooLong(policy, time.GetUtcNow()),
+                (int)policy.UnconfirmedAlertAfter.TotalMinutes, proposal);
         }
 
         return new PaymentDetail(

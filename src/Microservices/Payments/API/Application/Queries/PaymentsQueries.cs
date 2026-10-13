@@ -21,6 +21,15 @@ public sealed record PaymentSummary(
 /// <summary>One line of the payment's timeline: what the saga did or received, and when.</summary>
 public sealed record SagaTimelineEntry(DateTimeOffset At, string Step, string Kind, string Detail, Guid? MessageId);
 
+/// <summary>A manual resolution waiting for a second person's decision.</summary>
+public sealed record NetworkResolutionView(
+    string ProposedOutcome,
+    string? NetworkReference,
+    string Evidence,
+    string ProposedByUserId,
+    string ProposedByLabel,
+    DateTimeOffset ProposedAt);
+
 /// <summary>The saga behind the payment: where it is, and everything it did.</summary>
 public sealed record SagaView(
     Guid SagaId,
@@ -31,7 +40,11 @@ public sealed record SagaView(
     string? LastError,
     Guid WorkflowId,
     Guid CorrelationId,
-    IReadOnlyList<SagaTimelineEntry> Timeline);
+    IReadOnlyList<SagaTimelineEntry> Timeline,
+    DateTimeOffset? UnconfirmedSince = null,
+    bool UnconfirmedTooLong = false,
+    int UnconfirmedAlertMinutes = 0,
+    NetworkResolutionView? Proposal = null);
 
 public sealed record PaymentDetail(
     long PaymentId,
@@ -84,11 +97,16 @@ public sealed record ProcessingItem(
     DateTimeOffset? NextCheckAt,
     string? LastError,
     DateTimeOffset UpdatedAt,
-    bool Overdue);
+    bool Overdue,
+    DateTimeOffset? UnconfirmedSince,
+    bool UnconfirmedTooLong,
+    string? ProposedOutcome,
+    string? ProposedByLabel);
 
 /// <summary>The Payment Processing Monitor: counts, and the sagas that are not finished.</summary>
 public sealed record ProcessingOverview(
     int CompensationFailed,
+    int UnconfirmedTooLong,
     int Overdue,
     int Retrying,
     int WaitingForApproval,

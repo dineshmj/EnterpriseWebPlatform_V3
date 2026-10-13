@@ -65,7 +65,11 @@ public sealed class PaymentsOutboxPublisher(
         [PaymentsMessageMapper.PaymentCompleted] = KafkaTopicNames.PaymentEvents,
         [PaymentsMessageMapper.PaymentRejected] = KafkaTopicNames.PaymentEvents,
         [PaymentsMessageMapper.PaymentFailed] = KafkaTopicNames.PaymentEvents,
-        [PaymentsMessageMapper.PaymentCompensationFailed] = KafkaTopicNames.PaymentEvents
+        [PaymentsMessageMapper.PaymentCompensationFailed] = KafkaTopicNames.PaymentEvents,
+        [PaymentsMessageMapper.PaymentUnconfirmedByNetwork] = KafkaTopicNames.PaymentEvents,
+        [PaymentsMessageMapper.PaymentNetworkResolutionProposed] = KafkaTopicNames.PaymentEvents,
+        [PaymentsMessageMapper.PaymentNetworkResolutionApproved] = KafkaTopicNames.PaymentEvents,
+        [PaymentsMessageMapper.PaymentNetworkResolutionRejected] = KafkaTopicNames.PaymentEvents
     };
 
     public static async Task<OutboxBacklog> GetBacklogAsync(PaymentsDbContext db, int maxAttempts, CancellationToken ct)

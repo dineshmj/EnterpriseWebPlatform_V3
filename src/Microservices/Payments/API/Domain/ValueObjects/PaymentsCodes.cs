@@ -40,6 +40,16 @@ public enum SagaStep
     ConfirmWithNetwork = 7
 }
 
+/// <summary>What operations say the payment network did with a payment it never confirmed (manual reconciliation).</summary>
+public enum NetworkOutcome
+{
+    /// <summary>The network's records show the payment was sent: settle, never release.</summary>
+    Sent = 1,
+
+    /// <summary>The network's records show it never sent the payment: releasing is safe.</summary>
+    NotSent = 2
+}
+
 public enum SagaStatus
 {
     /// <summary>A step is in progress: a reply, a timeout or a due network call will move it on.</summary>
@@ -111,6 +121,22 @@ public static class PaymentsCodes
 
     public static SagaStatus ParseSagaStatus(string code) =>
         Parse<SagaStatus>(code, ToCode, "saga status");
+
+    public static string ToCode(this NetworkOutcome outcome) => outcome switch
+    {
+        NetworkOutcome.Sent => "SENT",
+        NetworkOutcome.NotSent => "NOT_SENT",
+        _ => throw new ArgumentOutOfRangeException(nameof(outcome), outcome, null)
+    };
+
+    public static NetworkOutcome ParseNetworkOutcome(string code) =>
+        Parse<NetworkOutcome>(code, ToCode, "network outcome");
+
+    public static bool TryParseNetworkOutcome(string? code, out NetworkOutcome outcome)
+    {
+        try { outcome = ParseNetworkOutcome(code?.Trim().ToUpperInvariant() ?? string.Empty); return true; }
+        catch (ArgumentOutOfRangeException) { outcome = default; return false; }
+    }
 
     private static TEnum Parse<TEnum>(string code, Func<TEnum, string> toCode, string what) where TEnum : struct, Enum
     {

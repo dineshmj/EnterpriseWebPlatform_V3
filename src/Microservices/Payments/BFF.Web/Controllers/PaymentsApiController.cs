@@ -17,6 +17,8 @@ public sealed record PaymentDecisionBody(string? Remarks);
 
 public sealed record ResendParkedMessageBody(string? Reason);
 
+public sealed record NetworkResolutionProposalBody(string? Outcome, string? NetworkReference, string? Evidence);
+
 /// <summary>
 /// The Payments MFE's API. A thin, explicit facade: the BFF forwards each request with the
 /// staff member's own access token and relays the API's answer. It holds no business
@@ -89,6 +91,33 @@ public sealed class PaymentsApiController(
     [HttpGet("payments/processing")]
     public Task<IActionResult> GetProcessing(CancellationToken cancellationToken = default) =>
         SendAsync(PaymentsBffOptions.PaymentsApiClient, new HttpRequestMessage(HttpMethod.Get, "/v1/payments/processing"), cancellationToken);
+
+    /// <summary>
+    /// Manual reconciliation of a payment the network never confirmed: one operator proposes SENT /
+    /// NOT_SENT with evidence; another approves or rejects (payment.reconcile, four eyes, recent MFA -
+    /// all checked by the Payments API).
+    /// </summary>
+    [HttpPost("payments/{paymentId:long}/network-resolution")]
+    [ValidateAntiForgeryToken]
+    public Task<IActionResult> ProposeNetworkResolution(long paymentId, [FromBody] NetworkResolutionProposalBody? body, CancellationToken cancellationToken = default) =>
+        SendAsync(PaymentsBffOptions.PaymentsApiClient,
+            new HttpRequestMessage(HttpMethod.Post, $"/v1/payments/{paymentId}/network-resolution")
+            {
+                Content = JsonContent.Create(new NetworkResolutionProposalBody(body?.Outcome, body?.NetworkReference, body?.Evidence))
+            },
+            cancellationToken);
+
+    [HttpPost("payments/{paymentId:long}/network-resolution/{decision}")]
+    [ValidateAntiForgeryToken]
+    public Task<IActionResult> DecideNetworkResolution(long paymentId, string decision, [FromBody] PaymentDecisionBody? body, CancellationToken cancellationToken = default)
+    {
+        if (decision is not ("approve" or "reject"))
+            return Task.FromResult<IActionResult>(NotFound());
+
+        return SendAsync(PaymentsBffOptions.PaymentsApiClient,
+            new HttpRequestMessage(HttpMethod.Post, $"/v1/payments/{paymentId}/network-resolution/{decision}") { Content = JsonContent.Create(new PaymentDecisionBody(body?.Remarks)) },
+            cancellationToken);
+    }
 
     /// <summary>Messages the Payments Outbox relay parked (operations, outbox.view).</summary>
     [HttpGet("payments/outbox/parked")]

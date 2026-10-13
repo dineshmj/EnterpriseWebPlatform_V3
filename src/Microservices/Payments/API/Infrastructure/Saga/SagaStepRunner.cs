@@ -3,6 +3,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.Payments.Api.Application.Commands;
+using EnterpriseWebPlatform.Payments.Api.Domain.Aggregates;
 using EnterpriseWebPlatform.Payments.Api.Domain.ValueObjects;
 using EnterpriseWebPlatform.Payments.Api.Infrastructure.Persistence;
 
@@ -49,28 +50,37 @@ public sealed class SagaStepRunner(
 
 /// <summary>
 /// Readiness signal: Degraded (never Unhealthy) while payments are stuck - a compensation
-/// failed (operations must act), or a running saga is long overdue (the step runner or a
-/// participant is not keeping up). The API itself is fine, so this must not take it out
-/// of service.
+/// failed (operations must act), a running saga is long overdue (the step runner or a
+/// participant is not keeping up), or the payment network has not confirmed a payment for
+/// longer than Payments:Saga:UnconfirmedAlertMinutes (funds held, outcome unknown: operations
+/// must reconcile). The API itself is fine, so this must not take it out of service.
 /// </summary>
-public sealed class SagaBacklogHealthCheck(PaymentsDbContext db) : IHealthCheck
+public sealed class SagaBacklogHealthCheck(PaymentsDbContext db, SagaPolicy policy, TimeProvider time) : IHealthCheck
 {
     private static readonly TimeSpan Overdue = TimeSpan.FromMinutes(2);
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
-        var cutoff = DateTimeOffset.UtcNow - Overdue;
+        var now = time.GetUtcNow();
+        var cutoff = now - Overdue;
+        var unconfirmedCutoff = now - policy.UnconfirmedAlertAfter;
         var stuck = await db.PaymentSagas.AsNoTracking().CountAsync(x => x.Status == SagaStatus.Stuck, cancellationToken);
         var overdue = await db.PaymentSagas.AsNoTracking()
             .CountAsync(x => x.Status == SagaStatus.Running && x.NextCheckAt < cutoff, cancellationToken);
+        var unconfirmed = await db.PaymentSagas.AsNoTracking()
+            .CountAsync(x => x.Status == SagaStatus.Running && x.UnconfirmedSince <= unconfirmedCutoff, cancellationToken);
         var running = await db.PaymentSagas.AsNoTracking().CountAsync(x => x.Status == SagaStatus.Running, cancellationToken);
 
-        var data = new Dictionary<string, object> { ["running"] = running, ["overdue"] = overdue, ["compensationFailed"] = stuck };
-        if (stuck == 0 && overdue == 0)
+        var data = new Dictionary<string, object>
+        {
+            ["running"] = running, ["overdue"] = overdue, ["compensationFailed"] = stuck, ["unconfirmedTooLong"] = unconfirmed
+        };
+        if (stuck == 0 && overdue == 0 && unconfirmed == 0)
             return HealthCheckResult.Healthy($"{running} payment saga(s) running.", data);
 
         return HealthCheckResult.Degraded(
-            $"{stuck} payment(s) with a failed compensation (operations must retry the release); {overdue} saga(s) overdue by more than {Overdue.TotalMinutes:F0} min.",
+            $"{stuck} payment(s) with a failed compensation (operations must retry the release); {overdue} saga(s) overdue by more than {Overdue.TotalMinutes:F0} min; " +
+            $"{unconfirmed} payment(s) unconfirmed by the network for more than {policy.UnconfirmedAlertAfter.TotalMinutes:F0} min (operations must reconcile).",
             data: data);
     }
 }

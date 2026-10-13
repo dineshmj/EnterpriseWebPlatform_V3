@@ -52,8 +52,9 @@ export default function PaymentProcessingPage() {
   return (
     <MfeShell title="Payment processing monitor" subtitle="Payments">
       {data && (
-        <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-          <Tile label="Compensation failed" value={data.compensationFailed} tone={data.compensationFailed > 0 ? 'danger' : 'neutral'} hint="Funds may still be held: retry the release" />
+        <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+          <Tile label="Compensation failed" value={data.compensationFailed} tone={data.compensationFailed > 0 ? 'danger' : 'neutral'} hint="Funds may still be held: retry the release, or operations resend a parked message" />
+          <Tile label="Unconfirmed by network" value={data.unconfirmedTooLong} tone={data.unconfirmedTooLong > 0 ? 'danger' : 'neutral'} hint="Outcome unknown for long: reconcile (two people)" />
           <Tile label="Overdue" value={data.overdue} tone={data.overdue > 0 ? 'warning' : 'neutral'} hint="Timer more than a minute past due" />
           <Tile label="Retrying" value={data.retrying} tone={data.retrying > 0 ? 'warning' : 'neutral'} hint="A step needed more than one attempt" />
           <Tile label="Awaiting approval" value={data.waitingForApproval} tone="neutral" hint="Waiting for a payments officer" />
@@ -115,6 +116,8 @@ function Row({ item }: { item: ProcessingItem }) {
         <div className="flex gap-1.5 text-xs text-ink-faint">
           {statusLabel(item.sagaStatus)}
           {item.overdue && <Badge tone="warning">Overdue</Badge>}
+          {item.unconfirmedTooLong && <Badge tone="danger">Unconfirmed since {formatDateTime(item.unconfirmedSince)}</Badge>}
+          {item.proposedOutcome && <Badge tone="warning">Resolution proposed by {item.proposedByLabel}</Badge>}
         </div>
       </Td>
       <Td className="text-ink-muted">{item.attempts}</Td>

@@ -1,4 +1,5 @@
 using EnterpriseWebPlatform.Payments.Api.Domain.Common;
+using EnterpriseWebPlatform.Payments.Api.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.Payments.Api.Domain.Events;
 
@@ -18,6 +19,32 @@ public sealed record PaymentFailedDomainEvent(string ReasonCode, string Reason, 
 
 /// <summary>The release of the reserved funds kept failing: operations must act. Published.</summary>
 public sealed record PaymentCompensationFailedDomainEvent(string Reason, DateTimeOffset OccurredAt) : IDomainEvent;
+
+/// <summary>
+/// The payment network has not confirmed the payment for longer than the alert time: the funds
+/// stay reserved and operations must reconcile it (new work). Raised once per wait. Published.
+/// </summary>
+public sealed record PaymentUnconfirmedByNetworkDomainEvent(DateTimeOffset UnconfirmedSince, DateTimeOffset OccurredAt) : IDomainEvent;
+
+/// <summary>
+/// Manual reconciliation of a payment the network never confirmed: a resolution PROPOSED by one
+/// person, then APPROVED or REJECTED by a second (four eyes). Published, so the audit trail
+/// records each person and the evidence reference.
+/// </summary>
+public sealed record NetworkResolutionDomainEvent(
+    string Stage,
+    NetworkOutcome Outcome,
+    string? NetworkReference,
+    string Evidence,
+    string ProposedByUserId,
+    string ActorUserId,
+    string? Remarks,
+    DateTimeOffset OccurredAt) : IDomainEvent
+{
+    public const string Proposed = "PROPOSED";
+    public const string Approved = "APPROVED";
+    public const string Rejected = "REJECTED";
+}
 
 // ------------------------------------------------------------------ Saga commands (sent on accounts.commands)
 
