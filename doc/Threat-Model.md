@@ -86,22 +86,40 @@ Abbreviations: **S** spoofing, **T** tampering, **R** repudiation, **I** informa
 | | Threat | Control | Where |
 |---|---|---|---|
 | S | Token confusion (ID token or another API's token) | Issuer, audience, lifetime, signature; only `typ: at+jwt` | Every API README (token validation) |
-| E | Endpoint without authorization | Deny by default: every endpoint needs a policy | Every API README (deny by default) |
+| E | Endpoint without authorization | Deny by default, one helper for every domain API (`MapEwpApiControllers` + authenticated fallback policy); the Journey APIs refuse an endpoint without an access rule | Every API README (deny by default); `ApiEndpointAuthorization.cs` |
 | E | Reading or changing another branch's records (BOLA) | Branch scope on every read and command; payment funds reserved only on an account of the initiator's branch | Payments README #4, #15; Accounts README #13; KYC / CO / DM READMEs |
 | E | Privilege combination (auditor + branch role) | The auditor's permission counts only through the Audit Journey API | Payments README #4 |
 | E | Insider fraud: self-approval, approval above authority | Separation of duties (maker ≠ checker, across contexts); approval limits by clearance; clearance by risk (Compliance) | Payments README #5, #6; Accounts README #5; Compliance README |
 | S | A stolen machine token posts fake workflow steps | Internal endpoints pin the exact `client_id`, not only the scope | Every API README (internal endpoints) |
 | T | Duplicate or tampered retries create a second payment | Idempotency-Key bound to the person and the payment's details (409 otherwise); unique constraints | Payments README #7, #13 |
-| I | Internals in error responses | Problem details with a trace ID only | Every API README (problem responses) |
-| D | One caller floods an API | Per-caller rate limits (person, client, IP) | Every API README (rate limits) |
-| D/E | An operator (or a stolen session) switches off an external system | The simulators' switch exists only in Development / test (unset = off), needs `simulator.behaviour.manage` and a recent MFA sign-in, is logged with the LAN ID and reverts to Healthy after 15 minutes; the simulators accept it from loopback only | [Operations Journey API README](../src/Microservices/Operations/JourneyApi/README.md) |
+| I | Internals in error responses | Problem Details everywhere: a trace ID only in the .NET APIs, a generic detail for unexpected errors in the Journey APIs | Every API README (problem responses) |
+| D | One caller floods an API | Per-caller rate limits (person, client, IP) in the .NET APIs; overall + per person and client in the Journey APIs (changes far lower than reads) | Every API README (rate limits); Journey API READMEs |
+| D/E | An operator (or a stolen session) switches off an external system | The simulators' switch exists only in Development / test (unset = off; the API refuses to start with it on, or with MFA off, outside them), needs `simulator.behaviour.manage` and a recent MFA sign-in, is logged with the LAN ID and reverts to Healthy after 15 minutes; the simulators accept it from loopback only | [Operations Journey API README](../src/Microservices/Operations/JourneyApi/README.md) |
+
+#### Token rules implemented twice (.NET and NestJS) - parity checklist
+
+The .NET APIs (JWT bearer + policies) and the NestJS Journey APIs (`delegated-token.guard.ts`) enforce the same token rules in two languages. A change to one side is not done until the other matches:
+
+| Rule | .NET APIs | NestJS Journey APIs |
+|---|---|---|
+| Issuer, signature (IDP's keys), lifetime | `AddJwtBearer` | `jwtVerify` with the IDP's JWKS |
+| Audience = this API | `ValidAudience` | `audience` option (no default) |
+| Access tokens only | `ValidTypes = at+jwt` | `typ: 'at+jwt'` |
+| Scope per endpoint | `RequireClaim("scope", ...)` | `Requires` / scope check |
+| Permission per endpoint | `PaymentsStaffRequirement` etc. | `Requires` / permission check |
+| Acting client pinned (delegated tokens) | `ActingClientOf` (auditor via the Audit Journey API) | `act.client_id` = the configured caller |
+| Recent MFA for step-up | `MfaStepUp.IsRecent`: `amr` contains `mfa`, `auth_time` at most N minutes old, not in the future | `recentMfa`: the same rule; MFA required outside Development |
+| Deny by default | `MapEwpApiControllers` + fallback policy | an endpoint without an access rule is refused |
+| Rate limits, Problem Details | `UseEwpRateLimiting`, `AddProblemDetails` | `rate-limit.ts`, `problem-details.filter.ts` |
+
+When automated tests resume, both sides get the same token fixtures (expired, wrong audience, wrong `typ`, missing or old `auth_time`, wrong `act`) and must give the same answers.
 
 ### TB4 — APIs ↔ PostgreSQL
 
 | | Threat | Control | Where |
 |---|---|---|---|
 | E/I | A compromised service reads or changes other contexts' data | One database per context; one login role per deployable with data access to its own database only, no DDL | [EwpServiceDbUsers.sql](../db/EwpServiceDbUsers.sql); every API README (own database user) |
-| T/R | Rewriting the audit trail | Append-only (trigger + SELECT/INSERT-only user); hash chain verified continuously; readiness degrades on a break; signed checkpoints outside the database catch a complete rewrite | [Audit API README](../src/Microservices/Audit/API/README.md) #3, #4, #8 |
+| T/R | Rewriting the audit trail | Append-only (trigger + SELECT/INSERT-only user); hash chain verified continuously; readiness degrades on a break; signed checkpoints outside the database catch a complete rewrite; readiness also degrades when verification is overdue, the newest entry is not anchored, or checkpoints go missing | [Audit API README](../src/Microservices/Audit/API/README.md) #3, #4, #8 |
 | I/T | Reading or replacing KYC documents in storage | Envelope encryption at rest (per-document AES-256-GCM key, wrapped by a rotatable key-encryption key; document ID bound in); served only after authorization, magic-byte checks, attachment disposition | [DM API README](../src/Microservices/DocumentsManagement/API/README.md) #6, #12 |
 
 ### TB5 — Services ↔ Kafka
@@ -119,7 +137,7 @@ Abbreviations: **S** spoofing, **T** tampering, **R** repudiation, **I** informa
 |---|---|---|---|
 | T | A retried call pays or opens twice | Idempotency-Key on every call; a refusal is final | Payments README #7; Accounts README #6 |
 | D | A slow or failing provider cascades | Timeouts, retries with jitter, circuit breaker (standard resilience handler); saga timeouts and compensation | Each API's `Program.cs`; Payments README |
-| S | Calls to an impostor endpoint | Configured base URLs + API keys; HTTPS | Payments / Accounts / Compliance configuration |
+| S/I | Calls to an impostor endpoint; SSRF by configuration | Base URLs checked at start-up (outside Development: https, `PermittedHosts`, no internal address); no redirects followed; API keys; HTTPS | Payments README #18; Accounts README #15; Compliance README #13; `ExternalEndpoint.cs` |
 
 ## 5. Abuse cases (banking)
 
@@ -157,6 +175,9 @@ Abbreviations: **S** spoofing, **T** tampering, **R** repudiation, **I** informa
 | R-8 | `/metrics` and health endpoints are anonymous (network controls assumed) | Low | Accepted for PoC (deployment control) |
 | R-9 | No mTLS between services | Medium in production | Accepted for PoC (service mesh in production) |
 | R-10 | Development secrets and certificates in configuration; SASL_PLAINTEXT on localhost | High in production | Accepted for PoC: development only; production uses a secret store, TLS and fail-closed start-up |
+| R-11 | Token rules are implemented twice (.NET and NestJS) and could drift | Medium | **Mitigated**: parity checklist in §4 (TB3); shared token fixtures for both stacks when automated tests resume |
+| R-12 | A payment can wait for the network's answer indefinitely: no age alert, no controlled manual resolution | Medium (operations) | Planned: age alert and four-eyes manual reconciliation with evidence (never a release on timeout) |
+| R-13 | A stale MFA sign-in is fixed only by signing out and in again (no OIDC step-up with `max_age` / `acr_values`) | Low (usability) | Planned: BFF-initiated re-authentication without losing the session |
 
 ## 8. Assumptions and out of scope
 

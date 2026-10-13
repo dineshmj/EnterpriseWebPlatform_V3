@@ -59,6 +59,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 // ---------------------------------------------------------------- Authorization
 builder.Services.AddAuthorization(options =>
 {
+    // Deny by default: an endpoint without its own policy still needs an authenticated caller.
+    options.DenyAnonymousByDefault();
+
     // The subscriber's pinned machine identity: nobody else may open account applications.
     options.AddPolicy("AccountApplicationOpeningSubscriberWrite", policy =>
     {
@@ -139,7 +142,8 @@ builder.Services.AddSingleton(new AccountOpeningDeposit(openingDeposit));
 // ---------------------------------------------------------------- Core banking (external)
 builder.Services.AddOptions<CoreBankingOptions>()
     .Bind(builder.Configuration.GetSection(CoreBankingOptions.SectionName))
-    .Validate(o => Uri.TryCreate(o.BaseUrl, UriKind.Absolute, out _), "CoreBanking:BaseUrl is not configured.")
+    .Validate(o => ExternalEndpoint.Problem(o.BaseUrl, o.PermittedHosts, builder.Environment.IsDevelopment()) is null,
+        "CoreBanking:BaseUrl must be an absolute http(s) URL; outside Development https, with its host listed in CoreBanking:PermittedHosts and not an internal address.")
     .Validate(o => !string.IsNullOrWhiteSpace(o.ApiKey), "CoreBanking:ApiKey is not configured.")
     .Validate(o => o.MaxOpeningAttempts >= 1, "CoreBanking:MaxOpeningAttempts must be at least 1.")
     .ValidateOnStart();
@@ -154,6 +158,7 @@ builder.Services.AddSingleton(sp =>
 builder.Services
     .AddHttpClient<ICoreBankingSystem, CoreBankingClient>(CoreBankingClient.HttpClientName, (sp, client) =>
         client.BaseAddress = new Uri(sp.GetRequiredService<IOptions<CoreBankingOptions>>().Value.BaseUrl))
+    .WithoutRedirects()   // a 3xx never moves the call, and its API key, elsewhere
     // Resilience pipeline around every call to core banking:
     //  - attempt timeout : a hung system is abandoned after 5 s
     //  - retry           : 2 retries with jittered exponential back-off - safe for this
@@ -237,7 +242,7 @@ app.Use(async (context, next) =>
 app.UseAuthorization();
 
 // Deny by default: every controller endpoint needs an authenticated caller, on top of its own policy.
-app.MapControllers().RequireAuthorization();
+app.MapEwpApiControllers();
 app.MapEwpHealthEndpoints();
 app.MapEwpMetricsEndpoint();   // Prometheus scrape (GET /metrics)
 

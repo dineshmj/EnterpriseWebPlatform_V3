@@ -58,6 +58,7 @@ async function callJourney<T>(path: string): Promise<ActionResult<T>> {
     if (response.status === 401) return { ok: false, signedOut: true, error: 'Your session has ended.' };
     if (response.status === 403) return { ok: false, error: 'You are not allowed to see the audit trail.' };
     if (response.status === 404) return { ok: false, error: 'Nothing was found for this record.' };
+    if (response.status === 429) return { ok: false, error: 'Too many requests. Wait a minute, then try again.' };
     return { ok: false, error: 'The audit service is unavailable. Try again shortly.' };
   } catch {
     return { ok: false, error: 'The audit service is unavailable. Try again shortly.' };

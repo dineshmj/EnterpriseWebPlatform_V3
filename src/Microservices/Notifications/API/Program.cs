@@ -55,6 +55,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 // ---------------------------------------------------------------- Authorization
 builder.Services.AddAuthorization(options =>
 {
+    // Deny by default: an endpoint without its own policy still needs an authenticated caller.
+    options.DenyAnonymousByDefault();
+
     // A person reading (and receiving live) their own notifications.
     options.AddPolicy("NotificationsRead", policy =>
     {
@@ -125,7 +128,7 @@ app.UseEwpRateLimiting();
 app.UseAuthorization();
 
 // Deny by default: every endpoint needs an authenticated caller, on top of its own policy.
-app.MapControllers().RequireAuthorization();
+app.MapEwpApiControllers();
 // A connection never outlives its access token: when the token expires the hub closes it,
 // and the client reconnects through the Shell BFF, which supplies a fresh token.
 app.MapHub<NotificationsHub>(NotificationsHub.Path, options => options.CloseOnAuthenticationExpiration = true)

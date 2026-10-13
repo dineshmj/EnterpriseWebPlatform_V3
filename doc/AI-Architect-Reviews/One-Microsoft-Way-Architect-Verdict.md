@@ -1,624 +1,357 @@
-## Review update: the correct source is now under review
+# EWP V3 — Principal architect and security review
 
-This archive contains 1,760 entries and includes the Payments and Accounts APIs, the separate Audit microservice, Notifications/SignalR, the IDP's TOTP MFA implementation, and the Kafka saga components. This is the version I needed.
+Review baseline: `EnterpriseWebPlatform_V3_20261013_160122.zip` · 
 
-I've already found a more consequential issue than a missing security header: the Payments saga appears to discard the reply's `CausationId`, even though the Accounts service publishes it to identify the command that caused the reply. The saga's transition guard checks the current step and status, but not whether the reply belongs to the current command attempt.
+Today's date: 13-OCT-2026
 
-That creates a plausible financial correctness failure: after a reservation times out and is retried, a delayed failure reply from the earlier attempt could be accepted even if the newer attempt successfully reserved the funds. The saga could mark the payment rejected without releasing the funds. I’m treating this as a high-priority finding and checking the surrounding transaction and compensation paths before finalizing the report.
+## Executive assessment
 
-# EnterpriseWebPlatform V3 — Enterprise Security & Architecture Review
+This review uses the newly uploaded archive as the source of truth. I started by reading `ReadMe.txt`, `doc/Threat-Model.md`, and the project-level READMEs, then checked the implementation of the controls against the code rather than treating the documentation's claims as proof.
 
-Review target: `EnterpriseWebPlatform_V3-main(4).zip` · Static source inspection · 10 October 2026
+I also rechecked the previous review's major findings. Several important changes are present: payment saga replies are correlated with the current command, payment idempotency checks the original request details, the payment-network call is no longer made while holding the saga's database transaction, the Shell validates the expected iframe origin, and the document-storage and audit-checkpoint designs have been strengthened.
 
-Dinesh, the corrected archive gives me a much more complete picture. You have built considerably more than a conventional microservices demonstration: there are distinct business contexts, asynchronous workflow processing, identity and access controls, payment orchestration, audit-chain integrity, and notification delivery.
+My preliminary verdict: EWP V3 has made substantial progress, but I would not yet grant an unconditional production go-ahead. The remaining concerns below are based on implementation evidence, not on the development-machine limitations you explicitly excluded.
 
-My assessment is that the architectural foundations are strong, but several implementation details need to be corrected before I would regard this as production-ready banking software. The most important concerns are not cosmetic. They affect payment correctness, authorization boundaries, MFA enforcement, and the integrity of the evidence your system records.
+Architecture
 
-One limitation up front: this is a static code review. The environment available to me does not have the .NET SDK or pnpm, so I could not compile the solution, execute the Playwright suite, or run dependency vulnerability scans. I distinguish source-confirmed defects from risks requiring runtime verification below.
+# 8.5 / 10
 
-## 1\. Executive assessment
+Strong patterns; remaining concerns are around end-to-end invariants and recoverability.
 
-## Architecture
+Security
 
-## 8/10
+# 7.5 / 10
 
-Strong domain boundaries, orchestration, transactional messaging, and explicit authorization policies. Deductions for a few workflow correctness defects and scaling trade-offs.
+Good control design; production assurance still needs some important gaps closed.
 
-## Security
+These are qualitative principal-review scores, not automated scan results or a certification against ASVS. I could inspect the source archive, but I have not claimed a successful .NET/TypeScript build, dynamic penetration test, or runtime verification.
 
-## 6.5/10
+I have respected your exclusions: committed development credentials and certificates, local-only infrastructure, simulators, demo identities, and the absence of automated tests are not being reported as findings in themselves. Where a design weakness would survive moving to production infrastructure, I have retained it.
 
-Good security engineering is visible, but the findings below include payment authorization, browser trust, MFA configuration, and sensitive-data handling concerns.
+## Findings requiring remediation
 
-## Production readiness
+The findings are ordered by risk and likely impact. “High” means I would block a production go-ahead until the issue is fixed or an explicitly approved compensating control is demonstrated.
 
-## 5.5/10
+### EWP-01 — Operations MFA can fail open through configuration
 
-Provisional rating: runtime verification, financial failure testing, deployment hardening, and operational controls remain unproven or incomplete.
+High
 
-These are qualitative ratings of the source reviewed, not certification results or measurements from a penetration test.
+Security
 
-## 2\. Findings that should be addressed first
+New / current archive
 
-I am using the following severity scale:
+Why it matters: Operations exposes actions that change simulator behaviour, which is a privileged operational capability. The Operations Journey API only enforces recent MFA when its `mfaEnabled` option is true. Unlike the .NET APIs, I could not find a corresponding startup guard that requires MFA to be enabled outside Development.
 
--   Critical: credible path to catastrophic compromise or loss.
+Evidence
 
--   High: material security or financial-correctness risk that should block production release.
+-   `src/Microservices/Operations/JourneyApi/src/configuration/journey-options.ts`, around line 56: `mfaEnabled` is set by comparing `OPERATIONS_MFA_ENABLED` to the string `'true'`; unset or misspelled values become `false`.
 
--   Medium: significant weakness, resilience defect, or production-readiness gap.
+-   `src/Microservices/Operations/JourneyApi/src/auth/delegated-token.guard.ts`, lines 87–92: the step-up check runs only when `requirement.stepUp && this.options.mfaEnabled`.
 
--   Low: limited impact, hardening, or maintainability concern.
+-   Compare `src/Common/WebUtilities/Security/MfaStepUp.cs` and the startup calls to `RequireMfaOutsideDevelopment()` in the Payments, Accounts, Compliance and KYC APIs.
 
-HIGH
+Failure scenario: Operations is deployed with the environment variable omitted or set incorrectly. A correctly delegated token belonging to a user with the required permission can then perform a step-up-protected operation without a recent MFA authentication.
 
-### Finding 1 — A stale Payments Saga reply can be accepted as the current command's reply
+Recommended fix — small: Require explicit MFA enablement at startup outside Development, validate the configured age, and fail startup if the configuration is missing or false. Make the IDP and all enforcing APIs agree on the MFA policy. Verify that a password-only token is rejected for the protected Operations action.
 
-Files: `Payments/API/Domain/Aggregates/PaymentSaga.cs`, `Payments/API/Application/Commands/HandleSagaReply.cs`, `AsyncWorkflows/Subscribers/Payments/PaymentsSagaReplySubscriber/Processing/PaymentsSagaReplyProcessor.cs`
+### EWP-02 — Audit integrity depends on protecting the checkpoint signing key and checkpoint store
 
-This is the most important workflow-correctness defect I found.
+High
 
-Accounts publishes a reply whose envelope includes a `CausationId` identifying the command that produced it. The Payments reply processor reads that field, but does not forward it to the Payments API. The API's `SagaReplyCommand` therefore has no command-causation identifier to validate.
+Security / audit
 
-In `PaymentSaga.cs`, `Expecting(...)` checks the current step and saga status. Despite its comment describing late replies after a resend, it does not compare the reply's causation identifier with `CurrentCommandId`.
+Partly fixed since previous review
 
-Failure scenario
+The new signed-checkpoint design is a meaningful improvement over a hash chain stored solely in the audit database. It still depends on the integrity and availability of the signing key and the external checkpoint files.
 
-1.  Payments sends `ReserveFunds` attempt 1.
+Evidence
 
-2.  The reply times out, and the saga sends attempt 2 with a new command ID.
+-   `src/Microservices/Audit/API/Infrastructure/AuditAnchors.cs`: signed checkpoints and their verification.
 
-3.  Attempt 2 reserves the funds successfully, but its reply is delayed.
+-   `doc/Threat-Model.md`, section 7, residual risk R-3: the remaining production requirements explicitly include a key vault/HSM and immutable checkpoint storage administered independently of the database.
 
-4.  A delayed `FundsReservationFailed` reply from attempt 1 arrives first.
+Failure scenario: An attacker with control of both the audit database and the checkpoint-signing capability can rewrite historical entries and create checkpoints that validate against the rewritten chain. If checkpoints are replaced or deleted without independent retention, the evidence of tampering can also be weakened.
 
-5.  The saga is still at `ReserveFunds`, so the stale failure can be accepted and the payment rejected without compensation.
+Recommended fix — medium: Keep the private signing key outside the API process where practical, use a managed key service or HSM, and store checkpoints in immutable storage under a separate administrative trust boundary. Monitor missing or overdue checkpoints, not just invalid signatures. Establish an independently retained checkpoint history.
 
-The result can be a held balance that the payment workflow no longer intends to settle or release.
+This is a production assurance gap, not a claim that the current hash-chain implementation is ineffective.
 
-Required fix: carry `CausationId` through the reply subscriber, request DTO, command handler, and domain method. Validate that it matches the current command ID before applying the reply. A mismatch should be recorded as stale and handled idempotently. Add tests for out-of-order success/failure replies, retries, and compensation.
+### EWP-03 — The Operations token-exchange chain needs production fail-closed validation
 
-HIGH
+High
 
-### Finding 2 — Payment initiation relies too heavily on the UI's branch-filtered account lookup
+Security / delegated authorization
 
-Files: `Payments/API/Controllers/PaymentsController.cs`, `Accounts/API/Controllers/PaymentAccountsController.cs`, `Accounts/API/Application/Commands/FundsCommand.cs`
+New / current archive
 
-The Accounts lookup endpoint is explicitly branch-filtered. However, the Payments initiation endpoint accepts `CustomerNumber`, source BSB and account number from the request. It derives the payment's branch from the staff token, then sends the supplied account details to Accounts.
+The IDP's token-exchange validator uses an explicit allow-list, checks the subject token and its caller, and preserves the original user's identity and authentication time. The Operations Journey API also checks the expected audience, access-token type, delegated actor, scope and permission.
 
-Accounts checks whether the specified account can reserve the requested amount and whether the customer number matches the account. But the funds command does not carry the initiating employee's branch, and the authoritative reservation path does not re-enforce the branch restriction of the lookup endpoint.
+The concern is not the general RFC 8693 approach. It is that the enforcement policy needs to be demonstrably fail-closed across every configuration and service boundary.
 
-Consequently, the API does not establish that the staff member is entitled to initiate a payment from the selected account under the same branch policy enforced by the lookup screen. Calling the Payments API directly can bypass the UI's search restriction if the caller knows or obtains another customer's account details.
+Evidence
 
-This is especially important because the seeded `customer_service_agent` role has `payment.initiate`, and payments below the configured approval threshold can proceed without a second officer's approval.
+-   `src/IDP/Security/TokenExchangeGrantValidator.cs`, lines 41–60 and 77–118: caller/token allow-list and delegated-token creation.
 
-Required fix: enforce the account/customer authorization policy on the authoritative command path, not just the lookup endpoint. Carry or independently derive the relevant branch and customer relationship, verify it in Accounts under the appropriate transaction/lock, and reject out-of-scope accounts. If production policy requires customer consent or a mandate for assisted transfers, model and verify that explicitly; a staff permission is not proof of customer authorization.
+-   `src/Microservices/Operations/JourneyApi/src/auth/delegated-token.guard.ts`, lines 63–88: token validation and endpoint authorization.
 
-HIGH
+-   `src/Microservices/Operations/JourneyApi/src/configuration/journey-options.ts`, around line 56: MFA configuration defaults to disabled unless explicitly set to `'true'`.
 
-### Finding 3 — The Shell still trusts an iframe's origin based on the first message
+Failure scenario: The deployment has the expected OAuth clients and permissions configured, but the Operations-specific MFA option is missing. Token exchange continues to work, and authorization checks that do not depend on MFA still succeed; the step-up requirement is silently skipped.
 
-File: `src/Shell/client-app/app/page.tsx`, around `handleFrameMessage`
+Recommended fix — small to medium: Validate the whole Operations security configuration at startup, including MFA policy and token audience/caller identity. Keep the IDP's client allow-list as the authoritative exchange restriction. Add a configuration review that proves each protected operation has the intended scope, permission and step-up requirement. This overlaps EWP-01, but it is the broader configuration-validation requirement.
 
-The Shell verifies `event.source === iframe.contentWindow`, but when it receives `BSS_MFE_READY`, it assigns `event.origin` to `currentFrameOriginRef.current` and sends the workspace context to that origin.
+### EWP-04 — The payment saga's parked-message recovery must remain auditable and safe under replay
 
-Checking the source window is useful, but it is not sufficient. A window can navigate to another origin while retaining the same `WindowProxy` identity. If the frame can be navigated to an untrusted origin, that page can announce itself as ready and receive context.
+Medium
 
-The Shell also uses the saved origin to relay notifications into the frame. The same trust decision therefore affects both workspace context and notification delivery.
+Architecture / operations
 
-Required fix: define an explicit allowlist mapping each MFE to its trusted origin. Validate both `event.source` and `event.origin` before accepting any message. Derive the expected origin from trusted configuration, not the incoming message. Apply the same validation to navigation permission replies and other cross-frame protocols. Keep CSP as a second layer of defence.
+Previous finding partly resolved
 
-HIGH
+The previous review found a gap in the ability to recover parked outbox messages. The current Threat Model says this is now addressed through the Payment Processing Monitor, with the same message ID, a reason, `workflow.reprocess`, recent MFA, and timeline recording.
 
-### Finding 4 — MFA and step-up enforcement are disabled by the shipped default configuration
+That is the right direction. The remaining production concern is to ensure replay is a controlled business operation rather than merely a message-delivery operation.
 
-Files: `src/IDP/appsettings.json` and `appsettings.json` for Accounts, Compliance, CustomerKyc and Payments
+Evidence
 
-The TOTP implementation is real and includes encrypted authenticator secrets, hashed recovery codes, lockout integration, replay protection, and authentication-method claims. That is good work.
+-   `doc/Threat-Model.md`, section 7, residual risk R-5: documents the re-send workflow and its intended controls.
 
-However, `Mfa:Enabled` is `false` in the base configuration for the IDP and the four APIs that enforce step-up. The shared `MfaStepUpAuthorizationHandler` explicitly allows the requirement whenever this setting is false.
+-   `src/Microservices/Payments/API/Domain/Aggregates/PaymentSaga.cs`: persisted saga history and state transitions.
 
-Therefore, MFA is implemented but not enabled by default, and the APIs independently control whether sensitive actions require an MFA claim. A deployment that enables MFA at the IDP but misses one API's configuration can have inconsistent step-up enforcement.
+-   `src/Microservices/Payments/API/Application/Commands/RunDueSagaStep.cs`: network status enquiry and handling of unknown outcomes.
 
-Required fix: make production configuration fail startup if MFA is not explicitly enabled where policy requires it. Validate that the IDP and all step-up APIs use a consistent policy. Add deployment smoke tests that prove a password-only token is rejected for sensitive actions. Development can remain MFA-off deliberately, but that must not be an implicit production default.
+Failure scenario: An operator replays a parked command after its external effect has already occurred, or after the saga has progressed. If replay is not checked against current business state and the downstream idempotency contract, it could cause duplicate processing or leave the payment and external system inconsistent.
 
-HIGH
+Recommended fix — medium: Verify the operator action checks the current saga state, that replay retains the original message identity, and that the consumer and external endpoint are idempotent. Make the monitor expose the last error, retry history, downstream status and the reason the message was parked. Keep replay and compensation separate from generic retry.
 
-### Finding 5 — The Payments step runner holds a database transaction open during an external network call
+I have not classified the replay feature itself as broken: the archive's Threat Model documents the intended safeguards. The remaining production gate is to verify the full operator-to-outbox-to-consumer path and the downstream idempotency contract.
 
-Files: `Payments/API/Application/Commands/RunDueSagaStep.cs`, `Payments/API/Infrastructure/Persistence/PaymentsRepositories.cs`
+### EWP-05 — Operations API needs explicit abuse controls for privileged actions
 
-`RunDueSagaStepCommandHandler.HandleAsync` begins a database transaction, selects and locks a due saga using `FOR UPDATE SKIP LOCKED`, then calls `SendToNetworkAsync` before saving and committing. That method makes an HTTP request to the external payment network, with resilience timeouts configured up to 20 seconds for the overall call.
+Medium
 
-This holds the saga row lock and transaction open across external I/O. Under slow network conditions or a growing backlog, it can cause lock contention, connection-pool pressure, long-running transactions, and reduced throughput.
+Security / resilience
 
-The external call is also a side effect that cannot be rolled back by PostgreSQL. The configured idempotency key mitigates duplicate payment risk only if the external provider durably honours that key and returns the same result on retries.
+New / current archive
 
-Required fix: persist a durable transition/claim before making the external call, execute the call outside the database transaction, then persist its outcome and next outbox command in a short transaction. Model timeout/unknown outcome explicitly and reconcile with the network before compensating where the real provider's semantics require it.
+The Operations Journey API is a privileged control plane for changing simulator behaviour. I found authorization and step-up checks, but I could not establish from the inspected code that the mutating Journey API endpoints have their own effective per-user and per-client rate limits.
 
-## 3\. Other high-priority authorization and financial controls
+Evidence
 
-### Finding 6 — Auditor-only access can be bypassed by combined permissions
+-   `src/Microservices/Operations/JourneyApi/src/auth/delegated-token.guard.ts`: authenticates the delegated caller and checks permissions and optional step-up MFA.
 
-File: `Payments/API/Authorization/PaymentsAuthorization.cs`
+-   `src/Microservices/Operations/BFF.Web/app/v1/operations/actions.ts`: exposes the server-side actions that invoke the Journey API.
 
-The Payments authorization handler intends to prevent auditors from reading the Payments screens directly; auditors should access payment details through the Audit Journey API using a delegated token.
+-   `src/Microservices/Operations/JourneyApi/src/`: the Journey API's endpoint and guard implementation.
 
-The check is based on:
+Failure scenario: A compromised authorized session or client repeatedly invokes a privileged operation. Authentication and authorization succeed on each request, but the API has no effective application-level limit to constrain the rate of operations.
 
-```
-granted.All(p => p == AuditReadPermission)
-```
+Recommended fix — small to medium: Add explicit limits to state-changing Operations endpoints, keyed at least by subject and client, with a separate overall limit. Add monitoring and alerting for repeated state changes. Confirm whether an upstream limiter already covers these routes before implementing a second one; if it does, document and test that control.
 
-If a caller has `payment.history.view` and another permission accepted by `PaymentView`, the `All(...)` condition is false. The handler can then authorize the caller directly. `ReadScopeOf(...)` also treats `payment.history.view` as an all-branches permission.
+### EWP-06 — Payment saga correctness still needs a production-grade reconciliation contract
 
-This is a concrete policy weakness when users can have multiple roles—a capability the identity schema permits.
+Medium
 
-Remediation: remove the audit-only permission from the general `PaymentView` permission list. Keep the Audit Journey API's delegated-token policy separate. Add regression tests for an auditor alone, an auditor combined with a payments role, and an operations administrator.
+Architecture / financial consistency
 
-### Finding 7 — Payment idempotency does not compare the repeated request with the original payload
+Previous finding partly resolved
 
-File: `Payments/API/Application/Commands/InitiatePayment.cs`
+The old design held a database transaction open during the external network call. That issue is fixed: the current runner claims work in a short transaction, calls the network without holding that transaction, and records the answer under a fresh lock/version check.
 
-A repeated `PaymentRef` (the `Idempotency-Key`) from the same user returns the existing payment without comparing the submitted customer, account, amount, payee, or reference against the original request.
+The remaining concern is the correctness contract for an ambiguous external outcome. The saga now uses a status enquiry, and unknown results leave funds reserved. That is safer than releasing funds blindly, but the production design must define what happens if the external system cannot determine the outcome for a prolonged period.
 
-This avoids duplicate payment creation, but it means that accidental or malicious reuse of the same key with a different request is silently treated as a retry.
+Evidence
 
-Remediation: persist a canonical request fingerprint alongside the idempotency key. Return the original result only when the fingerprint matches; otherwise return `409 Conflict`. Preserve the existing unique constraint and concurrent-insert handling.
+-   `src/Microservices/Payments/API/Application/Commands/RunDueSagaStep.cs`, lines 124–139 and 160–231: status enquiry, unknown outcomes and version-checked recording.
 
-### Finding 8 — MFA replay protection is vulnerable to concurrent verification races
+-   `src/Microservices/Payments/API/Infrastructure/PaymentNetwork/PaymentNetworkClient.cs`, lines 87–106: status enquiry and translation of responses.
 
-File: `src/IDP/Security/MfaService.cs` and the `UserMfa` / `UserMfaRecoveryCode` persistence model
+-   `src/Microservices/Payments/API/Domain/Aggregates/PaymentSaga.cs`, lines 61–63: unknown outcome handling and the rule against releasing funds without confirmation.
 
-The code correctly records `LastUsedTimeStep` and marks recovery codes as used. But the verification flow reads those records, checks their state in application code, and saves the result without an evident concurrency token or atomic conditional update.
+Failure scenario: The network accepted a payment, but the response was lost. Status enquiries remain unavailable or inconclusive. The saga correctly avoids releasing the funds, but the payment can remain unresolved and funds may stay reserved indefinitely unless an operational resolution path exists.
 
-Two simultaneous requests could both observe the same TOTP step as unused—or the same recovery code as unused—and both succeed before either update becomes visible.
+Recommended fix — medium: Define a maximum unresolved duration and a documented manual reconciliation process. The process must not release funds merely because a timeout expired. Require an authoritative network status or a controlled, independently evidenced decision. Track unresolved payments, alert on age, and record the resolution and approving actor in the audit trail.
 
-Remediation: perform the verification state transition atomically. For example, use a conditional update on the TOTP time step and check the affected row count; consume recovery codes with a single conditional `UPDATE ... WHERE used_at IS NULL`. Add concurrent-request tests. Apply equivalent concurrency protection to lockout counters.
+This is a residual operational requirement rather than evidence that the current saga incorrectly releases funds.
 
-### Finding 9 — Sensitive bank account numbers are written to application logs
+## Earlier findings rechecked against the new archive
 
-Files: `Payments/API/Application/Commands/InitiatePayment.cs`, `Accounts/API/Application/Commands/FundsCommand.cs`
-
-The Payments initiation log formats the `BankAccountRef` values, whose `ToString()` contains the BSB and full account number. The Accounts funds-command log also includes BSB and account number.
-
-These are financial identifiers that can flow into centralized log storage, observability platforms, exports, and incident archives with different access and retention controls from the banking databases.
-
-Remediation: remove full account numbers from routine logs. Use a payment reference, trace ID, and a masked account identifier where operationally necessary. Review existing log retention and access policy, and ensure exceptions and tracing do not reintroduce the same values.
-
-### Finding 10 — Approval and MFA configuration should fail closed
-
-File: `Payments/API/Program.cs`
-
-The approval threshold falls back to `1,000` when `Payments:ApprovalThreshold` is absent. The approval-limit parser treats a blank value as no limit. The current configuration intentionally gives clearance level 5 an unlimited approval limit, but the same representation can also arise from a missing or accidentally blank setting.
-
-This is a dangerous configuration convention for financial controls: an omitted setting can silently become a permissive policy.
-
-Remediation: require explicit production values for the approval threshold and every clearance level. Represent an unlimited limit with a deliberate, validated value rather than an empty string. At startup, validate the configured policy against an approved policy schema and reject unexpected or missing levels.
-
-## 4\. Audit microservice — good foundation, but don't call the chain tamper-proof
-
-The Audit microservice is one of the stronger architectural additions. I found:
-
--   A separate API and database.
-
--   A Kafka subscriber that records business events.
-
--   A hash chain over audit entries.
-
--   An append-only database trigger.
-
--   A least-privilege design in which the application database user is intended to have `SELECT` and `INSERT`, not `UPDATE`, `DELETE`, or DDL.
-
--   Audit reads that themselves create `ACCESS` entries.
-
--   A scheduled integrity monitor and an explicit integrity endpoint.
-
-These are valuable controls. The following limitations remain.
-
-### Finding 11 — The hash chain has no independent trust anchor
-
-Files: `Audit/API/Domain/AuditEntry.cs`, `Audit/API/Infrastructure/AuditTrailAppender.cs`, `Audit/API/Application/AuditChainVerifier.cs`, `Audit/API/AuditDb/EwpAuditDb.sql`
-
-The verifier can detect an isolated modification, deletion, insertion, or reordering that breaks the chain. The append-only trigger and the application's restricted database role also make ordinary tampering harder.
-
-However, an administrator or attacker with sufficient database privileges could disable the trigger or otherwise rewrite the complete chain and recompute all subsequent hashes. If no trusted copy of a prior chain head exists outside that database, a complete rewrite may verify successfully.
-
-Remediation: periodically sign and export chain checkpoints to a separate security boundary—such as an independently administered immutable store or a separately controlled signing service. Document the threat model accurately: the current design is tamper-evident against many classes of database modification, but not proof against a privileged attacker capable of rewriting the entire store.
-
-### Finding 12 — A single global audit chain serializes all writes
-
-The fixed PostgreSQL advisory lock in `AuditTrailAppender` serializes every append across the entire audit trail. That is simple and provides a deterministic global sequence, but it also creates a single write-throughput bottleneck.
-
-The verifier additionally walks the entire chain in batches. As the trail grows, verification time and database load will grow with it.
-
-Remediation: measure append throughput and verification duration under realistic load. If scale demands it, consider partitioned chains with independently signed checkpoints, or another design that preserves tamper evidence without requiring every event to wait for a single global lock. Do not change this merely for theoretical performance; benchmark it first.
-
-### Finding 13 — The audit evidence depends on producer and broker trust
-
-The audit mapper takes the actor and initiator fields from event envelopes. This is reasonable when events are produced by trusted services, but those fields are not independently authenticated by the audit service.
-
-A compromised producer with permission to publish to a business topic could potentially emit an event with misleading actor metadata. The payload hash proves what the audit service received, not who genuinely originated the event.
-
-Remediation: enforce Kafka ACLs per producer and topic, validate the expected source/event combinations, and retain broker provenance. For stronger assurance, consider signed event envelopes or a separately authenticated producer identity in the audit record.
-
-## 5\. MFA and identity — implemented, but configuration and freshness matter
-
-Beyond the findings above, I would address these items before production.
-
-### Finding 14 — MFA is checked as a historical authentication method, not a recent step-up
-
-The `MfaStepUpAuthorizationHandler` checks whether the token's `amr` claim contains `mfa`. It does not visibly check how recently MFA occurred.
-
-That is sufficient if the policy means “the user authenticated with MFA at some point in the current authentication context.” It is not sufficient if the policy means “the user must have performed a fresh second-factor challenge shortly before approving a payment or retrying a release.”
-
-Remediation: define the freshness requirement for sensitive actions. If fresh authentication is required, use an OIDC flow that requests appropriate authentication context or maximum age, and validate the resulting authentication time/context. A sign-out-and-sign-in instruction is a workaround, not an ideal high-assurance step-up experience.
-
-### Finding 15 — TOTP enrolment failures do not appear to share the normal MFA lockout path
-
-`MfaService.VerifyAsync` increments failed attempts, but `ConfirmEnrolmentAsync` returns `null` for an incorrect enrolment code without visibly incrementing the same counter.
-
-The login rate limiter and short-lived pending cookie mitigate this, but the enrolment path should be reviewed for consistent throttling and lockout behaviour.
-
-Remediation: enforce both per-account and per-IP throttling during enrolment, with a bounded number of attempts and clear recovery behaviour.
-
-### Finding 16 — MFA Data Protection and signing keys remain deployment-critical
-
-The IDP's persistent Data Protection setup is a good sign: the implementation is designed to survive restarts and multiple instances. But the key ring's encryption and availability are critical because it protects pending MFA state and encrypted authenticator secrets.
-
-Remediation: verify key protection, backup, access separation, rotation, disaster recovery, and multi-instance consistency in the actual deployment. Ensure production signing certificates and secrets are supplied externally, and that the development signing path cannot be selected in production.
-
-## 6\. SignalR and notifications
-
-The Notifications microservice is correctly separated from the Shell. The hub derives audiences from the authenticated user's claims, exposes no client-callable group-joining method, and closes connections when the access token expires. Notifications are persisted before live push, so a failed push does not destroy the stored notification.
-
-Those are strong design choices.
-
-### Remaining concerns
-
--   Hub resource consumption: the common rate limiter is configured for `/v1`, whereas the hub is at `/hubs/notifications`. I did not find equivalent connection-count limits in the hub code. Authenticated clients could potentially create excessive connections. Add connection quotas, infrastructure-level limits, and monitoring for connection churn.
-
--   Origin checks: the Shell's WebSocket route has an origin check, but its fallback accepts a request without `Origin` when `Sec-Fetch-Site` is also absent. Modern browsers normally supply an origin for WebSocket connections; however, non-browser clients can omit both. Keep this in mind when assessing the threat model, and rely on token validation and network controls as well.
-
--   Notification privacy: notification text can include payee names, amounts, customer identifiers, and rejection reasons. Treat notification storage and delivery as a sensitive data surface, and apply retention and access controls.
-
--   Deep links: the notification target is stored as JSON. Keep the client-side route selection restricted to known MFEs and allowed relative paths; never turn an event-supplied target into an arbitrary URL.
-
-## 7\. Saga architecture and distributed reliability
-
-The Payments implementation has a good foundation:
-
--   Saga state is persisted.
-
--   The API uses a transactional outbox.
-
--   Accounts has a transactional inbox and a durable funds-hold model.
-
--   Command delivery is designed for at-least-once semantics.
-
--   The reply subscriber has an explicit machine identity.
-
--   The saga records history and exposes processing/backlog information.
-
--   The external network client uses timeouts, retries, and a circuit breaker.
-
--   Compensation failure becomes a visible operational state rather than being silently discarded.
-
-That is a much more credible orchestration design than a long chain of synchronous API calls.
-
-There are still important operational details to settle.
-
-### Finding 17 — Outbox parking needs a formal recovery process
-
-The Payments publisher parks messages after bounded attempts. That prevents a poison message from being retried forever, but a parked command can block later messages for the same aggregate because publication preserves per-aggregate order.
-
-That may be the correct safety behaviour. The missing production control is a safe, observable redrive process.
-
-Remediation: provide an operator-controlled re-drive mechanism that preserves message identity and audit history, records who re-drove the message and why, and checks whether the downstream side effect already occurred. Do not solve this by skipping a failed message without understanding its business meaning.
-
-### Finding 18 — Delivery ordering is not a global business-order guarantee
-
-The outbox preserves order within an aggregate stream. Kafka preserves order within a partition. Neither gives you a universal total order across different topics and services.
-
-The authoritative ordering rules must remain in the domain state machine, using command causation, expected states, idempotency, and explicit barriers. The stale-reply finding above is exactly the kind of defect that durable state alone does not prevent if messages are not correlated to the current command.
-
-### Finding 19 — Payment idempotency depends on the external provider's contract
-
-The same `PaymentRef` is sent as the external `Idempotency-Key`, which is the correct general idea. But production safety depends on the provider guaranteeing that repeated requests with that key cannot produce multiple payments, including after a timeout, provider failover, or a long delay.
-
-Remediation: document and test the real provider's idempotency retention window and response-replay semantics. Add a reconciliation/status-enquiry process for “unknown outcome” cases before releasing funds.
-
-### Finding 20 — In-process background workers need explicit operational ownership
-
-The Payments API hosts both the saga step runner and outbox relay. This is a reasonable choice for a PoC and makes the ownership model clear. It does, however, couple API availability and background workflow execution.
-
-Before scaling, decide whether these workers should remain in the API deployment or become independently scalable worker deployments. Either model is valid, provided the database locks, health checks, idempotency, and ownership rules are preserved.
-
-## 8\. Credentials, infrastructure, and deployment configuration
-
-The current archive contains development-only credentials in configuration files and a development TLS private key/certificate pair under the KYC BFF. I did not find the earlier IDP `tempkey.jwk` in this archive, which is an improvement.
-
-I do not treat the development values as evidence that production credentials have been compromised. But the repository/distribution hygiene should be improved.
-
-### Required actions
-
-1.  Remove private development keys and certificates from distributable archives; generate them locally and exclude them from source control where possible.
-
-2.  Move deployment secrets to a managed secret store or protected environment configuration.
-
-3.  Make production startup fail if connection strings, signing certificates, client secrets, Kafka credentials, or external API credentials are missing or still contain development defaults.
-
-4.  Keep Kafka TLS/SASL and database access controls enabled in production. The local development configuration uses localhost endpoints and development credentials; that must not become a deployment template by accident.
-
-5.  Tighten `AllowedHosts`, reverse-proxy trust, forwarded-header configuration, CSP settings, and public health/metrics exposure for the actual hosting topology.
-
-6.  Run automated secret scanning and dependency vulnerability scanning in CI.
-
-### Finding 21 — Database scripts are destructive reset scripts, not production migrations
-
-The database creation scripts start by dropping tables, including the Payments schema and audit trail. The comments explicitly describe recreating the databases for development.
-
-That is acceptable for a controlled local reset. It is not acceptable as an ordinary production deployment mechanism.
-
-Remediation: keep these scripts clearly labelled as destructive development/bootstrap scripts. Introduce versioned migrations and deployment safeguards for production schema changes. Require explicit approval and backup/recovery plans for destructive operations.
-
-## 9\. Testing and verification — the biggest confidence gap
-
-The archive contains a Playwright test suite, but the test files present are limited to:
-
--   Readiness/smoke checks
-
--   Sign-in
-
--   Customer Onboarding journeys
-
--   Browser security headers
-
--   IDP session revocation after sign-out
-
-I could not find .NET unit-test projects for the APIs and domain logic. The test README itself says .NET unit and adapter tests are still to come.
-
-For a system with financial operations, concurrent workflows, TOTP verification, ABAC/ReBAC, and append-only audit logic, that is a significant gap.
-
-### Tests I would require before production approval
-
-### Payments correctness
-
--   Stale `FundsReservationFailed` after a successful retry cannot reject a payment incorrectly.
-
--   Duplicate and concurrent `Idempotency-Key` requests cannot create duplicate payments; a different payload with the same key is rejected.
-
--   External acceptance followed by a process crash is reconciled without a second payment.
-
--   Two officers cannot concurrently approve/reject the same payment.
-
--   Compensation is idempotent and eventually reaches a reconciled terminal state.
-
-### Authorization and identity
-
--   A staff member cannot initiate a payment from an out-of-scope customer's account by bypassing the lookup screen.
-
--   An auditor with a second role cannot bypass the Audit Journey API restriction.
-
--   Password-only tokens are rejected for all actions requiring MFA when the policy is enabled.
-
--   Concurrent reuse of a TOTP code or recovery code cannot authenticate twice.
-
--   A malicious iframe origin cannot receive workspace context or notifications.
-
-### Audit, Kafka, and resilience
-
--   Duplicate Kafka delivery, poison messages, dead-lettering, and redrive are exercised.
-
--   Outbox publication followed by a crash does not produce duplicate business effects.
-
--   Audit chain tampering, missing entries, and concurrent appends are tested.
-
--   SignalR connections cannot receive another user's or branch's notifications.
-
--   Database and Kafka outages, restarts, and backlog recovery are tested under load.
-
-The most important tests should be automated at the domain, application, and database integration levels—not only through the browser.
-
-## 10\. Recommended remediation order
-
-I would not begin by refactoring CSS or reorganizing components. I would tackle the risks in this order:
+The following are the material changes I verified in the current source. “Resolved” here means the particular code defect identified in the earlier review is no longer present; it does not mean the whole subsystem is production-certified.
 
 |
-Priority
+Earlier finding
 
  |
 
-Work item
+Current status
 
  |
 
-Reason
+Evidence
 
  |
 | --- | --- | --- |
 |
 
-P0
+Payments saga could accept a stale reply from an earlier command attempt
 
  |
 
-Fix Payments reply causation validation
+Resolved in code
 
  |
 
-Prevent incorrect payment state transitions from stale replies.
-
- |
-|
-
-P0
-
- |
-
-Enforce account/branch authorization on payment initiation
-
- |
-
-Prevent bypass of UI-only account restrictions.
+`PaymentSaga.cs`, lines 467–480, compares the reply's `CausationId` to `CurrentCommandId` and records ignored replies. The reply processor forwards `causationId` to the API.
 
  |
 |
 
-P0
+Payment initiation reused an idempotency key without checking the original payload
 
  |
 
-Validate the Shell's MFE origin against a static allowlist
+Resolved in code
 
  |
 
-Prevent cross-origin workspace/notification disclosure.
-
- |
-|
-
-P0
-
- |
-
-Make production MFA and approval configuration fail closed
-
- |
-
-Prevent security controls from being silently disabled by configuration.
+`InitiatePayment.cs`, lines 92–114, checks the initiating user and normalized payment details.
 
  |
 |
 
-P1
+Payment-network HTTP call ran while a saga DB transaction was open
 
  |
 
-Move the external network call outside the database transaction
+Resolved in code
 
  |
 
-Reduce contention and improve saga reliability.
-
- |
-|
-
-P1
-
- |
-
-Fix TOTP/recovery-code concurrency
-
- |
-
-Ensure one-time codes are truly single-use under concurrency.
+`RunDueSagaStep.cs` separates claim, external call and outcome recording.
 
  |
 |
 
-P1
+Shell accepted the iframe's origin based on its first ready message
 
  |
 
-Remove full account numbers from logs
+Resolved in code
 
  |
 
-Reduce financial data exposure.
-
- |
-|
-
-P1
-
- |
-
-Separate auditor-only permissions from normal Payments read policies
-
- |
-
-Prevent combined-role authorization bypass.
+`src/Shell/client-app/app/page.tsx` now maintains `expectedFrameOriginRef` from the selected menu item's `baseURL` and validates the ready message against it.
 
  |
 |
 
-P1
+Full account numbers were included in payment/account logs
 
  |
 
-Add .NET unit/integration tests for payment and saga invariants
+Partly fixed / appears resolved in inspected paths
 
  |
 
-Make future changes safer and provide regression evidence.
-
- |
-|
-
-P1
-
- |
-
-Add formal outbox recovery and external-payment reconciliation
-
- |
-
-Ensure failures can be resolved without unsafe manual database changes.
+`InitiatePayment.cs` and `FundsCommand.cs` use `LogMasking.Account(...)`. A full repository-wide log-data audit would still be required before sign-off.
 
  |
 |
 
-P2
+KYC document storage lacked at-rest encryption
 
  |
 
-Add externally anchored audit checkpoints
+Resolved in design/code path
 
  |
 
-Strengthen the audit trail against privileged tampering.
-
- |
-|
-
-P2
-
- |
-
-Harden production secrets, host/CSP configuration, and SignalR quotas
-
- |
-
-Reduce deployment and resource-exhaustion risk.
+`doc/Threat-Model.md` R-2 identifies envelope encryption in `EncryptedDocumentStorage.cs` as implemented. The production key-management requirement remains.
 
  |
 |
 
-P2
+Audit hash chain had no external integrity anchor
 
  |
 
-Benchmark the audit chain and worker/backlog behaviour
+Partly fixed / design materially improved
 
  |
 
-Establish a realistic capacity and recovery envelope.
+`AuditAnchors.cs` implements signed checkpoints. Independent signing-key and immutable-storage administration remain production requirements.
+
+ |
+|
+
+No operator path to resend parked payment outbox messages
 
  |
 
-P0 here means “fix before production approval,” not that the application has already been exploited.
+Reported as resolved by current documentation
 
-## Final verdict
+ |
 
-You have made strong architectural decisions: independent bounded contexts, server-side BFFs, explicit scopes and policies, transactional messaging, a persisted Payments saga, compensating actions, a separate audit service, and a server-authorized notification channel. These are not superficial patterns; several are implemented in a thoughtful way.
+`doc/Threat-Model.md` R-5 describes controlled resend with a reason, permission, recent MFA and timeline evidence. The complete live recovery path still needs runtime verification.
 
-But my merciless conclusion is this:
+ |
+|
 
-The architecture is ahead of the current verification and hardening. The stale saga-reply issue and the payment initiation authorization boundary are the two findings I would prioritize above everything else. They concern whether the system performs the correct financial action for the right actor—not merely whether the code follows a pattern.
+Payment saga could release funds after an ambiguous network outcome
 
-The Shell origin issue, MFA defaults, and concurrent one-time-code handling come next. The audit chain is a good design, but its assurance must be described accurately and supported by independent trust anchors if it is expected to withstand privileged tampering.
+ |
 
-I would call this a strong, advanced architectural PoC with important production blockers, not production-ready banking software yet. That is not a dismissal of the work; it is the distinction I would want a security reviewer to make before this platform is trusted with real money or regulated customer data.
+Partly fixed
 
-I have not changed your code in this review. My recommendation is to resolve the P0 findings first, add regression tests for them, and then repeat the review against the patched archive.
+ |
+
+`RunDueSagaStep.cs` queries the network and keeps funds reserved on an unknown status. Long-lived unresolved cases still need an operational resolution process.
+
+ |
+|
+
+MFA step-up checked authentication method but not recency
+
+ |
+
+Resolved in .NET implementation
+
+ |
+
+The current Threat Model describes `MfaStepUp.cs` requiring `amr=mfa` and a recent `auth_time`. The Operations-specific configuration issue is EWP-01.
+
+ |
+
+I also verified that the current archive contains the newer Accounts, Payments, Audit, Notifications, Compliance and Operations contexts, along with the token-exchange implementation. This is a materially different codebase from the incomplete archive used for the previous review.
+
+## What I would require before production approval
+
+My next-gate checklist would be:
+
+1.  Make Operations MFA fail closed. Require it outside Development and prove the protected operation rejects password-only authentication.
+
+2.  Complete the audit trust boundary. Put checkpoint signing and immutable retention under independently administered controls.
+
+3.  Prove payment reconciliation and recovery. Demonstrate that ambiguous outcomes cannot release funds, that unresolved payments generate alerts, and that parked-message replay cannot create a second financial effect.
+
+4.  Confirm privileged-operation abuse controls. Establish effective rate limiting and monitoring for Operations state-changing endpoints.
+
+5.  Run an end-to-end authorization review. Validate the subject, audience, delegated actor, branch restrictions, separation of duties, permissions and recent-MFA requirements across the newer Next.js BFF → NestJS Journey API → domain API paths.
+
+6.  Run the actual build and runtime checks. I have not compiled this archive or exercised its browser and service flows in this review. A static source review cannot prove deployment configuration, runtime middleware ordering, cookie behaviour, database grants or Kafka ACLs are effective.
+
+## Final ratings
+
+Architecture
+
+## 8.5 / 10
+
+What would raise it by one point: demonstrate complete recovery for ambiguous payment outcomes and parked messages, with observable operational ownership and reconciliation.
+
+Security
+
+## 7.5 / 10
+
+What would raise it by one point: enforce fail-closed MFA across Operations and all sensitive paths, complete independent audit checkpoint protection, and validate the delegated authorization model through runtime tests and deployment configuration.
+
+Principal-review conclusion: the updated EWP V3 has stronger architecture and security controls than the version I reviewed previously. The stale-saga-reply, payload-idempotency, long-held transaction and iframe-origin defects appear fixed in the current source. I would still hold production approval until the Operations MFA configuration is fail-closed, audit checkpoints have their independent production trust boundary, and payment reconciliation and privileged-operation controls are demonstrated end to end.

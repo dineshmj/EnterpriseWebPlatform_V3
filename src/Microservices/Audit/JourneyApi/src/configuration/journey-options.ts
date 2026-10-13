@@ -1,6 +1,7 @@
 /**
  * Configuration of the Audit Journey API - environment variables only (runnow.bat sets the
- * development values). A missing value stops the start-up: no secret has a default.
+ * development values). A missing value stops the start-up: no secret and no security setting
+ * (audience, permitted caller, own client) has a default.
  */
 export interface JourneyOptions {
   port: number;
@@ -39,9 +40,9 @@ export function loadOptions(): JourneyOptions {
     port: Number(process.env.AUDIT_JOURNEY_PORT ?? '46379'),
     publicOrigin: required('AUDIT_JOURNEY_PUBLIC_ORIGIN'),
     authority: required('AUDIT_JOURNEY_IDP_AUTHORITY').replace(/\/$/, ''),
-    audience: process.env.AUDIT_JOURNEY_AUDIENCE ?? 'audit-journey-api',
-    callerClientId: process.env.AUDIT_JOURNEY_CALLER_CLIENT_ID ?? 'Audit.Microservice.Web.ClientID',
-    clientId: process.env.AUDIT_JOURNEY_CLIENT_ID ?? 'Audit.JourneyApi.ClientID',
+    audience: required('AUDIT_JOURNEY_AUDIENCE'),
+    callerClientId: required('AUDIT_JOURNEY_CALLER_CLIENT_ID'),
+    clientId: required('AUDIT_JOURNEY_CLIENT_ID'),
     clientSecret: required('AUDIT_JOURNEY_CLIENT_SECRET'),
     auditApiBaseUrl: required('AUDIT_API_BASE_URL').replace(/\/$/, ''),
     paymentsApiBaseUrl: required('PAYMENTS_API_BASE_URL').replace(/\/$/, ''),

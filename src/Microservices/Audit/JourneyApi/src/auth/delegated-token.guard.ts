@@ -11,6 +11,7 @@ import { SetMetadata } from '@nestjs/common';
 import type { Request } from 'express';
 import { createRemoteJWKSet, jwtVerify, JWTPayload } from 'jose';
 import { JOURNEY_OPTIONS, JourneyOptions } from '../configuration/journey-options';
+import { RateLimiter, READ_LIMIT } from '../http/rate-limit';
 
 /** The person this request acts for, and the token that proves it (exchanged further downstream). */
 export interface Delegation {
@@ -39,6 +40,7 @@ export class DelegatedTokenGuard implements CanActivate {
   constructor(
     @Inject(JOURNEY_OPTIONS) private readonly options: JourneyOptions,
     private readonly reflector: Reflector,
+    private readonly limiter: RateLimiter,
   ) {
     this.jwks = createRemoteJWKSet(new URL(`${options.authority}/.well-known/openid-configuration/jwks`));
   }
@@ -67,6 +69,9 @@ export class DelegatedTokenGuard implements CanActivate {
     if (typeof payload.sub !== 'string' || !scopes.includes('audit-journey.read') || actingClient !== this.options.callerClientId) {
       throw new ForbiddenException('Only the Audit web application, acting for a signed-in person, may call this API.');
     }
+
+    // Each person, through each calling client, has a request limit (429 with Retry-After beyond it).
+    this.limiter.take(`read|${payload.sub}|${actingClient}`, READ_LIMIT);
 
     const permissions = toList(payload.permission);
     const required = this.reflector.get<string | undefined>(PERMISSION_KEY, context.getHandler());

@@ -11,6 +11,7 @@ import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import { createRemoteJWKSet, jwtVerify, JWTPayload } from 'jose';
 import { JOURNEY_OPTIONS, JourneyOptions } from '../configuration/journey-options';
+import { CHANGE_LIMIT, RateLimiter, READ_LIMIT } from '../http/rate-limit';
 
 /** The person this request acts for. */
 export interface Delegation {
@@ -38,6 +39,9 @@ export const Requires = (requirement: Requirement) => SetMetadata(REQUIREMENT_KE
  * token for this call (RFC 8693). Then the person must hold the endpoint's permission, and - for a
  * change while MFA is on - must have signed in with MFA recently (the exchanged token keeps the
  * person's original sign-in time and methods). Anything else: 401 or 403. Fail closed.
+ *
+ * Each person, through each calling client, has a request limit: reads and - much lower - changes
+ * (429 with Retry-After beyond it).
  */
 @Injectable()
 export class DelegatedTokenGuard implements CanActivate {
@@ -46,6 +50,7 @@ export class DelegatedTokenGuard implements CanActivate {
   constructor(
     @Inject(JOURNEY_OPTIONS) private readonly options: JourneyOptions,
     private readonly reflector: Reflector,
+    private readonly limiter: RateLimiter,
   ) {
     this.jwks = createRemoteJWKSet(new URL(`${options.authority}/.well-known/openid-configuration/jwks`));
   }
@@ -78,6 +83,9 @@ export class DelegatedTokenGuard implements CanActivate {
     if (typeof payload.sub !== 'string' || !toList(payload.scope).includes(requirement.scope) || actingClient !== this.options.callerClientId) {
       throw new ForbiddenException('Only the Operations web application, acting for a signed-in person, may call this API.');
     }
+
+    const isChange = requirement.scope.endsWith('.write');
+    this.limiter.take(`${isChange ? 'change' : 'read'}|${payload.sub}|${actingClient}`, isChange ? CHANGE_LIMIT : READ_LIMIT);
 
     const permissions = toList(payload.permission);
     if (!permissions.includes(requirement.permission)) {

@@ -17,6 +17,12 @@ public sealed class ScreeningProviderOptions
 
     public string BaseUrl { get; init; } = string.Empty;
 
+    /// <summary>
+    /// Outside Development the only hosts BaseUrl may name (https, no internal address): a
+    /// tampered address cannot send the API key elsewhere. See ExternalEndpoint.
+    /// </summary>
+    public string[] PermittedHosts { get; init; } = [];
+
     /// <summary>The provider's API key; configuration / secret store only.</summary>
     public string ApiKey { get; init; } = string.Empty;
 

@@ -123,6 +123,9 @@ builder.Services
 
 builder.Services.AddAuthorization(options =>
 {
+    // Deny by default: an endpoint without its own policy still needs an authenticated caller.
+    options.DenyAnonymousByDefault();
+
     options.AddPolicy("ApiScope", policy =>
     {
         policy.RequireAuthenticatedUser();
@@ -195,8 +198,8 @@ app.UseAuthentication();
 app.UseEwpRateLimiting();
 app.UseAuthorization();
 
-app.MapControllers()
-    .RequireAuthorization("ApiScope");
+// Deny by default: every controller endpoint needs an authenticated caller, on top of its own policy.
+app.MapEwpApiControllers("ApiScope");
 
 app.MapEwpHealthEndpoints();
 app.MapEwpMetricsEndpoint();   // Prometheus scrape (GET /metrics)

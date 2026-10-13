@@ -56,6 +56,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization(options =>
 {
+    // Deny by default: an endpoint without its own policy still needs an authenticated caller.
+    options.DenyAnonymousByDefault();
+
     options.AddPolicy("KycCaseOpeningSubscriberWrite", policy =>
     {
         policy.RequireAuthenticatedUser();
@@ -168,7 +171,8 @@ app.Use(async (context, next) =>
 });
 
 app.UseAuthorization();
-app.MapControllers();
+// Deny by default: every controller endpoint needs an authenticated caller, on top of its own policy.
+app.MapEwpApiControllers();
 
 app.MapEwpHealthEndpoints();
 app.MapEwpMetricsEndpoint();   // Prometheus scrape (GET /metrics)

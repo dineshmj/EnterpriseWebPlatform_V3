@@ -1,238 +1,201 @@
-# Enterprise Web Platform V3 — Merciless Security & Architecture Review
+# EWP V3 — Re-review (Principal Architect / Security)
 
-**Scope:** Static review of the current codebase (EnterpriseWebPlatform\_V3-main). Nothing was executed.
-**Stance:** Production-readiness lens for a banking / financial-services platform. “PoC” is not a free pass for architectural debt that would be catastrophic under real load, real attackers, or real regulators.
+Today's date: 13-OCT-2026.
 
----
-
-## Executive Verdict
-
-This is one of the stronger architectural PoCs I have seen in the .NET banking space. The team has clearly internalized BFF, Duende IdentityServer, transactional outbox, saga patterns, deny-by-default authorization, and defense-in-depth. Many of the previous review’s critical findings (outbox stall, scope-only authorization, stored-XSS chain, secrets in shared libraries, refresh-token reuse, missing at+jwt validation, etc.) have been properly fixed.
-
-That said, **it is still a PoC with production-shaped bones and several load-bearing gaps**. The remaining issues are not “nice-to-haves”; they are the difference between “impressive demo” and “something a CISO / external auditor would sign off on.”
+**Scope:** Static review of the current tree (EnterpriseWebPlatform\_V3\_20261013\_160122). Nothing was executed.
+**Method:** Started from ReadMe.txt, doc/Threat-Model.md, and component READMEs (Security controls tables), then verified claims in code. PoC-allowed infractions from your list and Threat-Model §7 “Accepted for PoC” are excluded unless they hide a design flaw.
 
 ---
 
-## 1\. What Is Done Exceptionally Well
+## Earlier findings — verified resolved
 
-These are not soft compliments — they are hard, non-trivial engineering choices that most platforms get wrong.
-
-### 1.1 Identity & Token Architecture
-
--   Duende IdentityServer with **server-side sessions** (cookie is only a reference). Stolen cookies become useless after logout.
--   **Token exchange (RFC 8693)** used deliberately so the human subject is preserved across service boundaries (act claim). Downstream services can still see *who* initiated the action.
--   Access tokens constrained with ValidTypes = \["at+jwt"\] (RFC 9068) on every API — ID tokens cannot be presented as access tokens.
--   Refresh tokens are TokenUsage.OneTimeOnly + UpdateAccessTokenClaimsOnRefresh = true.
--   Client secrets are configuration-driven and **fail-closed** at startup (ClientSecretStore). No secrets compiled into shared libraries.
--   MFA (TOTP / Google Authenticator) is correctly implemented: 160-bit secrets, Data-Protection-encrypted at rest, recovery codes stored only as SHA-256 hashes, constant-time comparison, replay protection via LastUsedTimeStep, lockout after failed attempts, \_\_Host- pending-sign-in cookie.
--   MFA step-up authorization for high-risk actions (payment approve/reject/retry) is present and returns a clear mfa\_required problem detail instead of a silent 401 loop.
-
-### 1.2 BFF Pattern & Browser Security
-
--   Tokens never reach the browser. Cookie settings are disciplined: \_\_Host- prefix, HttpOnly, Secure, SameSite=Lax (with correct None only for OIDC correlation/nonce).
--   CSP is **hash-based** for both scripts *and* styles, computed from the actual exported Next.js HTML at startup. No unsafe-inline. This is rare and excellent.
--   Document serving: magic-byte verification (PDF/PNG/JPEG only), stored type is the verified type, X-Content-Type-Options: nosniff, forced attachment disposition. Stored-XSS chain is closed.
-
-### 1.3 Messaging Reliability
-
--   Shared Kafka subscriber loop: at-least-once, **in-place retry** for transient failures (preserves partition order), dead-letter topic for permanent failures, offset commit only after success or DLQ.
--   Transactional Outbox with FOR UPDATE SKIP LOCKED, per-aggregate oldest-first publishing, exponential backoff, parking of exhausted rows, acks=all.
--   Inbox tables for idempotency on the receiving side.
--   Kafka client configuration is fail-closed for SASL credentials.
-
-### 1.4 Authorization Model
-
--   Explicit separation of scopes vs permissions vs attributes vs workflow state vs SoD.
--   Object-level / branch-scoped authorization in CO, KYC, DM, Payments.
--   M2M policies pin client\_id — a stolen machine token from one subscriber cannot call another service’s write endpoints.
--   Audit API accepts **only** delegated (token-exchanged) tokens from the Journey API; a plain machine or BFF token is refused.
-
-### 1.5 Audit Trail
-
--   Append-only via Kafka consumer inside the Audit API (no write HTTP endpoint).
--   Hash-chain tamper evidence with continuous monitoring and readiness degradation when the chain is broken.
--   Advisory locks for append serialization.
-
-### 1.6 Payments Orchestration Saga
-
--   Proper aggregate-rooted state machine with history, timeouts, network-retry policy, compensation path, and a health check that reports *stuck* / *overdue* sagas as Degraded (not Unhealthy — correct distinction).
-
-### 1.7 Operational Hygiene
-
--   Least-privilege DB users per deployable (db/EwpServiceDbUsers.sql).
--   Rate limiting (OWASP API4) applied to API surfaces.
--   Structured request logging with trace IDs, OpenTelemetry, Prometheus metrics, health endpoints split into live/ready.
--   Swagger gated to Development.
-
----
-
-## 2\. Critical / High Findings (Must Fix Before Any Real Environment)
-
-### C1. Local Docker Stack Is Still Wide Open
-
-docker-compose.yml still runs:
-
--   PostgreSQL with POSTGRES\_PASSWORD: admin and port 5432 published.
--   Kafka in **PLAINTEXT** with no authentication.
--   Kafka UI with DYNAMIC\_CONFIG\_ENABLED: "true" and no authentication on port 8080.
-
-There *is* a hardened Kafka UI config under kafka/, but the default compose path that developers will actually run is the insecure one.
-**Risk:** Any developer machine or CI runner that publishes these ports is one nmap away from full data and topic compromise.
-**Fix:** Make the secure configuration the *default* compose profile. PLAINTEXT and unauthenticated UI should require an explicit insecure profile and a loud warning.
-
-### C2. Development Client Secrets Committed in Cleartext
-
-Every BFF and every subscriber has its client secret in appsettings.Development.json. These are UUIDs, but they are still long-lived credentials sitting in the repository history.
-
-For a PoC this is understandable. For anything that ever leaves a developer laptop it is unacceptable.
-**Fix:**
-
--   Move all secrets to user-secrets / environment variables / a local secret store even in Development.
--   Document a rotation procedure.
--   Ensure the IDP refuses to start if any confidential client is missing a secret (already partially done — extend the check).
-
-### C3. Document Storage Is Local Filesystem with No Encryption at Rest
-
-LocalFileSystemDocumentStorage writes content under a root path. There is no envelope encryption, no key rotation story, no object-storage abstraction with SSE-KMS / customer-managed keys.
-
-In a banking context, customer identity documents (KYC evidence) are highly sensitive. A disk snapshot or container escape yields plaintext PDFs.
-**Fix:** Introduce an IDocumentStorage implementation backed by encrypted object storage (or at minimum application-level encryption with a key from a proper KMS). Keep the local implementation only for Development.
-
-### C4. Metrics and Health Endpoints Are Anonymous by Design
-
-/metrics and health endpoints are deliberately AllowAnonymous. The code comments correctly state that ingress must not expose them. That is an *operational* control, not an *architectural* one.
-
-In practice, misconfigured ingress, service-mesh bypass, or a developer exposing a port will leak:
-
--   Outbox backlog sizes
--   Running / stuck / overdue payment sagas
--   Consumer group lag
--   Database connectivity status
-
-This is reconnaissance gold.
-**Fix:** Require a network policy *and* a scrape token / mTLS for /metrics. At minimum, gate metrics behind a configuration flag that defaults to off outside Development (already partially present) and document the network control as mandatory.
-
-### C5. No Formal Circuit Breakers / Bulkheads on Outbound Calls
-
-Subscribers and BFFs call downstream APIs and the IDP. There is retry logic for Kafka processing, but I do not see a resilience library (Polly, standard .NET resilience handlers with circuit breakers, timeouts, bulkheads) systematically applied to HTTP clients.
-
-Under partial outage this will amplify load (retry storms) and can cascade.
-**Fix:** Standardize an IHttpClientFactory + resilience pipeline (timeout → retry with jitter → circuit breaker → bulkhead) for every outbound client, especially M2M token acquisition and cross-service calls.
-
-### C6. Shared BFF State Database
-
-Multiple BFFs connect to EwpBffStateDb. If this is used for Data Protection keys or session-related state, a compromise of one BFF’s credentials gives access to the shared store.
-**Verify** that Data Protection keys are isolated per BFF (or properly ring-isolated) and that the shared DB does not become a lateral-movement pivot.
-
----
-
-## 3\. High / Medium Findings
-
-### H1. Inter-Service Communication Is Not Forced to mTLS
-
-All service-to-service traffic appears to rely on the ambient network. In a real deployment this must be mTLS (service mesh or explicit client certificates). The architecture does not encode this requirement in code or configuration contracts.
-
-### H2. Kafka ACLs Are Described but Not Enforced in the Default Stack
-
-The code assumes per-worker Kafka users with topic/group ACLs. The local Kafka container has none of that. Documentation should make it impossible to confuse “works on my machine” with “works under ACL isolation.”
-
-### H3. Authorization Completeness Is Uneven Across Contexts
-
-KYC and Payments show mature object-level + SoD + MFA step-up.
-Documents Management and Customer Onboarding have improved dramatically, but a systematic matrix of “every command / query × every policy predicate” should be published and tested. Residual risk of a missed RequireClaim("branch", …) or missing SoD check on a new endpoint remains.
-
-### H4. Audit Trail Has No Cryptographic Anchoring Outside the Database
-
-The hash chain is excellent *inside* the Audit DB. There is no periodic external anchor (e.g., publishing the chain head to a WORM store, HSM, or public transparency log). A determined attacker with DB write access can rewrite history and recompute the chain.
-For a banking audit log this is a material gap.
-
-### H5. No Explicit Threat Model or STRIDE Analysis in the Repo
-
-There is a large architectural blueprint and an authorization model, but no living threat model that maps assets → threats → mitigations → residual risk. This is the document security architects and auditors will ask for first.
-
-### H6. Playwright Security Tests Exist but Coverage Is Unknown
-
-There is a tst/playwright/tests/40-security/ tree. Good. Without evidence of coverage for:
-
--   CSRF on state-changing BFF endpoints
--   Session fixation / revocation after logout
--   MFA bypass attempts
--   Token exchange abuse
--   Document content-type confusion …the suite cannot be treated as a control.
-
-### H7. Rate Limiting Configuration Is Present; Defaults and Per-Endpoint Tuning Are Opaque
-
-AddEwpRateLimiting is applied. Without seeing the default limits and whether sensitive endpoints (login, MFA, payment initiation, document upload) have tighter buckets, this is only a partial control.
-
-### H8. Logging of Authorization Failures and Security Events
-
-Token-exchange refusals are logged. It is unclear whether every authorization failure (especially object-level and SoD failures) is emitted as a structured security event that can be alerted on. “Deny” without observability is half a control.
-
----
-
-## 4\. Architectural Observations (Not Bugs, but Debt)
-
-| Area | Observation | Severity if left |
+| Prior issue | Status | Evidence |
 | --- | --- | --- |
-| **Database-per-context** | Correctly enforced. Good. | — |
-| **DDD maturity** | Uneven (CO/KYC strong; some contexts thinner). | Medium |
-| **Saga style mix** | Choreography for onboarding, orchestration for payments. Justified, but the operational model differs; runbooks must reflect that. | Low |
-| **Simulators** | Core banking / payment network / screening simulators are present. Ensure they can never be deployed with production credentials or network paths. | High if misdeployed |
-| **Next.js static export + BFF** | Correct for the security model, but the build → hash-CSP pipeline is fragile; a broken export silently weakens XSS defence. | Medium |
-| **Observability** | Strong foundation. Missing: security-specific dashboards (authn failures, MFA lockouts, token-exchange denials, outbox age, saga stuck count). | Medium |
-| **Schema evolution** | SQL scripts with DROP patterns still appear in places. Prefer migrations with expand/contract. | Medium |
+| Outbox relay stall / unsafe publishing | **Resolved** | FOR UPDATE SKIP LOCKED, bounded attempts, park + ops resend (ResendParkedMessage, OutboxController, Payments README #17) |
+| Documents auth scope-only / branch via header | **Resolved** | DocumentResourceAuthorization — branch from token, acting client allow-list, delete only CO BFF |
+| Stored-XSS via documents | **Resolved** | Magic-byte policy + nosniff + attachment disposition |
+| CO RBAC-only / caller-supplied SubjectId/BranchId | **Resolved** | CustomerResourceAuthorization — branch/city/country from claims |
+| Secrets in shared libraries | **Resolved** | Config-driven, fail-closed (ClientSecretStore, subscriber Validate) |
+| Refresh token reuse | **Resolved** | RefreshTokenUsage = OneTimeOnly on clients |
+| Missing ValidTypes = at+jwt | **Resolved** | All domain APIs |
+| Server-side sessions | **Resolved** | IDP AddServerSideSessions |
+| Document encryption at rest | **Resolved** | EncryptedDocumentStorage AES-256-GCM envelope, fail-closed key ring |
+| Audit chain not externally anchored | **Resolved** | ECDSA P-256 checkpoints, write-once files (AuditAnchors.cs) |
+| MFA step-up only “ever authenticated with MFA” | **Resolved** | amr=mfa **and** auth\_time ≤ Mfa:StepUpMaxAgeMinutes (MfaStepUp.cs) |
+| No ops recovery for parked outbox / blind release | **Resolved** | Resend with reason + MFA; saga CONFIRM\_WITH\_NETWORK by Idempotency-Key |
+| SignalR connection quota | **Resolved** | Notifications:MaxConnectionsPerPerson |
+| No circuit breakers on outbound HTTP | **Resolved** | AddStandardResilienceHandler on subscribers and payment network client |
+| Shared BFF key material | **Resolved** | Per-BFF schema + role in EwpBffStateDb; SetApplicationName + cert-protected DP keys |
 
 ---
 
-## 5\. Security Control Scorecard (Current State)
+## Remaining findings
 
-| Control | Status | Notes |
+### F-1 — Customer KYC API has no global deny-by-default on endpoints
+
+**Category:** Security (ASVS / OWASP API5)
+**Severity:** Medium — a new controller without \[Authorize\] would be reachable without an authorization policy (and, depending on middleware order, possibly anonymously).
+
+**Evidence:**
+
+-   src/Microservices/CustomerKyc/API/Program.cs — app.MapControllers(); with **no** .RequireAuthorization().
+-   Contrast: Accounts, Payments, Compliance, Notifications, Audit, Shell use MapControllers().RequireAuthorization().
+-   Current KYC controllers *do* carry \[Authorize(...)\], so behaviour today is correct.
+
+**Failure scenario:** Developer adds KycReportsController without attributes → endpoint is not protected by a policy.
+
+**Fix (small):**
+
+C#
+
+```
+app.MapControllers().RequireAuthorization();
+```
+
+Keep per-action policies for finer scopes. Optionally set FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build().
+
+**Prior?** Implicit in earlier “deny by default” commentary; **unchanged gap** on this service.
+
+---
+
+### F-2 — Dual auth stacks (.NET APIs vs NestJS Journey APIs) can drift
+
+**Category:** Architecture / best practice
+**Severity:** Medium — same security rules implemented twice (JWT typ, audience, act, permissions, MFA age) in C# and TypeScript.
+
+**Evidence:**
+
+-   .NET: JWT Bearer + policy handlers (e.g. Payments, Audit API).
+-   NestJS: delegated-token.guard.ts in Audit and Operations Journey APIs (manual jose verify, scope, act.client\_id, recentMfa).
+
+**Failure scenario:** MFA max-age or act parsing is tightened in one stack and forgotten in the other → inconsistent enforcement or a bypass on one path.
+
+**Fix (medium):** Shared contract tests (token fixtures) that both stacks must pass; or generate policy metadata from one source. Document the parity checklist in the threat model.
+
+**Prior?** **New** (Journey APIs appeared after the last review).
+
+---
+
+### F-3 — MFA step-up forces full sign-out instead of OIDC step-up
+
+**Category:** Best practice / security UX
+**Severity:** Low–Medium — control is correct (amr + fresh auth\_time), but the recovery path is “sign out and sign in again,” which increases friction and support risk.
+
+**Evidence:**
+
+-   MfaStepUp.cs / NestJS recentMfa — refuse when auth\_time is stale.
+-   Threat-Model R-4 notes polish: OIDC max\_age / acr\_values.
+-   Problem detail text tells the user to sign out.
+
+**Failure scenario:** Officer’s session is hours old; high-value approve fails with 403; user abandons the flow or seeks workarounds.
+
+**Fix (medium):** BFF-initiated re-auth with max\_age / acr\_values=mfa so the existing session can be stepped up without full logout.
+
+**Prior?** Called out as residual polish in Threat-Model; **unchanged**.
+
+---
+
+### F-4 — Production key custody for document KEKs and audit anchors is still design work
+
+**Category:** Security (encryption at rest / audit integrity)
+**Severity:** Medium *for production go-ahead* (implementation in PoC is solid; operational model is not finished).
+
+**Evidence:**
+
+-   DocumentKeyRing loads KEKs from configuration (fail-closed). Threat-Model R-2: production should use vault/HSM.
+-   AuditAnchorStore writes signed checkpoints to a local directory marked read-only. R-3: production needs immutable store under a different administrator + key in HSM.
+
+**Failure scenario:** In production with the same design, a single privileged admin with DB + config + filesystem can still rewrite history or decrypt evidence after key compromise.
+
+**Fix (large for true production):**
+
+-   Document KEKs only from KMS/HSM; rotation runbook.
+-   Anchor checkpoints to WORM/object-lock storage; split admin roles (trail writer ≠ anchor writer).
+
+**Prior?** Previously reported as missing encryption/anchors; **partly fixed** (crypto present; custody model open).
+
+---
+
+### F-5 — Inconsistent global authorization style across domain APIs
+
+**Category:** Best practice / maintainability
+**Severity:** Low (related to F-1).
+
+**Evidence:** CO and DM use .RequireAuthorization("ApiScope"); others use bare .RequireAuthorization(); KYC uses neither at map level.
+
+**Failure scenario:** Reviewers and new services copy the weakest pattern.
+
+**Fix (small):** One shared extension, e.g. MapEwpApiControllers(), always applying authenticated fallback + optional scope policy.
+
+**Prior?** **New** as an explicit consistency finding.
+
+---
+
+### F-6 — External payment-network BaseUrl is not host-constrained
+
+**Category:** Security (SSRF defence-in-depth)
+**Severity:** Low — URL is configuration, not caller-controlled; still worth locking down.
+
+**Evidence:**
+
+-   PaymentNetworkOptions.BaseUrl validated only as absolute URI (Program.cs Validate).
+-   Client uses BaseAddress + relative paths; API key header.
+
+**Failure scenario:** Misconfiguration (or compromised config store) points BaseUrl at an internal metadata service; the process still sends the API key.
+
+**Fix (small):** Allow-list of hostnames / deny private/link-local ranges at startup when not Development.
+
+**Prior?** **New**.
+
+---
+
+### F-7 — Audit trail actor identity is still envelope-trusted (not signed)
+
+**Category:** Security / regulatory evidence
+**Severity:** Low in PoC (Threat-Model R-6 accepted); **raise to Medium if production is claimed without change**.
+
+**Evidence:** Actor fields come from producer envelopes; Kafka ACLs + trusted producers are the control. No message-level signature binding actor to payload.
+
+**Failure scenario:** Compromised producer credentials publish events with a forged InitiatedByUserId / decision actor → audit attributes the wrong person.
+
+**Fix (medium–large):** Sign integration events (or at least actor + message id) with a producer key; Audit verifies before append.
+
+**Prior?** Accepted for PoC — listed only so production criteria stay explicit.
+
+---
+
+## What is *not* wrong (checked and sound)
+
+-   Database-per-context; least-privilege DB roles and BFF schema isolation.
+-   Token exchange (RFC 8693) with pinned acting clients; auditors only via Audit Journey API.
+-   SoD in domain aggregates (KYC, Compliance, Accounts, Payments).
+-   Branch ABAC on documents, customers, payments; no branch from headers.
+-   Transactional outbox + inbox; saga lease/version; network reconciliation; parked-message resend with MFA + reason + audit trail.
+-   CSP hash-based (scripts + styles); document content allow-list; log masking for account numbers.
+-   Rate limiting (API sliding windows; IDP login/MFA fixed window).
+-   SignalR: no client-driven group join; audiences from token; connection quota.
+-   Fail-closed configuration for secrets, Kafka SASL, document keys, Data Protection certificates.
+
+---
+
+## Overall ratings
+
+| Dimension | Score | What raises it by ~1 point |
 | --- | --- | --- |
-| Tokens never in browser | **Strong** | BFF pattern enforced |
-| OAuth 2.1 / OIDC hygiene | **Strong** | PKCE, state, nonce, one-time refresh, at+jwt |
-| MFA | **Strong** | Correct TOTP + recovery + lockout + step-up |
-| Human vs machine identity | **Strong** | Token exchange + pinned client\_id |
-| Object-level authorization | **Good → Strong** | Context-dependent |
-| SoD | **Good** | Present in KYC / Payments |
-| Transactional Outbox | **Strong** | Production-shaped |
-| Inbox / idempotency | **Strong** |  |
-| Dead-letter + retry | **Strong** |  |
-| Document content safety | **Strong** | Magic bytes + nosniff + attachment |
-| CSP | **Strong** | Hash-based, no unsafe-inline |
-| Secrets management | **Partial** | Fail-closed, but Dev secrets in repo |
-| Encryption at rest (documents) | **Weak** | Local FS only |
-| Network encryption (mTLS) | **Not encoded** | Assumed operational |
-| Kafka authn/ACLs (local) | **Weak** | PLAINTEXT default |
-| Audit integrity | **Good** | Hash chain; no external anchor |
-| Rate limiting | **Present** | Tuning unclear |
-| Circuit breakers | **Missing / uneven** |  |
-| Threat model | **Missing** |  |
+| **Architecture** | **8.5 / 10** | Unifyed parity tests for NestJS vs .NET auth (F-2); uniform endpoint authorization helper (F-1/F-5); finished production key/anchor custody design (F-4). |
+| **Security** | **8.5 / 10** | Global deny-by-default on KYC (F-1); OIDC step-up instead of forced logout (F-3); host allow-list for external BaseUrls (F-6); event-level actor binding if claiming production audit strength (F-7). |
+
+These scores assume PoC constraints. Against a **production banking** bar with no PoC exceptions, architecture would sit nearer **7.5** and security nearer **7** until F-4 and deployment controls (mTLS, secret store, WORM anchors) are real—not because the application design is weak, but because custody and network controls are still explicit residuals.
 
 ---
 
-## 6\. Recommended Fix Order (Ruthless Prioritization)
+## Summary
 
-1.  **Secure the local stack by default** (C1) — stop training developers on insecure defaults.
-2.  **Remove cleartext Dev secrets from the repository** (C2).
-3.  **Encrypt document storage** (C3) — this is customer PII/KYC data.
-4.  **Add resilience pipelines** to all outbound HTTP (C5).
-5.  **Externalize audit chain heads** (H4).
-6.  **Publish a living threat model** and map every control to it (H5).
-7.  **Harden metrics/health exposure** (C4).
-8.  Complete the authorization matrix tests and Playwright security suite (H3, H6).
-9.  Encode mTLS / network policy requirements as deploy-time contracts (H1, H2).
+The platform has closed almost every material issue from the previous review with real code, not documentation theatre. The threat model is living and mostly honest. What remains for a production go-ahead is:
 
----
+1.  Close the KYC global authorization gap (small, do now).
+2.  Prevent NestJS/.NET auth drift (tests or shared contract).
+3.  Finish key/anchor custody for documents and audit (design + ops, not more AES).
+4.  Prefer OIDC step-up over sign-out for MFA freshness.
 
-## 7\. Final Assessment
-
-You have built a **serious reference architecture**. The security thinking is visible in the code, not just in the documents. Previous review findings were largely closed with real engineering, not checkboxes.
-
-The remaining gaps are classic “last 20 % that takes 80 % of the effort” items: secrets hygiene, encryption at rest, network-level controls, resilience under partial failure, and audit integrity that survives a compromised database.
-
-Treat the current codebase as **architecture that has earned the right to be hardened**, not as something that is already production-ready. With the critical and high items above closed, this would be one of the more defensible distributed banking platforms a regulator would see.
-
-If you want a follow-up, I can produce:
-
--   a concrete threat-model skeleton mapped to the current components, or
--   a prioritized remediation backlog with acceptance criteria for each finding.
+Nothing found would justify blocking further PoC development. Nothing found is a free pass for a regulated production cutover without addressing F-1, F-2, and F-4.

@@ -62,6 +62,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 // ---------------------------------------------------------------- Authorization
 builder.Services.AddAuthorization(options =>
 {
+    // Deny by default: an endpoint without its own policy still needs an authenticated caller.
+    options.DenyAnonymousByDefault();
+
     // The reply courier's pinned machine identity: nobody else may hand replies to the saga.
     options.AddPolicy("PaymentsSagaReplySubscriberWrite", policy =>
     {
@@ -153,13 +156,15 @@ builder.Services.AddSingleton(sagaPolicy);
 // ---------------------------------------------------------------- The payment network (external)
 builder.Services.AddOptions<PaymentNetworkOptions>()
     .Bind(builder.Configuration.GetSection(PaymentNetworkOptions.SectionName))
-    .Validate(o => Uri.TryCreate(o.BaseUrl, UriKind.Absolute, out _), "PaymentNetwork:BaseUrl is not configured.")
+    .Validate(o => ExternalEndpoint.Problem(o.BaseUrl, o.PermittedHosts, builder.Environment.IsDevelopment()) is null,
+        "PaymentNetwork:BaseUrl must be an absolute http(s) URL; outside Development https, with its host listed in PaymentNetwork:PermittedHosts and not an internal address.")
     .Validate(o => !string.IsNullOrWhiteSpace(o.ApiKey), "PaymentNetwork:ApiKey is not configured.")
     .ValidateOnStart();
 
 builder.Services
     .AddHttpClient<IPaymentNetwork, PaymentNetworkClient>(PaymentNetworkClient.HttpClientName, (sp, client) =>
         client.BaseAddress = new Uri(sp.GetRequiredService<IOptions<PaymentNetworkOptions>>().Value.BaseUrl))
+    .WithoutRedirects()   // a 3xx never moves the call, and its API key, elsewhere
     // Resilience pipeline around every call to the payment network:
     //  - attempt timeout : a hung network is abandoned after 5 s
     //  - retry           : 2 retries with jittered exponential back-off - safe for this
@@ -253,7 +258,7 @@ app.Use(async (context, next) =>
 app.UseAuthorization();
 
 // Deny by default: every controller endpoint needs an authenticated caller, on top of its own policy.
-app.MapControllers().RequireAuthorization();
+app.MapEwpApiControllers();
 app.MapEwpHealthEndpoints();
 app.MapEwpMetricsEndpoint();   // Prometheus scrape (GET /metrics)
 

@@ -115,6 +115,9 @@ builder.Services
 
 builder.Services.AddAuthorization(options =>
 {
+    // Deny by default: an endpoint without its own policy still needs an authenticated caller.
+    options.DenyAnonymousByDefault();
+
     // WHY:
     // Scope authorization is the coarse-grained API boundary. The finer
     // RBAC/ABAC/ReBAC decisions will be introduced at the BFF/API boundary as
@@ -235,8 +238,8 @@ app.Use(async (context, next) =>
 
 app.UseAuthorization();
 
-app.MapControllers()
-    .RequireAuthorization("ApiScope");
+// Deny by default: every controller endpoint needs an authenticated caller, on top of its own policy.
+app.MapEwpApiControllers("ApiScope");
 
 app.MapEwpHealthEndpoints();
 app.MapEwpMetricsEndpoint();   // Prometheus scrape (GET /metrics)

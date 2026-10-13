@@ -69,6 +69,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization(options =>
 {
+    // Deny by default: an endpoint without its own policy still needs an authenticated caller.
+    options.DenyAnonymousByDefault();
+
     options.AddPolicy(AuditPolicies.View, policy => policy.RequireAuthenticatedUser().AddRequirements(new DelegatedAuditorRequirement("audit.view")));
     options.AddPolicy(AuditPolicies.Search, policy => policy.RequireAuthenticatedUser().AddRequirements(new DelegatedAuditorRequirement("audit.search")));
 });
@@ -110,7 +113,7 @@ app.UseEwpRateLimiting();
 app.UseAuthorization();
 
 // Deny by default: every endpoint needs an authenticated caller, on top of its own policy.
-app.MapControllers().RequireAuthorization();
+app.MapEwpApiControllers();
 app.MapEwpHealthEndpoints();
 app.MapEwpMetricsEndpoint();   // Prometheus scrape (GET /metrics)
 

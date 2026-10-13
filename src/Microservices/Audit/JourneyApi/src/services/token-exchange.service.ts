@@ -48,7 +48,9 @@ export class TokenExchangeService {
         signal: controller.signal,
       });
     } catch (error) {
-      throw new ServiceUnavailableException(`The identity provider is unavailable: ${(error as Error).message}`);
+      // The reason stays in this log: the caller learns only that the IDP is unavailable.
+      this.logger.warn(`Token exchange failed: ${(error as Error).message}`);
+      throw new ServiceUnavailableException('The identity provider is unavailable. Try again shortly.');
     } finally {
       clearTimeout(timer);
     }

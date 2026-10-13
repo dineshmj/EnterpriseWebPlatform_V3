@@ -56,13 +56,15 @@ async function callJourney<T>(
     if (response.ok) return { ok: true, data: (await response.json()) as T };
     if (response.status === 401) return { ok: false, signedOut: true, error: 'Your session has ended.' };
     if (response.status === 403) {
-      const problem = (await response.json().catch(() => null)) as { code?: string; message?: string } | null;
-      return { ok: false, error: problem?.code === 'mfa_required' && problem.message ? problem.message : 'You are not allowed to do this.' };
+      // Problem Details (RFC 9457): "code" says why, "detail" says what to do.
+      const problem = (await response.json().catch(() => null)) as { code?: string; detail?: string } | null;
+      return { ok: false, error: problem?.code === 'mfa_required' && problem.detail ? problem.detail : 'You are not allowed to do this.' };
     }
     if (response.status === 404) return { ok: false, error: 'Not available in this environment.' };
+    if (response.status === 429) return { ok: false, error: 'Too many requests. Wait a minute, then try again.' };
     if (response.status === 503) {
-      const problem = (await response.json().catch(() => null)) as { message?: string } | null;
-      return { ok: false, error: problem?.message ?? 'The operations service is unavailable. Try again shortly.' };
+      const problem = (await response.json().catch(() => null)) as { detail?: string } | null;
+      return { ok: false, error: problem?.detail ?? 'The operations service is unavailable. Try again shortly.' };
     }
     return { ok: false, error: 'The operations service is unavailable. Try again shortly.' };
   } catch {

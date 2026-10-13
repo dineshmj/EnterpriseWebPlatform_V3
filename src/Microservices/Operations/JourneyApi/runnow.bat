@@ -23,6 +23,9 @@ echo.
 
 echo [2/3] Configuring (DEVELOPMENT values only)...
 
+REM Development | Test | Production. Outside Development the API refuses to start with MFA off,
+REM and outside Development and Test with the simulators' switch on.
+set "OPERATIONS_JOURNEY_ENVIRONMENT=Development"
 set "OPERATIONS_JOURNEY_PORT=46382"
 set "OPERATIONS_JOURNEY_PUBLIC_ORIGIN=https://operations-journey.dev.localhost:46382"
 set "OPERATIONS_JOURNEY_IDP_AUTHORITY=https://idp.dev.localhost:46392"

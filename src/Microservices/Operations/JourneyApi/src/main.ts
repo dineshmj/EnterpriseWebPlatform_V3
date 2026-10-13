@@ -3,6 +3,8 @@ import { NestFactory } from '@nestjs/core';
 import type { NextFunction, Request, Response } from 'express';
 import { AppModule } from './app.module';
 import { loadOptions } from './configuration/journey-options';
+import { ProblemDetailsFilter } from './http/problem-details.filter';
+import { overallRateLimit, RateLimiter } from './http/rate-limit';
 
 /**
  * Operations Journey API (NestJS) - the customer's "Journey API" tier: an Experience / Edge API,
@@ -23,6 +25,10 @@ async function bootstrap() {
     res.setHeader('Cache-Control', 'no-store');
     next();
   });
+
+  // Errors as Problem Details (RFC 9457); an overall request limit before any token is checked.
+  app.useGlobalFilters(new ProblemDetailsFilter());
+  app.use(overallRateLimit(new RateLimiter()));
 
   // One log line per request: method, path without the query string, status, duration.
   app.use((req: Request, res: Response, next: NextFunction) => {

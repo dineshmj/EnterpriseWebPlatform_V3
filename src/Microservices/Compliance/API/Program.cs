@@ -59,6 +59,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 // ---------------------------------------------------------------- Authorization
 builder.Services.AddAuthorization(options =>
 {
+    // Deny by default: an endpoint without its own policy still needs an authenticated caller.
+    options.DenyAnonymousByDefault();
+
     // The subscriber's pinned machine identity: nobody else may open cases.
     options.AddPolicy("ComplianceCaseOpeningSubscriberWrite", policy =>
     {
@@ -107,7 +110,8 @@ builder.Services.AddScoped<ScreenDueCaseCommandHandler>();
 // ---------------------------------------------------------------- Screening provider (external)
 builder.Services.AddOptions<ScreeningProviderOptions>()
     .Bind(builder.Configuration.GetSection(ScreeningProviderOptions.SectionName))
-    .Validate(o => Uri.TryCreate(o.BaseUrl, UriKind.Absolute, out _), "ScreeningProvider:BaseUrl is not configured.")
+    .Validate(o => ExternalEndpoint.Problem(o.BaseUrl, o.PermittedHosts, builder.Environment.IsDevelopment()) is null,
+        "ScreeningProvider:BaseUrl must be an absolute http(s) URL; outside Development https, with its host listed in ScreeningProvider:PermittedHosts and not an internal address.")
     .Validate(o => !string.IsNullOrWhiteSpace(o.ApiKey), "ScreeningProvider:ApiKey is not configured.")
     .ValidateOnStart();
 
@@ -120,6 +124,7 @@ builder.Services.AddSingleton(sp =>
 builder.Services
     .AddHttpClient<IScreeningProvider, ScreeningProviderClient>(ScreeningProviderClient.HttpClientName, (sp, client) =>
         client.BaseAddress = new Uri(sp.GetRequiredService<IOptions<ScreeningProviderOptions>>().Value.BaseUrl))
+    .WithoutRedirects()   // a 3xx never moves the call, and its API key, elsewhere
     // Resilience pipeline around every call to the external provider:
     //  - attempt timeout : a hung provider is abandoned after 5 s
     //  - retry           : 2 retries with jittered exponential back-off (screening is a
@@ -203,7 +208,7 @@ app.Use(async (context, next) =>
 app.UseAuthorization();
 
 // Deny by default: every controller endpoint needs an authenticated caller, on top of its own policy.
-app.MapControllers().RequireAuthorization();
+app.MapEwpApiControllers();
 app.MapEwpHealthEndpoints();
 app.MapEwpMetricsEndpoint();   // Prometheus scrape (GET /metrics)
 

@@ -4,10 +4,20 @@ using EnterpriseWebPlatform.Audit.Api.Application;
 
 namespace EnterpriseWebPlatform.Audit.Api.Infrastructure;
 
-/// <summary>The latest verification of the chain, shared by the monitor and the health check.</summary>
+/// <summary>The latest verification of the chain and of its anchors, shared by the monitor and the health check.</summary>
 public sealed class AuditChainStatus
 {
     public AuditChainVerification? Latest { get; set; }
+
+    /// <summary>How often the monitor runs ("Audit:VerifyIntervalMinutes").</summary>
+    public TimeSpan Interval { get; set; } = TimeSpan.FromMinutes(10);
+
+    /// <summary>The newest entry anchored outside the database (the latest checkpoint's sequence).</summary>
+    public long AnchoredSequence { get; set; }
+
+    /// <summary>Checkpoint files now, and the most ever seen since start-up: fewer now means files went missing.</summary>
+    public int Checkpoints { get; set; }
+    public int MostCheckpointsSeen { get; set; }
 }
 
 /// <summary>
@@ -29,6 +39,7 @@ public sealed class AuditChainMonitor(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var interval = TimeSpan.FromMinutes(Math.Max(1, configuration.GetValue("Audit:VerifyIntervalMinutes", 10)));
+        status.Interval = interval;
         await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
 
         while (!stoppingToken.IsCancellationRequested)
@@ -52,6 +63,13 @@ public sealed class AuditChainMonitor(
                 }
                 else
                     logger.LogCritical("AUDIT CHAIN BROKEN at entry {Sequence}: {Problem}.", result.BrokenAtSequence, result.Problem);
+
+                var checkpoints = await anchors.ReadAllAsync(stoppingToken);
+                status.AnchoredSequence = checkpoints.Select(c => c.Sequence).DefaultIfEmpty(0).Max();
+                status.Checkpoints = checkpoints.Count;
+                status.MostCheckpointsSeen = Math.Max(status.MostCheckpointsSeen, checkpoints.Count);
+                if (status.Checkpoints < status.MostCheckpointsSeen)
+                    logger.LogCritical("AUDIT CHECKPOINTS MISSING: {Missing} checkpoint file(s) disappeared since start-up.", status.MostCheckpointsSeen - status.Checkpoints);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (Exception ex) { logger.LogError(ex, "Audit chain verification could not run."); }
@@ -61,21 +79,44 @@ public sealed class AuditChainMonitor(
     }
 }
 
-/// <summary>Readiness: Degraded when the chain is broken (the service still records, and must, so it is not taken out of service).</summary>
-public sealed class AuditChainHealthCheck(AuditChainStatus status) : IHealthCheck
+/// <summary>
+/// Readiness: Degraded (the service still records, and must, so it is not taken out of service) when
+///  - the chain is broken;
+///  - the verification is OVERDUE (more than two intervals and a minute since the last one: the
+///    monitor stopped, or the verification keeps failing);
+///  - the newest verified entry is NOT ANCHORED (writing the checkpoint failed);
+///  - checkpoint files went MISSING since start-up.
+/// The metrics carry the same figures, so an alert can fire on each.
+/// </summary>
+public sealed class AuditChainHealthCheck(AuditChainStatus status, TimeProvider time) : IHealthCheck
 {
     public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
         if (status.Latest is not { } latest)
             return Task.FromResult(HealthCheckResult.Healthy("Audit chain not verified yet."));
 
+        var age = time.GetUtcNow() - latest.VerifiedAt;
         var data = new Dictionary<string, object>
         {
             ["entriesVerified"] = latest.EntriesChecked,
-            ["brokenAtSequence"] = latest.BrokenAtSequence ?? 0L
+            ["brokenAtSequence"] = latest.BrokenAtSequence ?? 0L,
+            ["minutesSinceVerification"] = Math.Round(age.TotalMinutes, 1),
+            ["unanchoredEntries"] = Math.Max(0, latest.LastSequence - status.AnchoredSequence),
+            ["missingCheckpoints"] = status.MostCheckpointsSeen - status.Checkpoints
         };
-        return Task.FromResult(latest.Intact
-            ? HealthCheckResult.Healthy($"Audit chain intact ({latest.EntriesChecked} entries, verified {latest.VerifiedAt:u}).", data)
-            : HealthCheckResult.Degraded($"Audit chain broken at entry {latest.BrokenAtSequence}: {latest.Problem}.", data: data));
+
+        var problems = new List<string>();
+        if (!latest.Intact)
+            problems.Add($"Audit chain broken at entry {latest.BrokenAtSequence}: {latest.Problem}");
+        if (age > status.Interval * 2 + TimeSpan.FromMinutes(1))
+            problems.Add($"Audit chain verification overdue: last one {age.TotalMinutes:F0} min ago");
+        if (latest.Intact && latest.LastSequence > status.AnchoredSequence)
+            problems.Add($"Audit chain not anchored beyond entry {status.AnchoredSequence} (newest verified entry {latest.LastSequence})");
+        if (status.Checkpoints < status.MostCheckpointsSeen)
+            problems.Add($"{status.MostCheckpointsSeen - status.Checkpoints} audit checkpoint file(s) missing since start-up");
+
+        return Task.FromResult(problems.Count == 0
+            ? HealthCheckResult.Healthy($"Audit chain intact and anchored ({latest.EntriesChecked} entries, verified {latest.VerifiedAt:u}).", data)
+            : HealthCheckResult.Degraded(string.Join("; ", problems) + ".", data: data));
     }
 }
