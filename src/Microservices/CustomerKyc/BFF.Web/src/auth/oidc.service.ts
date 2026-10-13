@@ -39,10 +39,15 @@ export class OidcService {
     return this.clientPromise;
   }
 
+  /**
+   * silent: prompt=none in the Shell's frame. stepUp: prompt=login + acr_values=mfa - the IDP asks
+   * the signed-in person only for a fresh authenticator code (a risky action), in a small window.
+   */
   async authorizationUrl(
     res: Response,
     returnUrl: string,
     silent: boolean = false,
+    stepUp: boolean = false,
   ): Promise<string> {
     const client = await this.getClient();
     const state = generators.state();
@@ -60,7 +65,8 @@ export class OidcService {
       nonce,
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
-      ...(silent ? { prompt: 'none' } : {})
+      ...(silent ? { prompt: 'none' } : {}),
+      ...(stepUp ? { prompt: 'login', acr_values: 'mfa' } : {})
     });
   }
 

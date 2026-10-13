@@ -39,6 +39,33 @@ public sealed class AuthController : ControllerBase
         return Challenge(properties, "oidc");
     }
 
+    /// <summary>
+    /// Step-up for a risky action: opened by the MFE in a small window (the IDP's pages are never
+    /// framed). prompt=login + acr_values=mfa: the IDP asks the signed-in person only for a fresh
+    /// authenticator code, and this BFF's session gets tokens with a new auth_time. The window
+    /// then lands on step-up-done, which the MFE recognises and closes.
+    /// </summary>
+    [HttpGet("step-up")]
+    [Authorize]
+    public IActionResult StepUp()
+    {
+        var properties = new AuthenticationProperties { RedirectUri = StepUpDonePath };
+        properties.Items["prompt"] = "login";
+        properties.Items["acr_values"] = "mfa";
+        return Challenge(properties, "oidc");
+    }
+
+    public const string StepUpDonePath = "/api/auth/step-up-done";
+
+    [HttpGet("step-up-done")]
+    [Authorize]
+    public ContentResult StepUpDone() => new()
+    {
+        ContentType = "text/html; charset=utf-8",
+        Content = "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Confirmed</title></head>" +
+                  "<body><p>Confirmed. You can close this window; the action continues.</p></body></html>"
+    };
+
     [HttpGet("user")]
     [AllowAnonymous]
     public IActionResult UserInfo()

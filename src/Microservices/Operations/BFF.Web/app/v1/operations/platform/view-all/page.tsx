@@ -11,6 +11,7 @@ import { Select } from '@/app/components/ui/form';
 import {
   type Behaviour, type ComponentHealth, type HealthStatus, type PlatformHealth, type SimulatorState,
 } from '@/lib/operations-types';
+import { confirmWithAuthenticator, NOT_CONFIRMED } from '@/lib/step-up';
 import { changeSimulator, loadPlatformHealth, loadSimulators } from '../../actions';
 
 const REFRESH_MS = 10_000;
@@ -64,7 +65,17 @@ export default function PlatformHealthPage() {
   const change = async (simulator: SimulatorState, behaviour: Behaviour) => {
     setBusy(simulator.key);
     setSimulatorError(null);
-    const result = await changeSimulator(simulator.key, behaviour);
+    let result = await changeSimulator(simulator.key, behaviour);
+    // A change needs a recent authenticator code: confirm it in a small window, then once more.
+    if (!result.ok && result.stepUp) {
+      try {
+        result = await confirmWithAuthenticator()
+          ? await changeSimulator(simulator.key, behaviour)
+          : { ok: false, error: NOT_CONFIRMED };
+      } catch (e) {
+        result = { ok: false, error: e instanceof Error ? e.message : NOT_CONFIRMED };
+      }
+    }
     setBusy(null);
     if (result.ok) { setSimulators(result.data); void refresh(); return; }
     if (result.signedOut) { signInAgain(); return; }

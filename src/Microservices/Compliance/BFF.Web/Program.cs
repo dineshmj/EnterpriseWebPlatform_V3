@@ -135,6 +135,11 @@ builder.Services
             {
                 context.ProtocolMessage.Prompt = prompt;
             }
+            // Step-up (AuthController.StepUp): ask the IDP for a fresh authenticator code.
+            if (context.Properties.Items.TryGetValue("acr_values", out var acrValues))
+            {
+                context.ProtocolMessage.AcrValues = acrValues;
+            }
             return Task.CompletedTask;
         };
     });

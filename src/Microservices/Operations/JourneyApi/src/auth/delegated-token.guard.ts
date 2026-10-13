@@ -95,7 +95,7 @@ export class DelegatedTokenGuard implements CanActivate {
     if (requirement.stepUp && this.options.mfaEnabled && !recentMfa(payload, this.options.mfaMaxAgeMinutes)) {
       throw new ForbiddenException({
         code: 'mfa_required',
-        message: 'This change needs a recent sign-in with your authenticator code: sign out, then sign in again and enter the code.',
+        message: 'This change needs a recent confirmation with your authenticator code. Enter the code in the window that opens, then the change continues.',
       });
     }
 

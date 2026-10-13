@@ -6,9 +6,18 @@
 
 <section class="card" aria-labelledby="mfa-title">
     <header class="card-head">
-        <p class="eyebrow">Two-step sign-in</p>
-        <h1 class="card-title" id="mfa-title">Enter your code</h1>
-        <p class="card-lead">Open <strong>Google Authenticator</strong> and enter the 6-digit code shown for <strong>EWP V3 Demo</strong>.</p>
+        @if (Model.StepUp)
+        {
+            <p class="eyebrow">Confirm it's you</p>
+            <h1 class="card-title" id="mfa-title">Enter your code to continue</h1>
+            <p class="card-lead">The action you started needs a recent confirmation. Open <strong>Google Authenticator</strong> and enter the 6-digit code shown for <strong>EWP V3 Demo</strong>. You stay signed in.</p>
+        }
+        else
+        {
+            <p class="eyebrow">Two-step sign-in</p>
+            <h1 class="card-title" id="mfa-title">Enter your code</h1>
+            <p class="card-lead">Open <strong>Google Authenticator</strong> and enter the 6-digit code shown for <strong>EWP V3 Demo</strong>.</p>
+        }
     </header>
 
     <partial name="_ValidationSummary" />
@@ -23,7 +32,7 @@
         <p class="card-lead">Lost your phone? Enter one of your recovery codes instead.</p>
 
         <div class="actions">
-            <button class="btn btn-primary btn-block">Verify and sign in</button>
+            <button class="btn btn-primary btn-block">@(Model.StepUp ? "Confirm" : "Verify and sign in")</button>
             <a class="btn btn-ghost btn-block" asp-page="/Account/Login">Cancel</a>
         </div>
     </form>

@@ -1,4 +1,7 @@
 // After a silent sign-in the user comes back to the same page, query included (e.g. ?paymentId=).
+
+import { confirmWithAuthenticator, needsStepUp, NOT_CONFIRMED } from './step-up';
+
 export async function getJson<T>(url: string): Promise<T> {
   const response = await fetch(url, { credentials: 'include', cache: 'no-store' });
   if (response.status === 401) {
@@ -19,7 +22,7 @@ export async function getCsrfToken(): Promise<string> {
   return body.token;
 }
 
-export async function postJson<T>(url: string, body: unknown, extraHeaders: Record<string, string> = {}): Promise<T> {
+export async function postJson<T>(url: string, body: unknown, extraHeaders: Record<string, string> = {}, afterStepUp = false): Promise<T> {
   const csrfToken = await getCsrfToken();
   const response = await fetch(url, {
     method: 'POST',
@@ -37,6 +40,11 @@ export async function postJson<T>(url: string, body: unknown, extraHeaders: Reco
     throw new Error('Authentication required.');
   }
   const text = await response.text();
+  // A risky action whose authenticator code is too old: confirm it in a small window, then once more.
+  if (!afterStepUp && needsStepUp(response.status, text)) {
+    if (await confirmWithAuthenticator()) return postJson<T>(url, body, extraHeaders, true);
+    throw new Error(NOT_CONFIRMED);
+  }
   if (!response.ok) throw new Error(errorMessage(text, response.status));
   return (text ? JSON.parse(text) : undefined) as T;
 }

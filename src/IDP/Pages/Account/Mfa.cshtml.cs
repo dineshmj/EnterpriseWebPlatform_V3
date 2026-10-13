@@ -30,14 +30,25 @@ public sealed class MfaModel(
     [BindProperty]
     public string Code { get; set; } = string.Empty;
 
-    public IActionResult OnGet() =>
-        PendingSignIn.Load(HttpContext, dataProtection, time) is null ? RedirectToPage("/Account/Login") : Page();
+    /// <summary>A signed-in person confirming a risky action (no password was asked).</summary>
+    public bool StepUp { get; private set; }
+
+    public IActionResult OnGet()
+    {
+        var pending = PendingSignIn.Load(HttpContext, dataProtection, time);
+        if (pending is null)
+            return RedirectToPage("/Account/Login");
+
+        StepUp = pending.StepUp;
+        return Page();
+    }
 
     public async Task<IActionResult> OnPost()
     {
         var pending = PendingSignIn.Load(HttpContext, dataProtection, time);
         if (pending is null)
             return RedirectToPage("/Account/Login");
+        StepUp = pending.StepUp;
 
         var user = await users.FindBySubjectIdAsync(pending.SubjectId, HttpContext.RequestAborted);
         if (user is null || !user.IsActive)

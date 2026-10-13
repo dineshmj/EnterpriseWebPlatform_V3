@@ -34,6 +34,27 @@ export class AuthController {
     return res.redirect(url);
   }
 
+  /**
+   * Step-up for a risky action, opened by the MFE in a small window (the IDP's pages are never
+   * framed): the IDP asks only for a fresh authenticator code, and the new session's tokens carry
+   * a new auth_time. The window then lands on step-up-done, which the MFE recognises and closes.
+   */
+  @Get('step-up')
+  async stepUp(@Res() res: Response) {
+    const url = await this.oidc.authorizationUrl(res, AuthController.stepUpDonePath, false, true);
+    return res.redirect(url);
+  }
+
+  static readonly stepUpDonePath = '/api/auth/step-up-done';
+
+  @Get('step-up-done')
+  stepUpDone(@Res() res: Response) {
+    res.setHeader('Cache-Control', 'no-store');
+    return res.type('html').send(
+      '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Confirmed</title></head>' +
+      '<body><p>Confirmed. You can close this window; the action continues.</p></body></html>');
+  }
+
   @Get('callback')
   async callback(@Req() req: Request, @Res() res: Response) {
     const returnUrl = await this.oidc.handleCallback(req, res);

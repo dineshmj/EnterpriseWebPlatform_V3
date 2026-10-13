@@ -65,6 +65,21 @@ test('Sophie submits, Ethan sees the KYC case', async ({ signedInAs }) => {
 
 A sign-in is saved to `.auth\<user>.json` and reused for 20 minutes (`EWP_SESSION_REUSE_MINUTES`); if the saved session has ended (signed out, BFF state re-created), the person signs in again automatically.
 
+### MFA tests
+
+`tests\40-security\mfa` runs only with MFA switched on; otherwise it is skipped. The tests play Google Authenticator themselves: they enrol `daniel.ops` from the setup key the IDP shows (kept in `.auth\mfa-daniel.ops.key`) and compute each code. Before running them:
+
+1. Re-create the IDP database (`.\ps\Reset.ps1`, option 1), so `daniel.ops` is not enrolled with a phone. Do not enrol him by hand afterwards.
+2. Switch MFA on and shorten the step-up age (Development settings; put them back afterwards):
+   - IDP `appsettings.Development.json`: `"Mfa": { "Enabled": true }`
+   - Payments, Accounts, Compliance and KYC APIs `appsettings.Development.json`: `"Mfa": { "Enabled": true, "StepUpMaxAgeMinutes": 1 }`
+   - Operations Journey API `runnow.bat`: `OPERATIONS_MFA_ENABLED=true`, `OPERATIONS_MFA_MAX_AGE_MINUTES=1`
+3. Restart the IDP, those APIs and the Node services.
+4. `tst\playwright\.env`: `EWP_MFA_ENABLED=true` and `EWP_STEP_UP_MAX_AGE_MINUTES=1`.
+5. Run: `npx playwright test tests/40-security/mfa --project=security` (about 4 minutes: the step-up age is waited out, and each code needs a fresh 30-second step).
+
+With MFA on, the other tests stop at the code page - switch it off again for them.
+
 ### Conventions
 
 - Arrange / Act / Assert sections in every test; multi-step walk-throughs use `test.step` so each step is named in the report.

@@ -32,8 +32,10 @@ export interface PendingSignIn {
  * The authorization request: code + PKCE. Sign-in asks only for identity and refresh: the
  * token this BFF holds is good for nothing but being exchanged (it carries no API scope).
  * prompt=none in the Shell's frame: the IDP's SSO session signs the person in silently.
+ * stepUp: prompt=login + acr_values=mfa - the IDP asks the signed-in person only for a fresh
+ * authenticator code (before a risky change), in a small window opened by the page.
  */
-export async function authorizationRequest(returnUrl: string, silent: boolean): Promise<{ url: string; pending: PendingSignIn }> {
+export async function authorizationRequest(returnUrl: string, silent: boolean, stepUp = false): Promise<{ url: string; pending: PendingSignIn }> {
   const client = await oidcClient();
   const pending: PendingSignIn = {
     state: generators.state(),
@@ -49,6 +51,7 @@ export async function authorizationRequest(returnUrl: string, silent: boolean): 
     code_challenge: generators.codeChallenge(pending.codeVerifier),
     code_challenge_method: 'S256',
     ...(silent ? { prompt: 'none' } : {}),
+    ...(stepUp ? { prompt: 'login', acr_values: 'mfa' } : {}),
   });
   return { url, pending };
 }

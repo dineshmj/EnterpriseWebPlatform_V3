@@ -32,4 +32,4 @@ export interface SimulatorState {
 
 export type ActionResult<T> =
   | { ok: true; data: T }
-  | { ok: false; error: string; signedOut?: boolean };
+  | { ok: false; error: string; signedOut?: boolean; stepUp?: boolean };

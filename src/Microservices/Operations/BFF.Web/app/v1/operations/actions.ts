@@ -58,7 +58,9 @@ async function callJourney<T>(
     if (response.status === 403) {
       // Problem Details (RFC 9457): "code" says why, "detail" says what to do.
       const problem = (await response.json().catch(() => null)) as { code?: string; detail?: string } | null;
-      return { ok: false, error: problem?.code === 'mfa_required' && problem.detail ? problem.detail : 'You are not allowed to do this.' };
+      return problem?.code === 'mfa_required'
+        ? { ok: false, stepUp: true, error: problem.detail ?? 'This change needs a recent confirmation with your authenticator code.' }
+        : { ok: false, error: 'You are not allowed to do this.' };
     }
     if (response.status === 404) return { ok: false, error: 'Not available in this environment.' };
     if (response.status === 429) return { ok: false, error: 'Too many requests. Wait a minute, then try again.' };

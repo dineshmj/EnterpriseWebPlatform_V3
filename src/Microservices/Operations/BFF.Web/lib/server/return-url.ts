@@ -4,6 +4,9 @@
  */
 export const HEALTH_PAGE = '/v1/operations/platform/view-all';
 
+/** Where the IDP sends the step-up window back to (fixed: never taken from the request). */
+export const STEP_UP_DONE_PATH = '/api/auth/step-up-done';
+
 export function safeReturnUrl(_requested: string | null | undefined): string {
   return HEALTH_PAGE;
 }

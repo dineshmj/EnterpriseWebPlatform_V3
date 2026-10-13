@@ -18,6 +18,7 @@ namespace EnterpriseWebPlatform.IdentityServer.Security;
 /// The state between "password correct" and "signed in" while MFA is on: who, where to go
 /// afterwards, and - during enrolment - the new secret. Kept in a short-lived (5 minutes),
 /// encrypted, HttpOnly cookie; the person is NOT signed in until the code is verified.
+/// StepUp: an already signed-in person confirming a risky action with a fresh code (no password).
 /// </summary>
 public sealed record PendingSignIn(
     string SubjectId,
@@ -25,7 +26,8 @@ public sealed record PendingSignIn(
     string ReturnUrl,
     DateTimeOffset ExpiresAt,
     string? EnrolmentSecret = null,
-    bool EnrolmentConfirmed = false)
+    bool EnrolmentConfirmed = false,
+    bool StepUp = false)
 {
     private const string CookieName = "__Host-ewp.mfa.pending";
     private const string Purpose = "EnterpriseWebPlatform.IdentityServer.Mfa.PendingSignIn.v1";

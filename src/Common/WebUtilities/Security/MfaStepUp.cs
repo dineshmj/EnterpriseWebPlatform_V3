@@ -107,8 +107,8 @@ public static class MfaStepUp
                     title = "Recent authenticator code required",
                     status = 403,
                     code = ErrorCode,
-                    error = "This action needs a recent sign-in with your authenticator code: sign out, then sign in again and enter the code from Google Authenticator.",
-                    detail = "Risky actions need a sign-in with the authenticator code within the last few minutes. Sign out, then sign in again and enter the code from Google Authenticator."
+                    error = "This action needs a recent confirmation with your authenticator code. Enter the code in the window that opens, then the action continues.",
+                    detail = "Risky actions need a confirmation with the authenticator code within the last few minutes. The screen opens a window where you enter the code from Google Authenticator; you stay signed in."
                 }));
                 return;
             }

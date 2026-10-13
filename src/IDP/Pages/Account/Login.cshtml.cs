@@ -87,8 +87,35 @@ public sealed class LoginModel : PageModel
 
         ClientName = DisplayNameOf(context);
 
+        // Step-up (RFC 9470 style): a client asks for a FRESH authenticator code ("acr_values=mfa",
+        // with prompt=login) for a person who is already signed in here - typically before a risky
+        // action whose last MFA sign-in is too old. The password is not asked again; only the code
+        // is, and a new sign-in (new auth_time, amr mfa) is issued. Anyone else signs in fully.
+        if (_mfaOptions.Enabled &&
+            context?.AcrValues.Contains(StepUpAcr) == true &&
+            User.Identity?.IsAuthenticated == true &&
+            User.FindFirst("sub")?.Value is { } subjectId)
+        {
+            var user = await _userRepository.FindBySubjectIdAsync(subjectId, HttpContext.RequestAborted);
+            if (user is { IsActive: true } && await _mfa.IsEnrolledAsync(user.Id, HttpContext.RequestAborted))
+            {
+                new PendingSignIn(
+                    subjectId,
+                    RememberLogin: false,
+                    Input.ReturnUrl,
+                    _time.GetUtcNow().Add(PendingSignIn.Lifetime),
+                    StepUp: true)
+                    .Save(HttpContext, _dataProtection);
+
+                return RedirectToPage("/Account/Mfa");
+            }
+        }
+
         return Page();
     }
+
+    /// <summary>The "acr_values" a client sends to ask for a fresh authenticator code.</summary>
+    public const string StepUpAcr = "mfa";
 
     public async Task<IActionResult> OnPost()
     {
