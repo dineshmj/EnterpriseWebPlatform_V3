@@ -49,6 +49,42 @@ public interface IPaymentsUnitOfWork
     void DiscardChanges();
 }
 
+/// <summary>A message the Outbox relay gave up on (PARKED), as operations see it.</summary>
+public sealed record ParkedOutboxMessage(
+    Guid MessageId,
+    string EventType,
+    string AggregateId,
+    string? PaymentNumber,
+    long? PaymentId,
+    DateTimeOffset OccurredAt,
+    int AttemptCount,
+    DateTimeOffset? LastAttemptAt,
+    string? LastError,
+    int HeldBack,
+    int RedriveCount,
+    DateTimeOffset? LastRedrivenAt,
+    string? LastRedrivenBy,
+    string? LastRedriveReason);
+
+/// <summary>
+/// Parked Outbox messages: the list for operations, and the resend - the SAME message (same
+/// id) goes back to the relay with fresh attempts, so a consumer that did receive an earlier
+/// attempt drops it in its Inbox.
+/// </summary>
+public interface IParkedOutbox
+{
+    Task<IReadOnlyList<ParkedOutboxMessage>> ListAsync(CancellationToken cancellationToken);
+
+    /// <summary>The message's aggregate (the PaymentRef), parked or not; null when it does not exist.</summary>
+    Task<string?> FindAggregateIdAsync(Guid messageId, CancellationToken cancellationToken);
+
+    /// <summary>Locks the message until the transaction ends; null when it does not exist or is not parked.</summary>
+    Task<ParkedOutboxMessage?> LockParkedAsync(Guid messageId, CancellationToken cancellationToken);
+
+    /// <summary>Hands the locked message back to the relay (saved with the unit of work).</summary>
+    Task ResendAsync(Guid messageId, string byLanId, string reason, DateTimeOffset now, CancellationToken cancellationToken);
+}
+
 /// <summary>Inbox (idempotent consumer): recorded in the same transaction as the change it caused.</summary>
 public interface IInboxStore
 {

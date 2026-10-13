@@ -106,6 +106,25 @@ export interface ProcessingOverview {
   items: ProcessingItem[];
 }
 
+/** A message the Payments Outbox relay gave up on (PARKED); operations may resend it. */
+export interface ParkedMessage {
+  messageId: string;
+  eventType: string;
+  aggregateId: string;
+  paymentNumber: string | null;
+  paymentId: number | null;
+  occurredAt: string;
+  attemptCount: number;
+  lastAttemptAt: string | null;
+  lastError: string | null;
+  /** Later messages of the same payment waiting behind this one (per-payment order). */
+  heldBack: number;
+  redriveCount: number;
+  lastRedrivenAt: string | null;
+  lastRedrivenBy: string | null;
+  lastRedriveReason: string | null;
+}
+
 /** A customer's paying account (from Accounts), with what is available now. */
 export interface PayerAccount {
   customerNumber: string;

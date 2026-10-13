@@ -422,6 +422,15 @@ public sealed class PaymentSaga : AggregateRoot
         SendFundsCommand(ReleaseFundsCommand, payment, policy, now);
     }
 
+    /// <summary>
+    /// Operations resent one of the payment's messages that the Outbox relay had PARKED (the
+    /// broker could not take it). The saga's state does not change - the message simply goes
+    /// out again, under its own id - but the payment's timeline says who did it and why. The
+    /// saga's Version stays as it is, so a network call in flight still records its answer.
+    /// </summary>
+    public void RecordMessageResent(Guid messageId, string eventType, string operatorLabel, string reason, DateTimeOffset now) =>
+        Record(now, "MESSAGE_RESENT", $"{operatorLabel} resent the parked {eventType} message: {reason}", messageId);
+
     // ------------------------------------------------------------------ internals
 
     private void BeginCompensation(Payment payment, PaymentStatus outcome, string code, string reason, SagaPolicy policy, DateTimeOffset now)

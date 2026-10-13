@@ -168,7 +168,17 @@ CREATE TABLE outbox_messages (
     published_at TIMESTAMPTZ NULL,
     attempt_count INTEGER NOT NULL DEFAULT 0,
     last_attempt_at TIMESTAMPTZ NULL,
-    last_error TEXT NULL
+    last_error TEXT NULL,
+
+    -- Resend by operations after the relay PARKED the message (Payments:Outbox:MaxAttempts):
+    -- how often, when, by whom (LAN ID) and why. The message keeps its id, so consumers'
+    -- inboxes drop it if an earlier attempt did arrive.
+    redrive_count INTEGER NOT NULL DEFAULT 0,
+    last_redriven_at TIMESTAMPTZ NULL,
+    last_redriven_by VARCHAR(200) NULL,
+    last_redrive_reason VARCHAR(500) NULL,
+
+    CONSTRAINT ck_payments_outbox_redrive CHECK (redrive_count >= 0 AND (redrive_count = 0) = (last_redriven_at IS NULL))
 );
 
 CREATE UNIQUE INDEX ux_payments_outbox_sequence ON outbox_messages (sequence);

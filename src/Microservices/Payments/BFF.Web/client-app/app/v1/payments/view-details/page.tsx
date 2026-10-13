@@ -349,6 +349,7 @@ function timelineLook(kind: string) {
     case 'REPLY_RECEIVED':
       return { icon: Inbox, tone: 'text-brand-700' };
     case 'RETRY':
+    case 'MESSAGE_RESENT':
       return { icon: Undo2, tone: 'text-warning-700' };
     case 'REPLY_IGNORED':
       return { icon: Clock, tone: 'text-ink-faint' };

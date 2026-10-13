@@ -15,6 +15,8 @@ public sealed record PayeeConfirmationBody(string? Bsb, string? AccountNumber, s
 
 public sealed record PaymentDecisionBody(string? Remarks);
 
+public sealed record ResendParkedMessageBody(string? Reason);
+
 /// <summary>
 /// The Payments MFE's API. A thin, explicit facade: the BFF forwards each request with the
 /// staff member's own access token and relays the API's answer. It holds no business
@@ -87,6 +89,19 @@ public sealed class PaymentsApiController(
     [HttpGet("payments/processing")]
     public Task<IActionResult> GetProcessing(CancellationToken cancellationToken = default) =>
         SendAsync(PaymentsBffOptions.PaymentsApiClient, new HttpRequestMessage(HttpMethod.Get, "/v1/payments/processing"), cancellationToken);
+
+    /// <summary>Messages the Payments Outbox relay parked (operations, outbox.view).</summary>
+    [HttpGet("payments/outbox/parked")]
+    public Task<IActionResult> GetParkedMessages(CancellationToken cancellationToken = default) =>
+        SendAsync(PaymentsBffOptions.PaymentsApiClient, new HttpRequestMessage(HttpMethod.Get, "/v1/payments/outbox/parked"), cancellationToken);
+
+    /// <summary>Operations resend a parked message (workflow.reprocess, a reason, recent MFA - checked by the Payments API).</summary>
+    [HttpPost("payments/outbox/{messageId:guid}/resend")]
+    [ValidateAntiForgeryToken]
+    public Task<IActionResult> ResendParkedMessage(Guid messageId, [FromBody] ResendParkedMessageBody? body, CancellationToken cancellationToken = default) =>
+        SendAsync(PaymentsBffOptions.PaymentsApiClient,
+            new HttpRequestMessage(HttpMethod.Post, $"/v1/payments/outbox/{messageId}/resend") { Content = JsonContent.Create(new ResendParkedMessageBody(body?.Reason)) },
+            cancellationToken);
 
     [HttpGet("payments/policy")]
     public Task<IActionResult> GetPolicy(CancellationToken cancellationToken = default) =>

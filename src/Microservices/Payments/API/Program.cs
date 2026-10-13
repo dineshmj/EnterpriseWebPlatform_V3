@@ -72,9 +72,9 @@ builder.Services.AddAuthorization(options =>
     });
 
     // Staff policies: scope for the kind of operation + any of the permissions + a branch.
-    // Step-up (MFA): a payments officer's decision and operations' "Retry release" need a sign-in with the authenticator code while "Mfa:Enabled"
+    // Step-up (MFA): a payments officer's decision and operations' "Retry release" and "Resend" need a sign-in with the authenticator code while "Mfa:Enabled"
     // is true (the token's amr contains "mfa"); with MFA off, nothing changes.
-    string[] stepUpPolicies = ["PaymentApprove", "PaymentReject", "PaymentRetryRelease"];
+    string[] stepUpPolicies = ["PaymentApprove", "PaymentReject", "PaymentRetryRelease", "PaymentOutboxResend"];
 
     void AddStaffPolicy(string name, string scope, params string[] anyOfPermissions) =>
         options.AddPolicy(name, policy =>
@@ -91,6 +91,9 @@ builder.Services.AddAuthorization(options =>
     // An auditor only through the Audit Journey API (PaymentsStaffAuthorizationHandler): never the Payments screens.
     AddStaffPolicy("PaymentView", PaymentsApiScopesRequired.PAYMENTS_READ, "payment.view", "payment.initiate", "workflow.view", "payment.history.view");
     AddStaffPolicy("PaymentRetryRelease", PaymentsApiScopesRequired.PAYMENTS_WRITE, "workflow.retry");
+    // Parked Outbox messages: operations see them (outbox.view) and resend one (workflow.reprocess).
+    AddStaffPolicy("PaymentOutboxView", PaymentsApiScopesRequired.PAYMENTS_READ, "outbox.view");
+    AddStaffPolicy("PaymentOutboxResend", PaymentsApiScopesRequired.PAYMENTS_WRITE, "workflow.reprocess");
     AddStaffPolicy("PaymentApprove", PaymentsApiScopesRequired.PAYMENTS_WRITE, "payment.approve");
     AddStaffPolicy("PaymentReject", PaymentsApiScopesRequired.PAYMENTS_WRITE, "payment.reject");
 });
@@ -110,6 +113,8 @@ builder.Services.AddScoped<HandleSagaReplyCommandHandler>();
 builder.Services.AddScoped<RunDueSagaStepCommandHandler>();
 builder.Services.AddScoped<DecidePaymentCommandHandler>();
 builder.Services.AddScoped<RetryReleaseCommandHandler>();
+builder.Services.AddScoped<IParkedOutbox, ParkedOutbox>();
+builder.Services.AddScoped<ResendParkedMessageCommandHandler>();
 
 // The approval tier and the saga's limits are configuration, never constants in a screen.
 // Financial controls fail closed: a missing or blank setting stops the start-up instead of
@@ -182,6 +187,14 @@ builder.Services.AddHostedService<SagaStepRunner>();
 // ---------------------------------------------------------------- Outbox relay (in-process)
 builder.Services.AddKafkaOptions(builder.Configuration);   // validated at start-up
 builder.Services.AddSingleton<PaymentsKafkaProducer>();
+var outboxPolicy = new OutboxPolicy(
+    builder.Configuration.GetValue("Payments:Outbox:MaxAttempts", 10),
+    builder.Configuration.GetValue("Payments:Outbox:BaseDelaySeconds", 5.0));
+if (outboxPolicy.MaxAttempts is < 1 or > 50 || outboxPolicy.BaseDelaySeconds is < 0.5 or > 300)
+{
+    throw new InvalidOperationException("Payments:Outbox needs MaxAttempts 1-50 and BaseDelaySeconds 0.5-300.");
+}
+builder.Services.AddSingleton(outboxPolicy);
 builder.Services.AddScoped<PaymentsOutboxPublisher>();
 builder.Services.AddKeyedSingleton<LoopHeartbeat>(PaymentsOutboxPublisherHostedService.HeartbeatKey);
 builder.Services.AddHostedService<PaymentsOutboxPublisherHostedService>();
@@ -205,7 +218,7 @@ builder.Services.AddHealthChecks()
         HealthStatus.Unhealthy, [HealthEndpoints.LiveTag]))
     .AddDbContextCheck<PaymentsDbContext>("database", tags: [HealthEndpoints.ReadyTag])
     .Add(new HealthCheckRegistration("outbox-backlog",
-        sp => new OutboxBacklogHealthCheck(ct => PaymentsOutboxPublisher.GetBacklogAsync(sp.GetRequiredService<PaymentsDbContext>(), ct),
+        sp => new OutboxBacklogHealthCheck(ct => PaymentsOutboxPublisher.GetBacklogAsync(sp.GetRequiredService<PaymentsDbContext>(), outboxPolicy.MaxAttempts, ct),
             TimeSpan.FromMinutes(2)),
         HealthStatus.Degraded, [HealthEndpoints.ReadyTag]))
     .Add(new HealthCheckRegistration("saga-backlog",

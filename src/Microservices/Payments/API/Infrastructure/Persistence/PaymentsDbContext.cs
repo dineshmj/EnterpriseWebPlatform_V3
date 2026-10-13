@@ -217,6 +217,10 @@ public sealed class PaymentsDbContext(DbContextOptions<PaymentsDbContext> option
             e.Property(x => x.AttemptCount).HasColumnName("attempt_count").IsRequired();
             e.Property(x => x.LastAttemptAt).HasColumnName("last_attempt_at");
             e.Property(x => x.LastError).HasColumnName("last_error");
+            e.Property(x => x.RedriveCount).HasColumnName("redrive_count").IsRequired();
+            e.Property(x => x.LastRedrivenAt).HasColumnName("last_redriven_at");
+            e.Property(x => x.LastRedrivenBy).HasColumnName("last_redriven_by").HasMaxLength(200);
+            e.Property(x => x.LastRedriveReason).HasColumnName("last_redrive_reason").HasMaxLength(500);
         });
 
         modelBuilder.Entity<StaffMember>(e =>
@@ -285,4 +289,10 @@ public sealed class OutboxMessage
     public int AttemptCount { get; set; }
     public DateTimeOffset? LastAttemptAt { get; set; }
     public string? LastError { get; set; }
+
+    /// <summary>How often operations resent the message after it was parked; when, by whom (LAN ID) and why the last time.</summary>
+    public int RedriveCount { get; set; }
+    public DateTimeOffset? LastRedrivenAt { get; set; }
+    public string? LastRedrivenBy { get; set; }
+    public string? LastRedriveReason { get; set; }
 }

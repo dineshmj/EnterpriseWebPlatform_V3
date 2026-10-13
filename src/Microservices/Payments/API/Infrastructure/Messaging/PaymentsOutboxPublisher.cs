@@ -31,6 +31,13 @@ public sealed class PaymentsKafkaProducer(Microsoft.Extensions.Options.IOptions<
 }
 
 /// <summary>
+/// How hard the relay tries before it PARKS a message ("Payments:Outbox"): MaxAttempts publish
+/// attempts, the n-th after BaseDelaySeconds × 2^(n-1). A parked message stays unpublished and
+/// holds back its payment's later messages (per-payment order) until operations resend it.
+/// </summary>
+public sealed record OutboxPolicy(int MaxAttempts, double BaseDelaySeconds);
+
+/// <summary>
 /// Relays committed Payments Outbox rows to Kafka - the saga's commands to
 /// accounts.commands and the payments' outcomes to payments.payment.events - with the
 /// platform's relay guarantees: FOR UPDATE SKIP LOCKED (multi-instance safe), per-payment
@@ -39,10 +46,11 @@ public sealed class PaymentsKafkaProducer(Microsoft.Extensions.Options.IOptions<
 public sealed class PaymentsOutboxPublisher(
     PaymentsDbContext db,
     PaymentsKafkaProducer kafka,
+    OutboxPolicy policy,
     ILogger<PaymentsOutboxPublisher> logger)
 {
-    public const int MaxAttempts = 10;
-    private const double BaseDelaySeconds = 5;
+    private int MaxAttempts => policy.MaxAttempts;
+    private double BaseDelaySeconds => policy.BaseDelaySeconds;
     private const int BatchSize = 50;
 
     private static readonly Dictionary<string, string> TopicByEventType = new(StringComparer.Ordinal)
@@ -60,13 +68,13 @@ public sealed class PaymentsOutboxPublisher(
         [PaymentsMessageMapper.PaymentCompensationFailed] = KafkaTopicNames.PaymentEvents
     };
 
-    public static async Task<OutboxBacklog> GetBacklogAsync(PaymentsDbContext db, CancellationToken ct)
+    public static async Task<OutboxBacklog> GetBacklogAsync(PaymentsDbContext db, int maxAttempts, CancellationToken ct)
     {
         var rows = await db.Database.SqlQuery<OutboxBacklog>($"""
             SELECT
-                count(*) FILTER (WHERE attempt_count >= {MaxAttempts}) AS "Parked",
-                count(*) FILTER (WHERE attempt_count < {MaxAttempts}) AS "Pending",
-                EXTRACT(EPOCH FROM now() - min(occurred_at) FILTER (WHERE attempt_count < {MaxAttempts}))::float8 AS "OldestPendingSeconds"
+                count(*) FILTER (WHERE attempt_count >= {maxAttempts}) AS "Parked",
+                count(*) FILTER (WHERE attempt_count < {maxAttempts}) AS "Pending",
+                EXTRACT(EPOCH FROM now() - min(occurred_at) FILTER (WHERE attempt_count < {maxAttempts}))::float8 AS "OldestPendingSeconds"
             FROM outbox_messages
             WHERE published_at IS NULL
             """).ToListAsync(ct);

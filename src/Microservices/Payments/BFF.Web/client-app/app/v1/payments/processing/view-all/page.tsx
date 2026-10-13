@@ -1,15 +1,20 @@
 'use client';
 
-import { Activity, CheckCircle2, ChevronRight } from 'lucide-react';
+import { Activity, CheckCircle2, ChevronRight, MailWarning } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { MfeShell, type ShellNotification, useShellNotifications } from '../../../../components/MfeShell';
-import { Card, CardHeader } from '../../../../components/ui/card';
+import { Button } from '../../../../components/ui/button';
+import { Card, CardContent, CardFooter, CardHeader } from '../../../../components/ui/card';
 import { cn } from '../../../../components/ui/cn';
+import { ConfirmDialog } from '../../../../components/ui/confirm-dialog';
 import { Table, Td, Th, formatDateTime } from '../../../../components/ui/data';
 import { Alert, Badge, EmptyState, StatusBadge, statusLabel } from '../../../../components/ui/feedback';
-import { getJson } from '../../../../lib/api';
-import { type ProcessingItem, type ProcessingOverview, STEP_LABEL, formatMoney } from '../../../../lib/payments';
+import { Field, Textarea } from '../../../../components/ui/form';
+import { getJson, postJson } from '../../../../lib/api';
+import {
+  type ParkedMessage, type ProcessingItem, type ProcessingOverview, type StaffUser, STEP_LABEL, formatMoney, getStaffUser,
+} from '../../../../lib/payments';
 
 const REFRESH_MS = 5000;
 
@@ -22,6 +27,10 @@ export default function PaymentProcessingPage() {
   const [data, setData] = useState<ProcessingOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
+  const [user, setUser] = useState<StaffUser | null>(null);
+
+  useEffect(() => { getStaffUser().then(setUser).catch(() => setUser(null)); }, []);
+  const isOperations = !!user?.roles.includes('operations_administrator');
 
   const load = useCallback(() =>
     getJson<ProcessingOverview>('/bff/api/payments/processing')
@@ -84,6 +93,8 @@ export default function PaymentProcessingPage() {
           </Table>
         )}
       </Card>
+
+      {isOperations && <ParkedMessagesCard refresh={refresh} />}
     </MfeShell>
   );
 }
@@ -116,6 +127,144 @@ function Row({ item }: { item: ProcessingItem }) {
         </Link>
       </Td>
     </tr>
+  );
+}
+
+const REASON_MIN = 10;
+const REASON_MAX = 500;
+
+/**
+ * Operations recovery for the Outbox: messages the relay gave up on (PARKED) after its bounded
+ * attempts - typically Kafka was unreachable for long. A parked message also holds back its
+ * payment's later messages. Resend puts the SAME message back to the relay; a consumer that
+ * did receive an earlier attempt drops it, so nothing happens twice.
+ */
+function ParkedMessagesCard({ refresh }: { refresh: number }) {
+  const [messages, setMessages] = useState<ParkedMessage[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<ParkedMessage | null>(null);
+  const [reason, setReason] = useState('');
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const load = useCallback(() =>
+    getJson<ParkedMessage[]>('/bff/api/payments/outbox/parked')
+      .then(list => { setMessages(list); setError(null); })
+      .catch(e => setError(e instanceof Error ? e.message : 'Unable to load the parked messages.')), []);
+
+  useEffect(() => { void load(); }, [load, refresh]);
+  useEffect(() => {
+    const timer = window.setInterval(() => void load(), REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [load]);
+
+  const trimmed = reason.trim();
+  const reasonOk = trimmed.length >= REASON_MIN && trimmed.length <= REASON_MAX;
+  const label = (m: ParkedMessage) => m.paymentNumber ?? m.aggregateId;
+
+  const resend = async () => {
+    if (!selected) return;
+    setConfirm(false);
+    setBusy(true);
+    setError(null);
+    try {
+      await postJson(`/bff/api/payments/outbox/${selected.messageId}/resend`, { reason: trimmed });
+      setNotice(`${selected.eventType} for ${label(selected)} is back with the relay.`);
+      setSelected(null);
+      setReason('');
+      void load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'The message could not be resent.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="mt-6">
+      <CardHeader
+        icon={<MailWarning />}
+        title="Parked messages"
+        description="Messages the Outbox relay gave up on after its attempts (the message broker could not take them). Make sure Kafka is up, then resend."
+      />
+      {error && <div className="px-6 pt-4"><Alert tone="danger">{error}</Alert></div>}
+      {notice && <div className="px-6 pt-4"><Alert tone="success">{notice}</Alert></div>}
+      {!messages && !error && <p className="px-6 py-8 text-sm text-ink-muted">Loading…</p>}
+      {messages && messages.length === 0 && (
+        <EmptyState icon={<CheckCircle2 />} title="Nothing parked">Every message reached the broker.</EmptyState>
+      )}
+      {messages && messages.length > 0 && (
+        <Table aria-label="Parked messages">
+          <thead>
+            <tr>
+              <Th>Payment</Th>
+              <Th>Message</Th>
+              <Th>Raised</Th>
+              <Th>Attempts</Th>
+              <Th>Last error</Th>
+              <Th>Held back</Th>
+              <Th>Resent before</Th>
+              <Th><span className="sr-only">Resend</span></Th>
+            </tr>
+          </thead>
+          <tbody>
+            {messages.map(m => (
+              <tr key={m.messageId} className={cn(selected?.messageId === m.messageId && 'bg-warning-50/60')}>
+                <Td>
+                  {m.paymentId
+                    ? <Link className="font-mono text-[13px] font-semibold text-brand-700 hover:underline" href={`/v1/payments/view-details/?paymentId=${m.paymentId}`}>{m.paymentNumber}</Link>
+                    : <span className="font-mono text-xs text-ink-muted">{m.aggregateId}</span>}
+                </Td>
+                <Td>
+                  <div className="text-ink">{m.eventType}</div>
+                  <div className="font-mono text-[11px] text-ink-faint">{m.messageId}</div>
+                </Td>
+                <Td className="text-ink-muted">{formatDateTime(m.occurredAt)}</Td>
+                <Td className="text-ink-muted">
+                  {m.attemptCount}
+                  <div className="text-xs text-ink-faint">{formatDateTime(m.lastAttemptAt)}</div>
+                </Td>
+                <Td className="max-w-[280px] text-xs text-ink-muted">{m.lastError ?? '—'}</Td>
+                <Td className="text-ink-muted">{m.heldBack > 0 ? <Badge tone="warning">{m.heldBack} waiting</Badge> : '—'}</Td>
+                <Td className="text-xs text-ink-muted">
+                  {m.redriveCount === 0 ? '—' : `${m.redriveCount}× · last by ${m.lastRedrivenBy ?? '?'}, ${formatDateTime(m.lastRedrivenAt)}`}
+                </Td>
+                <Td className="text-right">
+                  <Button variant="secondary" size="sm" disabled={busy}
+                    onClick={() => { setSelected(m); setNotice(null); setError(null); }}>Resend…</Button>
+                </Td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      )}
+      {selected && (
+        <>
+          <CardContent className="space-y-3 border-t border-line">
+            <p className="text-sm text-ink-muted">
+              Resend <span className="font-medium text-ink">{selected.eventType}</span> for {label(selected)}.
+              The same message goes to the relay again; if an earlier attempt did arrive, the receiver ignores it.
+            </p>
+            <Field label="Reason" htmlFor="resend-reason" required
+              hint={`Recorded on the payment's timeline with your LAN ID (${REASON_MIN} to ${REASON_MAX} characters).`}>
+              <Textarea id="resend-reason" value={reason} maxLength={REASON_MAX} onChange={e => setReason(e.target.value)} disabled={busy} />
+            </Field>
+          </CardContent>
+          <CardFooter className="gap-3">
+            <Button variant="secondary" onClick={() => { setSelected(null); setReason(''); }} disabled={busy}>Cancel</Button>
+            <Button variant="accent" onClick={() => setConfirm(true)} disabled={busy || !reasonOk}>{busy ? 'Resending…' : 'Resend message'}</Button>
+          </CardFooter>
+        </>
+      )}
+      {confirm && selected && (
+        <ConfirmDialog title="Resend this message?" cancelLabel="Cancel" confirmLabel="Resend"
+          onCancel={() => setConfirm(false)} onConfirm={() => void resend()}>
+          {selected.eventType} for {label(selected)} goes back to the Outbox relay with fresh attempts.
+          {selected.heldBack > 0 && ` The ${selected.heldBack} message(s) waiting behind it follow once it is sent.`}
+        </ConfirmDialog>
+      )}
+    </Card>
   );
 }
 
