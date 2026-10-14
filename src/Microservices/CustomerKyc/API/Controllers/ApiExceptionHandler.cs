@@ -7,6 +7,12 @@ using EnterpriseWebPlatform.CustomerKyc.Api.Domain.Exceptions;
 
 namespace EnterpriseWebPlatform.CustomerKyc.Api.Controllers;
 
+// ┌─ :: SECURITY :: Errors that leak nothing ──────────────────────────────────────────────────────
+// │ Why : Stack traces, SQL or exception messages help an attacker map the system.
+// │ How : Unexpected exceptions become problem details with a traceId only; domain errors carry
+// │       their own message.
+// │ Ref : Features 2.4.1 | RFC 9457 | OWASP A05 | CWE-209
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Turns exceptions that escape the controllers into RFC 9457 problem details
 /// WITHOUT leaking internals (OWASP A05 / CWE-209). Expected outcomes are already

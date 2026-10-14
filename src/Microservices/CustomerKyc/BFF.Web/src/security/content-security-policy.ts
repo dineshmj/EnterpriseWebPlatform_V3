@@ -2,6 +2,12 @@ import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+// ┌─ :: SECURITY :: CSP by hash (NestJS twin) ─────────────────────────────────────────────────────
+// │ Why : Same threat as the .NET BFFs: injected script or CSS.
+// │ How : Scripts and styles from self plus the exported inline blocks by SHA-256; no
+// │       'unsafe-inline'; frame-ancestors the Shell (and the IDP).
+// │ Ref : Features 2.3.1 | CSP Level 3 | CWE-79
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /**
  * Strict Content-Security-Policy for this BFF's Next.js static export
  * (OWASP A03 / XSS defence in depth). Same rules as the .NET BFFs

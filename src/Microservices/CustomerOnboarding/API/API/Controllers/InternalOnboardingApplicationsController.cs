@@ -27,6 +27,10 @@ public sealed class InternalOnboardingApplicationsController(
     /// X-Causation-Id / X-Initiated-By-User-Id headers.
     /// </summary>
     [HttpPost("{applicationRef:guid}/kyc-outcomes")]
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Internal endpoint: only the Onboarding Outcome Subscriber's client_id is accepted
+    // │ (pinned), not just the scope.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     [Authorize(Policy = "OnboardingOutcomeSubscriberWrite")]
     public async Task<IActionResult> RecordKycOutcome(
         Guid applicationRef,

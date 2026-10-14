@@ -5,6 +5,14 @@ using EnterpriseWebPlatform.CustomerKyc.Api.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.CustomerKyc.Api.Domain.Aggregates;
 
+// ┌─ :: ARCHITECTURE + SECURITY :: The KYC case: stages, assignment and separation of duties ──────
+// │ Why : Verifying a customer must be done by an independent, qualified officer of the right
+// │       branch, and two officers deciding at once must not produce two outcomes.
+// │ How : Two stages, each decided once; the first decision assigns the case (ReBAC) and only the
+// │       assignee may decide; the initiator may never decide (fails closed when unknown); the case
+// │       status is derived from the stages.
+// │ Ref : Features 1.2.1, 2.2.5, 2.2.6 | Authorization-Model 6, 8 | OWASP A01
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Aggregate root: the KYC verification of ONE onboarding application.
 ///
@@ -218,6 +226,10 @@ public sealed class KycCase : AggregateRoot
         if (IsTerminal)
             throw new DomainConflictException("The KYC case has already reached a terminal state.");
 
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the case belongs to another officer, refuse (ReBAC); the first decision on an
+        // │ unassigned case assigns it.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (AssignedOfficerUserId is not null && !IsAssignedTo(decidedByUserId))
             throw new AssignmentViolationException("The KYC case is assigned to another officer; only that officer can decide it.");
 
@@ -280,8 +292,10 @@ public sealed class KycCase : AggregateRoot
 
     private void EnsureSeparationOfDuties(string officerUserId)
     {
-        // Fail closed: without a known initiator the platform cannot prove that the
-        // officer is not acting on their own workflow, so the action is denied.
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the initiator is unknown, deny: nobody can prove the officer is not deciding their
+        // │ own workflow (separation of duties fails closed).
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (InitiatedByUserId is null)
         {
             throw new SeparationOfDutiesViolationException(

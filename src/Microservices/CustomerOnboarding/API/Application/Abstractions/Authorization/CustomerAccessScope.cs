@@ -3,6 +3,12 @@ using EnterpriseWebPlatform.CustomerOnboarding.Domain.Enums;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Authorization;
 
+// ┌─ :: SECURITY :: Scope filtering in the database ───────────────────────────────────────────────
+// │ Why : Loading everything and hiding rows in the UI leaks data and does not scale.
+// │ How : WithinScope adds the branch-city filter to the query itself, so out-of-scope rows are
+// │       never even loaded; paging happens after the filter.
+// │ Ref : Features 2.2.3 | OWASP API1 BOLA, API3 (excessive data exposure)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// The set of customers a caller may see (ABAC, branch scope).
 ///

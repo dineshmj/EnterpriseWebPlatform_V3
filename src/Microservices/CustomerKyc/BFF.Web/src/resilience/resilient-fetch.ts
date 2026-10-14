@@ -4,6 +4,13 @@ import { traceHeaders } from '../observability/trace-context';
 
 type State = 'closed' | 'open' | 'half-open';
 
+// ┌─ :: ARCHITECTURE :: Circuit breaker and GET-only retries ──────────────────────────────────────
+// │ Why : A struggling downstream service hammered by every retry never recovers, and a hung call
+// │       blocks the officer.
+// │ How : One breaker per downstream (half of the calls in 30 s failing opens it for 30 s), a
+// │       timeout per call, retries for GETs only.
+// │ Ref : Features 1.6.3 | Circuit Breaker pattern
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /**
  * A circuit breaker per downstream service, with the platform's settings (the .NET BFFs'
  * standard resilience handler): when at least half of the calls in the last 30 seconds failed

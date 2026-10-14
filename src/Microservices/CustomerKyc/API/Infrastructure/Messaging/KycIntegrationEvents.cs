@@ -5,6 +5,13 @@ namespace EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure.Messaging;
 // Every event uses the platform's standard envelope (doc/Integration-Event-Catalogue.md §3):
 // workflow metadata at the top level, the event-specific body under Payload.
 
+// ┌─ :: ARCHITECTURE :: Published contracts with the deciders ─────────────────────────────────────
+// │ Why : Compliance must enforce separation of duties across contexts - it needs to know who
+// │       decided each KYC stage.
+// │ How : The standard envelope (IDs, initiator, SchemaVersion) and payloads that name the stage
+// │       deciders; tolerant readers ignore what they do not need.
+// │ Ref : Features 1.3.6, 2.2.6 | Integration-Event-Catalogue.md | Tolerant Reader pattern
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// The standard envelope. SchemaVersion is the contract version of the payload; it
 /// changes only for a breaking change (additive fields keep it).

@@ -326,6 +326,13 @@ CREATE TABLE onboarding_application_documents
 --
 -- ============================================================================
 
+-- ┌─ :: ARCHITECTURE :: Outbox with workflow metadata ─────────────────────────────────────────────
+-- │ Why : The relay needs everything to publish, order and trace an event - and nothing more.
+-- │ How : Each row keeps the aggregate, event type, payload, workflow / correlation / causation
+-- │       IDs, the initiator, the traceparent and the publish state; the relay's own database user
+-- │       may only read and update this table.
+-- │ Ref : Features 1.3.1, 1.3.4, 2.4.3 | Transactional Outbox pattern
+-- └────────────────────────────────────────────────────────────────────────────────────────────────
 CREATE TABLE outbox_messages
 (
     -- Equals the integration event's MessageId, so a row and its Kafka message

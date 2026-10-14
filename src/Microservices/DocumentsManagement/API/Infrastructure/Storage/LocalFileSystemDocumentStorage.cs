@@ -4,6 +4,13 @@ using EnterpriseWebPlatform.DocumentsManagement.Application.Abstractions.Storage
 
 namespace EnterpriseWebPlatform.DocumentsManagement.Infrastructure.Storage;
 
+// ┌─ :: SECURITY :: No path traversal ─────────────────────────────────────────────────────────────
+// │ Why : A crafted storage reference such as "../../" could read or overwrite files outside the
+// │       store.
+// │ How : Every path is resolved and must stay under the storage root; references are generated,
+// │       never taken from the user.
+// │ Ref : Features 2.4.4 | OWASP Path Traversal | CWE-22
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 public sealed class LocalFileSystemDocumentStorage : IDocumentStorage
 {
     private readonly string _rootPath;
@@ -93,6 +100,9 @@ public sealed class LocalFileSystemDocumentStorage : IDocumentStorage
         var normalized = storageReference.Replace('/', Path.DirectorySeparatorChar);
         var fullPath = Path.GetFullPath(Path.Combine(_rootPath, normalized));
 
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the resolved path leaves the storage root, refuse - path traversal.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (!fullPath.StartsWith(_rootPath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Invalid storage reference.");
 

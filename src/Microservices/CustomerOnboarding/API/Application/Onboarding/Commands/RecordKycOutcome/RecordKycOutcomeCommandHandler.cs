@@ -2,6 +2,13 @@ using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Persiste
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Application.Onboarding.Commands.RecordKycOutcome;
 
+// ┌─ :: ARCHITECTURE :: Idempotent consumer of workflow outcomes ──────────────────────────────────
+// │ Why : KYC, Compliance and Accounts outcomes arrive through Kafka at least once; a repeat must
+// │       not move the application twice.
+// │ How : The message ID is recorded in inbox_messages in the same transaction as the state change;
+// │       a repeat is answered and ignored.
+// │ Ref : Features 1.3.2 | Idempotent Consumer pattern
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 public sealed class RecordKycOutcomeCommandHandler
 {
     /// <summary>Inbox consumer name for KYC outcomes.</summary>
@@ -35,6 +42,10 @@ public sealed class RecordKycOutcomeCommandHandler
         RecordKycOutcomeCommand command,
         CancellationToken cancellationToken)
     {
+        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // │ If this outcome was already recorded, do nothing (Inbox) - a redelivery never changes
+        // │ the application twice.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (await _inbox.HasProcessedAsync(command.MessageId, InboxConsumer, cancellationToken))
         {
             return RecordKycOutcomeResult.Duplicate;

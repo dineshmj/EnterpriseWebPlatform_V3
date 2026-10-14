@@ -2,6 +2,14 @@ using EnterpriseWebPlatform.DocumentsManagement.Domain.Exceptions;
 
 namespace EnterpriseWebPlatform.DocumentsManagement.Domain.Policies;
 
+// ┌─ :: SECURITY :: Content type from the bytes, not the claim ────────────────────────────────────
+// │ Why : An uploader can call any file "application/pdf"; trusting that lets a script be served as
+// │       a document.
+// │ How : The type is detected from the file's signature (magic bytes) against an allow-list (PDF,
+// │       PNG, JPEG); a mismatch with the declared type is refused; the verified type is stored and
+// │       served.
+// │ Ref : Features 2.4.4 | OWASP File Upload Cheat Sheet | CWE-434 | AI review 1 (stored XSS)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Allow-list of document content types, verified against the file signature
 /// (magic bytes). The caller's declared Content-Type is never trusted on its own:
@@ -33,6 +41,10 @@ public static class DocumentContentPolicy
             }
         }
 
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the bytes match no allowed signature, refuse the upload - whatever the file name
+        // │ or declared type say.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (detected is null)
         {
             throw new DomainRuleViolationException(

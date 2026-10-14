@@ -19,6 +19,14 @@ public enum ResourceAccess
     Allowed
 }
 
+// ┌─ :: SECURITY :: Who may see and change which customer (ABAC + ReBAC) ──────────────────────────
+// │ Why : Changing an ID in a URL must not open another branch's customer (BOLA), and seeing a
+// │       customer must not mean being allowed to change them.
+// │ How : Read scope from the token: operations see all, an agent sees customers whose primary
+// │       address is in their branch city; changes need the managing agent; a missing attribute
+// │       means nothing is visible (fail closed); lists are filtered in the database.
+// │ Ref : Features 2.2.3, 2.2.5 | OWASP API1:2023 BOLA | Authorization-Model 5, 6, 10 | AI review 1
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Object-level authorization for customers and onboarding applications.
 ///
@@ -50,6 +58,10 @@ public sealed class CustomerResourceAuthorization(CustomerDbContext db)
         var branchCity = user.FindFirst("branch_city")?.Value;
         var branchCountryCode = user.FindFirst("branch_country_code")?.Value;
 
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the agent's token lacks the branch attributes, the scope matches no customer (fail
+        // │ closed).
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (string.IsNullOrWhiteSpace(branchCode) ||
             string.IsNullOrWhiteSpace(branchCity) ||
             string.IsNullOrWhiteSpace(branchCountryCode))
@@ -111,6 +123,10 @@ public sealed class CustomerResourceAuthorization(CustomerDbContext db)
 
         var actingUserId = GetActingUserId(user);
 
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ Only the customer's managing agent may change them (ReBAC); anyone else in scope gets
+        // │ 403, anyone out of scope 404.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         return actingUserId is not null &&
                string.Equals(managingAgent, actingUserId, StringComparison.OrdinalIgnoreCase)
             ? ResourceAccess.Allowed

@@ -5,6 +5,14 @@ import { randomBytes } from 'node:crypto';
 import { KycBffOptions } from '../configuration/kyc-bff-options';
 import { savePendingSignIn, takePendingSignIn } from './pending-sign-in';
 
+// ┌─ :: SECURITY :: OIDC client: code + PKCE, fresh session, single-flight refresh ────────────────
+// │ Why : A session ID that survives sign-in can be fixed by an attacker; two parallel refreshes
+// │       with a rotating refresh token would revoke each other.
+// │ How : Authorization Code + PKCE (prompt=none in the frame, prompt=login + acr_values=mfa for
+// │       step-up); the session ID is regenerated at sign-in; refreshes for the same token share
+// │       one call.
+// │ Ref : Features 2.1.1, 2.3.4, 2.1.5 | RFC 7636 | OWASP Session Fixation | RFC 9700 (rotation)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 @Injectable()
 export class OidcService {
   private clientPromise?: Promise<Client>;
@@ -88,6 +96,9 @@ export class OidcService {
     // Session fixation protection: the authenticated session always gets a
     // new session ID, never the one that existed before sign-in.
     await new Promise<void>((resolve, reject) =>
+      // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+      // │ A NEW session ID at sign-in - never the one that existed before (session fixation).
+      // └──────────────────────────────────────────────────────────────────────────────────────
       req.session.regenerate(error => (error ? reject(error) : resolve())),
     );
 

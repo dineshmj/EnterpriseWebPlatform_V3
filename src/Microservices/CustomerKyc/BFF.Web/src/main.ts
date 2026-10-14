@@ -12,6 +12,14 @@ import { EwpLogger, requestLogging } from './observability/logger';
 import { healthStatus, metricsEndpoint, requestMetrics } from './observability/metrics';
 import { traceMiddleware } from './observability/trace-context';
 
+// ┌─ :: ARCHITECTURE + SECURITY :: KYC BFF (NestJS): Backend-for-Frontend ─────────────────────────
+// │ Why : The officer's browser must never hold a token, and the BFF must be as hardened as the
+// │       .NET ones.
+// │ How : Server-side session in PostgreSQL behind a __Host- cookie (HttpOnly, Secure,
+// │       SameSite=Lax, 30 minutes rolling); strict CSP by hash; nosniff; framed only by the Shell;
+// │       HTTPS only.
+// │ Ref : Features 2.1.1, 2.3 | BFF pattern | OWASP A05, A07 | ASVS V3
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 async function bootstrap() {
   const options = loadOptions();
   const logger = new EwpLogger('customer-kyc-bff');
@@ -86,6 +94,10 @@ async function bootstrap() {
 
   app.use(
     session({
+      // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+      // │ __Host- session cookie: HttpOnly, Secure, SameSite=Lax, 30 minutes rolling - locked
+      // │ to this host over HTTPS.
+      // └──────────────────────────────────────────────────────────────────────────────────────
       name: '__Host-KYC-BFF-SESSION',
       secret: options.sessionSecret,
       // PostgreSQL, shared by every instance and by back-channel logout (session-store.ts).

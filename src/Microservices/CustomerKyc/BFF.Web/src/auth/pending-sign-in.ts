@@ -13,6 +13,13 @@ const COOKIE_PREFIX = '__Host-KYC-OIDC-';
 const LIFETIME_MS = 5 * 60 * 1000;
 const STATE_FORMAT = /^[A-Za-z0-9_-]{16,128}$/;
 
+// ┌─ :: SECURITY :: The OIDC round trip state ─────────────────────────────────────────────────────
+// │ Why : State, nonce and PKCE verifier must survive the redirect to the IDP without being
+// │       readable or forgeable.
+// │ How : Kept in a short-lived, encrypted (AES-256-GCM, key derived with HKDF) HttpOnly cookie,
+// │       consumed once at the callback.
+// │ Ref : OpenID Connect Core (state, nonce) | RFC 7636 PKCE | ASVS V3
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /**
  * A sign-in in progress is kept in its OWN short-lived cookie - one per attempt, named after its
  * `state` - not in the session (as ASP.NET Core's correlation cookie does). Two reasons:

@@ -4,6 +4,14 @@ using EnterpriseWebPlatform.CustomerOnboarding.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Application.Onboarding.Commands.SubmitApplication;
 
+// ┌─ :: ARCHITECTURE + SECURITY :: Submit: state, evidence and event in one transaction ───────────
+// │ Why : The submission starts the cross-context workflow; the initiator must travel with it for
+// │       accountability and separation of duties downstream.
+// │ How : Only the managing agent submits; the application, its evidence references and the
+// │       OnboardingApplicationSubmitted Outbox row (with initiated_by, workflow / correlation IDs
+// │       and traceparent) are saved together.
+// │ Ref : Features 1.3.1, 1.3.4, 2.2.6 | Transactional Outbox pattern
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 public sealed class SubmitOnboardingApplicationCommandHandler
 {
     private readonly IOnboardingApplicationRepository _applicationRepository;

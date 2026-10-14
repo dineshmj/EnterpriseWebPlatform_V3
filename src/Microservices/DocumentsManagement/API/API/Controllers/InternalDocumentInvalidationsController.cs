@@ -48,6 +48,10 @@ public sealed class InternalDocumentInvalidationsController(
     ILogger<InternalDocumentInvalidationsController> logger) : ControllerBase
 {
     [HttpPost]
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Internal endpoint: only the one pinned machine client is accepted, not just the
+    // │ scope.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     [Authorize(Policy = "DocumentInvalidationSubscriberWrite")]
     public async Task<IActionResult> Invalidate(
         [FromBody] InvalidateDocumentsRequest request,

@@ -29,6 +29,12 @@ const ACCESS_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:access_token';
  */
 const MAX_CACHED = 10_000;
 
+// ┌─ :: SECURITY :: Token exchange for Documents Management (read only) ───────────────────────────
+// │ Why : Documents Management must know which officer reads evidence and from which branch.
+// │ How : The officer's token is exchanged (RFC 8693) for a short-lived documents-management.read
+// │       token, cached per person until shortly before expiry.
+// │ Ref : Features 2.1.2 | RFC 8693
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 @Injectable()
 export class DocumentsManagementTokenService {
   private readonly cache = new Map<string, { accessToken: string; expiresAt: number }>();

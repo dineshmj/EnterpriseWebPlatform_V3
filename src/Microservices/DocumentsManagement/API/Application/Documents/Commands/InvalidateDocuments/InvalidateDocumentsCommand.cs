@@ -30,6 +30,13 @@ public sealed record InvalidateDocumentsResult(
     int NotFound,
     int OtherBranch);
 
+// ┌─ :: ARCHITECTURE + SECURITY :: Compensation: invalidate, scoped and idempotent ────────────────
+// │ Why : A rejected application must neutralise its evidence without deleting it - and an event
+// │       must not reach another branch's documents.
+// │ How : Only the documents named by the rejection, of the application's own branch, are marked
+// │       INVALIDATED; the Inbox and "already invalidated" make it idempotent.
+// │ Ref : Features 1.4.2 | Saga compensation | Idempotent Consumer pattern
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 public sealed class InvalidateDocumentsCommandHandler(
     IDocumentRepository repository,
     IInboxStore inbox,

@@ -1,3 +1,8 @@
+// ┌─ :: SECURITY :: Fail-closed configuration ─────────────────────────────────────────────────────
+// │ Why : A BFF running without its secret, session key or audience would be silently insecure.
+// │ How : Every required setting is read once at start-up; a missing one stops the BFF.
+// │ Ref : Features 1.6.5 | OWASP A05
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 export interface KycBffOptions {
   port: number;
   authority: string;

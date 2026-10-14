@@ -4,6 +4,13 @@ import { Pool } from 'pg';
 
 const IDLE_MS = 30 * 60 * 1000;
 
+// ┌─ :: SECURITY :: Sessions a database reader cannot use ─────────────────────────────────────────
+// │ Why : Whoever reads the session table could otherwise hijack sessions (the ID) or read the
+// │       tokens in them.
+// │ How : Only the SHA-256 of the session ID is stored; the session, tokens included, is encrypted
+// │       with AES-256-GCM under a 32-byte key that is not in the database.
+// │ Ref : Features 2.3.4 | ASVS V3.2, V6.2 | OWASP Session Management Cheat Sheet
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /**
  * Server-side sessions in PostgreSQL (EwpBffStateDb, schema kyc_bff, user ewp_kyc_bff), like
  * the .NET BFFs and the Audit web app: a restart signs nobody out, several instances share the

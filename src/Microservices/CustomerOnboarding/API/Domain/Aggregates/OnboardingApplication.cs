@@ -6,6 +6,14 @@ using EnterpriseWebPlatform.CustomerOnboarding.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Domain.Aggregates;
 
+// ┌─ :: ARCHITECTURE + SECURITY :: The onboarding application: the choreographed saga's state ─────
+// │ Why : The onboarding spans four contexts with no coordinator; each step must be valid only in
+// │       the right state, and a rejection must compensate - never delete evidence.
+// │ How : A transition table guards every move (submitted, KYC, Compliance, account opening,
+// │       completed / rejected); reject records COMPENSATING and names the evidence documents, so
+// │       Documents Management invalidates and retains them.
+// │ Ref : Features 1.4.1, 1.4.2 | Saga plan 1 | Saga pattern (choreography)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Aggregate root: one onboarding application of one customer, and the saga state
 /// of its cross-context workflow (KYC → Compliance → Account opening).

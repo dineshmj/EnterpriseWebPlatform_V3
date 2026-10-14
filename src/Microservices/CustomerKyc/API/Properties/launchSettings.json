@@ -1,4 +1,11 @@
 {
+  // ┌─ :: SECURITY :: HTTPS on the component's own host name ────────────────────────────────────────
+  // │ Why : Cookies are __Host- / Secure and tokens are bearer secrets: nothing may travel over plain
+  // │       HTTP.
+  // │ How : HTTPS on kyc-api.dev.localhost (the extra http://localhost:5005 is a local leftover nothing
+  // │       calls); ASPNETCORE_ENVIRONMENT=Development alone loads the development secrets and switches.
+  // │ Ref : Features 2.3.3, 2.4.5 | OWASP A02 (TLS)
+  // └────────────────────────────────────────────────────────────────────────────────────────────────
   "profiles": {
     "https": {
       "commandName": "Project",

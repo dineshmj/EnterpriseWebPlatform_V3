@@ -7,6 +7,13 @@ using EnterpriseWebPlatform.DocumentsManagement.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.DocumentsManagement.API.Authorization;
 
+// ┌─ :: SECURITY :: Branch from the token, acting client checked ──────────────────────────────────
+// │ Why : A branch asserted in a header, or any client holding the scope, could read another
+// │       branch's evidence.
+// │ How : Only a person's exchanged token is accepted, with the CO BFF or the KYC BFF as acting
+// │       client; the branch comes from that token; only the CO BFF may delete.
+// │ Ref : Features 2.1.2, 2.2.3 | OWASP API1 BOLA | RFC 8693 | AI review 1 fix
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Object-level (branch-scoped) authorization for documents.
 ///
@@ -43,6 +50,10 @@ public sealed class DocumentResourceAuthorization
         if (user.FindFirst("sub") is null)
             return null;
 
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the token was not exchanged by the CO or KYC BFF, there is no branch - nothing is
+        // │ accessible (fail closed).
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (ActingClientOf(user) is not { } actingClient || !ActingClients.Contains(actingClient))
             return null;
 

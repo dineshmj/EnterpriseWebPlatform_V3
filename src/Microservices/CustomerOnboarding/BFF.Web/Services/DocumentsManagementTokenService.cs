@@ -15,6 +15,13 @@ public interface IDocumentsManagementTokenService
     Task<string> GetTokenAsync(HttpContext httpContext, CancellationToken cancellationToken);
 }
 
+// ┌─ :: SECURITY :: Token exchange for Documents Management ───────────────────────────────────────
+// │ Why : Documents Management must know WHICH person uploads, from which branch - a machine token
+// │       or a header asserted by the BFF would not prove it.
+// │ How : The agent's token is exchanged (RFC 8693) for a short-lived documents-management.write
+// │       token; the person stays the subject and this BFF is the acting client.
+// │ Ref : Features 2.1.2 | RFC 8693 | AI review 1 (DM branch from token)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// OAuth 2.0 Token Exchange (RFC 8693): swaps the signed-in agent's access token for a
 /// short-lived Documents Management token. The agent stays the subject (so Documents Management

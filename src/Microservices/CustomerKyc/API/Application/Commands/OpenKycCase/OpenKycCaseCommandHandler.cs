@@ -40,6 +40,12 @@ public sealed record OpenKycCaseResult(
         created);
 }
 
+// ┌─ :: ARCHITECTURE :: Opening a case from an event, idempotently ────────────────────────────────
+// │ Why : The submission event can arrive twice, or two subscriber instances can race on it.
+// │ How : One case per application (unique); a repeat finds the existing case and is answered, not
+// │       duplicated; the Inbox records the message in the same transaction.
+// │ Ref : Features 1.3.2, 1.4.1 | Idempotent Consumer pattern
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 public sealed class OpenKycCaseCommandHandler(
     IKycCaseRepository repository,
     IInboxStore inbox,
@@ -61,6 +67,10 @@ public sealed class OpenKycCaseCommandHandler(
     public async Task<OpenKycCaseResult> HandleAsync(OpenKycCaseCommand command, CancellationToken cancellationToken)
     {
         var existing = await repository.GetByApplicationRefAsync(command.ApplicationRef, cancellationToken);
+        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // │ If the case already exists, this is a redelivery: answer with the existing case -
+        // │ never open a second one.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (existing is not null)
         {
             if (!await inbox.HasProcessedAsync(command.CausationId, InboxConsumer, cancellationToken))

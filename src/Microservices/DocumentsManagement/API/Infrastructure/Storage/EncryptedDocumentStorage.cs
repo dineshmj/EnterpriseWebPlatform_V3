@@ -6,6 +6,14 @@ using EnterpriseWebPlatform.DocumentsManagement.Application.Abstractions.Storage
 
 namespace EnterpriseWebPlatform.DocumentsManagement.Infrastructure.Storage;
 
+// ┌─ :: SECURITY :: Envelope encryption at rest ───────────────────────────────────────────────────
+// │ Why : KYC documents are the most sensitive data in the platform; a copied disk or backup must
+// │       reveal nothing.
+// │ How : Each document gets its own AES-256-GCM key, wrapped by a rotatable key-encryption key;
+// │       the document ID is bound in as associated data, so a swapped file fails; no key ring = no
+// │       start; plaintext files are refused.
+// │ Ref : Features 2.4.4 | Threat-Model R-2 | OWASP A02 | NIST SP 800-38D (GCM) | AI review 1 #2
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Encryption at rest for customer evidence (driver licences, tax notices): every file is
 /// written encrypted, so a copy of the disk, a backup or a container escape yields no readable
@@ -112,6 +120,10 @@ public sealed class EncryptedDocumentStorage(IDocumentStorage inner, DocumentKey
                 open.Decrypt(contentNonce, ciphertext, contentTag, plaintext, associated);
             return new MemoryStream(plaintext, writable: false);
         }
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the authentication tag does not match, the file was changed or belongs to another
+        // │ document: refuse it.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         catch (AuthenticationTagMismatchException)
         {
             throw new DocumentDecryptionException(storageReference, "it was changed, or belongs to another document");

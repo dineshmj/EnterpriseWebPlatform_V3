@@ -12,6 +12,13 @@ using EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.Service
 
 namespace EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.Controllers;
 
+// ┌─ :: ARCHITECTURE + SECURITY :: A thin BFF facade ──────────────────────────────────────────────
+// │ Why : A BFF that holds business rules or coordinates sagas becomes a distributed-monolith hub.
+// │ How : It forwards each request with the agent's own token and relays the API's answer; every
+// │       write needs the anti-forgery header; uploads go to Documents Management with an exchanged
+// │       token.
+// │ Ref : Features 3.4, 2.3.3 | OWASP A01 (CSRF) | BFF pattern
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 [Authorize]
 [ApiController]
 [Route("bff/api/onboarding")]

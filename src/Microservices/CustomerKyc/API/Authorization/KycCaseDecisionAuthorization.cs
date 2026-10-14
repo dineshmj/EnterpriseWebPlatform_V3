@@ -2,6 +2,14 @@ using Microsoft.AspNetCore.Authorization;
 
 namespace EnterpriseWebPlatform.CustomerKyc.Api.Authorization;
 
+// ┌─ :: SECURITY :: KYC decision: RBAC + stage permission + ABAC ──────────────────────────────────
+// │ Why : Different officers may be entitled to different steps; a role alone is too coarse for a
+// │       regulated decision.
+// │ How : kyc_officer + the decision permission + the stage permission (identity / document) +
+// │       department KYC + clearance 3 or above + a branch claim; the case's branch is checked
+// │       again on the record.
+// │ Ref : Features 2.2.4 | Authorization-Model 5 | NIST SP 800-162
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// RBAC + ABAC requirement for acting on a KYC case: role kyc_officer, department
 /// KYC, clearance level 3 or above, and EVERY listed permission (e.g. the decision

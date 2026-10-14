@@ -44,6 +44,10 @@ public sealed class InternalDocumentAttachmentsController(
     ILogger<InternalDocumentAttachmentsController> logger) : ControllerBase
 {
     [HttpPost]
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Internal endpoint: only the one pinned machine client is accepted, not just the
+    // │ scope.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     [Authorize(Policy = "DocumentInvalidationSubscriberWrite")]
     public async Task<IActionResult> Attach(
         [FromBody] AttachDocumentsRequest request,

@@ -5,6 +5,13 @@ using EnterpriseWebPlatform.DocumentsManagement.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.DocumentsManagement.Domain.Aggregates;
 
+// ┌─ :: ARCHITECTURE + SECURITY :: Evidence is retained, never deleted ────────────────────────────
+// │ Why : A bank must keep KYC evidence for audit and regulatory retention, even when an
+// │       application is rejected.
+// │ How : AVAILABLE (removable by the uploader before submission) -> ATTACHED (a KYC record, no
+// │       delete) -> INVALIDATED on rejection (retained); the branch is fixed at upload.
+// │ Ref : Features 1.4.2, 2.4.4 | Saga plan 1.5 | Records retention
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Aggregate root: one stored, verified document.
 ///

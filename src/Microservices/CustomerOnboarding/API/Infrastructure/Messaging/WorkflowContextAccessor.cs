@@ -2,6 +2,13 @@ using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Messaging;
 
+// ┌─ :: ARCHITECTURE :: Workflow, correlation and causation identity ──────────────────────────────
+// │ Why : One business transaction crosses many services and messages; without shared IDs nobody
+// │       can follow it or tell which message caused which.
+// │ How : Every request and message carries WorkflowId, CorrelationId and CausationId plus the
+// │       human initiator; they are stored on Outbox rows and copied into Kafka headers.
+// │ Ref : Features 1.3.4 | Correlation Identifier pattern (EIP)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>Workflow metadata supplied by the caller (all optional).</summary>
 public sealed record WorkflowRequestContext(
     Guid? WorkflowId,

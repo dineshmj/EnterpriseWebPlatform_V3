@@ -8,6 +8,12 @@ const SHORT: Record<Level, string> = {
   Verbose: 'VRB', Debug: 'DBG', Information: 'INF', Warning: 'WRN', Error: 'ERR', Fatal: 'FTL',
 };
 
+// ┌─ :: ARCHITECTURE :: Same log format as the .NET services ──────────────────────────────────────
+// │ Why : One log pipeline must read every service the same way.
+// │ How : Service name and trace ID on every line, one line per request without the query string,
+// │       JSON outside Development.
+// │ Ref : Features 1.7.3 | OWASP A09
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /**
  * Structured logs like the .NET components (Common.Observability, Serilog):
  *  - JSON, one object per line, in Serilog's compact format (@t, @l, @m, @tr) with the service

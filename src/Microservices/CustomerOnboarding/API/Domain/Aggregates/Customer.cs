@@ -7,6 +7,14 @@ using EnterpriseWebPlatform.CustomerOnboarding.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Domain.Aggregates;
 
+// ┌─ :: ARCHITECTURE + SECURITY :: The customer: a managing agent and a verified name ─────────────
+// │ Why : A customer's identity must not be quietly rewritten after verification, and only the
+// │       agent responsible for them may change them.
+// │ How : Every customer has a managing agent (ReBAC, enforced with the API's check); one primary
+// │       address; the name is verified identity and can change only while the customer is still a
+// │       prospect.
+// │ Ref : Features 1.2.1, 2.2.5 | Authorization-Model 6 | OWASP A01 (business logic)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Aggregate root: a customer and their addresses.
 ///
@@ -192,6 +200,10 @@ public sealed class Customer : AggregateRoot
             return;
         }
 
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ Once the customer was submitted for onboarding, the name is verified identity: refuse
+        // │ any change.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (Status != CustomerStatus.Prospect)
         {
             throw new DomainRuleViolationException(

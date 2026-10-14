@@ -7,6 +7,13 @@ import { sessionStore } from './session-store';
 
 const BACKCHANNEL_LOGOUT_EVENT = 'http://schemas.openid.net/event/backchannel-logout';
 
+// ┌─ :: SECURITY :: Back-channel logout ───────────────────────────────────────────────────────────
+// │ Why : A sign-out elsewhere must end this BFF's session even when the browser blocks the
+// │       front-channel iframe.
+// │ How : The IDP posts a signed logout token; it is verified (issuer, audience, signature, events
+// │       claim) and every session of that IDP session (sid) is deleted.
+// │ Ref : Features 2.1.4 | OpenID Connect Back-Channel Logout 1.0
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /**
  * OpenID Connect Back-Channel Logout 1.0: the IDP calls this endpoint server-to-server
  * when the user signs out anywhere in the SSO session (registered at the IDP as

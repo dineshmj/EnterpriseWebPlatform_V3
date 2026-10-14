@@ -21,6 +21,10 @@ public sealed class InternalKycCasesController(
     /// a redelivered event returns the existing case (200) instead of a new one (201).
     /// </summary>
     [HttpPost("from-application-submitted")]
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Internal endpoint: only the KYC Case Opening Subscriber's client_id is accepted
+    // │ (pinned), not just the scope.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     [Authorize(Policy = "KycCaseOpeningSubscriberWrite")]
     public async Task<IActionResult> CreateFromApplicationSubmitted(
         [FromBody] OpenKycCaseRequest request,

@@ -30,6 +30,13 @@ interface CaseEvidence {
   taxProofDocumentId: string;
 }
 
+// ┌─ :: ARCHITECTURE + SECURITY :: Thin facade with CSRF and safe downloads ───────────────────────
+// │ Why : A forged request could decide a case; a document served with the uploader's content type
+// │       could run as HTML.
+// │ How : Every write needs the anti-forgery token; documents are served with the VERIFIED type,
+// │       nosniff, and only a PDF inline - anything else as a download.
+// │ Ref : Features 2.3.3, 2.4.4 | OWASP A01 (CSRF), A03 (XSS via upload) | CWE-434
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 @Controller('bff/api/kyc')
 export class KycCasesController {
   constructor(
@@ -218,6 +225,10 @@ export class KycCasesController {
   private async forwardDocumentContent(response: globalThis.Response, res: Response, fileName: string) {
     const verifiedType = (response.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
     const safeName = fileName.replace(/[^\w.\- ]/g, '_');
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Only a verified PDF is shown inline; every other type is a download
+    // │ (Content-Disposition: attachment).
+    // └──────────────────────────────────────────────────────────────────────────────────────
     const inline = verifiedType === 'application/pdf';
 
     res.status(response.status);

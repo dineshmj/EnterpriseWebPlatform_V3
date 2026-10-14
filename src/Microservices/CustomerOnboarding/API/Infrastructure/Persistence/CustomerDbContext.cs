@@ -10,6 +10,12 @@ using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence.Outbox
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence;
 
+// ┌─ :: ARCHITECTURE :: State and Outbox in one transaction ───────────────────────────────────────
+// │ Why : Saving the change and publishing it separately loses events (dual write).
+// │ How : Domain events become Outbox rows in the same SaveChanges; consumed messages are recorded
+// │       in inbox_messages in the same transaction; Version guards concurrent edits.
+// │ Ref : Features 1.3.1, 1.3.2, 1.6.4, 3.2 | Transactional Outbox and Inbox patterns
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 public sealed class CustomerDbContext :
     DbContext,
     IApplicationUnitOfWork,

@@ -37,6 +37,12 @@ public sealed class KycKafkaProducer : IDisposable
     }
 }
 
+// ┌─ :: ARCHITECTURE :: Transactional Outbox relay (in-process) ───────────────────────────────────
+// │ Why : KYC outcomes must reach Kafka exactly when their decision commits.
+// │ How : FOR UPDATE SKIP LOCKED, per-aggregate order, bounded attempts with back-off, parked after
+// │       MaxAttempts; the decision's trace continues into Kafka.
+// │ Ref : Features 1.3.1 | Transactional Outbox pattern
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Relays committed KYC Outbox rows to Kafka, with the same guarantees as the
 /// Customer Onboarding relay: FOR UPDATE SKIP LOCKED claiming (multi-instance

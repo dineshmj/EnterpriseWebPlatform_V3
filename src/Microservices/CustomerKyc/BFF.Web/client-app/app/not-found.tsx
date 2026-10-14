@@ -1,5 +1,9 @@
 // Replaces Next.js's built-in 404 page, which carries inline CSS that the Content-Security-Policy
 // does not allow (no 'unsafe-inline' for styles): the same message, styled by class.
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ Own not-found page without inline styles: Next.js's default carries inline CSS, which
+// │ the strict CSP would otherwise have to allow.
+// └──────────────────────────────────────────────────────────────────────────────────────
 export default function NotFound() {
   return (
     <main className="mx-auto max-w-xl px-6 py-24 text-center">

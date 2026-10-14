@@ -18,22 +18,26 @@ using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Persiste
 using EnterpriseWebPlatform.CustomerOnboarding.Application;
 using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence;
 
+// ┌─ :: ARCHITECTURE + SECURITY :: Customer Onboarding API: a resource server ─────────────────────
+// │ Why : The domain API owns its context's data and rules; it trusts nothing the caller says about
+// │       itself - not the UI, not the BFF.
+// │ How : Validates every JWT access token (issuer, audience, signature, lifetime, at+jwt), denies
+// │       by default, checks scope + permission + ABAC / ReBAC per action and inside the
+// │       aggregates, writes events through its Outbox and records consumed messages in its Inbox.
+// │ Ref : Features 1.1.1, 1.2, 2.2 | OAuth 2.0 resource server (RFC 6750, RFC 9068) |
+// │       OWASP API1 / API5 | Authorization-Model 4
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 var builder = WebApplication.CreateBuilder(args);
 
 // Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
 // over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
 builder.AddEwpObservability("customer-onboarding-api", tracing => tracing.AddAspNetCoreInstrumentation().AddNpgsql());
 
-// WHY:
-// The V2 Products API already established a proven hosting model for this PoC:
-// ASP.NET Core controllers, Swagger/OpenAPI, JWT bearer authentication,
-// centralized authorization, EF Core and HTTPS. V3 deliberately retains those
-// aspects rather than introducing a new hosting model for every bounded context.
-//
-// IF NOT:
-// Each V3 microservice would have different startup conventions, increasing
-// operational complexity without adding architectural value.
-
+// ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+// │ One hosting model for every .NET domain API (controllers, JWT bearer, central
+// │ policies, EF Core, HTTPS), as proven in V2 - different start-up conventions per
+// │ service would add operational cost, not value.
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.Services
     .AddControllers()
     .ConfigureApiBehaviorOptions(options =>
@@ -95,11 +99,19 @@ var audience =
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Every request needs a JWT access token from our IDP: issuer, audience, lifetime and
+    // │ signature are checked against the IDP's published keys (metadata over HTTPS only).
+    // └──────────────────────────────────────────────────────────────────────────────────────
     .AddJwtBearer(options =>
     {
         options.Authority = authority;
         options.Audience = audience;
         options.RequireHttpsMetadata = true;
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ Keep claim names as issued (sub, role, permission, branch, amr, auth_time) - the
+        // │ policies read them by these names.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         options.MapInboundClaims = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
@@ -116,16 +128,14 @@ builder.Services
 builder.Services.AddAuthorization(options =>
 {
     // Deny by default: an endpoint without its own policy still needs an authenticated caller.
+    // :: SECURITY :: Deny by default - see Common/WebUtilities/Security/ApiEndpointAuthorization.cs
     options.DenyAnonymousByDefault();
 
-    // WHY:
-    // Scope authorization is the coarse-grained API boundary. The finer
-    // RBAC/ABAC/ReBAC decisions will be introduced at the BFF/API boundary as
-    // the V3 security model is implemented.
-    //
-    // IF NOT:
-    // A valid token intended for another resource could reach this API unless
-    // every endpoint independently enforced the intended scope.
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Scope is the coarse boundary: a valid token meant for another API never gets in. The
+    // │ finer decisions (RBAC policies, branch ABAC, managing-agent ReBAC) follow per action
+    // │ and in the aggregates.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     options.AddPolicy("ApiScope", policy =>
     {
         policy.RequireAuthenticatedUser();
@@ -204,6 +214,7 @@ builder.Services.AddHealthChecks()
     .AddDbContextCheck<CustomerDbContext>("database", tags: [HealthEndpoints.ReadyTag]);
 
 // OWASP API4: per-caller rate limits on the API surface (429 + Retry-After); configuration "RateLimiting".
+// :: SECURITY :: Per-caller rate limits - see Common/WebUtilities/Security/RateLimiting.cs
 builder.Services.AddEwpRateLimiting(builder.Configuration, "/v1");
 
 var app = builder.Build();
@@ -218,14 +229,26 @@ if (app.Environment.IsDevelopment())
 }
 else
 {
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ HSTS outside Development only: browsers then refuse plain HTTP for this host (in
+    // │ Development it would pin the developer certificate's host).
+    // └──────────────────────────────────────────────────────────────────────────────────────
     app.UseHsts();
 }
 
 // Problem details without internals; see ApiExceptionHandler.
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ Unexpected errors become problem details with a traceId only - no stack trace, SQL or
+// │ exception text reaches the caller; the details are logged under the same traceId.
+// └──────────────────────────────────────────────────────────────────────────────────────
 app.UseExceptionHandler();
 
 app.UseHttpsRedirection();
 app.UseAuthentication();
+// ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+// │ Order matters: authentication BEFORE the rate limiter (the budget is per person, read
+// │ from the token), authorization after it.
+// └──────────────────────────────────────────────────────────────────────────────────────
 app.UseEwpRateLimiting();
 
 // Remember the acting agent's LAN ID (named in published events; rules use "sub").

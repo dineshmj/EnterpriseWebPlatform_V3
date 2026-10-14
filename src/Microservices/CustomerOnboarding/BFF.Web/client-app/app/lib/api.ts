@@ -1,5 +1,9 @@
 export async function getJson<T>(url: string): Promise<T> {
   const response = await fetch(url, { credentials: 'include', cache: 'no-store' });
+  // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+  // │ If the BFF answers 401, the session has ended: sign in again through the BFF - the
+  // │ screen never holds a token.
+  // └──────────────────────────────────────────────────────────────────────────────────────
   if (response.status === 401) {
     window.location.href = `/api/auth/silent-login?returnUrl=${encodeURIComponent(window.location.pathname)}`;
     throw new Error('Authentication required.');

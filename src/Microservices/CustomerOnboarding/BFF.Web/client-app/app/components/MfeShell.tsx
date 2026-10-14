@@ -210,6 +210,10 @@ export function MfeShell({
     const handler = (event: MessageEvent) => {
       // Only accept protocol messages from the embedding Shell.
       if (event.source !== parentWindow) return;
+      // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+      // │ Accept Shell messages only from the configured Shell origin - a page that frames this
+      // │ MFE cannot pose as the Shell.
+      // └──────────────────────────────────────────────────────────────────────────────────────
       if (event.origin !== parentOrigin) return;
 
       if (event.data?.type === 'BSS_CONTEXT_HANDOFF') {

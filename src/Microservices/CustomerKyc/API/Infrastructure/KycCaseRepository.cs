@@ -5,6 +5,13 @@ using EnterpriseWebPlatform.CustomerKyc.Api.Domain.Aggregates;
 
 namespace EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure;
 
+// ┌─ :: ARCHITECTURE :: Row lock for decisions ────────────────────────────────────────────────────
+// │ Why : Two officers deciding the two stages of one case at the same moment could each miss the
+// │       other's decision.
+// │ How : Decisions load the case with SELECT ... FOR UPDATE inside the transaction, so they queue;
+// │       Version is the second guard at save time.
+// │ Ref : Features 1.6.4 | Pessimistic + optimistic concurrency
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 public sealed class KycCaseRepository(KycDbContext db) : IKycCaseRepository
 {
     public Task<KycCase?> GetByApplicationRefAsync(Guid applicationRef, CancellationToken cancellationToken) =>

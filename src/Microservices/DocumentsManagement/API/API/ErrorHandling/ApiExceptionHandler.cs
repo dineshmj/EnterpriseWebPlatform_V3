@@ -7,6 +7,12 @@ using EnterpriseWebPlatform.DocumentsManagement.Domain.Exceptions;
 
 namespace EnterpriseWebPlatform.DocumentsManagement.API.ErrorHandling;
 
+// ┌─ :: SECURITY :: Errors that leak nothing ──────────────────────────────────────────────────────
+// │ Why : Stack traces, SQL or exception messages help an attacker map the system.
+// │ How : Unexpected exceptions become problem details with a traceId only; domain errors carry
+// │       their own message.
+// │ Ref : Features 2.4.1 | RFC 9457 | OWASP A05 | CWE-209
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Turns exceptions into RFC 9457 problem details WITHOUT leaking internals
 /// (OWASP A05 / CWE-209). Only this service's domain errors carry their message;
