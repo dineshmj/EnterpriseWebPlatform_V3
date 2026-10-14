@@ -1,0 +1,43 @@
+# 08 — Journey APIs (NestJS)
+
+Deployables: `src/Microservices/Audit/JourneyApi`, `src/Microservices/Operations/JourneyApi`
+
+## 1. Who may call
+
+- [x] **Every request needs a JWT access token from the IDP.** It is verified with `jose` against the IDP's keys: issuer, audience, lifetime, signature, and `typ: 'at+jwt'` (RFC 9068), the same as the .NET APIs. → `src/auth/delegated-token.guard.ts`
+- [x] **Only delegated tokens are accepted.** The token must have:
+  - a person (`sub`);
+  - the endpoint's scope;
+  - this API's web BFF as acting client (`act.client_id`);
+  - the endpoint's permission.
+
+  *Because* a stolen machine token, or another client holding the scope, must not get in.
+- [x] **Deny by default:** an endpoint without an access rule answers 403. → Operations `delegated-token.guard.ts`
+- [x] **Step-up:** a risky change (the simulator switch) needs a recent MFA sign-in (`amr` + `auth_time`); otherwise it gets 403 `mfa_required`.
+
+## 2. Calls further down
+
+- [x] **The second token exchange:** one token per downstream scope, with this API added to the `act` chain. An IDP refusal becomes 403, an IDP outage 503. → Audit `src/services/token-exchange.service.ts`
+- [x] **Downstream answers are translated** (401 / 403 → 403, 404 → 404, anything else → 503), with timeouts on every call. *Because* raw downstream errors would leak internals. → Audit `src/services/domain-api.client.ts`
+- [x] **The simulator switch exists only when `OPERATIONS_SIMULATOR_CONTROLS_ENABLED` (Development or Test);** otherwise it answers 404. It calls loopback-only endpoints, logs the LAN ID and reverts automatically. → Operations `src/platform/platform.services.ts`
+
+## 3. Abuse and errors
+
+- [x] **Rate limits:**
+  - overall: 600 a minute;
+  - per person and client: 120 reads a minute, and 10 changes a minute (Operations);
+  - 429 with `Retry-After`.
+
+  → `src/http/rate-limit.ts`
+- [x] **Errors are RFC 9457 Problem Details** with a safe `detail` (and a `code` where the screen must react). Unexpected errors are logged, not returned. → `src/http/problem-details.filter.ts`
+- [x] **Headers:** `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`, `nosniff` and `Cache-Control: no-store`. HTTPS only. → `src/main.ts`
+
+## 4. Configuration
+
+- [x] **Fail closed:** every security setting (audience, caller client, environment) is required, with no defaults. → `src/configuration/journey-options.ts`
+- [x] **Operations refuses to start outside Development with MFA off,** and outside Development and Test with the simulator switch on. Switches must be exactly `true` or `false`. → `assertSafeOutsideDevelopment`
+
+## 5. Production (open)
+
+- [ ] **Shared token fixtures.** The guard and the .NET handlers pass the same fixtures (R-11; the parity checklist is in Threat-Model §4, TB3).
+- [ ] **Secret store.** Client secrets and TLS passwords come from a secret store (R-10).

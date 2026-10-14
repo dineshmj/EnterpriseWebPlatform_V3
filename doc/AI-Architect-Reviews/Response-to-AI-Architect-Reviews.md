@@ -24,6 +24,8 @@ Three AI architects (Microsoft, Google and xAI) reviewed EWP V3 twice. This docu
 
 All six files are kept exactly as received; only their names carry the date. Round 1 is dated by the day it was received and added to the repository (`bf49510`); Microsoft's own text dates its review 10-OCT-2026.
 
+The earliest review, `2026-10-02-Claude-Architect-Review.md` (Claude, 02-OCT-2026, on the code before `7a4e4b8`), is the "previous review" that xAI's round 1 refers to. It is not answered again here: it carries its own remediation table, and xAI's round 1 confirmed its fixes (Outbox relay, Documents Management authorization, stored XSS, secrets in shared libraries, refresh-token reuse, `at+jwt`).
+
 ### Ratings over the two rounds
 
 | Reviewer | Round 1: Architecture | Round 1: Security | Round 2: Architecture | Round 2: Security |

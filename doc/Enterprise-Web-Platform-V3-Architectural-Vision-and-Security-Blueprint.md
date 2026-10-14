@@ -629,7 +629,7 @@ These are baselines, not claims of compliance.
 
 ## 19. Engineering Gaps Register
 
-Point-in-time findings, with their remediation status, are kept in [Fellow-architect-review-of-v3-ewp.md](Fellow-architect-review-of-v3-ewp.md). Context-specific gaps are listed in the "Implementation status" section of each requirements document.
+Point-in-time findings, with their remediation status, are kept in [2026-10-02-Claude-Architect-Review.md](AI-Architect-Reviews/2026-10-02-Claude-Architect-Review.md), together with the later AI architect reviews and the [response to them](AI-Architect-Reviews/Response-to-AI-Architect-Reviews.md). Context-specific gaps are listed in the "Implementation status" section of each requirements document.
 
 ---
 
