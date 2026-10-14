@@ -1,10 +1,10 @@
-# EWP V3 — Response to the AI architect reviews (rounds 1 and 2)
+# EWP V3 — Response to the AI architect reviews (rounds 1, 2 and 3)
 
 Response date: 14-OCT-2026
 
 ## In short
 
-Three AI architects (Microsoft, Google and xAI) reviewed EWP V3 twice. This document answers every finding of both rounds, with the outcome and the commit or code that backs it.
+Three AI architects (Microsoft, Google and xAI) reviewed EWP V3 three times. This document answers every finding of all three rounds, with the outcome and the commit or code that backs it.
 
 - **Round 1 (received 12-OCT-2026).**
   - The Microsoft and xAI findings were concrete. Microsoft's included real defects: a stale saga reply could be accepted, and payment initiation trusted the screen's branch filter.
@@ -13,39 +13,43 @@ Three AI architects (Microsoft, Google and xAI) reviewed EWP V3 twice. This docu
 - **Round 2 (13-OCT-2026), on the patched code.**
   - Microsoft and xAI confirmed the round-1 fixes in code and raised a smaller set of findings. Those are fixed too, apart from production requirements.
   - Google's findings were again mostly generic and are answered with evidence.
+- **Round 3 (14-OCT-2026), with the response document and the checklists as starting points.**
+  - All three confirmed the earlier fixes in code; none found a checklist `[x]` item that is false.
+  - Microsoft and xAI found the same one new issue: rate limits are counted per instance. That is now a recorded production requirement (R-14).
+  - Google's code claims were checked one by one. One was right: the subscribers' internal endpoints were exempt from rate limiting. That is fixed. Another was partly right (two simultaneous deliveries of one Payments reply); that is fixed too. The rest are rejected with evidence.
 
 ### The review files
 
-| Reviewer | Round 1 — 12-OCT-2026 | Round 2 — 13-OCT-2026 |
-| --- | --- | --- |
-| Microsoft | `2026-10-12-One-Microsoft-Way-Architect-Verdict.md` | `2026-10-13-One-Microsoft-Way-Architect-Verdict.md` |
-| Google | `2026-10-12-1600-Amphitheater-Architect-Verdict.md` | `2026-10-13-1600-Amphitheater-Architect-Verdict.md` |
-| xAI | `2026-10-12-Bastrop-Texas-Architect-Verdict.md` | `2026-10-13-Bastrop-Texas-Architect-Verdict.md` |
+| Reviewer | Round 1 — 12-OCT-2026 | Round 2 — 13-OCT-2026 | Round 3 — 14-OCT-2026 |
+| --- | --- | --- | --- |
+| Microsoft | `2026-10-12-One-Microsoft-Way-Architect-Verdict.md` | `2026-10-13-One-Microsoft-Way-Architect-Verdict.md` | `2026-10-14-One-Microsoft-Way-Architect-Verdict.md` |
+| Google | `2026-10-12-1600-Amphitheater-Architect-Verdict.md` | `2026-10-13-1600-Amphitheater-Architect-Verdict.md` | `2026-10-14-1600-Amphitheater-Architect-Verdict.md` |
+| xAI | `2026-10-12-Bastrop-Texas-Architect-Verdict.md` | `2026-10-13-Bastrop-Texas-Architect-Verdict.md` | `2026-10-14-Bastrop-Texas-Architect-Verdict.md` |
 
-All six files are kept exactly as received; only their names carry the date. Round 1 is dated by the day it was received and added to the repository (`bf49510`); Microsoft's own text dates its review 10-OCT-2026.
+All nine files are kept exactly as received; only their names carry the date. Round 1 is dated by the day it was received and added to the repository (`bf49510`); Microsoft's own text dates its review 10-OCT-2026.
 
 The earliest review, `2026-10-02-Claude-Architect-Review.md` (Claude, 02-OCT-2026, on the code before `7a4e4b8`), is the "previous review" that xAI's round 1 refers to. It is not answered again here: it carries its own remediation table, and xAI's round 1 confirmed its fixes (Outbox relay, Documents Management authorization, stored XSS, secrets in shared libraries, refresh-token reuse, `at+jwt`).
 
-### Ratings over the two rounds
+### Ratings over the three rounds
 
-| Reviewer | Round 1: Architecture | Round 1: Security | Round 2: Architecture | Round 2: Security |
-| --- | --- | --- | --- | --- |
-| Microsoft | 8 | 6.5 (production readiness 5.5) | 8.5 | 7.5 |
-| xAI | not scored ("one of the stronger architectural PoCs") | not scored | 8.5 | 8.5 |
-| Google | not scored | not scored | 7 | 7 |
+| Reviewer | Round 1: Architecture | Round 1: Security | Round 2: Architecture | Round 2: Security | Round 3: Architecture | Round 3: Security |
+| --- | --- | --- | --- | --- | --- | --- |
+| Microsoft | 8 | 6.5 (production readiness 5.5) | 8.5 | 7.5 | 8.5 | **8** |
+| xAI | not scored ("one of the stronger architectural PoCs") | not scored | 8.5 | 8.5 | **8.7** | 8.5 |
+| Google | not scored | not scored | 7 | 7 | **8.5** | **8** |
 
 ### Outcomes
 
-| Outcome | Round 1 | Round 2 | Total |
-| --- | --- | --- | --- |
-| Fixed after the review | 19 | 9 | 28 |
-| Already in place at the review (shown with evidence) | 3 | 1 | 4 |
-| Production requirement (cannot be closed in a PoC; recorded in `doc/Threat-Model.md` §7) | 8 | 3 | 11 |
-| Partly accepted | 3 | 2 | 5 |
-| Accepted as a deliberate design or PoC choice | 3 | — | 3 |
-| Clarified (the control existed; the review could not see its settings) | 1 | — | 1 |
-| Rejected with evidence | 7 | 5 | 12 |
-| **Findings answered** | **44** | **20** | **64** |
+| Outcome | Round 1 | Round 2 | Round 3 | Total |
+| --- | --- | --- | --- | --- |
+| Fixed after the review | 19 | 9 | 2 | 30 |
+| Already in place at the review (shown with evidence) | 3 | 1 | — | 4 |
+| Production requirement (cannot be closed in a PoC; recorded in `doc/Threat-Model.md` §7) | 8 | 3 | 4 | 15 |
+| Partly accepted | 3 | 2 | 1 | 6 |
+| Accepted as a deliberate design or PoC choice | 3 | — | — | 3 |
+| Clarified (the control existed; the review could not see its settings) | 1 | — | — | 1 |
+| Rejected with evidence | 7 | 5 | 4 | 16 |
+| **Findings answered** | **44** | **20** | **11** | **75** |
 
 None of the findings needs further work in the PoC. The open items are the production requirements collected at the end of this document.
 
@@ -67,6 +71,8 @@ None of the findings needs further work in the PoC. The open items are the produ
 | `ece52ca` | 13-OCT | Step-up MFA without signing out |
 | `97ec907` | 14-OCT | Documentation brought up to date |
 | `6a9bc5a` … `6b7d466` | 14-OCT | `:: ARCHITECTURE ::` / `:: SECURITY ::` comments where each control is enforced (search with `rg ":: (ARCHITECTURE\|SECURITY) ::"`) |
+| — | 14-OCT | `doc/Checklists` (one checklist per deployable tier); before round 3: anti-forgery cookies HttpOnly, no fallback origins in the light BFFs |
+| — | 14-OCT | Round-3 fixes (the commit that adds the round-3 section below): internal endpoints rate-limited, Payments Inbox re-checked under the saga lock, Journey API rate-limit sweep, R-14 recorded |
 
 ---
 
@@ -345,9 +351,62 @@ Idempotent consumers exist throughout:
 
 ---
 
+## Round 3 — 14-OCT-2026
+
+Review baseline: the code after the pre-review hardening. This time the reviewers were asked to start from this document, the checklists and Threat-Model §7, and to say whether each finding is new, reopens an earlier one, or disagrees with this document.
+
+### Microsoft (round 3)
+
+| # | Finding | Outcome | Evidence |
+| --- | --- | --- | --- |
+| EWP-07 | Journey API rate limits are process-local, not deployment-wide | **Production requirement** (R-14) | <ul><li>Agreed, and it applies more widely: the domain APIs, the IDP's sign-in limit and the SignalR connection cap also count in memory, per instance.</li><li>Recorded as Threat-Model R-14.</li><li>The code comments, READMEs and checklists 01 / 08 / 09 now say "per instance".</li><li>Production enforces deployment-wide limits at a gateway or with a shared store; the per-person keys stay.</li></ul> |
+
+Its three qualifications are already recorded open items, which the reviewer says it did not promote to findings:
+- no resend tool for parked Accounts and Compliance messages;
+- shared token fixtures (R-11);
+- narrower per-table grants (checklist 14).
+
+### xAI (round 3)
+
+| # | Finding | Outcome | Evidence |
+| --- | --- | --- | --- |
+| F3-01 | NestJS rate limits are process-local | **Production requirement** (R-14) | Same as Microsoft EWP-07. |
+| F3-02 | The .NET and NestJS token checks must stay in lock-step | **Production requirement** (R-11) | Agreed: the parity checklist and the code comments are documentation, not executable parity. Shared token fixtures for both stacks come when automated tests resume. |
+| F3-03 | Expired rate-limit windows are swept only at 10,000 entries | **Fixed** | Both Journey APIs now sweep expired windows at most once a minute, so memory follows the callers active in the last window (`src/http/rate-limit.ts`). |
+
+### Google (round 3)
+
+Each claim was checked against the code:
+
+| # | Finding | Outcome | Evidence |
+| --- | --- | --- | --- |
+| EWP-302 (and §1) | Outbox publishers lack `FOR UPDATE SKIP LOCKED`, so duplicates are published | **Rejected** | <ul><li>`CustomerOutboxPublisher.cs` line 111 selects with `FOR UPDATE SKIP LOCKED`, as do the KYC, Compliance, Accounts and Payments relays.</li><li>A repeat would in any case carry the same message ID, which every consumer's Inbox absorbs.</li></ul> |
+| EWP-301 (and §1) | Token exchange does not validate audience and scope at the domain API boundary | **Rejected** | <ul><li>Every domain API validates issuer, audience, signature, lifetime and `at+jwt`.</li><li>Both Journey APIs verify `audience` and `typ`, and require their web BFF as `act`.</li><li>The IDP exchanges only for allow-listed caller / resource pairs and puts the target resource in `aud`.</li><li>Same answer as round 2, SEC-01.</li></ul> |
+| §2 | The `__Host-` prefix is omitted in some cookie overrides | **Rejected** | <ul><li>Every cookie name carries `__Host-`: `CookieNames.cs`, the anti-forgery cookies, the KYC BFF session, the light BFFs' `config.ts`, and the IDP's pending sign-in.</li><li>No configuration file overrides a cookie name.</li></ul> |
+| §2 | Simultaneous redeliveries fail on the Inbox key instead of being absorbed | **Partly accepted; fixed** | <ul><li>Customer Onboarding, KYC, Compliance, Accounts, Documents Management and Notifications already catch the unique violation and answer "already processed".</li><li>Payments checked its Inbox only before taking the saga row lock. Two copies of one reply at the same moment made the second fail with a 500. It failed safe — nothing happened twice, and the retry was answered as already processed — but it was noisy.</li><li>`HandleSagaReply.cs` now checks the Inbox again under the lock.</li></ul> |
+| §3 | Sender-constrained tokens (DPoP) needed before production | **Production requirement** (with R-9) | <ul><li>Browser tokens never leave the BFFs, so DPoP's main use (tokens in the browser) does not apply.</li><li>For service-to-service calls, certificate-bound tokens (RFC 8705) come with mTLS in production.</li></ul> |
+| §4 | Internal endpoints bypass the global rate limiters | **Fixed** | <ul><li>Correct: `/internal` was on the limiter's always-exempt list.</li><li>The subscribers' internal endpoints are now limited by their machine client's budget (3,000 a minute) in all seven APIs that have them.</li><li>A 429 is transient for a subscriber (retry in place, Inbox-safe), so a backlog only slows down, while a stolen worker secret can no longer flood its API.</li><li>`RateLimiting.cs`, each `Program.cs`.</li></ul> |
+| EWP-303 | Exception handlers log unmasked PII and account numbers | **Rejected** | <ul><li>`ApiExceptionHandler` logs the exception with the trace ID and returns no internals.</li><li>No domain exception message contains an account number.</li><li>EF Core sensitive-data logging and Npgsql's "Include Error Detail" are off, so database errors carry no row values.</li><li>Request bodies are never logged.</li></ul> |
+
+Google's second, "nice-to-have" list is not counted as findings. Most of it describes technology this platform does not use:
+
+| Suggestion | Answer |
+| --- | --- |
+| Adaptive outbox polling and batch sizing | Not needed at this scale: fixed batches of 50 with back-off. Revisit with load tests (production item 15). |
+| DLQ depth metrics and alerting | Agreed; already a production item (checklist 11, and item 11 below). |
+| Refresh-token rotation grace period | Not applicable: refresh tokens are one-time only, with no grace window, and stay in the BFF's server-side session. |
+| BFF session invalidation across Redis replicas | Not applicable: sessions are server-side in PostgreSQL and read on every request; back-channel logout deletes them. |
+| YARP gateway rate-limit partitioning | No gateway exists; the limits are per person, per machine client and per IP. The deployment-wide gap is R-14. |
+| Generic 503 for non-idempotent mutations | Already handled: payments carry an Idempotency-Key and decisions are sent once (`postOnce`); an open circuit answers 503 before anything is sent. |
+| Correlation IDs dropped on Kafka | Not the case: `traceparent`, workflow, correlation and causation IDs are copied into Kafka headers and continued by the subscribers. |
+| Real-time audit hash verification | Each entry's hash is computed and chained inside the append transaction. Full verification and anchoring run periodically by design (R-3). |
+| Nullable reference types, compiled queries, module federation | Nullable is enabled in every project. Compiled queries are an optional optimisation. The MFEs are composed by iframes, not module federation. |
+
+---
+
 ## What remains for a production go-ahead
 
-These are the production requirements from both rounds. Each is recorded in `doc/Threat-Model.md` §7 or in the component READMEs.
+These are the production requirements from all three rounds. Each is recorded in `doc/Threat-Model.md` §7 or in the component READMEs.
 
 **Keys, secrets and evidence**
 
@@ -358,26 +417,27 @@ These are the production requirements from both rounds. Each is recorded in `doc
 
 **Network and deployment**
 
-5. mTLS between services (R-9).
+5. mTLS between services, with certificate-bound tokens (RFC 8705) between services (R-9).
 6. Network controls, plus a scrape token or mTLS, for the health and metrics endpoints (R-8).
 7. `AllowedHosts` and proxy settings for the real topology.
 8. Versioned database migrations instead of the full reset scripts.
 9. A SignalR backplane for more than one Notifications instance.
+10. Deployment-wide rate limits and connection caps, at a gateway or with a shared store (R-14).
 
 **Operations and monitoring**
 
-10. A security-event stream and dashboards: sign-in failures, MFA lockouts, token-exchange refusals.
-11. A resend tool for parked Accounts and Compliance Outbox messages (Payments has one).
-12. Retention and access rules for stored notifications.
+11. A security-event stream and dashboards: sign-in failures, MFA lockouts, token-exchange refusals, dead-letter depth.
+12. A resend tool for parked Accounts and Compliance Outbox messages (Payments has one).
+13. Retention and access rules for stored notifications.
 
 **Load and contracts**
 
-13. A benchmark of the global audit chain under realistic load.
-14. A test of the real payment network's idempotency contract (retention window, replayed answers).
+14. A benchmark of the global audit chain under realistic load.
+15. A test of the real payment network's idempotency contract (retention window, replayed answers).
 
 **Tests**
 
-15. When automated tests resume:
+16. When automated tests resume:
     - shared token fixtures for the .NET and NestJS stacks (R-11);
     - authorization-matrix tests;
     - CSRF and token-exchange abuse tests;

@@ -235,7 +235,11 @@ builder.Services.AddHealthChecks()
 
 // OWASP API4: per-caller rate limits on the API surface (429 + Retry-After); configuration "RateLimiting".
 // :: SECURITY :: Per-caller rate limits - see Common/WebUtilities/Security/RateLimiting.cs
-builder.Services.AddEwpRateLimiting(builder.Configuration, "/v1");
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ The internal endpoints (internal/v1, called by the Kafka subscribers) are limited
+// │ too, by the machine client's budget - a stolen worker secret cannot flood its API.
+// └──────────────────────────────────────────────────────────────────────────────────────
+builder.Services.AddEwpRateLimiting(builder.Configuration, "/v1", "/internal");
 builder.Services.AddEwpMfaStepUp();   // the step-up requirement and its clear 403 ("mfa_required")
 // :: SECURITY :: Step-up MFA - see Common/WebUtilities/Security/MfaStepUp.cs
 builder.RequireMfaOutsideDevelopment();   // fail closed: MFA can be off on a developer's machine only

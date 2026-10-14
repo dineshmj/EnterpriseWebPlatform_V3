@@ -57,6 +57,14 @@ public sealed class HandleSagaReplyCommandHandler(
 
         var saga = await sagas.GetForUpdateAsync(reply.PaymentRef, cancellationToken)
             ?? throw new DomainRuleViolationException($"No payment saga exists for PaymentRef {reply.PaymentRef}.");
+
+        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // │ Check the Inbox again now that the saga row is locked: if the same reply was
+        // │ delivered twice at once, the second copy waited for the lock while the first
+        // │ committed - it is answered as already processed, not failed on the Inbox key.
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        if (await inbox.HasProcessedAsync(reply.MessageId, InboxConsumer, cancellationToken))
+            return SagaReplyOutcome.AlreadyProcessed;
         var payment = await payments.GetAsync(saga.PaymentId, cancellationToken);
         var now = clock.GetUtcNow();
 

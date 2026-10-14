@@ -13,7 +13,7 @@ Deployables: `src/AsyncWorkflows/Subscribers/<Context>/<Name>` (8 workers), the 
 
 ## 2. Identity
 
-- [x] **Each worker has its OWN machine client:** client credentials and one write scope. Its API pins the `client_id` on its internal endpoint. → `src/IDP/ConfigRegistration/Clients/M2M/`
+- [x] **Each worker has its OWN machine client:** client credentials and one write scope. Its API pins the `client_id` on its internal endpoint, and rate-limits that endpoint by the machine client's budget (3,000 a minute, per instance). A 429 is retried in place, so a backlog only slows down. → `src/IDP/ConfigRegistration/Clients/M2M/`
 - [x] **The token is cached until shortly before it expires.** A 401 invalidates it, and the call is retried once, never in a loop. → `CachedM2MTokenClient.cs`
 - [x] **Each worker has its own Kafka user:** it may read only its topics and its group, and write only its dead-letter topic (see 12).
 - [x] **Secrets are read from configuration and fail closed:** the client secret and the Kafka password; the worker does not start without them. `appsettings.Development.json` holds Development values only.

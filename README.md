@@ -58,7 +58,7 @@ Each document has one purpose. A fact is written in exactly one place; other doc
 | [End-to-End Processing Walkthrough](doc/End-to-End-Processing-Walkthrough.md) | One onboarding traced from the agent's submit to the KYC outcome, through every component, policy and domain check |
 | [Payment Saga diagram](doc/Payment%20Saga%20Orchestration.png) ([PDF](doc/Payment%20Saga%20Orchestration.pdf)) | The Payments saga's steps, replies, timeouts and compensation in one picture |
 | [Claude Architect Review](doc/AI-Architect-Reviews/2026-10-02-Claude-Architect-Review.md) | The first point-in-time review (02-OCT-2026), its findings and their remediation status |
-| [AI Architect Reviews](doc/AI-Architect-Reviews) | The external reviewers' verdicts (Microsoft, Google, xAI) of 12-OCT and 13-OCT-2026, kept as received, and the response to every finding |
+| [AI Architect Reviews](doc/AI-Architect-Reviews) | The external reviewers' verdicts (Microsoft, Google, xAI) of 12-, 13- and 14-OCT-2026, kept as received, and the response to every finding |
 | [Checklists](doc/Checklists/README.md) | One checklist per deployable tier (IDP, Shell, MFE SPAs and BFFs, Journey and domain APIs, Outbox publishers, subscribers, Kafka, PostgreSQL users and grants): what is true today, and what is open |
 
 ### Per component (`src/**/doc/`)

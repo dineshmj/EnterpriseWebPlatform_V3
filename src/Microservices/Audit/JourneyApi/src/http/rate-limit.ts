@@ -29,16 +29,25 @@ export class TooManyRequestsException extends HttpException {
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 /**
  * Fixed-window counters in memory, per key (OWASP API4: unrestricted resource consumption). Each
- * instance of the API counts on its own; the limits are per instance.
+ * instance of the API counts on its own: the limits are PER INSTANCE. With several instances, a
+ * gateway or a shared store (e.g. Redis) must hold the deployment-wide limit (Threat-Model R-14).
  */
 export class RateLimiter {
   private readonly windows = new Map<string, { endsAt: number; count: number }>();
+  private nextPruneAt = 0;
 
   /** Counts one request for `key`; throws TooManyRequestsException when its permits are used up. */
   take(key: string, limit: RateLimit, now = Date.now()): void {
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Sweep expired windows at most once a minute: memory follows the callers active in
+    // │ the last window, never every key ever seen (a slow memory DoS).
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    if (now >= this.nextPruneAt) {
+      this.prune(now);
+      this.nextPruneAt = now + 60_000;
+    }
     let window = this.windows.get(key);
     if (!window || now >= window.endsAt) {
-      if (this.windows.size >= 10_000) this.prune(now);
       window = { endsAt: now + limit.windowSeconds * 1000, count: 0 };
       this.windows.set(key, window);
     }

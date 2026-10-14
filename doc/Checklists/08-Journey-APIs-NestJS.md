@@ -28,7 +28,7 @@ Deployables: `src/Microservices/Audit/JourneyApi`, `src/Microservices/Operations
   - per person and client: 120 reads a minute, and 10 changes a minute (Operations);
   - 429 with `Retry-After`.
 
-  → `src/http/rate-limit.ts`
+  The counters are per instance, and expired windows are swept every minute. → `src/http/rate-limit.ts`
 - [x] **Errors are RFC 9457 Problem Details** with a safe `detail` (and a `code` where the screen must react). Unexpected errors are logged, not returned. → `src/http/problem-details.filter.ts`
 - [x] **Headers:** `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`, `nosniff` and `Cache-Control: no-store`. HTTPS only. → `src/main.ts`
 
@@ -41,3 +41,4 @@ Deployables: `src/Microservices/Audit/JourneyApi`, `src/Microservices/Operations
 
 - [ ] **Shared token fixtures.** The guard and the .NET handlers pass the same fixtures (R-11; the parity checklist is in Threat-Model §4, TB3).
 - [ ] **Secret store.** Client secrets and TLS passwords come from a secret store (R-10).
+- [ ] **Deployment-wide rate limits.** A gateway or shared store enforces them across instances (R-14).

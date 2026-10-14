@@ -49,7 +49,7 @@ Deployable: `src/IDP` · Database: `EwpIdentityAccessDb` (user `ewp_idp`)
 ## 6. Sign-in, MFA and sessions
 
 - [x] **Passwords are hashed with PBKDF2 and a per-user salt.** An unknown user costs the same time, through a dummy hash. *Because* a copied database must not reveal passwords, and timing must not reveal which users exist. → `src/IDP/Security/PasswordManager.cs`
-- [x] **Accounts lock after 5 failures, for 15 minutes,** and sign-ins are throttled per IP (20 a minute). *Because* this slows guessing and password spraying. → `UserRepository.cs`; `Program.cs` (`login` rate limiter)
+- [x] **Accounts lock after 5 failures, for 15 minutes,** and sign-ins are throttled per IP (20 a minute, counted per instance). *Because* this slows guessing and password spraying. → `UserRepository.cs`; `Program.cs` (`login` rate limiter)
 - [x] **TOTP MFA is protected at every step:**
   - the secret is encrypted with Data Protection;
   - recovery codes are stored hashed;

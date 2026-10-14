@@ -29,7 +29,7 @@ Deployables: `src/Microservices/<Context>/API` for Customer Onboarding, KYC, Doc
 
 ## 3. Data and messaging
 
-- [x] **State and the events it produces are saved in one transaction (Transactional Outbox);** consumed message IDs go to the Inbox in the same transaction. *Because* this avoids dual writes and makes redelivery harmless.
+- [x] **State and the events it produces are saved in one transaction (Transactional Outbox);** consumed message IDs go to the Inbox in the same transaction. A copy delivered at the same moment is answered as "already processed", never failed: the unique key violation is caught, and Payments checks its Inbox again under the saga row lock. *Because* this avoids dual writes and makes redelivery harmless.
 - [x] **Concurrency:** a `Version` on every aggregate, plus `SELECT … FOR UPDATE` where two people can act at once.
 - [x] **Calls to external systems** (core banking, screening provider, payment network) are checked at start-up: outside Development they must be HTTPS, to a permitted host, and never to an internal address. No redirects are followed; each call has a timeout, retry and circuit breaker. *Because* this prevents SSRF. → `src/Common/WebUtilities/Security/ExternalEndpoint.cs`
 - [x] **Uploads are checked by magic bytes** against an allow-list, and evidence is encrypted at rest (AES-256-GCM envelope; Documents Management).
@@ -41,10 +41,11 @@ Deployables: `src/Microservices/<Context>/API` for Customer Onboarding, KYC, Doc
 - [x] **Per-caller rate limits:**
   - per person: 600 a minute, of which at most 60 changes;
   - 120 a minute per anonymous IP;
-  - 3,000 a minute per machine client;
+  - 3,000 a minute per machine client, including the subscribers' internal endpoints;
   - 429 with `Retry-After`.
 
-  Authentication runs before the limiter. → `src/Common/WebUtilities/Security/RateLimiting.cs`
+  Authentication runs before the limiter. The counters are per instance. → `src/Common/WebUtilities/Security/RateLimiting.cs`
+- [x] **SignalR (Notifications):** at most `Notifications:MaxConnectionsPerPerson` (default 10) connections per person, counted per instance; 4 KB messages; the connection closes when the token expires.
 - [x] **HTTPS only** (HSTS outside Development), and `AllowedHosts` set. Swagger exists in Development only.
 - [x] **No full account numbers in logs:** BSB plus the last four digits (`LogMasking`).
 
@@ -61,3 +62,4 @@ Deployables: `src/Microservices/<Context>/API` for Customer Onboarding, KYC, Doc
 - [ ] **mTLS** between services (R-9).
 - [ ] **Network controls** for `/metrics` and the health endpoints (R-8).
 - [ ] **A secret store and key vault** (R-2, R-10).
+- [ ] **Deployment-wide rate limits** at a gateway or with a shared store (R-14).

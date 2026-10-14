@@ -15,6 +15,8 @@ namespace EnterpriseWebPlatform.Common.WebUtilities.Security;
 // │ Why : One user, a stolen token or a runaway script could flood an API for everybody.
 // │ How : A budget per person (sub), per machine client (client_id) and per IP for anonymous
 // │       callers - never one shared bucket; changes get a tighter budget; 429 with Retry-After.
+// │       Counters live in memory, so the limits are PER INSTANCE; with several instances a
+// │       gateway or a shared store holds the deployment-wide limit (Threat-Model R-14).
 // │ Ref : Features 2.4.7 | OWASP API4:2023 Unrestricted Resource Consumption | ASVS V11.1
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>Limits per minute (configuration section "RateLimiting"; the defaults suit normal use comfortably).</summary>
@@ -43,13 +45,18 @@ public sealed class EwpRateLimitingOptions
 ///   - a signed-in person: by subject ID, with a tighter limit for changes than for reads;
 ///   - a machine client: by client ID (subscribers, BFF-to-API M2M calls);
 ///   - nobody signed in yet: by IP address.
-/// Only the given path prefixes are limited (the API surface); static files, health probes,
-/// SignalR hubs and the subscribers' internal endpoints are not. Over the limit the answer is
+/// Only the given path prefixes are limited (the API surface, including the subscribers' internal
+/// endpoints); static files, health probes and SignalR hubs are not. Over the limit the answer is
 /// 429 with Retry-After and a problem-details body the screens show as-is.
 /// </summary>
 public static class RateLimitingExtensions
 {
-    private static readonly string[] AlwaysExempt = ["/health", "/hubs", "/internal"];
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Only probes and hubs are exempt. The subscribers' internal endpoints are limited by
+    // │ their machine client's budget: a 429 is transient for a subscriber (retry in place,
+    // │ Inbox-safe), so a backlog only slows down, while a stolen worker secret cannot flood.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    private static readonly string[] AlwaysExempt = ["/health", "/hubs"];
 
     public static IServiceCollection AddEwpRateLimiting(this IServiceCollection services, IConfiguration configuration, params string[] limitedPathPrefixes)
     {
