@@ -300,7 +300,9 @@ Idempotent consumers exist throughout:
   - **Messages.** Undeliverable messages are parked and can be resent.
   - **Subscribers.** These retry in place and dead-letter only bad messages.
   - **Compliance screening.** A backlog degrades readiness.
-- **Production requirement: onboarding age alerts.** The onboarding steps wait mostly on people (KYC and compliance officers), so the remaining item is age monitoring and alerting for onboarding applications. It is a monitoring rule, not a compensation trigger.
+- **Done since (14-OCT): onboarding age alerts.** The onboarding steps wait mostly on people (KYC and compliance officers), so the remaining item was age monitoring - a monitoring rule, not a compensation trigger.
+  - The Customer Onboarding API's readiness turns Degraded when an application waits too long in one step: a machine step after `Onboarding:Alerts:HandoverMinutes` (production 15), an officer step after `OfficerDecisionMinutes` (production one day), and `CompensationFailed` always.
+  - It shows on Platform Health and on the `/metrics` health gauge (`OnboardingAgeHealthCheck.cs`).
 
 #### BP-01 — Anaemic domain models in the NestJS Journey APIs — **Rejected**
 
@@ -362,19 +364,18 @@ These are the production requirements from both rounds. Each is recorded in `doc
 
 **Operations and monitoring**
 
-10. Age monitoring and alerting for onboarding applications.
-11. A security-event stream and dashboards: sign-in failures, MFA lockouts, token-exchange refusals.
-12. A resend tool for parked Accounts and Compliance Outbox messages (Payments has one).
-13. Retention and access rules for stored notifications.
+10. A security-event stream and dashboards: sign-in failures, MFA lockouts, token-exchange refusals.
+11. A resend tool for parked Accounts and Compliance Outbox messages (Payments has one).
+12. Retention and access rules for stored notifications.
 
 **Load and contracts**
 
-14. A benchmark of the global audit chain under realistic load.
-15. A test of the real payment network's idempotency contract (retention window, replayed answers).
+13. A benchmark of the global audit chain under realistic load.
+14. A test of the real payment network's idempotency contract (retention window, replayed answers).
 
 **Tests**
 
-16. When automated tests resume:
+15. When automated tests resume:
     - shared token fixtures for the .NET and NestJS stacks (R-11);
     - authorization-matrix tests;
     - CSRF and token-exchange abuse tests;

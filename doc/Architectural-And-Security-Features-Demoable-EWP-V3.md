@@ -502,13 +502,14 @@ The KYC BFF (NestJS) continues the caller's trace (or starts one) and passes `tr
 
 #### 1.7.2 Health endpoints for liveness and readiness
 
-Every component answers the two questions an orchestrator such as AKS or EKS asks. `/health/live` asks whether the process is working; if not, restart it. `/health/ready` asks whether it can do its job now; if not, send it no traffic yet. The two are deliberately different. A database outage makes an API *not ready* but still *live*, because restarting it would not help. A relay or consume loop that stops cycling fails *liveness*, so it is restarted. Workers have no web server of their own, so they serve the same endpoints from a minimal built-in listener. A third state, *Degraded*, reports "working, but look": a relay with parked or overdue Outbox messages, or a subscriber retrying a message while its downstream API is down. Responses list each check's status and nothing internal.
+Every component answers the two questions an orchestrator such as AKS or EKS asks. `/health/live` asks whether the process is working; if not, restart it. `/health/ready` asks whether it can do its job now; if not, send it no traffic yet. The two are deliberately different. A database outage makes an API *not ready* but still *live*, because restarting it would not help. A relay or consume loop that stops cycling fails *liveness*, so it is restarted. Workers have no web server of their own, so they serve the same endpoints from a minimal built-in listener. A third state, *Degraded*, reports "working, but look": a relay with parked or overdue Outbox messages, a subscriber retrying a message while its downstream API is down, or onboarding applications that have waited too long in one step. That last check covers the choreographed onboarding, which has no coordinator to notice a stopped hand-off. A machine step (a worker, Kafka, core banking) is flagged after `Onboarding:Alerts:HandoverMinutes` (production 15), an officer step (KYC, Compliance) after `OfficerDecisionMinutes` (production one day), and `CompensationFailed` always. Nothing is compensated on a time-out: people are told instead. Responses list each check's status and nothing internal.
 
 **Where to look at:**
 
 - Shared endpoints and worker listener: [HealthEndpoints.cs](../src/Common/Observability/HealthEndpoints.cs)
 - Loop heartbeat and Outbox backlog checks: [LoopHeartbeat.cs](../src/Common/Observability/LoopHeartbeat.cs), [OutboxBacklogHealthCheck.cs](../src/Common/Observability/OutboxBacklogHealthCheck.cs)
 - Subscriber liveness and readiness: [SubscriberHealth.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/SubscriberHealth.cs)
+- Onboarding applications waiting too long: [OnboardingAgeHealthCheck.cs](../src/Microservices/CustomerOnboarding/API/Infrastructure/Monitoring/OnboardingAgeHealthCheck.cs)
 - Wiring: the `AddHealthChecks` calls in each `Program.cs`, e.g. [CustomerKyc API Program.cs](../src/Microservices/CustomerKyc/API/Program.cs); endpoint list: [ReadMe.txt §9a](../ReadMe.txt)
 
 #### 1.7.3 Structured logs and metrics

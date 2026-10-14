@@ -16,6 +16,7 @@ using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.CustomerOnboarding.API.Authorization;
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Persistence;
 using EnterpriseWebPlatform.CustomerOnboarding.Application;
+using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Monitoring;
 using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence;
 
 // ┌─ :: ARCHITECTURE + SECURITY :: Customer Onboarding API: a resource server ─────────────────────
@@ -211,7 +212,20 @@ builder.Services.AddExceptionHandler<EnterpriseWebPlatform.CustomerOnboarding.AP
 // and /health/ready (dependencies reachable). Anonymous; no internals in the body.
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), tags: [HealthEndpoints.LiveTag])
-    .AddDbContextCheck<CustomerDbContext>("database", tags: [HealthEndpoints.ReadyTag]);
+    .AddDbContextCheck<CustomerDbContext>("database", tags: [HealthEndpoints.ReadyTag])
+    .Add(new HealthCheckRegistration("onboarding-age",
+        sp => ActivatorUtilities.CreateInstance<OnboardingAgeHealthCheck>(sp),
+        HealthStatus.Degraded, [HealthEndpoints.ReadyTag]));
+
+// ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+// │ If an alert age is missing or not a positive number of minutes, refuse to start - a
+// │ silent zero would raise alarms for everything, a silent default could hide stuck work.
+// └──────────────────────────────────────────────────────────────────────────────────────
+builder.Services.AddOptions<OnboardingAlertOptions>()
+    .Bind(builder.Configuration.GetSection(OnboardingAlertOptions.SectionName))
+    .Validate(o => o.HandoverMinutes > 0 && o.OfficerDecisionMinutes > 0,
+        "Onboarding:Alerts:HandoverMinutes and OfficerDecisionMinutes must be positive whole numbers of minutes.")
+    .ValidateOnStart();
 
 // OWASP API4: per-caller rate limits on the API surface (429 + Retry-After); configuration "RateLimiting".
 // :: SECURITY :: Per-caller rate limits - see Common/WebUtilities/Security/RateLimiting.cs

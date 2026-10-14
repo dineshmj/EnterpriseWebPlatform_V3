@@ -19,3 +19,15 @@ What this project does to stay secure: each control, what would go wrong without
 | 9 | Per-caller rate limits (person, machine client, IP), 429 with `Retry-After` | One caller, or a stolen token, could flood the API for everybody | Unrestricted resource consumption (OWASP API4) | [RateLimiting.cs](../../../Common/WebUtilities/Security/RateLimiting.cs), `AddEwpRateLimiting` in [Program.cs](Program.cs) |
 | 10 | Own least-privilege database user `ewp_customer_onboarding_api`: its own database only, no DDL | A compromised API or leaked connection string would expose other contexts' data or let the schema be changed | Lateral movement and blast radius of a breach | [EwpServiceDbUsers.sql](../../../../db/EwpServiceDbUsers.sql) |
 | 11 | HTTPS only (HSTS outside Development) and host filtering (`AllowedHosts`) | Tokens could travel over plain HTTP; a forged `Host` header could poison generated links | Interception (OWASP A02) and host-header attacks | `UseHsts` in [Program.cs](Program.cs); `AllowedHosts` in [appsettings.Development.json](appsettings.Development.json) |
+
+## Monitoring
+
+Readiness (`/health/ready`) turns **Degraded**, never Unhealthy, when an onboarding application has waited too long in one step ([OnboardingAgeHealthCheck.cs](Infrastructure/Monitoring/OnboardingAgeHealthCheck.cs)). The ages are required settings under `Onboarding:Alerts`:
+
+| Step | Setting | Production | Development |
+| --- | --- | --- | --- |
+| Machine steps: Submitted, KYC completed, Compliance completed, account opening, compensating | `HandoverMinutes` | 15 | 5 |
+| Officer steps: KYC in progress, Compliance in progress | `OfficerDecisionMinutes` | 1440 (one day) | 60 |
+| CompensationFailed | — | always | always |
+
+The check reports counts per step only, because the endpoint is anonymous. It changes nothing: an application is never rejected or compensated because of its age. The Operations Platform Health screen shows the API as Degraded, and the `/metrics` health gauge carries the same state for alerting.
