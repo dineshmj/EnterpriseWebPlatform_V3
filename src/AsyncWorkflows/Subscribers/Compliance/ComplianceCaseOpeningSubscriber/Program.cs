@@ -5,6 +5,16 @@ using EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.Compliance.Compliance
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.Compliance.ComplianceCaseOpeningSubscriber.Processing;
 using EnterpriseWebPlatform.Common.Observability;
 
+// ┌─ :: ARCHITECTURE + SECURITY :: ComplianceCaseOpeningSubscriber: a context-owned worker ────────
+// │ Why : The context that owns the reaction must own its worker - no central integration hub - and
+// │       a worker must not lose, duplicate or wrongly drop a message.
+// │ How : Consumes KycCaseApproved and calls the Compliance API (open the case) with its OWN
+// │       machine identity (client credentials, one client per worker); commits the offset only
+// │       after processing; transient failures are retried in place, bad messages go to the
+// │       dead-letter topic; the API's Inbox makes redelivery harmless.
+// │ Ref : Features 1.1.3, 1.3.2, 1.3.3, 1.6.2, 2.1.2 | Idempotent Consumer pattern |
+// │       Dead Letter Channel (EIP)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 var builder = Host.CreateApplicationBuilder(args);
 
 // Distributed tracing: each message is processed in a span that continues the
@@ -17,6 +27,10 @@ builder.Services.AddKafkaSubscriber<ComplianceCaseOpeningProcessor, ComplianceCa
 
 // The worker's own machine identity; the token is cached until shortly before expiry.
 builder.Services
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Its own client_id and secret, accepted only on its one internal endpoint (pinned);
+    // │ the token is cached until shortly before expiry, never shared with another worker.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     .AddCachedM2MTokenClient<ComplianceCaseOpeningSubscriberOptions>(ComplianceCaseOpeningSubscriberOptions.SectionName)
     .AddStandardResilienceHandler();
 
@@ -25,6 +39,11 @@ builder.Services
         client.BaseAddress = new Uri(sp.GetRequiredService<IOptions<ComplianceCaseOpeningSubscriberOptions>>().Value.ComplianceApiBaseUrl.TrimEnd('/')))
     // Timeout, jittered retry and circuit breaker; the endpoint is idempotent (Inbox +
     // one case per application), so retrying the POST is safe.
+    // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+    // │ Retrying this POST is safe ONLY because the endpoint is idempotent (Inbox / one
+    // │ record per message); timeouts, jittered retries and a circuit breaker protect the
+    // │ API.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     .AddStandardResilienceHandler(options =>
     {
         options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(10);

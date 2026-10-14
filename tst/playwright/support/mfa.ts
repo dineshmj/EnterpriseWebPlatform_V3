@@ -20,6 +20,14 @@ const STEP_SECONDS = 30;
 const authDir = path.resolve(__dirname, '..', '.auth');
 const idpHost = new URL(urls.idp).host;
 
+// ┌─ :: SECURITY :: A test authenticator (TOTP) ───────────────────────────────────────────────────
+// │ Why : Step-up MFA can only be tested end to end if the test can produce real authenticator
+// │       codes.
+// │ How : The test enrols the demo persona from the IDP's own setup key and computes the codes
+// │       itself (RFC 6238, HMAC-SHA1, 30-second steps); only demo IDP users, only when
+// │       EWP_MFA_ENABLED=true.
+// │ Ref : Features 2.1.5 | RFC 6238 (TOTP) | tst/README.md "MFA tests"
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 export class Authenticator {
   private lastStep = -1;
 

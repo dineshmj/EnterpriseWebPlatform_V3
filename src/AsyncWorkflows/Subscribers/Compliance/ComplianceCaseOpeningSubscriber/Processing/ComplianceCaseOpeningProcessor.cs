@@ -64,6 +64,10 @@ public sealed class ComplianceCaseOpeningProcessor(
         try
         {
             response = await SendAsync(envelope, p, cancellationToken);
+            // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+            // │ If the API answers 401, the cached token may have been revoked or the key rotated:
+            // │ fetch a new token ONCE and try again - never loop.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             if (response.StatusCode == HttpStatusCode.Unauthorized)
             {
                 response.Dispose();
@@ -89,7 +93,10 @@ public sealed class ComplianceCaseOpeningProcessor(
                 return ProcessingOutcome.Processed;
             }
 
-            // 401 / 403: this worker's identity is not accepted - a configuration problem, not a bad message.
+            // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+            // │ Refused identity, time-out, throttling or a server error is not the message's fault:
+            // │ retry in place. Any other 4xx means the message itself is bad: dead-letter it.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             if (status is 401 or 403 or 408 or 429 || status >= 500)
                 throw new TransientProcessingException($"Compliance API returned HTTP {status} after the resilience pipeline: {body}");
 

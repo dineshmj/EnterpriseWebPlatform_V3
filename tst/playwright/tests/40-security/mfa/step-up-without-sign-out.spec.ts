@@ -18,6 +18,13 @@ import { resetAllSimulators } from '../../../support/simulators';
 const mfaEnabled = process.env.EWP_MFA_ENABLED === 'true';
 const maxAgeMinutes = Number(process.env.EWP_STEP_UP_MAX_AGE_MINUTES ?? '1');
 
+// ┌─ :: SECURITY :: What this test proves ─────────────────────────────────────────────────────────
+// │ Why : Threat-Model R-13: a risky action used to need a full sign-out to refresh MFA.
+// │ How : Past the step-up age a risky change opens a code-only window (no password) and completes
+// │       without signing out; while the code is fresh no window opens; the window returns to the
+// │       fixed step-up-done address.
+// │ Ref : Features 2.1.5 | RFC 9470 | Threat-Model R-13 | AI review 2: xAI F-3
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 test.describe('MFA step-up without signing out', () => {
   test.skip(!mfaEnabled, 'MFA is off: set EWP_MFA_ENABLED=true and switch MFA on (tst\\README.md, MFA tests).');
   test.describe.configure({ mode: 'serial' });

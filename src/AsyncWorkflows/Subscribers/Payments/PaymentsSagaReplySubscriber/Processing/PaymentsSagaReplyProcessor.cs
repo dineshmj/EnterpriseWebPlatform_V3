@@ -61,6 +61,10 @@ public sealed class PaymentsSagaReplyProcessor(
         try
         {
             response = await SendAsync(envelope, p, cancellationToken);
+            // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+            // │ If the API answers 401, the cached token may have been revoked or the key rotated:
+            // │ fetch a new token ONCE and try again - never loop.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             if (response.StatusCode == HttpStatusCode.Unauthorized)
             {
                 response.Dispose();
@@ -85,8 +89,11 @@ public sealed class PaymentsSagaReplyProcessor(
                 return ProcessingOutcome.Processed;
             }
 
-            // 401 / 403: this worker's identity is not accepted - a configuration problem, not a bad message.
-            // 409: two deliveries raced on the saga row - try again.
+            // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+            // │ Refused identity, time-out, throttling, a server error - or 409, two deliveries
+            // │ racing on the saga row - is retried in place; any other 4xx means the reply itself is
+            // │ bad: dead-letter it.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             if (status is 401 or 403 or 408 or 409 or 429 || status >= 500)
                 throw new TransientProcessingException($"Payments API returned HTTP {status} after the resilience pipeline: {body}");
 
