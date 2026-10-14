@@ -27,6 +27,11 @@ export interface JourneyOptions {
 
 export const JOURNEY_OPTIONS = 'AUDIT_JOURNEY_OPTIONS';
 
+// ┌─ :: SECURITY :: Fail-closed configuration ─────────────────────────────────────────────────────
+// │ Why : A Journey API started with a missing audience or caller would accept the wrong tokens.
+// │ How : Every security setting is required (no defaults); switches must be exactly true or false.
+// │ Ref : Features 1.6.5 | OWASP A05
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 function required(name: string): string {
   const value = process.env[name];
   if (!value || value.trim().length === 0) {

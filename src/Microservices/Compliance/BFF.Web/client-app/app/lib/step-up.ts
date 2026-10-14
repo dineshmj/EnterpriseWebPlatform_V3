@@ -6,6 +6,14 @@
  * auth_time. When the window is back on this app's own address (/api/auth/step-up-done) it is
  * closed here and the action is tried once more. The person stays signed in throughout.
  */
+// ┌─ :: SECURITY :: Step-up in a window, not in the frame ─────────────────────────────────────────
+// │ Why : The IDP's sign-in pages may never be framed (clickjacking), yet a risky action inside an
+// │       MFE frame may need a fresh code.
+// │ How : A small window opens /api/auth/step-up on this BFF; the IDP asks only for the code; when
+// │       the window is back on the fixed /api/auth/step-up-done address it is closed here and the
+// │       action is retried once.
+// │ Ref : Features 2.1.5 | RFC 9470 | Threat-Model R-13 | AI review 2: xAI F-3
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 const STEP_UP_URL = '/api/auth/step-up';
 const STEP_UP_DONE_PATH = '/api/auth/step-up-done';
 const GIVE_UP_AFTER_MS = 5 * 60_000;

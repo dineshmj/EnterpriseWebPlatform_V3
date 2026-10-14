@@ -27,6 +27,14 @@ export async function changeSimulator(key: string, behaviour: Behaviour): Promis
   return callJourney<SimulatorState[]>('operations-journey.write', 'PUT', `/v1/journeys/operations/simulators/${key}/behaviour`, { behaviour });
 }
 
+// ┌─ :: ARCHITECTURE + SECURITY :: Server actions: two hops, no token in the browser ──────────────
+// │ Why : The screen needs data from domain APIs, yet must never hold a token or reach them
+// │       directly.
+// │ How : A server action reads the session, exchanges the person's token for the Journey API,
+// │       which exchanges again for each domain API; Problem Details (detail, code) come back to
+// │       the screen.
+// │ Ref : Features 3.3, 2.1.2 | Customer pattern (Next.js BFF -> NestJS Journey API -> domain API)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 async function callJourney<T>(
   scope: 'operations-journey.read' | 'operations-journey.write', method: 'GET' | 'PUT', path: string, body?: unknown,
 ): Promise<ActionResult<T>> {

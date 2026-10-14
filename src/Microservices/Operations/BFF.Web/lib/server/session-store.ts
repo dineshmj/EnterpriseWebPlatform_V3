@@ -22,6 +22,13 @@ export interface SessionData {
  *  - the tokens are encrypted with AES-256-GCM (key OPERATIONS_WEB_SESSION_KEY, not in the database).
  */
 let pool: Pool | undefined;
+// ┌─ :: SECURITY :: Sessions a database reader cannot use ─────────────────────────────────────────
+// │ Why : Whoever reads the session table could otherwise hijack sessions or read the tokens in
+// │       them.
+// │ How : Only the SHA-256 of the cookie value is stored; the tokens are encrypted with AES-256-GCM
+// │       under a key that is not in the database; 30 minutes idle.
+// │ Ref : Features 2.3.4 | ASVS V3.2, V6.2 | OWASP Session Management Cheat Sheet
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 function db(): Pool {
   pool ??= new Pool({ connectionString: config.databaseUrl, max: 5 });
   return pool;

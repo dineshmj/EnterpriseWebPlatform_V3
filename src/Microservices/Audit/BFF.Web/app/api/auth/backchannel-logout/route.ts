@@ -21,6 +21,10 @@ export async function POST(request: NextRequest) {
   try {
     const { payload } = await jwtVerify(logoutToken, jwks, { issuer: config.authority, audience: config.clientId });
     const events = payload.events as Record<string, unknown> | undefined;
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ A logout token must carry the back-channel-logout event and no nonce - an ID token
+    // │ replayed here is refused.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     if (!events?.['http://schemas.openid.net/event/backchannel-logout'] || payload.nonce !== undefined) {
       return new NextResponse(null, { status: 400 });
     }

@@ -1,3 +1,9 @@
+// ┌─ :: SECURITY :: Fail-closed configuration and __Host- cookies ─────────────────────────────────
+// │ Why : A web tier running without its client secret or session key would be silently insecure.
+// │ How : Every required setting is read at start-up and a missing one stops it; the session and
+// │       sign-in cookies are __Host- (Secure, path /, no domain).
+// │ Ref : Features 1.6.5, 2.3.3 | OWASP A05
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /**
  * The light BFF's configuration - environment variables only (runnow.bat sets the development
  * values). A missing value stops the request that needs it: no secret has a default.

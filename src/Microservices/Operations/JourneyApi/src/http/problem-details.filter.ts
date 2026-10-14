@@ -2,6 +2,12 @@ import { STATUS_CODES } from 'node:http';
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import type { Request, Response } from 'express';
 
+// ┌─ :: SECURITY :: Errors that leak nothing ──────────────────────────────────────────────────────
+// │ Why : Internal errors and downstream messages help an attacker map the system.
+// │ How : Every error becomes RFC 9457 Problem Details with a safe detail (and a code where the
+// │       screen must react); unexpected errors are logged, not returned.
+// │ Ref : Features 2.4.1 | RFC 9457 | CWE-209
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /**
  * Every error as RFC 9457 Problem Details (application/problem+json), like the .NET APIs:
  * type, title, status, detail, instance - plus "code" when the caller must react to the reason

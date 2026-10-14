@@ -36,6 +36,11 @@ export interface JourneyOptions {
 
 export const JOURNEY_OPTIONS = 'OPERATIONS_JOURNEY_OPTIONS';
 
+// ┌─ :: SECURITY :: Fail-closed configuration ─────────────────────────────────────────────────────
+// │ Why : A Journey API started with a missing audience or caller would accept the wrong tokens.
+// │ How : Every security setting is required (no defaults); switches must be exactly true or false.
+// │ Ref : Features 1.6.5 | OWASP A05
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 function required(name: string): string {
   const value = process.env[name];
   if (!value || value.trim().length === 0) {
@@ -71,6 +76,10 @@ function minutes(name: string): number {
  * exists only in Development and Test.
  */
 export function assertSafeOutsideDevelopment(options: JourneyOptions): void {
+  // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+  // │ Outside Development, MFA must be on and the simulator switch off (Test may keep it) -
+  // │ otherwise refuse to start.
+  // └──────────────────────────────────────────────────────────────────────────────────────
   if (options.environment === 'Development') return;
   if (!options.mfaEnabled) {
     throw new Error(`OPERATIONS_MFA_ENABLED must be true in ${options.environment}; the Operations Journey API refuses to start.`);

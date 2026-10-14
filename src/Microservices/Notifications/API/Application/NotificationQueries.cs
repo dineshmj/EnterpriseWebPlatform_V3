@@ -51,6 +51,10 @@ public sealed class NotificationQueries(NotificationsDbContext db, TimeProvider 
     public async Task<bool> MarkReadAsync(string userId, IReadOnlyList<string> audiences, long notificationId, CancellationToken cancellationToken)
     {
         var visible = await db.Notifications.AnyAsync(n => n.Id == notificationId && audiences.Contains(n.Audience), cancellationToken);
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the notification is not addressed to one of this person's audiences, answer "not
+        // │ found" - existence is not disclosed.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (!visible)
             return false;
 

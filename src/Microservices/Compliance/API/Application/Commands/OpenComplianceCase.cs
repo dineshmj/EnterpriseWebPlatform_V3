@@ -24,6 +24,12 @@ public sealed record OpenComplianceCaseCommand(
 
 public sealed record OpenComplianceCaseResult(long ComplianceCaseId, string Status, bool Created);
 
+// ┌─ :: ARCHITECTURE :: Opening a case from an event, idempotently ────────────────────────────────
+// │ Why : The KYC outcome can arrive twice, or two subscriber instances can race on it.
+// │ How : One case per application (unique); a repeat finds the existing case and is answered,
+// │       never duplicated.
+// │ Ref : Features 1.3.2, 1.4.1 | Idempotent Consumer pattern
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 public sealed class OpenComplianceCaseCommandHandler(
     IComplianceCaseRepository repository,
     IInboxStore inbox,
@@ -41,6 +47,10 @@ public sealed class OpenComplianceCaseCommandHandler(
     public async Task<OpenComplianceCaseResult> HandleAsync(OpenComplianceCaseCommand command, CancellationToken cancellationToken)
     {
         var existing = await repository.GetByApplicationRefAsync(command.ApplicationRef, cancellationToken);
+        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // │ If the case already exists, this is a redelivery: answer with the existing case -
+        // │ never open a second one.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (existing is not null)
             return new OpenComplianceCaseResult(existing.Id, existing.Status.ToCode(), Created: false);
 

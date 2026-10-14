@@ -20,6 +20,13 @@ namespace EnterpriseWebPlatform.Audit.Api.Authorization;
 /// </summary>
 public sealed record DelegatedAuditorRequirement(string Permission) : IAuthorizationRequirement;
 
+// ┌─ :: SECURITY :: Only a person, through the Audit Journey API ──────────────────────────────────
+// │ Why : The audit trail is read by auditors; a machine token, or any other client holding the
+// │       scope, must not read it.
+// │ How : The token must have a person (sub), the audit.read scope, the Audit Journey API as the
+// │       acting client (act) and the permission of the action.
+// │ Ref : Features 2.1.2, 2.2.2 | RFC 8693 (act) | OWASP API5 BFLA
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 public sealed class DelegatedAuditorAuthorizationHandler : AuthorizationHandler<DelegatedAuditorRequirement>
 {
     protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, DelegatedAuditorRequirement requirement)

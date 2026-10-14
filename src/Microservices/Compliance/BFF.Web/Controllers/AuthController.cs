@@ -20,6 +20,10 @@ public sealed class AuthController : ControllerBase
     [AllowAnonymous]
     public IActionResult SilentLogin([FromQuery] string returnUrl = BffRouteCatalog.WorkQueue)
     {
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the return URL is not one of this MFE's own pages, refuse it - a crafted link
+        // │ cannot bounce a signed-in person to another site (open redirect).
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (!BffRouteCatalog.IsAllowedSpaRoute(returnUrl))
         {
             return BadRequest(new { message = "Invalid Compliance MFE return URL." });
@@ -34,6 +38,10 @@ public sealed class AuthController : ControllerBase
         {
             RedirectUri = returnUrl
         };
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ Silent sign-in (prompt=none) inside the Shell's frame: the IDP's single sign-on
+        // │ answers without a page; if there is no IDP session, the frame shows "signed out".
+        // └──────────────────────────────────────────────────────────────────────────────────────
         properties.Items["prompt"] = "none";
 
         return Challenge(properties, "oidc");
@@ -51,6 +59,10 @@ public sealed class AuthController : ControllerBase
     {
         var properties = new AuthenticationProperties { RedirectUri = StepUpDonePath };
         properties.Items["prompt"] = "login";
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ Step-up: prompt=login + acr_values=mfa - the IDP asks the signed-in person only for a
+        // │ fresh code; the window returns to the fixed step-up-done address.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         properties.Items["acr_values"] = "mfa";
         return Challenge(properties, "oidc");
     }

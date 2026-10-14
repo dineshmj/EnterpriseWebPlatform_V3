@@ -51,6 +51,13 @@ public sealed class AuditEntry
     public string EntryHash { get; set; } = string.Empty;
 }
 
+// ┌─ :: SECURITY :: Hash chain: every entry seals the one before ──────────────────────────────────
+// │ Why : An audit trail an administrator can quietly edit proves nothing.
+// │ How : Each entry's SHA-256 covers its fields (unambiguous JSON array encoding, stored
+// │       precision) and the previous entry's hash; a changed, removed or reordered entry breaks
+// │       every hash after it.
+// │ Ref : Features 2.4.8 | OWASP A09 | NIST SP 800-92 | CWE-117
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// The tamper-evident hash chain. Each entry's hash covers its own content AND the previous
 /// entry's hash, so changing, deleting or reordering any entry breaks every hash after it.

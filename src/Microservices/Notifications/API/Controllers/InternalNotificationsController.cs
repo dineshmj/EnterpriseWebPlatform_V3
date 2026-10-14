@@ -21,6 +21,10 @@ public sealed class InternalNotificationsController(
     ILogger<InternalNotificationsController> logger) : ControllerBase
 {
     [HttpPost("events")]
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Internal endpoint: only the Notifications Subscriber's client_id is accepted
+    // │ (pinned), not just the scope.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     [Authorize(Policy = "NotificationsSubscriberWrite")]
     public async Task<IActionResult> FromEvent([FromBody] WorkflowEventRequest request, CancellationToken cancellationToken)
     {

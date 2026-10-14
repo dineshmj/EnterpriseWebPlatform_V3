@@ -58,6 +58,14 @@ export interface SimulatorState {
   changedBy: string | null;
 }
 
+// ┌─ :: ARCHITECTURE + SECURITY :: The simulators' behaviour switch ───────────────────────────────
+// │ Why : Switching a simulator to "Down" is a powerful demo tool that must never exist in
+// │       production.
+// │ How : Only when OPERATIONS_SIMULATOR_CONTROLS_ENABLED (Development / Test); called server-side
+// │       on loopback-only endpoints; permission simulator.behaviour.manage + recent MFA; logged
+// │       with the LAN ID; auto-revert to Healthy.
+// │ Ref : Features 1.7.4 | Threat-Model (Operations) | OWASP A04 (insecure design)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /**
  * The simulators' behaviour switch, Development and test only. The simulators accept the switch
  * from loopback callers only, so it is called here - on the same machine - and never from the
@@ -122,6 +130,10 @@ export class SimulatorService implements OnModuleDestroy {
   }
 
   private ensureEnabled(): void {
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ If the switch is off, answer 404 - outside Development and Test the feature does not
+    // │ exist at all.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     if (!this.options.simulatorControlsEnabled) {
       throw new NotFoundException();   // outside Development and test: as if it did not exist
     }

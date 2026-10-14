@@ -30,6 +30,12 @@ public sealed class ComplianceKafkaProducer(Microsoft.Extensions.Options.IOption
     }
 }
 
+// ┌─ :: ARCHITECTURE :: Transactional Outbox relay (in-process) ───────────────────────────────────
+// │ Why : Compliance outcomes must reach Kafka exactly when their decision commits.
+// │ How : FOR UPDATE SKIP LOCKED, per-aggregate order, bounded attempts with back-off, parked after
+// │       MaxAttempts; the decision's trace continues into Kafka.
+// │ Ref : Features 1.3.1 | Transactional Outbox pattern
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Relays committed Compliance Outbox rows to Kafka with the platform's relay
 /// guarantees: FOR UPDATE SKIP LOCKED (multi-instance safe), per-aggregate ordering,

@@ -59,6 +59,10 @@ public sealed class ComplianceCasesController(
         [FromBody] OfficerTextRequest? request,
         CancellationToken cancellationToken = default)
     {
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ Only the known officer actions are forwarded - the BFF never builds an API path from
+        // │ arbitrary input.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (!Actions.Contains(officerAction))
             return Task.FromResult<IActionResult>(NotFound());
 
@@ -91,6 +95,11 @@ public sealed class ComplianceCasesController(
                     ContentType = "application/json"
                 };
             }
+            // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+            // │ If the API is down or its circuit is open, answer 503 at once ("temporarily
+            // │ unavailable") instead of letting the screen hang; the API's own answer (a 403, a
+            // │ validation problem) is relayed unchanged.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             catch (Exception ex) when (ex is BrokenCircuitException or TimeoutRejectedException or HttpRequestException)
             {
                 logger.LogWarning(ex, "Compliance API unavailable for {Method} {Path}.", message.Method, message.RequestUri);

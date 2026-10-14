@@ -30,6 +30,14 @@ export async function verifyIntegrity(): Promise<ActionResult<IntegrityResult>> 
   return callJourney<IntegrityResult>('/v1/journeys/audit/integrity');
 }
 
+// ┌─ :: ARCHITECTURE + SECURITY :: Server actions: two hops, no token in the browser ──────────────
+// │ Why : The screen needs data from domain APIs, yet must never hold a token or reach them
+// │       directly.
+// │ How : A server action reads the session, exchanges the person's token for the Journey API,
+// │       which exchanges again for each domain API; Problem Details (detail, code) come back to
+// │       the screen.
+// │ Ref : Features 3.3, 2.1.2 | Customer pattern (Next.js BFF -> NestJS Journey API -> domain API)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 async function callJourney<T>(path: string): Promise<ActionResult<T>> {
   const cookieStore = await cookies();
   const cookieValue = cookieStore.get(SESSION_COOKIE)?.value;

@@ -75,6 +75,13 @@ public static class NotificationCategory
     public const string NewWork = "NEW_WORK";
 }
 
+// ┌─ :: SECURITY :: Audiences from the token, never from the request ──────────────────────────────
+// │ Why : A person who could name the audience they listen to could read another branch's or
+// │       person's notifications.
+// │ How : Audiences are derived from the token only: the person (sub), their work-queue roles in
+// │       THEIR branch, and the all-branches roles; no branch claim means no branch queues.
+// │ Ref : Features 1.5.4, 2.2.3 | OWASP API1 BOLA
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Audiences, derived on the server from the person's token - never chosen by the browser,
 /// so nobody can listen to another person's or another branch's notifications.

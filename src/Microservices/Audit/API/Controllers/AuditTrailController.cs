@@ -32,6 +32,10 @@ public sealed class AuditTrailController(
         [FromQuery] DateTimeOffset? from, [FromQuery] DateTimeOffset? to, [FromQuery] string? kind,
         [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 25, CancellationToken cancellationToken = default)
     {
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ Paging and filters are bounded (page size, 100-character filters, known entry kinds)
+        // │ - no unbounded queries.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (pageNumber < 1 || pageSize < 1 || pageSize > MaxPageSize)
             return ValidationProblem($"pageNumber must be at least 1 and pageSize between 1 and {MaxPageSize}.");
         var entryKind = string.IsNullOrWhiteSpace(kind) ? AuditEntryKind.Event : kind.Trim().ToUpperInvariant();

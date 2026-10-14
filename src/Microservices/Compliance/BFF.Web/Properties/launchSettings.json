@@ -1,5 +1,12 @@
 {
   "$schema": "http://json.schemastore.org/launchsettings.json",
+  // ┌─ :: SECURITY :: HTTPS on the component's own host name ────────────────────────────────────────
+  // │ Why : Cookies are __Host- / Secure and tokens are bearer secrets: nothing may travel over plain
+  // │       HTTP.
+  // │ How : HTTPS only, on compliance.dev.localhost; ASPNETCORE_ENVIRONMENT=Development is the only
+  // │       environment that loads the development secrets and switches.
+  // │ Ref : Features 2.3.3, 2.4.5 | OWASP A02 (TLS)
+  // └────────────────────────────────────────────────────────────────────────────────────────────────
   "profiles": {
     "https": {
       "commandName": "Project",

@@ -22,6 +22,13 @@ public interface INotificationPusher
     Task PushAsync(IReadOnlyList<Notification> notifications, CancellationToken cancellationToken);
 }
 
+// ┌─ :: ARCHITECTURE :: Notifications from events, idempotently ───────────────────────────────────
+// │ Why : Workflow events arrive at least once; a repeat must not notify twice, and a push failure
+// │       must not lose the notification.
+// │ How : The message ID goes to the Inbox in the same transaction as the notifications; the push
+// │       happens after the commit and is best effort - the screen also reads the stored list.
+// │ Ref : Features 1.3.2, 1.5.4 | Idempotent Consumer pattern
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Turns one workflow event into notifications: Inbox check, rules, store - in one
 /// transaction - then push live. Stored first, pushed second: a person who is offline,
@@ -38,6 +45,9 @@ public sealed class PublishFromEventHandler(
     public async Task<(PublishOutcome Outcome, int Count)> HandleAsync(
         Guid messageId, string eventType, JsonElement envelope, CancellationToken cancellationToken)
     {
+        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // │ If this event was already turned into notifications, do nothing (Inbox).
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (await db.InboxMessages.AnyAsync(x => x.MessageId == messageId && x.Consumer == InboxConsumer, cancellationToken))
             return (PublishOutcome.Duplicate, 0);
 

@@ -6,6 +6,13 @@ import { encrypt } from '@/lib/server/session-store';
 
 export const dynamic = 'force-dynamic';
 
+// ┌─ :: SECURITY :: Step-up sign-in in a window ───────────────────────────────────────────────────
+// │ Why : The IDP's sign-in pages may never be framed, yet a risky change inside the frame may need
+// │       a fresh code.
+// │ How : prompt=login + acr_values=mfa: the IDP asks only for the code; the window returns to the
+// │       fixed /api/auth/step-up-done and is closed by the screen, which retries once.
+// │ Ref : Features 2.1.5 | RFC 9470 | Threat-Model R-13
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /**
  * Step-up for a risky change, opened by the page in a small window (the IDP's pages are never
  * framed): the IDP asks only for a fresh authenticator code, and the new session's tokens carry a

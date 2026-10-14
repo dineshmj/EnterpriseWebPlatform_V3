@@ -46,6 +46,13 @@ public sealed record OfficerActionResult(
     public static OfficerActionResult Failed(OfficerActionOutcome outcome, string error) => new(outcome, error);
 }
 
+// ┌─ :: ARCHITECTURE + SECURITY :: One officer action, locked and branch-scoped ───────────────────
+// │ Why : Two officers acting on one case at once, or an officer guessing another branch's case ID,
+// │       must both fail safely.
+// │ How : The case is locked FOR UPDATE; another branch's case is reported as not found; each
+// │       domain refusal becomes its own outcome (403 / 409 / 400), a concurrent change a 409.
+// │ Ref : Features 1.6.4, 2.2.3 | OWASP API1 BOLA
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// One handler for every officer action: lock the case, apply the aggregate method,
 /// save with the Outbox, commit. Domain refusals map to 403 (SoD, ReBAC, clearance),

@@ -48,6 +48,10 @@ public sealed class InternalComplianceCasesController(
     IStaffDirectory staffDirectory) : ControllerBase
 {
     [HttpPost("from-kyc-approved")]
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Internal endpoint: only the Compliance Case Opening Subscriber's client_id is
+    // │ accepted (pinned), not just the scope.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     [Authorize(Policy = "ComplianceCaseOpeningSubscriberWrite")]
     public async Task<IActionResult> Open([FromBody] OpenComplianceCaseRequest request, CancellationToken cancellationToken)
     {

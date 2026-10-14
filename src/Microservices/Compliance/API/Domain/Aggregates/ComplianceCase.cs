@@ -5,6 +5,15 @@ using EnterpriseWebPlatform.Compliance.Api.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.Compliance.Api.Domain.Aggregates;
 
+// ┌─ :: ARCHITECTURE + SECURITY :: The compliance case: screening, assignment, clearance and four eyes ────
+// │ Why : A sanctions / PEP decision must be taken by an independent officer cleared for the risk
+// │       found - never by someone already involved in the same application.
+// │ How : Screening sets the risk and the clearance it requires; one officer takes the case (ReBAC)
+// │       and only they act on it; approval needs clearance >= the risk; neither the initiator nor
+// │       a KYC decider of the application may act (fails closed when unknown).
+// │ Ref : Features 1.2.1, 2.2.4, 2.2.5, 2.2.6 | Authorization-Model 6, 8 |
+// │       OWASP A01 (business logic)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Aggregate root: the compliance (financial-crime) review of ONE onboarding
 /// application that KYC has approved.
@@ -257,6 +266,10 @@ public sealed class ComplianceCase : AggregateRoot
 
         if (RequiredClearance is not { } required)
             throw new DomainConflictException("The case has no risk rating yet.");
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the officer's clearance is below what the screened risk requires, refuse the
+        // │ approval (ABAC).
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (officerClearance < required)
         {
             throw new ClearanceViolationException(
@@ -317,6 +330,10 @@ public sealed class ComplianceCase : AggregateRoot
             throw new DomainConflictException("The case cannot be decided before its screening has completed.");
         if (Status == ComplianceCaseStatus.OnHold && !allowOnHold)
             throw new DomainConflictException("The case is on hold; release the hold first.");
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the case was taken by another officer, refuse (ReBAC); an untaken case is taken by
+        // │ the first action.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (AssignedOfficerUserId is not null && !IsAssignedTo(officerUserId))
             throw new AssignmentViolationException("The compliance case is assigned to another officer; only that officer can act on it.");
 
@@ -340,8 +357,10 @@ public sealed class ComplianceCase : AggregateRoot
     {
         RequireOfficer(officerUserId);
 
-        // Fail closed: without a known initiator the platform cannot prove that the
-        // officer is not acting on their own workflow.
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the initiator is unknown, deny: nobody can prove the officer is not acting on their
+        // │ own workflow (separation of duties fails closed).
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (InitiatedByUserId is null)
             throw new SeparationOfDutiesViolationException(
                 "The workflow initiator of this application is unknown, so Separation of Duties cannot be verified. The action is denied.");
@@ -349,6 +368,10 @@ public sealed class ComplianceCase : AggregateRoot
         if (Same(InitiatedByUserId, officerUserId))
             throw new SeparationOfDutiesViolationException("The workflow initiator cannot take or decide the compliance case.");
 
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If this officer decided the application's KYC, they may not decide its compliance too
+        // │ (cross-context four eyes).
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (Same(KycIdentityDecidedByUserId, officerUserId) || Same(KycDocumentDecidedByUserId, officerUserId))
             throw new SeparationOfDutiesViolationException(
                 "An officer who decided this application's KYC cannot also take or decide its compliance case.");

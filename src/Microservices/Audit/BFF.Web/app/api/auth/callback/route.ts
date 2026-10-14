@@ -10,6 +10,10 @@ export async function GET(request: NextRequest) {
   const sealed = request.cookies.get(AUTH_STATE_COOKIE)?.value;
   let pending: PendingSignIn;
   try {
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ If the encrypted sign-in state is missing or cannot be decrypted, the callback was
+    // │ not started here: refuse it (CSRF on login).
+    // └──────────────────────────────────────────────────────────────────────────────────────
     pending = JSON.parse(decrypt(sealed ?? '')) as PendingSignIn;
   } catch {
     return signedOut('The sign-in took too long or was not started here. Open the Audit Trail from the menu again.');

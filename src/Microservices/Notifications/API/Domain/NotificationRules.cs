@@ -3,6 +3,14 @@ using System.Text.RegularExpressions;
 
 namespace EnterpriseWebPlatform.Notifications.Api.Domain;
 
+// ┌─ :: ARCHITECTURE :: Who hears about what ──────────────────────────────────────────────────────
+// │ Why : Each event should reach exactly the people who must act or who started the work - no
+// │       broadcast.
+// │ How : Progress goes to the initiator; new work goes to the role's queue in the record's branch
+// │       (operations: all branches); an event without the needed initiator or branch notifies
+// │       nobody.
+// │ Ref : Features 1.5.4 | Need-to-know principle
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// The Notifications context's rules: which workflow event tells whom what. Reads the
 /// published contracts as a tolerant reader (only the fields it needs). People are named

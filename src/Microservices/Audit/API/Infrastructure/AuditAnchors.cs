@@ -4,6 +4,13 @@ using System.Text.Json;
 
 namespace EnterpriseWebPlatform.Audit.Api.Infrastructure;
 
+// ┌─ :: SECURITY :: Signed checkpoints outside the database ───────────────────────────────────────
+// │ Why : Someone with full database access could rewrite the whole chain and recompute every hash.
+// │ How : The newest verified entry is anchored in a checkpoint signed with an ECDSA P-256 key and
+// │       stored OUTSIDE the database; a rewritten chain no longer matches its anchors, and a new
+// │       anchor cannot be forged without the key.
+// │ Ref : Features 2.4.8 | Threat-Model (audit anchor) | FIPS 186-5 (ECDSA)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// A signed statement, kept OUTSIDE the audit database: "at this moment, entry {Sequence} of the
 /// trail had hash {EntryHash}". The hash chain makes every edit inside the database visible -
@@ -33,6 +40,10 @@ public sealed class AuditCheckpointSigner : IDisposable
     {
         if (string.IsNullOrWhiteSpace(keyId))
             throw new InvalidOperationException("Audit:Anchors:KeyId is not configured.");
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the signing key is missing, refuse to start - the chain would have no anchor
+        // │ outside its database (fail closed).
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (string.IsNullOrWhiteSpace(pkcs8Base64))
             throw new InvalidOperationException("Audit:Anchors:SigningKey is not configured: the audit chain would have no anchor outside its database.");
 

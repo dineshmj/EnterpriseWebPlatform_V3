@@ -16,6 +16,12 @@ public sealed record AuditChainVerification(
     long LastSequence = 0,
     string? LastEntryHash = null);
 
+// ┌─ :: SECURITY :: Verification: chain, anchors, truncation ──────────────────────────────────────
+// │ Why : Tampering is only useful to detect if someone checks.
+// │ How : Every hash and link is recomputed; every anchor must carry a valid signature and still
+// │       match the chain; a chain shorter than its newest anchor means entries were removed.
+// │ Ref : Features 2.4.8 | OWASP A09
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Re-walks the whole trail in sequence order and checks, for every entry: the sequence has no
 /// gap, it points at the previous entry's hash, and its own hash still matches its content - an
@@ -79,6 +85,10 @@ public sealed class AuditChainVerifier(AuditDbContext db, AuditAnchorStore ancho
 
         var lastSequence = expectedSequence - 1;
         var latestAnchored = anchored.Keys.DefaultIfEmpty(0).Max();
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If an anchor names an entry beyond the end of the trail, entries were removed
+        // │ (truncation): report it as broken.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (latestAnchored > lastSequence)
         {
             return Broken(checkedCount, expectedSequence,

@@ -27,6 +27,15 @@ const PERMISSION_KEY = 'requiredPermission';
 /** The person must hold this permission (audit.view, audit.search). */
 export const RequiresPermission = (permission: string) => SetMetadata(PERMISSION_KEY, permission);
 
+// ┌─ :: SECURITY :: Audit Journey API: delegated tokens only ──────────────────────────────────────
+// │ Why : The Journey API must serve a person through its own web app - not a stolen machine token
+// │       or another client holding the scope.
+// │ How : JWT checked against the IDP's keys (issuer, audience, lifetime, at+jwt); a person (sub),
+// │       the scope, the web BFF as "act" and the endpoint's permission are all required; no rule
+// │       on an endpoint = denied.
+// │ Ref : Features 2.1.2, 2.2.1 | RFC 8693 | RFC 9068 | OWASP API2, API5 |
+// │       Threat-Model .NET/NestJS parity
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /**
  * Accepts only a DELEGATED token: issued by the IDP for this API (audience), with the scope
  * audit-journey.read, whose "act" names the Audit web BFF - i.e. the BFF exchanged a signed-in
@@ -66,6 +75,10 @@ export class DelegatedTokenGuard implements CanActivate {
 
     const scopes = toList(payload.scope);
     const actingClient = (payload.act as { client_id?: unknown } | undefined)?.client_id;
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ No person, wrong scope or another acting client: refuse - only the Audit web, acting
+    // │ for a signed-in person, may call.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     if (typeof payload.sub !== 'string' || !scopes.includes('audit-journey.read') || actingClient !== this.options.callerClientId) {
       throw new ForbiddenException('Only the Audit web application, acting for a signed-in person, may call this API.');
     }

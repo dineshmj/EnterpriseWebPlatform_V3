@@ -33,6 +33,14 @@ public sealed class ScreeningProviderOptions
     public int RetryMaxDelaySeconds { get; init; } = 300;
 }
 
+// ┌─ :: ARCHITECTURE + SECURITY :: Calls to the external screening provider ───────────────────────
+// │ Why : An outbound call to a configurable URL can be turned against internal systems (SSRF), and
+// │       a hung provider can exhaust the API.
+// │ How : The endpoint is checked at start-up (https, permitted hosts, no internal addresses
+// │       outside Development); no redirects are followed; timeout, retry and circuit breaker per
+// │       call; failures become "unavailable", never a decision.
+// │ Ref : Features 1.6.3, 2.4.9 | OWASP API7:2023 SSRF | CWE-918 | Circuit Breaker pattern
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// HTTP adapter to the external AML / sanctions / PEP screening provider, and the
 /// anti-corruption layer for its wire format. The HttpClient runs through a
@@ -75,6 +83,10 @@ public sealed class ScreeningProviderClient(HttpClient http, IOptions<ScreeningP
             message.Headers.Add("X-Api-Key", options.Value.ApiKey);
             response = await http.SendAsync(message, cancellationToken);
         }
+        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // │ If the circuit is open, report the provider as unavailable at once - the case is
+        // │ retried later, never decided.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         catch (BrokenCircuitException ex)
         {
             throw new ScreeningUnavailableException("Screening provider unavailable: the circuit breaker is open.", ex);

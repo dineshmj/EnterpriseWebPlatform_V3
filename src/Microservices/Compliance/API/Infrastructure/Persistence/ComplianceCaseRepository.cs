@@ -7,6 +7,13 @@ using EnterpriseWebPlatform.Compliance.Api.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.Compliance.Api.Infrastructure.Persistence;
 
+// ┌─ :: ARCHITECTURE :: Row locks for actions and screening ───────────────────────────────────────
+// │ Why : Two officers, or two screening instances, working on the same case at once could each
+// │       miss the other's change.
+// │ How : Officer actions lock the case FOR UPDATE; the screening worker takes due cases FOR UPDATE
+// │       SKIP LOCKED; Version is the second guard at save time.
+// │ Ref : Features 1.6.4 | Pessimistic + optimistic concurrency
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 public sealed class ComplianceCaseRepository(ComplianceDbContext db) : IComplianceCaseRepository
 {
     public Task<ComplianceCase?> GetByApplicationRefAsync(Guid applicationRef, CancellationToken cancellationToken) =>

@@ -50,6 +50,10 @@ public sealed class AuditChainMonitor(
                 var result = await scope.ServiceProvider.GetRequiredService<AuditChainVerifier>().VerifyAsync(stoppingToken);
                 status.Latest = result;
 
+                // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+                // │ Anchor only a chain that verified intact - a broken chain is never sealed as if it
+                // │ were good.
+                // └──────────────────────────────────────────────────────────────────────────────────────
                 if (result.Intact)
                 {
                     logger.LogInformation("Audit chain intact: {Entries} entries verified, {Checkpoints} checkpoint(s) matched.",
@@ -112,6 +116,10 @@ public sealed class AuditChainHealthCheck(AuditChainStatus status, TimeProvider 
             problems.Add($"Audit chain verification overdue: last one {age.TotalMinutes:F0} min ago");
         if (latest.Intact && latest.LastSequence > status.AnchoredSequence)
             problems.Add($"Audit chain not anchored beyond entry {status.AnchoredSequence} (newest verified entry {latest.LastSequence})");
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If checkpoint files disappeared since the last run, readiness degrades - removed
+        // │ anchors are themselves tampering.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (status.Checkpoints < status.MostCheckpointsSeen)
             problems.Add($"{status.MostCheckpointsSeen - status.Checkpoints} audit checkpoint file(s) missing since start-up");
 

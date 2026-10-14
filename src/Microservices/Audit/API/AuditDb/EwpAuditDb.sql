@@ -68,6 +68,12 @@ CREATE INDEX ix_audit_entries_occurred ON audit_entries (occurred_at);
 CREATE INDEX ix_audit_entries_event_type ON audit_entries (event_type);
 
 -- Append-only, for everybody: an entry, once written, is never changed or removed.
+-- ┌─ :: SECURITY :: Append-only table ─────────────────────────────────────────────────────────────
+-- │ Why : The application's own database user must not be able to change history either.
+-- │ How : Triggers refuse every UPDATE, DELETE and TRUNCATE on audit_entries, for every user; the
+-- │       hash chain and the anchors catch whoever bypasses this.
+-- │ Ref : Features 2.4.8, 2.4.3 | OWASP A09 | Defence in depth
+-- └────────────────────────────────────────────────────────────────────────────────────────────────
 CREATE FUNCTION audit_entries_append_only() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
     RAISE EXCEPTION 'audit_entries is append-only: % is not allowed', TG_OP

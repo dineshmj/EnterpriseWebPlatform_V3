@@ -4,6 +4,14 @@ import { SessionData } from './session-store';
 
 let clientPromise: Promise<Client> | undefined;
 
+// ┌─ :: SECURITY :: OIDC client and the first token exchange ──────────────────────────────────────
+// │ Why : The browser must never hold a token, and the Journey API must know which person is asking
+// │       through which app.
+// │ How : Authorization Code + PKCE with state and nonce; tokens stay in the server-side session
+// │       and are refreshed there; each call exchanges the person's token (RFC 8693) for a Journey
+// │       API token naming this BFF as "act".
+// │ Ref : Features 2.1.1, 2.1.2 | RFC 7636 | RFC 8693 | IETF OAuth for Browser-Based Apps
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /** The IDP client of this light BFF (discovered once; retried after a failure). */
 export function oidcClient(): Promise<Client> {
   clientPromise ??= Issuer.discover(config.authority)

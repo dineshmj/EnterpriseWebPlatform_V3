@@ -20,6 +20,13 @@ export class TooManyRequestsException extends HttpException {
   }
 }
 
+// ┌─ :: SECURITY :: Per-person rate limits ────────────────────────────────────────────────────────
+// │ Why : One person, or a script with their session, must not exhaust the services behind this
+// │       API.
+// │ How : An overall limit plus per-person-and-client budgets (reads 120 / min; changes, where
+// │       there are any, 10 / min); 429 with Retry-After.
+// │ Ref : Features 2.4.7 | OWASP API4:2023
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /**
  * Fixed-window counters in memory, per key (OWASP API4: unrestricted resource consumption). Each
  * instance of the API counts on its own; the limits are per instance.

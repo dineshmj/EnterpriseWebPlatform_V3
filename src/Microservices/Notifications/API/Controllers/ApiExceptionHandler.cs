@@ -5,6 +5,12 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace EnterpriseWebPlatform.Notifications.Api.Controllers;
 
+// ┌─ :: SECURITY :: Errors that leak nothing ──────────────────────────────────────────────────────
+// │ Why : Stack traces, SQL or exception messages help an attacker map the system.
+// │ How : Unexpected exceptions become problem details with a traceId only; domain errors carry
+// │       their own message.
+// │ Ref : Features 2.4.1 | RFC 9457 | OWASP A05 | CWE-209
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Unexpected exceptions become RFC 9457 problem details WITHOUT internals (OWASP A05 /
 /// CWE-209): a generic message and a traceId; the full exception is logged under the

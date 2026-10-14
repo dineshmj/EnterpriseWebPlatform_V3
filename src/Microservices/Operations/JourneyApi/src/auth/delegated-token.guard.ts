@@ -33,6 +33,15 @@ const REQUIREMENT_KEY = 'operationsRequirement';
 /** The endpoint needs this scope in the token and this permission held by the person. */
 export const Requires = (requirement: Requirement) => SetMetadata(REQUIREMENT_KEY, requirement);
 
+// ┌─ :: SECURITY :: Operations Journey API: delegated tokens only ─────────────────────────────────
+// │ Why : The Journey API must serve a person through its own web app - not a stolen machine token
+// │       or another client holding the scope.
+// │ How : JWT checked against the IDP's keys (issuer, audience, lifetime, at+jwt); a person (sub),
+// │       the scope, the web BFF as "act" and the endpoint's permission are all required; no rule
+// │       on an endpoint = denied.
+// │ Ref : Features 2.1.2, 2.2.1 | RFC 8693 | RFC 9068 | OWASP API2, API5 |
+// │       Threat-Model .NET/NestJS parity
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /**
  * Accepts only a DELEGATED token: issued by the IDP for this API (audience), with the endpoint's
  * scope, whose "act" names the Operations web BFF - i.e. the BFF exchanged a signed-in person's
@@ -75,11 +84,18 @@ export class DelegatedTokenGuard implements CanActivate {
     }
 
     const requirement = this.reflector.get<Requirement | undefined>(REQUIREMENT_KEY, context.getHandler());
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ An endpoint without an access rule is denied - deny by default.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     if (!requirement) {
       throw new ForbiddenException('This endpoint has no access rule.');   // deny by default
     }
 
     const actingClient = (payload.act as { client_id?: unknown } | undefined)?.client_id;
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ No person, wrong scope or another acting client: refuse - only the Operations web,
+    // │ acting for a signed-in person, may call.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     if (typeof payload.sub !== 'string' || !toList(payload.scope).includes(requirement.scope) || actingClient !== this.options.callerClientId) {
       throw new ForbiddenException('Only the Operations web application, acting for a signed-in person, may call this API.');
     }
@@ -92,6 +108,10 @@ export class DelegatedTokenGuard implements CanActivate {
       throw new ForbiddenException('You are not allowed to do this.');
     }
 
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ A risky change needs a recent MFA sign-in (amr + auth_time): otherwise 403
+    // │ mfa_required and the screen steps up.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     if (requirement.stepUp && this.options.mfaEnabled && !recentMfa(payload, this.options.mfaMaxAgeMinutes)) {
       throw new ForbiddenException({
         code: 'mfa_required',

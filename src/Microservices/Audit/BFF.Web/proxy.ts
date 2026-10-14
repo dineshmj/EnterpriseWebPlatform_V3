@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// ┌─ :: SECURITY :: Audit web: security headers on every response ─────────────────────────────────
+// │ Why : The same browser threats as every MFE: injected script, framing by another site, MIME
+// │       sniffing.
+// │ How : A per-request nonce CSP (no 'unsafe-inline' scripts), frame-ancestors the Shell and the
+// │       IDP only, nosniff and a strict referrer policy.
+// │ Ref : Features 2.3.1, 2.3.2 | CSP Level 3 | OWASP Clickjacking Defense | CWE-1021
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /**
  * Security headers for every response, with a strict Content-Security-Policy: scripts only
  * from this app and only with this request's nonce ('strict-dynamic' lets Next.js's own

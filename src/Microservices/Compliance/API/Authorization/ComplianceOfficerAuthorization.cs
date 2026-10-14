@@ -4,6 +4,13 @@ using Microsoft.AspNetCore.Authorization;
 
 namespace EnterpriseWebPlatform.Compliance.Api.Authorization;
 
+// ┌─ :: SECURITY :: Compliance officer: RBAC + permission + ABAC ──────────────────────────────────
+// │ Why : A role alone is too coarse for a regulated decision.
+// │ How : compliance_officer + the action's permission + department Compliance + a clearance level
+// │       + a branch claim; the case's branch and the risk clearance are checked again on the
+// │       record.
+// │ Ref : Features 2.2.4 | Authorization-Model 5 | NIST SP 800-162
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// RBAC + ABAC requirement for acting on compliance cases: role compliance_officer,
 /// department COMPLIANCE, clearance level 3 or above, and EVERY listed permission.

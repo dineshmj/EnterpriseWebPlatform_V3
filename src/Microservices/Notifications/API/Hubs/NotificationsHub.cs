@@ -6,6 +6,14 @@ using EnterpriseWebPlatform.Notifications.Api.Domain;
 
 namespace EnterpriseWebPlatform.Notifications.Api.Hubs;
 
+// ┌─ :: ARCHITECTURE + SECURITY :: Real-time push over SignalR ────────────────────────────────────
+// │ Why : A WebSocket kept open forever outlives the sign-in, and one person opening hundreds of
+// │       connections can exhaust the server.
+// │ How : Only signed-in people (scope notifications.read) connect; each joins only the groups of
+// │       its own audiences; connections per person are limited; the connection closes when the
+// │       token expires.
+// │ Ref : Features 1.5.4, 2.4.7 | OWASP API4:2023 (resource consumption) | ASVS V3
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// The live channel. The Shell BFF proxies one connection per browser here and adds the
 /// person's access token; the hub joins the connection to the person's audiences, taken
@@ -23,6 +31,10 @@ public sealed class NotificationsHub(HubConnectionLimiter limiter, ILogger<Notif
     public override async Task OnConnectedAsync()
     {
         var person = Context.User?.FindFirst("sub")?.Value;
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the person already holds the maximum number of connections (or has no sub), refuse
+        // │ the new one.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (person is null || !limiter.TryAcquire(person))
         {
             logger.LogWarning("Notifications connection {ConnectionId} refused: {Reason}.", Context.ConnectionId,

@@ -9,6 +9,13 @@ interface TokenResponse {
   error_description?: string;
 }
 
+// ┌─ :: SECURITY :: The second token exchange: one token per downstream scope ─────────────────────
+// │ Why : Each domain API must see the person, and the chain of applications acting for them.
+// │ How : The delegated token is exchanged again (RFC 8693) for each downstream scope (audit.read,
+// │       payments.read); this API is added to the "act" chain; an IDP refusal is a 403, an IDP
+// │       outage a 503.
+// │ Ref : Features 2.1.2 | RFC 8693
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /**
  * OAuth 2.0 Token Exchange (RFC 8693): swaps the token this API received (the person, with the
  * web BFF acting) for one aimed at ONE downstream API - the person stays the subject, and this

@@ -21,6 +21,9 @@ async function bootstrap() {
   // A JSON API for one server-side caller: no browser should ever render or frame it.
   app.use((_req: Request, res: Response, next: NextFunction) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ An API serves no pages: CSP default-src 'none' and never framed.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
     res.setHeader('Cache-Control', 'no-store');
     next();

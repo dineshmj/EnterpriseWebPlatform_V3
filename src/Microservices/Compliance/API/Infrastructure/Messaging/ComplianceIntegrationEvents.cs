@@ -11,6 +11,13 @@ namespace EnterpriseWebPlatform.Compliance.Api.Infrastructure.Messaging;
 
 // Published contracts (topics compliance.case.*), in the platform's standard envelope.
 
+// ┌─ :: ARCHITECTURE :: Published contracts ───────────────────────────────────────────────────────
+// │ Why : Accounts and Customer Onboarding react to compliance outcomes without calling Compliance.
+// │ How : The standard envelope (IDs, initiator, SchemaVersion) and payloads with business
+// │       references only - never database IDs of other contexts; tolerant readers ignore what they
+// │       do not need.
+// │ Ref : Features 1.3.6, 3.6 | Integration-Event-Catalogue.md | Tolerant Reader pattern
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 public sealed record ComplianceIntegrationEventEnvelope<TPayload>(
     Guid MessageId,
     string EventType,

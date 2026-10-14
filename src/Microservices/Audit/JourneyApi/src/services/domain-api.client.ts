@@ -8,6 +8,12 @@ import {
 } from '@nestjs/common';
 import { TokenExchangeService } from './token-exchange.service';
 
+// ┌─ :: SECURITY :: Downstream answers, translated ────────────────────────────────────────────────
+// │ Why : Passing a domain API's raw error through would leak its internals to the screen.
+// │ How : 401 / 403 become a plain 403, 404 a 404, anything else a 503 "try again" - with timeouts
+// │       on every call.
+// │ Ref : Features 2.4.1, 1.6.3 | CWE-209
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /**
  * Calls a Domain API for the person: exchanges their token for one aimed at that API, then GETs.
  * Reads only (GET), so one retry on a timeout or a 502/503/504 is safe. The answer is mapped to
