@@ -23,11 +23,12 @@ public sealed class MfeOperations
             ClientName = OperationsMicroservice.CLIENT_NAME_FOR_IDP,
             ClientSecrets = { ClientSecretStore.For(OperationsMicroservice.CLIENT_ID_FOR_IDP) },
 
+            // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+            // │ Sign-in (Authorization Code + PKCE, tokens on the server) plus token exchange (RFC
+            // │ 8693): the exchanged token names this BFF as the acting client, so the Journey API
+            // │ knows which application calls for the person.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             AllowedGrantTypes = { GrantType.AuthorizationCode, OidcConstants.GrantTypes.TokenExchange },
-            // 🡡__ WHY   : Sign-in (code + PKCE, tokens kept on the server) and token exchange for the
-            //              Journey API - the exchanged token names this BFF as the acting client.
-            // 🡡__ IF NOT: The BFF would forward the person's own token, and the Journey API could not
-            //              tell which application is calling for them.
 
             RequirePkce = true,
 

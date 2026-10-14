@@ -59,6 +59,10 @@ public sealed class MenuRepository : IMenuRepository
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the person has no roles, the menu is empty (fail closed); the role filter is a
+        // │ parameterised query.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (roles.Length == 0)
         {
             return [];

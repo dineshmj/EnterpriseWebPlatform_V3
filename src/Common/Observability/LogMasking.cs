@@ -1,5 +1,13 @@
 namespace EnterpriseWebPlatform.Common.Observability;
 
+// ┌─ :: SECURITY :: No full account numbers in logs ───────────────────────────────────────────────
+// │ Why : Account numbers in logs spread into log shippers and observability platforms with other
+// │       access and retention rules.
+// │ How : Only the BSB and the last four digits are logged - enough to tell accounts apart; the
+// │       payment number and the trace ID find the rest.
+// │ Ref : Payments / Accounts README (security rows) | OWASP A09 |
+// │       CWE-532 Insertion of Sensitive Information into Log File | PCI DSS 3.4 (masking)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Masks financial identifiers before they reach a log entry. Logs travel to consoles, log
 /// shippers and observability platforms with their own access and retention rules, so a full

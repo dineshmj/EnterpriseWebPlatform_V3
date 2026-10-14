@@ -2,6 +2,15 @@ using Confluent.Kafka;
 
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 
+// ┌─ :: SECURITY :: Kafka authentication, fail closed ─────────────────────────────────────────────
+// │ Why : Without credentials any program on the network could publish a forged business event
+// │       (e.g. a fake "application submitted") or read every message.
+// │ How : Each deployable connects as its OWN SCRAM-SHA-512 user; a SASL protocol without a user
+// │       name or password stops the start-up instead of silently connecting unauthenticated. The
+// │       broker's ACLs do the rest.
+// │ Ref : Features 2.4.6 | kafka/README.md | OWASP A07 Identification and Authentication Failures |
+// │       CWE-306
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>Applies <see cref="KafkaOptions"/> to a Confluent producer or consumer configuration.</summary>
 public static class KafkaClientSecurity
 {
@@ -12,6 +21,10 @@ public static class KafkaClientSecurity
     /// </summary>
     public static T Apply<T>(T config, KafkaOptions options) where T : ClientConfig
     {
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the Kafka settings are incomplete (e.g. SASL without a user name or password),
+        // │ stop the start-up - never connect unauthenticated.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (Validate(options) is { } error)
             throw new InvalidOperationException(error);
 

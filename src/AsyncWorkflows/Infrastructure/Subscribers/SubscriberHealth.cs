@@ -2,6 +2,15 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Subscribers;
 
+// ┌─ :: ARCHITECTURE :: Worker liveness and readiness ─────────────────────────────────────────────
+// │ Why : An orchestrator (AKS / EKS) must know whether to restart a stuck worker or simply wait
+// │       for a dependency.
+// │ How : Liveness fails when the consume loop stops cycling (restart helps); readiness turns
+// │       Degraded while a message is being retried because its API is down (restart would not
+// │       help). No internals in the answer.
+// │ Ref : Features 1.7.2 | Kubernetes liveness / readiness probes |
+// │       OWASP A05 (no information disclosure)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Live state of the consume loop, written by <see cref="KafkaSubscriberHostedService{TProcessor, TSettings}"/>
 /// and read by the health checks (thread-safe: simple atomic fields).
@@ -82,6 +91,10 @@ public sealed class SubscriberReadinessCheck(SubscriberHealth health) : IHealthC
 {
     public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
+        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // │ If the consumer has not joined its consumer group yet, it is not ready - it receives
+        // │ no partitions.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (!health.HasJoinedGroup)
         {
             var reason = health.LastKafkaError is { } error

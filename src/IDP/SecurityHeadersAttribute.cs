@@ -4,6 +4,14 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace EnterpriseWebPlatform.IdentityServer;
 
+// ┌─ :: SECURITY :: Headers of the sign-in pages ──────────────────────────────────────────────────
+// │ Why : A framed sign-in page can be overlaid to capture a password (clickjacking); inline script
+// │       would make an XSS bug exploitable.
+// │ How : X-Frame-Options DENY and frame-ancestors 'none'; a CSP without 'unsafe-inline'; nosniff;
+// │       no referrer.
+// │ Ref : Features 2.1.3, 2.3.2 | OWASP A05 | CWE-1021 (clickjacking) |
+// │       OWASP Clickjacking Defense Cheat Sheet
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Security headers for the IDP's interactive pages (login, consent, logout).
 /// Razor Pages return a PageResult, MVC views a ViewResult: both are covered.

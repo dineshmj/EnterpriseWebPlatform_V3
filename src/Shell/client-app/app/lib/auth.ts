@@ -17,6 +17,10 @@ export async function checkAuthentication(): Promise<AuthState> {
     const response = await fetch('/bff/user', {
       credentials: 'include',
       headers: {
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ Every BFF call carries Duende's X-CSRF header: a cross-site page cannot add it, so a
+        // │ forged request is refused.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         'X-CSRF': '1',
       },
     });

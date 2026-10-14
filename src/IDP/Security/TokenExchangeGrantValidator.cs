@@ -12,6 +12,15 @@ using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 
 namespace EnterpriseWebPlatform.IdentityServer.Security;
 
+// ┌─ :: SECURITY :: Token exchange (RFC 8693) with an explicit allow-list ─────────────────────────
+// │ Why : A service calling another FOR A PERSON must keep that person as the subject - and no
+// │       service may turn just any token into a token for any other service.
+// │ How : Who may exchange what is an allow-list (fail closed); a token without a person (sub) is
+// │       never exchanged; the requester is added to the nested act claim; the person's original
+// │       auth_time and amr are kept, so step-up holds at every hop.
+// │ Ref : Features 2.1.2 | RFC 8693 OAuth 2.0 Token Exchange | OWASP API2 / API5 |
+// │       Authorization-Model 9.3
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// OAuth 2.0 Token Exchange (RFC 8693), delegation style: a service that received a person's
 /// token swaps it for a new one aimed at the next service. The new token keeps the PERSON as
@@ -82,6 +91,10 @@ public sealed class TokenExchangeGrantValidator(
         }
 
         var token = SubjectToken.From(validation.Claims ?? []);
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the subject token has no person (a machine token), refuse: delegation always acts
+        // │ for a person.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (token.Subject is null)
         {
             // A machine's own token has no person to act for: delegation needs one.
@@ -89,6 +102,10 @@ public sealed class TokenExchangeGrantValidator(
             return;
         }
 
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If this client is not allowed to exchange this kind of token, refuse (fail closed)
+        // │ and log it.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (!AllowedExchanges.TryGetValue(requester, out var allowed) || !allowed(token))
         {
             logger.LogWarning("Token exchange refused: client {Requester} may not exchange a token of client {Client} (acting: {Acting}).",

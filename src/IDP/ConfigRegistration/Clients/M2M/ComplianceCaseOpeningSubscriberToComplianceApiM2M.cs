@@ -20,6 +20,10 @@ public sealed class ComplianceCaseOpeningSubscriberToComplianceApiM2M
             ClientId = ComplianceMicroservice.CLIENT_ID_FOR_IDP_FOR_COMPLIANCE_CASE_OPENING_SUBSCRIBER_TO_COMPLIANCE_API_M2M,
             ClientName = ComplianceMicroservice.CLIENT_NAME_FOR_IDP_FOR_COMPLIANCE_CASE_OPENING_SUBSCRIBER_TO_COMPLIANCE_API_M2M,
             ClientSecrets = { ClientSecretStore.For(ComplianceMicroservice.CLIENT_ID_FOR_IDP_FOR_COMPLIANCE_CASE_OPENING_SUBSCRIBER_TO_COMPLIANCE_API_M2M) },
+            // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+            // │ Client Credentials with ONE write scope: a machine identity for one caller-callee
+            // │ purpose; the receiving API also pins this client_id on its internal endpoint.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             AllowedGrantTypes = GrantTypes.ClientCredentials,
             AllowedScopes = { ComplianceApiScopesRequired.COMPLIANCE_WRITE }
         };

@@ -8,6 +8,15 @@ using EnterpriseWebPlatform.Common.Observability;
 
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Publishers.CustomerOnboarding.CustomerOutboxPublisher.Publishing;
 
+// ┌─ :: ARCHITECTURE :: Transactional Outbox relay ────────────────────────────────────────────────
+// │ Why : Writing to the database and publishing to Kafka are two systems; doing both in a request
+// │       would lose an event when one fails (dual write).
+// │ How : The API writes the event to outbox_messages in the SAME transaction as the change; this
+// │       relay publishes committed rows: FOR UPDATE SKIP LOCKED (several instances never take the
+// │       same row), per-aggregate order (no row overtakes an earlier unpublished one), bounded
+// │       attempts with back-off, then parked; the trace continues.
+// │ Ref : Features 1.3.1, 1.3.5, 1.6.1, 3.2 | Transactional Outbox pattern | Threat-Model TB5
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Relays committed Customer Onboarding Outbox rows to Kafka.
 ///
@@ -115,6 +124,10 @@ public sealed class CustomerOutboxPublisher(
 
             try
             {
+                // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+                // │ If the event has no human initiator, publish it anyway (the workflow must not stop)
+                // │ but warn: accountability and person-targeted notifications need the initiator.
+                // └──────────────────────────────────────────────────────────────────────────────────────
                 if (message.InitiatedByUserId is null)
                 {
                     logger.LogWarning(
@@ -155,6 +168,11 @@ public sealed class CustomerOutboxPublisher(
                 message.LastAttemptAt = attemptedAt;
                 message.LastError = ex.Message.Length > 2000 ? ex.Message[..2000] : ex.Message;
 
+                // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+                // │ If the message has failed MaxAttempts times, PARK it (left unpublished with its last
+                // │ error, readiness Degraded) instead of retrying for ever; otherwise back off
+                // │ exponentially and try again.
+                // └──────────────────────────────────────────────────────────────────────────────────────
                 if (message.AttemptCount >= _options.MaxAttempts)
                 {
                     logger.LogError(

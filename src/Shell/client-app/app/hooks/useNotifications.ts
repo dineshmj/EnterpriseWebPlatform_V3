@@ -14,6 +14,14 @@ export type LiveStatus = 'connecting' | 'live' | 'offline';
 const MAX_ITEMS = 50;
 const MAX_TOASTS = 3;
 
+// ┌─ :: ARCHITECTURE + SECURITY :: Live notifications through the BFF ─────────────────────────────
+// │ Why : The browser must never hold an access token, and a connection must not outlive the
+// │       person's token.
+// │ How : SignalR connects to the Shell BFF's /hubs/notifications, which adds the token
+// │       server-side; the hub closes the connection when the token expires and this hook
+// │       reconnects (with back-off), getting a fresh one.
+// │ Ref : Features 1.5.4 | OWASP A07 | RFC 6455 (WebSocket) Origin considerations
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /**
  * The person's notifications: loaded over REST (also after every reconnect, so nothing
  * pushed while disconnected is missed) and received live over SignalR. Every live
@@ -68,6 +76,11 @@ export function useNotifications(onLive?: (notification: ShellNotification) => v
         retryTimer = window.setTimeout(() => void start(attempt + 1), Math.min(30_000, 2_000 * 2 ** Math.min(attempt, 4)));
       }
     };
+    // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+    // │ If the connection closes (token expired, API restarted), reconnect through the BFF -
+    // │ which supplies a fresh token; notifications missed meanwhile are re-read from the
+    // │ stored list.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     connection.onclose(() => {
       if (disposed) return;
       setStatus('offline');

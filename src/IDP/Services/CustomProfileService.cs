@@ -9,6 +9,15 @@ using EnterpriseWebPlatform.IdentityServer.Repositories;
 
 namespace EnterpriseWebPlatform.IdentityServer.Services;
 
+// ┌─ :: SECURITY :: Claims issued to tokens ───────────────────────────────────────────────────────
+// │ Why : Authorization in every API decides from these claims; a deactivated person must stop
+// │       getting tokens at once.
+// │ How : Claims are re-read from the database on every issue and refresh: roles, permissions and
+// │       the ABAC profile (branch, department, clearance); an inactive user gets none; the act
+// │       chain is carried into access tokens.
+// │ Ref : Features 2.2.2, 2.2.4 | Authorization-Model 3, 5 | ASVS V4.1 |
+// │       RFC 9068 (JWT access tokens)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 public sealed class CustomProfileService : IProfileService
 {
     private readonly IUserRepository _userRepository;
@@ -47,6 +56,10 @@ public sealed class CustomProfileService : IProfileService
             return;
         }
 
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the person has been deactivated, issue no claims - their sessions stop working at
+        // │ the next token refresh.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (!user.IsActive)
         {
             _logger.LogWarning(

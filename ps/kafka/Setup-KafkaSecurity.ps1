@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Secures the local Kafka broker (C:\Kafka, KRaft) for EWP V3: SCRAM-SHA-512
     authentication, one Kafka user per deployable, least-privilege ACLs, and no
@@ -221,6 +221,10 @@ switch ($Phase) {
 }
 
 # ---------------------------------------------------------------------------------------
+# ┌─ SEC ─────────────────────────────────────────────────────────────────────────────────
+# │ If the phase is Secure (Kafka stopped): switch the client listener to SASL/SCRAM, deny
+# │ everything that no ACL allows, and turn topic auto-creation off.
+# └───────────────────────────────────────────────────────────────────────────────────────
 'Secure' {
     if (Test-KafkaPort) { throw 'Stop Kafka first (Ctrl+C in its window): server.properties is read only at start-up.' }
 
@@ -230,6 +234,14 @@ switch ($Phase) {
 
     $adminPassword = $Users['admin']
     $lines = [string[]](Get-Content $ServerProps)
+    # ┌─ :: SECURITY :: Broker: SASL/SCRAM and deny-by-default ACLs ────────────────────────────────────
+    # │ Why : A broker that lets anyone connect, or allows everything without an ACL, lets any program
+    # │       publish forged events.
+    # │ How : SASL/SCRAM-SHA-512 on the client listener; StandardAuthorizer with
+    # │       allow.everyone.if.no.acl.found=false; topic auto-creation off. The Acls phase then grants
+    # │       each user only its own topics and consumer group.
+    # │ Ref : Features 2.4.6 | kafka/README.md | OWASP A01 (least privilege) | CIS Apache Kafka guidance
+    # └─────────────────────────────────────────────────────────────────────────────────────────────────
     $settings = [ordered]@{
         # Clients authenticate with SCRAM; both listeners bound to localhost only.
         'listeners'                            = 'SASL_PLAINTEXT://localhost:9092,CONTROLLER://localhost:9093'
@@ -264,6 +276,11 @@ switch ($Phase) {
 }
 
 # ---------------------------------------------------------------------------------------
+# ┌─ SEC ─────────────────────────────────────────────────────────────────────────────────
+# │ If the phase is Acls (Kafka running with SASL): grant each user ONLY its own topics
+# │ and consumer group - a relay writes its context's topics, a subscriber reads its
+# │ topics and writes its own dead-letter topic.
+# └───────────────────────────────────────────────────────────────────────────────────────
 'Acls' {
     if (-not (Test-KafkaPort)) { throw 'Kafka is not running on localhost:9092. Start it (StartKafka.bat) and re-run.' }
     if (-not (Test-Path $AdminProps)) { throw "Run -Phase Secure first ($AdminProps is missing)." }

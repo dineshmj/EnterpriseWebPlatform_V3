@@ -9,6 +9,15 @@ using Microsoft.Extensions.Hosting;
 
 namespace EnterpriseWebPlatform.Common.WebUtilities.Security;
 
+// ┌─ :: ARCHITECTURE + SECURITY :: Data Protection key ring, persisted and encrypted ──────────────
+// │ Why : Keys kept in memory sign everybody out at every restart and break a second instance; keys
+// │       stored readable let a database reader forge session cookies.
+// │ How : The key ring lives in PostgreSQL (one schema per BFF, its own user) and is encrypted at
+// │       rest with a certificate (DPAPI in Development on Windows); without either, the
+// │       application refuses to start.
+// │ Ref : Features 2.1.3, 2.3.4 | OWASP A02 Cryptographic Failures | ASVS V6.4 (key management) |
+// │       Threat-Model R-10
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>The schema that holds one application's key ring (e.g. "payments_bff" in EwpBffStateDb, "identity_server" in EwpIdentityAccessDb).</summary>
 public sealed record DataProtectionKeysSchema(string Name);
 
@@ -62,6 +71,11 @@ public static class PersistentDataProtectionExtensions
             .PersistKeysToDbContext<DataProtectionKeysContext>();
 
         var certificatePath = builder.Configuration[CertificatePathKey];
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If a certificate is configured, encrypt the key ring with it (a missing file stops
+        // │ the start-up); else, in Development on Windows, use DPAPI; otherwise refuse to start
+        // │ - keys are never stored readable.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (!string.IsNullOrWhiteSpace(certificatePath))
         {
             if (!File.Exists(certificatePath))

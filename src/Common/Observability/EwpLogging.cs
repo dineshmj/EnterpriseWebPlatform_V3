@@ -12,6 +12,15 @@ using Serilog.Sinks.OpenTelemetry;
 
 namespace EnterpriseWebPlatform.Common.Observability;
 
+// ┌─ :: ARCHITECTURE + SECURITY :: Structured logs that leak nothing ──────────────────────────────
+// │ Why : Logs are shipped to other systems with other access rules; a query string, token or name
+// │       in a log line is a data leak.
+// │ How : Serilog with the service name and TraceId on every entry; one line per request with
+// │       method, path WITHOUT the query string, status, duration and the caller as an ID (sub /
+// │       client_id) - never a token or a name; JSON outside Development.
+// │ Ref : Features 1.7.3 | OWASP A09 Security Logging and Monitoring Failures |
+// │       OWASP Logging Cheat Sheet | CWE-532
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Structured logging with Serilog, the same on every host:
 ///  - every entry carries the service name, the environment and the TraceId / SpanId;
@@ -85,6 +94,10 @@ public static class EwpLogging
             options.EnrichDiagnosticContext = (diagnostics, http) =>
             {
                 var user = http.User;
+                // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+                // │ Log the caller by subject ID (a person) or client ID (a machine) - never a name, an
+                // │ e-mail or a token.
+                // └──────────────────────────────────────────────────────────────────────────────────────
                 if (user.FindFirstValue("sub") is { } subject)
                     diagnostics.Set("subject", subject);
                 if (user.FindFirstValue("client_id") is { } client)

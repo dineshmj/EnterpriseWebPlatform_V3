@@ -8,6 +8,13 @@ interface AuthGuardProps {
 }
 
 /*
+ // ┌─ :: SECURITY :: Nothing renders before the BFF says "signed in" ───────────────────────────────
+ // │ Why : Showing the Shell before the session is confirmed would flash protected UI and start
+ // │       calls that fail.
+ // │ How : The guard asks the BFF (/bff/user) and renders only for a signed-in person; otherwise it
+ // │       sends the browser to the BFF's login, which runs the OIDC flow server-side.
+ // │ Ref : Features 2.1.1 | OWASP A01 (the UI is a convenience, the BFF and APIs decide)
+ // └────────────────────────────────────────────────────────────────────────────────────────────────
  * Component that protects routes requiring authentication
  * Automatically redirects to login if user is not authenticated
  */

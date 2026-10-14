@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Scans every EWP V3 dependency for known vulnerabilities (OWASP A06:
     Vulnerable and Outdated Components).
@@ -34,6 +34,13 @@ function Invoke-Native([string] $commandLine, [string] $workingDirectory) {
 }
 
 Write-Host "`n=== .NET packages (solution) ===" -ForegroundColor Cyan
+# ┌─ :: SECURITY :: Dependency vulnerability scan ──────────────────────────────────────────────────
+# │ Why : A known-vulnerable package (e.g. the Next.js advisories) is the easiest way in.
+# │ How : Every NuGet package (transitive included) and every pnpm production dependency is checked
+# │       against published advisories; the run fails at or above the chosen severity, so it can
+# │       gate a CI pipeline.
+# │ Ref : Features 2.5.1 | OWASP A06:2021 Vulnerable and Outdated Components | NIST SSDF PW.4
+# └─────────────────────────────────────────────────────────────────────────────────────────────────
 $dotnetOutput = Invoke-Native 'dotnet list EnterpriseWebPlatform.BSS.slnx package --vulnerable --include-transitive' $root
 $dotnetOutput | ForEach-Object { Write-Host $_ }
 foreach ($line in $dotnetOutput) {

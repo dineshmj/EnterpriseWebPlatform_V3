@@ -23,6 +23,9 @@ export interface NotificationsPage {
 // Origin check instead (a browser cannot add headers to a WebSocket).
 const API = '/bff/notifications';
 const HUB = '/hubs/notifications';
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ Same anti-forgery header on every notification call (mark read, read all).
+// └──────────────────────────────────────────────────────────────────────────────────────
 const ANTIFORGERY = { 'X-CSRF': '1' };
 
 async function call(path: string, method: 'GET' | 'POST'): Promise<Response> {

@@ -2,6 +2,13 @@ using Duende.IdentityServer.Models;
 
 namespace EnterpriseWebPlatform.IdentityServer.Security;
 
+// ┌─ :: SECURITY :: Client secrets from configuration only ────────────────────────────────────────
+// │ Why : A client secret compiled into code is shared by everyone who can read the repository.
+// │ How : Each secret comes from this deployable's configuration (Development settings or a secret
+// │       store); a missing secret stops the start-up.
+// │ Ref : Features 2.4.5, 1.6.5 | OWASP A05 / A07 | CWE-798 (hard-coded credentials) |
+// │       Threat-Model R-10
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Client secrets come from the IDP's own configuration
 /// ("ClientSecrets:&lt;client id&gt;"), i.e. appsettings.Development.json locally and
@@ -23,6 +30,10 @@ public static class ClientSecretStore
 
         var secret = configuration[$"ClientSecrets:{clientId}"];
 
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If a client has no secret configured, stop the start-up - never run with a default or
+        // │ empty secret.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (string.IsNullOrWhiteSpace(secret))
         {
             throw new InvalidOperationException(

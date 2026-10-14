@@ -4,6 +4,15 @@ using System.Text.RegularExpressions;
 
 namespace EnterpriseWebPlatform.Common.WebUtilities.Security;
 
+// ┌─ :: SECURITY :: Strict Content-Security-Policy with hashes ────────────────────────────────────
+// │ Why : Any XSS bug could run injected script, or inject CSS that steals data or fakes the
+// │       screen.
+// │ How : Scripts and styles only from the application's own origin plus the exported inline blocks
+// │       by SHA-256 hash (computed at start-up) - no 'unsafe-inline'; object-src 'none';
+// │       frame-ancestors / frame-src allow-lists; form-action 'self'.
+// │ Ref : Features 2.3.1, 2.3.2 | OWASP A03 Injection (XSS) | CSP Level 3 | OWASP CSP Cheat Sheet |
+// │       CWE-79, CWE-1021
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Builds a strict Content-Security-Policy for a BFF that serves a Next.js static
 /// export (OWASP A03 / XSS defence in depth).
@@ -29,6 +38,10 @@ public static partial class ContentSecurityPolicy
 
     private static IReadOnlyList<string> InlineHashes(string webRoot, Regex element)
     {
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If there is no exported web root, allow no inline hashes at all - every inline script
+        // │ or style is then blocked (fail closed), never allowed by default.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (string.IsNullOrWhiteSpace(webRoot) || !Directory.Exists(webRoot))
             return [];
 

@@ -2,6 +2,12 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace EnterpriseWebPlatform.IdentityServer.Security;
 
+// ┌─ :: SECURITY :: Token-signing key ─────────────────────────────────────────────────────────────
+// │ Why : Whoever holds the signing key can mint any token for any API.
+// │ How : The developer signing key is used only in Development; elsewhere a certificate must be
+// │       configured, or the IDP refuses to start.
+// │ Ref : Features 1.6.5 | OWASP A02 Cryptographic Failures | ASVS V6.4 | Threat-Model R-10
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 public static class SigningCredentialExtensions
 {
     /// <summary>
@@ -14,6 +20,10 @@ public static class SigningCredentialExtensions
         this IIdentityServerBuilder identityServer,
         WebApplicationBuilder builder)
     {
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If this is Development, use the developer signing key; anywhere else a signing
+        // │ certificate is required, or the IDP does not start.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (builder.Environment.IsDevelopment())
         {
             return identityServer.AddDeveloperSigningCredential();

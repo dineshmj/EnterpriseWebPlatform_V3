@@ -20,6 +20,10 @@ public sealed class PaymentsSagaReplySubscriberToPaymentsApiM2M
             ClientId = PaymentsMicroservice.CLIENT_ID_FOR_IDP_FOR_PAYMENTS_SAGA_REPLY_SUBSCRIBER_TO_PAYMENTS_API_M2M,
             ClientName = PaymentsMicroservice.CLIENT_NAME_FOR_IDP_FOR_PAYMENTS_SAGA_REPLY_SUBSCRIBER_TO_PAYMENTS_API_M2M,
             ClientSecrets = { ClientSecretStore.For(PaymentsMicroservice.CLIENT_ID_FOR_IDP_FOR_PAYMENTS_SAGA_REPLY_SUBSCRIBER_TO_PAYMENTS_API_M2M) },
+            // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+            // │ Client Credentials with ONE write scope: a machine identity for one caller-callee
+            // │ purpose; the receiving API also pins this client_id on its internal endpoint.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             AllowedGrantTypes = GrantTypes.ClientCredentials,
             AllowedScopes = { PaymentsApiScopesRequired.PAYMENTS_WRITE }
         };

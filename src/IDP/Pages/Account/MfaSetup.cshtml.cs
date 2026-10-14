@@ -13,6 +13,14 @@ using EnterpriseWebPlatform.IdentityServer.Security;
 
 namespace EnterpriseWebPlatform.IdentityServer.Pages.Account;
 
+// ┌─ :: SECURITY :: MFA enrolment ─────────────────────────────────────────────────────────────────
+// │ Why : Enrolment hands over the shared secret: it must happen only after the password and be
+// │       confirmed before use.
+// │ How : Only with a pending sign-in; the secret lives in the encrypted pending cookie until one
+// │       correct code confirms it; then it is stored encrypted with the IDP's key ring and ten
+// │       single-use recovery codes are shown once (stored only as hashes).
+// │ Ref : Features 2.1.3 | RFC 6238 | ASVS V2.8, V2.5 (recovery) | NIST SP 800-63B
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Enrolment, the first time a person signs in while MFA is on: scan the QR code with Google
 /// Authenticator (or type the key), prove it works with one code, keep the recovery codes, done.

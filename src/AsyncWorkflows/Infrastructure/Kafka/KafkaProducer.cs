@@ -6,6 +6,14 @@ using Confluent.Kafka;
 
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 
+// ┌─ :: ARCHITECTURE :: Idempotent, fully acknowledged producer ───────────────────────────────────
+// │ Why : A publish that is retried after a network blip must not create a duplicate, and a message
+// │       the broker acknowledged must survive a broker failure - the Outbox relies on both.
+// │ How : EnableIdempotence (the broker drops a retried duplicate) and Acks=All (every in-sync
+// │       replica has it before the send counts); messages keyed by aggregate ID keep one aggregate
+// │       in order; Flush on shutdown.
+// │ Ref : Features 1.3.1, 1.3.5 | Transactional Outbox pattern | Kafka idempotent producer (KIP-98)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 public sealed class KafkaProducer : IKafkaProducer, IDisposable
 {
     // ewp_messaging_published_total{topic,outcome}: every relay and every dead-letter write

@@ -14,6 +14,14 @@ using EnterpriseWebPlatform.IdentityServer.Data.Entities;
 
 namespace EnterpriseWebPlatform.IdentityServer.Security;
 
+// ┌─ :: SECURITY :: The half-signed-in state ──────────────────────────────────────────────────────
+// │ Why : Between "password correct" and "code correct" the person must NOT be signed in, and the
+// │       state must not be forgeable.
+// │ How : Kept in a five-minute, encrypted, HttpOnly, __Host- cookie; StepUp marks a signed-in
+// │       person confirming a risky action. SignInCompletion issues the session with amr "pwd otp
+// │       mfa" and a fresh auth_time.
+// │ Ref : Features 2.1.3, 2.1.5 | ASVS V3.2 | RFC 8176 (amr)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// The state between "password correct" and "signed in" while MFA is on: who, where to go
 /// afterwards, and - during enrolment - the new secret. Kept in a short-lived (5 minutes),

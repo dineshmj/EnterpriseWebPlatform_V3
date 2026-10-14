@@ -5,6 +5,15 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace EnterpriseWebPlatform.Common.WebUtilities.Security;
 
+// ┌─ :: SECURITY :: Calls to external systems (SSRF by configuration) ─────────────────────────────
+// │ Why : The address of core banking, the screening provider or the payment network is
+// │       configuration; a wrong or tampered value would send the API key and customer data
+// │       wherever it points.
+// │ How : Checked at start-up: absolute, no credentials in the URL; outside Development also https,
+// │       a host listed in PermittedHosts, and no loopback / private / link-local IP; the clients
+// │       follow no redirects.
+// │ Ref : Features 2.4.9 | OWASP A10:2021 SSRF | OWASP API7:2023 | CWE-918 | AI review 2: xAI F-6
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// The address of an EXTERNAL system (core banking, screening provider, payment network) is
 /// configuration, never caller input - yet a wrong or tampered value would send the API key, and
@@ -25,6 +34,10 @@ public static class ExternalEndpoint
             return "is not an absolute http(s) URL";
         if (!string.IsNullOrEmpty(uri.UserInfo))
             return "must not carry a user name or password";
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If this is Development, local simulators on localhost are fine. Elsewhere the address
+        // │ must be https, a permitted host and no internal IP.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (isDevelopment)
             return null;
 
@@ -32,6 +45,10 @@ public static class ExternalEndpoint
             return "must use https outside Development";
         if (permittedHosts is null || !permittedHosts.Any(h => string.Equals(h, uri.IdnHost, StringComparison.OrdinalIgnoreCase)))
             return $"host '{uri.IdnHost}' is not listed in PermittedHosts";
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the host is a loopback, private or link-local address (e.g. the cloud metadata
+        // │ endpoint 169.254.169.254), refuse it - SSRF target.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (IPAddress.TryParse(uri.IdnHost, out var address) && IsInternal(address))
             return $"host '{uri.IdnHost}' is a loopback, private or link-local address";
         return null;

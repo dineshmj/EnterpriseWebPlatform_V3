@@ -1,5 +1,13 @@
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 
+// ┌─ :: SECURITY :: One Kafka identity per deployable ─────────────────────────────────────────────
+// │ Why : A shared Kafka account would let any component act as any other one.
+// │ How : Each deployable has its own user name in its appsettings.json and its own password from
+// │       Development settings or a secret store - never compiled in. Production uses SaslSsl
+// │       (TLS); localhost uses SaslPlaintext.
+// │ Ref : Features 2.4.5, 2.4.6 | Threat-Model R-10 |
+// │       OWASP A02 Cryptographic Failures (TLS in production)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Connection settings for one Kafka client (producer or consumer). Each deployable
 /// authenticates as its OWN Kafka user, so the broker's ACLs can limit it to its own

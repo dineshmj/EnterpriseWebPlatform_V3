@@ -11,6 +11,12 @@ using Microsoft.Extensions.Options;
 
 namespace EnterpriseWebPlatform.Common.WebUtilities.Security;
 
+// ┌─ :: SECURITY :: Per-caller rate limits ────────────────────────────────────────────────────────
+// │ Why : One user, a stolen token or a runaway script could flood an API for everybody.
+// │ How : A budget per person (sub), per machine client (client_id) and per IP for anonymous
+// │       callers - never one shared bucket; changes get a tighter budget; 429 with Retry-After.
+// │ Ref : Features 2.4.7 | OWASP API4:2023 Unrestricted Resource Consumption | ASVS V11.1
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>Limits per minute (configuration section "RateLimiting"; the defaults suit normal use comfortably).</summary>
 public sealed class EwpRateLimitingOptions
 {
@@ -76,6 +82,10 @@ public static class RateLimitingExtensions
             var perPersonChanges = PartitionedRateLimiter.Create<HttpContext, string>(context =>
             {
                 var person = context.User.FindFirst("sub")?.Value;
+                // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+                // │ If a signed-in person sends a CHANGE (not a read), it also counts against the tighter
+                // │ per-person change budget (payments, decisions, uploads).
+                // └──────────────────────────────────────────────────────────────────────────────────────
                 if (!IsLimited(context) || person is null || HttpMethods.IsGet(context.Request.Method) ||
                     HttpMethods.IsHead(context.Request.Method) || HttpMethods.IsOptions(context.Request.Method))
                 {
@@ -124,6 +134,10 @@ public static class RateLimitingExtensions
 
     private static (string Key, int Limit) CallerOf(ClaimsPrincipal user, HttpContext context, EwpRateLimitingOptions options)
     {
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ Whose budget: a person by subject ID; else a machine client by client_id; else (not
+        // │ signed in) the IP address - never one bucket shared by everybody.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (user.FindFirst("sub")?.Value is { Length: > 0 } person)
             return ($"person:{person}", options.PerPersonPerMinute);
         if (user.Identity?.IsAuthenticated == true && user.FindFirst("client_id")?.Value is { Length: > 0 } client)

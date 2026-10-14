@@ -1,4 +1,10 @@
 {
+  // ┌─ :: SECURITY :: HTTPS on the Shell's own host name ────────────────────────────────────────────
+  // │ Why : Session cookies are __Host- and Secure: they work only over HTTPS on one host.
+  // │ How : HTTPS only, on shell.dev.localhost; the Development environment loads the development
+  // │       secrets.
+  // │ Ref : Features 2.3.3 | OWASP A02 (TLS)
+  // └────────────────────────────────────────────────────────────────────────────────────────────────
   "profiles": {
     "https": {
       "commandName": "Project",

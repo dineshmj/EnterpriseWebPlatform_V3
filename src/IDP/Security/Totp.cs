@@ -3,6 +3,13 @@ using System.Text;
 
 namespace EnterpriseWebPlatform.IdentityServer.Security;
 
+// ┌─ :: SECURITY :: TOTP (RFC 6238) ───────────────────────────────────────────────────────────────
+// │ Why : Codes must match what Google Authenticator shows, and comparing them must not leak
+// │       timing.
+// │ How : HMAC-SHA1, 6 digits, 30-second steps, one step of drift either way; constant-time
+// │       comparison; checked against the RFC's test vectors.
+// │ Ref : RFC 6238 | RFC 4226 (HOTP) | ASVS V2.8 | CWE-208 (timing)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Time-based one-time passwords (TOTP, RFC 6238) with the settings Google Authenticator
 /// supports reliably: HMAC-SHA1, 6 digits, a new code every 30 seconds. Small enough to read.

@@ -4,6 +4,14 @@ using Microsoft.AspNetCore.Routing;
 
 namespace EnterpriseWebPlatform.Common.WebUtilities.Security;
 
+// ┌─ :: SECURITY :: Deny by default ───────────────────────────────────────────────────────────────
+// │ Why : A controller added later without an [Authorize] attribute would otherwise be public.
+// │ How : Every domain API maps its controllers through MapEwpApiControllers (an authenticated
+// │       caller on top of each action's own policy) and sets a fallback policy, so any other
+// │       endpoint needs one too; only health and metrics are explicitly anonymous.
+// │ Ref : Features 2.2.1 | OWASP API5:2023 Broken Function Level Authorization | OWASP A01 |
+// │       ASVS V4.1.3 | AI review 2: xAI F-1, F-5
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Deny by default, the same way in every domain API (OWASP API5, ASVS V4.1.3):
 /// <list type="bullet">

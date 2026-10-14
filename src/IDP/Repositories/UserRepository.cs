@@ -7,6 +7,13 @@ using EnterpriseWebPlatform.IdentityServer.Security;
 
 namespace EnterpriseWebPlatform.IdentityServer.Repositories;
 
+// ┌─ :: SECURITY :: Credential checks without enumeration, with lockout ───────────────────────────
+// │ Why : Different answers or timings for unknown, inactive and locked users tell an attacker
+// │       which accounts exist; unlimited attempts invite brute force.
+// │ How : Unknown, inactive and locked-out users cost the same hash computation and get the same
+// │       failure; after five wrong passwords the account is locked for 15 minutes.
+// │ Ref : Features 2.1.3 | OWASP A07 | ASVS V2.2.1 (anti-automation), V2.1 | CWE-203, CWE-307
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 public sealed class UserRepository : IUserRepository
 {
     private readonly IdentityDbContext _context;
@@ -138,6 +145,10 @@ public sealed class UserRepository : IUserRepository
         // Unknown, inactive and locked-out users cost the same hash computation
         // as a real check and get the same generic failure, so the response
         // neither reveals which usernames exist nor that an account is locked.
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the user is unknown, inactive or locked, hash a dummy password anyway and fail the
+        // │ same way - no timing or message reveals which accounts exist.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (user is null || !user.IsActive || user.LockoutEnd > now)
         {
             _passwordManager.VerifyAgainstDummyHash(password);
@@ -153,6 +164,10 @@ public sealed class UserRepository : IUserRepository
         {
             user.AccessFailedCount++;
 
+            // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+            // │ If this was the fifth wrong password, lock the account for 15 minutes (brute-force
+            // │ protection).
+            // └──────────────────────────────────────────────────────────────────────────────────────
             if (user.AccessFailedCount >= MaxFailedAccessAttempts)
             {
                 user.LockoutEnd = now.Add(LockoutDuration);

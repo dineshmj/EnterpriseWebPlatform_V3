@@ -7,6 +7,13 @@ using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Subscribers;
 
+// ┌─ :: ARCHITECTURE + SECURITY :: Fail-closed worker configuration ───────────────────────────────
+// │ Why : A worker that starts without its topics, dead-letter topic or client secret would run
+// │       "half working" and fail silently later - or worse, call an API unauthenticated.
+// │ How : Settings are validated at start-up (ValidateOnStart); a missing client secret, topic or
+// │       dead-letter topic stops the worker at once.
+// │ Ref : Features 1.6.5 | OWASP A05 Security Misconfiguration | ASVS V14.1
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 public static class SubscriberServiceCollectionExtensions
 {
     /// <summary>

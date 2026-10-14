@@ -3,6 +3,14 @@ using System.Diagnostics.Metrics;
 
 namespace EnterpriseWebPlatform.Common.Observability;
 
+// ┌─ :: ARCHITECTURE :: Traces that survive the queue ─────────────────────────────────────────────
+// │ Why : A trace normally ends where a message is put on a queue, so the asynchronous half of a
+// │       workflow would be invisible.
+// │ How : The request's traceparent is stored on the Outbox row; the relay publishes in a span that
+// │       continues it and sends it in the Kafka header; the subscriber continues it again - one
+// │       onboarding is ONE trace.
+// │ Ref : Features 1.7.1 | OpenTelemetry messaging semantic conventions | W3C Trace Context
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// W3C trace-context propagation across the Outbox and Kafka, so that one trace
 /// spans every hop of a workflow:

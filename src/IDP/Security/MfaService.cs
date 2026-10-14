@@ -20,6 +20,15 @@ public sealed class MfaOptions
     public string Issuer { get; init; } = "EWP V3 Demo";
 }
 
+// ┌─ :: SECURITY :: Authenticator secrets and codes ───────────────────────────────────────────────
+// │ Why : The TOTP secret is as sensitive as a password, and an intercepted code must not be
+// │       reusable.
+// │ How : Secrets encrypted with the IDP's Data Protection key ring; recovery codes stored only as
+// │       hashes; a code is accepted only for a time step later than the last one used (atomic
+// │       update); wrong codes count towards the lockout.
+// │ Ref : Features 2.1.3 | RFC 6238 | ASVS V2.8.4 (no reuse), V6.4 |
+// │       AI review 1 fix R2 (atomic claim)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Enrolment and verification of a user's authenticator. The secret is encrypted with the IDP's
 /// key ring before it reaches the database; recovery codes are stored as hashes only. A wrong

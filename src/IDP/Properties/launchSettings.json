@@ -1,4 +1,11 @@
 {
+  // ┌─ :: SECURITY :: HTTPS on the IDP's own host name ──────────────────────────────────────────────
+  // │ Why : The IDP's issuer URL is part of every token; tokens and cookies must never travel over
+  // │       plain HTTP.
+  // │ How : HTTPS only, on idp.dev.localhost (the issuer the APIs validate); the Development
+  // │       environment loads the development signing key and secrets - a deployment sets its own.
+  // │ Ref : Features 2.4.5 | OWASP A02 (TLS) | RFC 8414 / OIDC Discovery (issuer)
+  // └────────────────────────────────────────────────────────────────────────────────────────────────
   "profiles": {
     "SelfHost": {
       "commandName": "Project",

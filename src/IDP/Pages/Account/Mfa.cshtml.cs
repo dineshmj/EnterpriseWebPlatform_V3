@@ -12,6 +12,15 @@ using EnterpriseWebPlatform.IdentityServer.Security;
 
 namespace EnterpriseWebPlatform.IdentityServer.Pages.Account;
 
+// ┌─ :: SECURITY :: Second factor (TOTP) ──────────────────────────────────────────────────────────
+// │ Why : A password alone is not enough for bank staff; a code must be fresh, single-use and not
+// │       brute-forceable.
+// │ How : Reached only with a pending sign-in from the password step; the code (or a recovery code)
+// │       is checked against the encrypted secret, a used time step is never accepted again, wrong
+// │       codes count towards the lockout.
+// │ Ref : Features 2.1.3, 2.1.5 | RFC 6238 TOTP | OWASP A07 | ASVS V2.8 |
+// │       NIST SP 800-63B (OTP authenticators)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// The second factor: the 6-digit code from Google Authenticator (or a recovery code). Reached
 /// only with a pending sign-in (correct password, MFA on); the person is signed in only here.
@@ -54,6 +63,10 @@ public sealed class MfaModel(
         if (user is null || !user.IsActive)
             return RedirectToPage("/Account/Login");
 
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the code is right, complete the sign-in with amr "pwd otp mfa" and a new
+        // │ auth_time; otherwise count a failure (lockout) and ask again.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (await mfa.VerifyAsync(user, Code ?? string.Empty, HttpContext.RequestAborted))
             return await SignInCompletion.CompleteAsync(this, interaction, events, user, pending.RememberLogin, pending.ReturnUrl, withMfa: true);
 

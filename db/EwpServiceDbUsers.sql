@@ -21,6 +21,15 @@
 \set ON_ERROR_STOP on
 
 -- -----------------------------------------------------------------------------
+-- ┌─ :: ARCHITECTURE + SECURITY :: Least-privilege database users, one per deployable ─────────────
+-- │ Why : A compromised service, or a leaked connection string, must expose one context's data at
+-- │       most - never the whole platform; and no service may change a schema.
+-- │ How : One login role per deployable: CONNECT only to its own database,
+-- │       SELECT/INSERT/UPDATE/DELETE on its own tables, no DDL, no superuser; the Outbox relay
+-- │       gets only its Outbox table. Database-per-context is enforced, not just agreed.
+-- │ Ref : Features 2.4.3, 1.1.1, 3.1 | OWASP A01 Broken Access Control (least privilege) |
+-- │       CIS PostgreSQL Benchmark
+-- └────────────────────────────────────────────────────────────────────────────────────────────────
 -- 1. Login roles (cluster-wide)
 -- -----------------------------------------------------------------------------
 DO $$

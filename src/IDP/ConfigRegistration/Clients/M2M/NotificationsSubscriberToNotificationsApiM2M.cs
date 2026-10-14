@@ -20,6 +20,10 @@ public sealed class NotificationsSubscriberToNotificationsApiM2M
             ClientId = NotificationsMicroservice.CLIENT_ID_FOR_IDP_FOR_NOTIFICATIONS_SUBSCRIBER_TO_NOTIFICATIONS_API_M2M,
             ClientName = NotificationsMicroservice.CLIENT_NAME_FOR_IDP_FOR_NOTIFICATIONS_SUBSCRIBER_TO_NOTIFICATIONS_API_M2M,
             ClientSecrets = { ClientSecretStore.For(NotificationsMicroservice.CLIENT_ID_FOR_IDP_FOR_NOTIFICATIONS_SUBSCRIBER_TO_NOTIFICATIONS_API_M2M) },
+            // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+            // │ Client Credentials with ONE write scope: a machine identity for one caller-callee
+            // │ purpose; the receiving API also pins this client_id on its internal endpoint.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             AllowedGrantTypes = GrantTypes.ClientCredentials,
             AllowedScopes = { NotificationsApiScopesRequired.NOTIFICATIONS_WRITE }
         };

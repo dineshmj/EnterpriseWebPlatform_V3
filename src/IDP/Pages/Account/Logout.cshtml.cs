@@ -9,6 +9,15 @@ using Duende.IdentityServer.Services;
 
 namespace EnterpriseWebPlatform.IdentityServer.Pages.Account;
 
+// ┌─ :: SECURITY :: Sign-out that cannot be forced cross-site ─────────────────────────────────────
+// │ Why : A logout reachable by a plain GET lets any page sign the person out (logout CSRF); and a
+// │       sign-out that only deletes the browser cookie leaves the IDP session alive.
+// │ How : GET signs out at once only for a client-initiated logout without a prompt (valid
+// │       id_token_hint); otherwise a confirmation is POSTed with anti-forgery. The server-side
+// │       session row is deleted and every client is told (front- and back-channel).
+// │ Ref : Features 2.1.3, 2.1.4 | OpenID Connect RP-Initiated, Front- and Back-Channel Logout |
+// │       OWASP A01 (CSRF) | CWE-352
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Logout.
 ///
@@ -51,6 +60,10 @@ public sealed class LogoutModel
 
         var context = await _interaction.GetLogoutContextAsync(logoutId, HttpContext.RequestAborted);
 
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the client started the logout with a valid id_token_hint, sign out at once;
+        // │ otherwise show a confirmation that must be POSTed (no logout CSRF).
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (context?.ShowSignoutPrompt == false)
         {
             return await SignOutAndContinueAsync();

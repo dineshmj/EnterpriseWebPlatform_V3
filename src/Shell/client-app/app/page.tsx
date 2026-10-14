@@ -1,4 +1,14 @@
 'use client';
+// ┌─ :: ARCHITECTURE + SECURITY :: The Shell host page and the Shell-MFE protocol ─────────────────
+// │ Why : The Shell frames MFEs from other origins; a hostile page or a wrong frame must never pose
+// │       as an MFE or receive the workspace context.
+// │ How : Explicit postMessage protocol (ready, context hand-over, context update, navigation
+// │       request / response); every message is checked for its source window AND the origin
+// │       expected for the menu item opened; replies go to that exact origin; the context is opaque
+// │       to the Shell.
+// │ Ref : Features 1.5.2, 2.3.2 | HTML postMessage security (origin checks) | CWE-346 |
+// │       AI review 1: Shell iframe origin
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { AuthGuard } from './components/AuthGuard';
@@ -46,6 +56,10 @@ function requestNavigationPermission(
     };
 
     function handleResponse(event: MessageEvent) {
+      // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+      // │ A navigation answer counts only from the MFE now in the frame (origin and window) -
+      // │ unsaved changes are protected by the MFE that owns them.
+      // └──────────────────────────────────────────────────────────────────────────────────────
       if (event.origin !== currentOrigin) return;
       if (event.source !== iframe.contentWindow) return;
       if (event.data?.type !== 'BSS_NAVIGATION_RESPONSE') return;
@@ -111,6 +125,10 @@ function HomeContent() {
       if (!iframe || event.source !== iframe.contentWindow) return;
 
       if (event.data?.type === 'BSS_MFE_READY') {
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ Accept READY only from the origin of the menu item the Shell opened - never trust the
+        // │ first message that arrives.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (event.origin !== expectedFrameOriginRef.current) return;
         currentFrameOriginRef.current = event.origin;
 
@@ -214,6 +232,10 @@ function HomeContent() {
   const openNotification = (notification: ShellNotification) => {
     void notifications.markRead(notification.id);
     const owner = ownerOf(notification);
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ A notification holds only a path: open it only through a microservice in the person's
+    // │ OWN menu; otherwise ignore it (the target BFF also checks its allow-list).
+    // └──────────────────────────────────────────────────────────────────────────────────────
     if (!owner) return;
     void handleMenuItemClick({
       taskName: notification.title,

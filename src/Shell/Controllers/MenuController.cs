@@ -6,6 +6,14 @@ using EnterpriseWebPlatform.BSS.BFFWeb.Data.Entities;
 
 namespace EnterpriseWebPlatform.BSS.BFFWeb.Controllers;
 
+// ┌─ :: ARCHITECTURE + SECURITY :: The menu is data, filtered by role on the server ───────────────
+// │ Why : Adding a context must not mean changing the Shell; and a menu built in the browser could
+// │       show anything.
+// │ How : The menu comes from the Shell database (adding a context adds rows); the server filters
+// │       it by the roles in the person's token. The menu only shows the way - every API still
+// │       decides on its own.
+// │ Ref : Features 1.5.1, 3.9 | OWASP A01 (the UI is not the control) | Shell-Requirements.md
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 [Authorize]
 [ApiController]
 [Route("bff/api/[controller]")]

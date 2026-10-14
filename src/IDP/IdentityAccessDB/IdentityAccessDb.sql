@@ -96,6 +96,16 @@ CREATE TABLE departments (
 );
 
 -- =========================================================
+-- ┌─ :: ARCHITECTURE + SECURITY :: Identity holds RBAC and ABAC attributes - not relationships ────
+-- │ Why : Authorization needs who someone is (roles, permissions) and their attributes (branch,
+-- │       department, clearance); putting record relationships here would couple the IDP to every
+-- │       business context.
+-- │ How : Users, roles, permissions and the employment profile live here and are issued as claims;
+-- │       relationships (managing agent, assigned officer) stay in the context that owns the record
+-- │       (section 9).
+-- │ Ref : Authorization-Model 3, 5, 6 | Features 2.2.2, 2.2.4, 2.2.5 | NIST ABAC (SP 800-162) |
+-- │       OWASP A01
+-- └────────────────────────────────────────────────────────────────────────────────────────────────
 -- 6. USER EMPLOYMENT / ABAC PROFILE
 -- =========================================================
 

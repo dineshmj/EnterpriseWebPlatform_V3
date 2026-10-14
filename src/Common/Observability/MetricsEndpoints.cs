@@ -11,6 +11,14 @@ using OpenTelemetry.Metrics;
 
 namespace EnterpriseWebPlatform.Common.Observability;
 
+// ┌─ :: ARCHITECTURE :: Prometheus metrics, including every health check ──────────────────────────
+// │ Why : Dashboards and alerts must see what the readiness probe sees - a parked Outbox, a failed
+// │       compensation - without parsing logs.
+// │ How : /metrics in Prometheus format: HTTP, rate limiting, authentication, resilience, database
+// │       and runtime metrics, plus every health check's status and numbers
+// │       (HealthMetricsPublisher).
+// │ Ref : Features 1.7.3 | Prometheus / OpenMetrics | Threat-Model R-8
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// The Prometheus scrape endpoint, <c>GET /metrics</c>, the same on every host (web hosts
 /// map it next to the health endpoints; workers serve it from their health listener).
@@ -28,6 +36,11 @@ public static class MetricsEndpoints
 
     public static IEndpointRouteBuilder MapEwpMetricsEndpoint(this WebApplication app)
     {
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If metrics are enabled (by default only in Development), expose /metrics anonymously
+        // │ for the Prometheus scraper - outside Development switch it on explicitly and keep it
+        // │ on an internal network (Threat-Model R-8).
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (IsEnabled(app.Configuration, app.Environment))
             app.MapPrometheusScrapingEndpoint(Path).AllowAnonymous();
         return app;

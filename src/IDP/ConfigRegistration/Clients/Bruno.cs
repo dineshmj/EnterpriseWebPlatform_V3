@@ -17,19 +17,12 @@ public sealed class Bruno
                 ClientId = "BSS.ApiTesting.Bruno.ClientID",
                 ClientName = "BSS API Testing Bruno Client",
 
-                // 🡡__ WHY   : Bruno is acting as a public client. It cannot safely keep a
-                //              client secret because the OAuth client is running interactively
-                //              on the developer's machine.
-                // 🡡__ IF NOT: Adding a client secret would make this a confidential-client
-                //              arrangement and would not provide meaningful protection for
-                //              a secret distributed to a developer workstation.
-
+                // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+                // │ Public client for developer API testing (registered in Development only): no client
+                // │ secret - it could not be kept on a workstation; Authorization Code + PKCE protects
+                // │ the code instead.
+                // └──────────────────────────────────────────────────────────────────────────────────────
                 AllowedGrantTypes = GrantTypes.Code,
-
-                // 🡡__ WHY   : Authorization Code + PKCE is the appropriate flow for a
-                //              public interactive client.
-                // 🡡__ IF NOT: Without PKCE, an intercepted authorization code could be
-                //              exchanged by another party.
 
                 RequirePkce = true,
                 RequireClientSecret = false,

@@ -48,6 +48,10 @@ try
     // true it applies to EVERY user: enrolment at the next sign-in, then the code each time.
     // Off is allowed in Development only: elsewhere the IDP refuses to start without it.
     builder.Services.Configure<MfaOptions>(builder.Configuration.GetSection(MfaOptions.SectionName));
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Outside Development MFA cannot be off: the IDP refuses to start (the APIs check the
+    // │ same).
+    // └──────────────────────────────────────────────────────────────────────────────────────
     builder.RequireMfaOutsideDevelopment();
     builder.Services.AddSingleton(TimeProvider.System);
     builder.Services.AddScoped<MfaService>();
@@ -56,6 +60,10 @@ try
 
     // Login throttling per client IP, complementing per-account lockout
     // (UserRepository): slows password spraying across many usernames.
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Per-IP login throttling (20 a minute) on top of per-account lockout: slows password
+    // │ spraying across many usernames.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     builder.Services.AddRateLimiter(options =>
     {
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -72,6 +80,10 @@ try
 
     // Client secrets come from this deployable's configuration. The client list
     // is materialized now, so a missing secret stops start-up (fail closed).
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ The client list is built NOW, so a missing client secret stops the start-up instead
+    // │ of failing at the first sign-in.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     ClientSecretStore.Initialize(builder.Configuration);
     var clients = Config.GetClients(builder.Environment.IsDevelopment()).ToList();
 
@@ -93,6 +105,11 @@ try
         .AddInMemoryApiScopes(Config.ApiScopes)
         .AddInMemoryApiResources(Config.ApiResources)
         .AddInMemoryClients(clients)
+        // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+        // │ Operational store in PostgreSQL: refresh tokens (hashed handles), PAR requests and
+        // │ signing keys survive a restart and are shared by IDP instances; hourly clean-up. In
+        // │ memory, a restart would invalidate every refresh token.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         .AddOperationalStore(options =>
         {
             options.ConfigureDbContext = db => db.UseNpgsql(identityDb);
@@ -100,20 +117,11 @@ try
             options.EnableTokenCleanup = true;
             options.TokenCleanupInterval = 3600;
         })
-        // 🡡__ WHY   : Refresh tokens, pushed authorization requests and Duende's signing keys are stored in
-        //              PostgreSQL (refresh tokens by a hash of the handle only; their details encrypted), so an IDP
-        //              restart no longer forgets them and several IDP instances share them. Expired rows are
-        //              removed hourly.
-        // 🡡__ IF NOT: The in-memory default: after a restart no refresh token works, and everybody must sign in
-        //              again once their access token expires.
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ Server-side sign-in sessions: sign-out deletes the row, so a cookie copied before
+        // │ sign-out is refused (otherwise it would keep working for up to 10 hours).
+        // └──────────────────────────────────────────────────────────────────────────────────────
         .AddServerSideSessions<ServerSideSessionStore>()
-        // 🡡__ WHY   : The IDP's sign-in session is a row in PostgreSQL (identity_server."ServerSideSessions"), and
-        //              the cookie only refers to it. Sign-out deletes the row, so a copy of the cookie taken before
-        //              sign-out (malware, a shared machine) is refused afterwards; sessions can also be listed and
-        //              ended by the IDP. The EF store is named explicitly: Duende would otherwise fall back to an
-        //              in-memory store, which forgets every session on restart.
-        // 🡡__ IF NOT: The cookie IS the session: deleting it in the browser signs the person out, but a copied
-        //              cookie keeps working until it expires (Duende's default: 10 hours).
         .AddProfileService<CustomProfileService>()
         // OAuth 2.0 Token Exchange (RFC 8693): a service swaps a person's token for one aimed at
         // the next service, keeping the person as subject and naming itself in "act".
@@ -145,6 +153,10 @@ try
     app.UseStaticFiles();
 
     app.UseRouting();
+    // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+    // │ Order matters: routing, then the rate limiter (so the "login" policy applies), then
+    // │ IdentityServer and authorization.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     app.UseRateLimiter();
 
     app.UseCookiePolicy();

@@ -6,6 +6,13 @@ using Duende.IdentityServer.Services;
 
 namespace EnterpriseWebPlatform.IdentityServer.Pages.Account;
 
+// ┌─ :: SECURITY :: Front-channel sign-out ────────────────────────────────────────────────────────
+// │ Why : Signing out at the IDP must also end every client's session, or the BFFs stay signed in.
+// │ How : The page embeds the IDP's end-session iframe, which calls every client's front-channel
+// │       logout URI; the back-channel logout (server to server) covers browsers that block those
+// │       iframes.
+// │ Ref : Features 2.1.4 | OpenID Connect Front-Channel Logout 1.0 / Back-Channel Logout 1.0
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Shown after sign-out. Renders IdentityServer's end-session callback in a
 /// hidden iframe, which in turn calls every client's front-channel logout URI

@@ -17,6 +17,16 @@ using EnterpriseWebPlatform.IdentityServer.Security;
 
 namespace EnterpriseWebPlatform.IdentityServer.Pages.Account;
 
+// ┌─ :: SECURITY :: Sign-in: password, then the second factor ─────────────────────────────────────
+// │ Why : The sign-in page is the front door: it must not reveal which accounts exist, must survive
+// │       password spraying, and must not sign anybody in on the password alone while MFA is on.
+// │ How : Credentials are checked in constant work (unknown users hash a dummy password);
+// │       per-account lockout plus a per-IP throttle; with MFA on the password only creates a
+// │       pending sign-in and the code (or enrolment) follows; acr_values=mfa from a signed-in
+// │       person asks for the code only (step-up).
+// │ Ref : Features 2.1.3, 2.1.5 | OWASP A07:2021 Identification and Authentication Failures |
+// │       ASVS V2.2, V2.8 | RFC 9470 | Threat-Model R-4, R-13
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 [SecurityHeaders]
 [AllowAnonymous]
 [EnableRateLimiting("login")]
@@ -91,6 +101,11 @@ public sealed class LoginModel : PageModel
         // with prompt=login) for a person who is already signed in here - typically before a risky
         // action whose last MFA sign-in is too old. The password is not asked again; only the code
         // is, and a new sign-in (new auth_time, amr mfa) is issued. Anyone else signs in fully.
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If a client asks for acr_values=mfa and the person is already signed in here (and
+        // │ enrolled), skip the password and ask ONLY for a fresh code (step-up); anyone else
+        // │ signs in fully.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (_mfaOptions.Enabled &&
             context?.AcrValues.Contains(StepUpAcr) == true &&
             User.Identity?.IsAuthenticated == true &&
@@ -165,6 +180,10 @@ public sealed class LoginModel : PageModel
                 {
                     // MFA off: signed in now, as before. MFA on: not yet - the password was only the
                     // first factor; the authenticator code (or, the first time, enrolment) follows.
+                    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+                    // │ If MFA is off (Development only), the password signs the person in; otherwise it only
+                    // │ creates a pending sign-in - the code (or enrolment) must follow.
+                    // └──────────────────────────────────────────────────────────────────────────────────────
                     if (!_mfaOptions.Enabled)
                     {
                         return await SignInCompletion.CompleteAsync(

@@ -83,6 +83,14 @@ END $$;
 -- reader can neither hijack nor read a session.
 -- -----------------------------------------------------------------------------
 DROP SCHEMA IF EXISTS audit_bff CASCADE;
+-- ┌─ :: SECURITY :: One session schema per BFF ────────────────────────────────────────────────────
+-- │ Why : A BFF that could read another BFF's sessions could hijack them; sessions held in memory
+-- │       sign everybody out at a restart.
+-- │ How : Each BFF has its own schema, used only by its own database user; the Node.js BFFs store
+-- │       only the SHA-256 of the session ID and the session itself encrypted (AES-256-GCM, key
+-- │       outside the database).
+-- │ Ref : Features 2.3.4, 2.4.3 | OWASP Session Management Cheat Sheet | ASVS V3.2
+-- └────────────────────────────────────────────────────────────────────────────────────────────────
 CREATE SCHEMA audit_bff;
 
 CREATE TABLE audit_bff.sessions (

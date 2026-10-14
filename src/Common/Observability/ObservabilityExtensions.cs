@@ -10,6 +10,15 @@ using Serilog;
 
 namespace EnterpriseWebPlatform.Common.Observability;
 
+// ┌─ :: ARCHITECTURE :: OpenTelemetry: traces, metrics and logs with one trace ID ─────────────────
+// │ Why : One business transaction crosses BFFs, APIs, the Outbox and Kafka; without a shared trace
+// │       ID nobody can follow it or find the log lines of one failing request.
+// │ How : Every .NET component gets the same OpenTelemetry set-up: W3C trace context, ASP.NET Core
+// │       / HttpClient / EF Core spans, runtime and HTTP metrics, OTLP export when an endpoint is
+// │       configured; logs carry the TraceId.
+// │ Ref : Features 1.7.1, 1.7.3 | OpenTelemetry | W3C Trace Context |
+// │       OWASP A09 Security Logging and Monitoring Failures
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 public static class ObservabilityExtensions
 {
     /// <summary>

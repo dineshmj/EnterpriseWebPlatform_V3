@@ -22,6 +22,10 @@ public sealed class AuditJourneyApiTokenExchange
             ClientId = AuditMicroservice.CLIENT_ID_FOR_IDP_FOR_AUDIT_JOURNEY_API,
             ClientName = AuditMicroservice.CLIENT_NAME_FOR_IDP_FOR_AUDIT_JOURNEY_API,
             ClientSecrets = { ClientSecretStore.For(AuditMicroservice.CLIENT_ID_FOR_IDP_FOR_AUDIT_JOURNEY_API) },
+            // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+            // │ Token exchange ONLY - no client credentials: the Audit Journey API can never call a
+            // │ Domain API as itself, only for a person (read scopes only).
+            // └──────────────────────────────────────────────────────────────────────────────────────
             AllowedGrantTypes = { OidcConstants.GrantTypes.TokenExchange },
             AllowedScopes = { AuditApiScopesRequired.AUDIT_READ, PaymentsApiScopesRequired.PAYMENTS_READ },
 

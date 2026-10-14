@@ -5,6 +5,14 @@ using Microsoft.Extensions.Logging;
 
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Subscribers;
 
+// ┌─ :: SECURITY :: Machine identity (OAuth 2.0 Client Credentials) ───────────────────────────────
+// │ Why : A worker that calls an API must prove WHICH service it is - never borrow a person's token
+// │       or call anonymously; asking the IDP for a token per message would also overload it.
+// │ How : The worker's own client (one per caller-callee purpose, narrowest scope) gets a token
+// │       with Client Credentials; it is cached until shortly before expiry, one refresh at a time,
+// │       and dropped after a 401.
+// │ Ref : Features 2.1.2 | RFC 6749 section 4.4 | OAuth 2.1 | OWASP API2 Broken Authentication
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// OAuth 2.0 Client Credentials token for the subscriber's own machine identity.
 /// The token is cached until shortly before it expires (instead of one token
@@ -28,6 +36,10 @@ public sealed class CachedM2MTokenClient(
 
     public async Task<string> GetAccessTokenAsync(CancellationToken cancellationToken)
     {
+        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // │ If the cached token is still valid, reuse it - one token request per token lifetime,
+        // │ not one per message.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (_accessToken is not null && DateTimeOffset.UtcNow < _expiresAt)
             return _accessToken;
 
@@ -54,6 +66,10 @@ public sealed class CachedM2MTokenClient(
 
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
 
+            // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+            // │ If the IDP refuses the client credentials, fail - the API is never called without a
+            // │ valid token.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             if (!response.IsSuccessStatusCode)
             {
                 // Treated as transient by the caller: the message stays unprocessed.

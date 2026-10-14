@@ -1,5 +1,14 @@
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 
+// ┌─ :: ARCHITECTURE + SECURITY :: Explicit topics and dead-letter topics ─────────────────────────
+// │ Why : A mistyped topic name would silently create a new topic and lose the events; a poison
+// │       message would block a partition for ever.
+// │ How : Every topic is named here once and created explicitly (auto-creation is off at the
+// │       broker); each subscriber has its own dead-letter topic; commands are keyed by the
+// │       PaymentRef / aggregate ID for ordering.
+// │ Ref : Features 1.3.5, 1.6.2 | Integration-Event-Catalogue.md |
+// │       Dead Letter Channel pattern (EIP)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 public static class KafkaTopicNames
 {
     public const string CustomerCreated = "customer.created";

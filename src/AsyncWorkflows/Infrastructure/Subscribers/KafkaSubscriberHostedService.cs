@@ -12,6 +12,16 @@ using EnterpriseWebPlatform.Common.Observability;
 
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Subscribers;
 
+// ┌─ :: ARCHITECTURE :: Reliable consume loop (at-least-once, in order, dead-letter) ──────────────
+// │ Why : A crash, a rebalance or a bad message must neither lose an event, process it twice in a
+// │       harmful way, nor stop the partition.
+// │ How : Manual commit only AFTER processing or dead-lettering; transient failures are retried in
+// │       place (seek back, order kept); permanent ones go to the dead-letter topic with diagnostic
+// │       headers, then are committed. The receiving API's Inbox makes a redelivery harmless.
+// │       Instances share one consumer group.
+// │ Ref : Features 1.3.3, 1.6.1, 1.6.2 | Idempotent Consumer and Dead Letter Channel patterns |
+// │       Threat-Model TB5
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// The reliable consume loop shared by every subscriber. The worker supplies only
 /// an <see cref="IMessageProcessor"/>; delivery behaviour is the same everywhere:
@@ -120,6 +130,11 @@ public sealed class KafkaSubscriberHostedService<TProcessor, TSettings>(
                 {
                     var outcome = await processor.ProcessAsync(consumed, stoppingToken);
 
+                    // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+                    // │ If the message can never succeed, copy it to the dead-letter topic with diagnostic
+                    // │ headers, then commit - the partition keeps flowing. Otherwise it was processed:
+                    // │ commit only now (at-least-once).
+                    // └──────────────────────────────────────────────────────────────────────────────────────
                     if (outcome.DeadLetter)
                     {
                         activity?.SetStatus(ActivityStatusCode.Error, "dead-lettered");
@@ -131,6 +146,11 @@ public sealed class KafkaSubscriberHostedService<TProcessor, TSettings>(
                     health.Processed(outcome.DeadLetter);
                     MessagingTelemetry.RecordConsumed(result.Topic, outcome.DeadLetter ? "dead_lettered" : "processed");
                 }
+                // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+                // │ If processing failed for a transient reason (the API is down), seek back to the SAME
+                // │ offset and retry with back-off - the message is never skipped and the partition's
+                // │ order is kept.
+                // └──────────────────────────────────────────────────────────────────────────────────────
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     activity?.SetStatus(ActivityStatusCode.Error, ex.Message);

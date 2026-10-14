@@ -16,6 +16,12 @@ function ContextItem({ item, emphasis = false }: { item: WorkspaceContextItem; e
   );
 }
 
+// ┌─ :: ARCHITECTURE :: Opaque workspace context ──────────────────────────────────────────────────
+// │ Why : If the Shell understood business data it would become a distributed-monolith hub.
+// │ How : The selected record travels as title / value pairs that the Shell only shows and hands
+// │       on; a receiving MFE re-reads anything authoritative from its own BFF.
+// │ Ref : Features 1.5.2, 3.1 | Shell-Requirements.md section 3
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 export function ApplicationWorkspace({ context }: ApplicationWorkspaceProps) {
   const persistent = context?.persistentContext ?? [];
   const current = context?.currentContext ?? [];

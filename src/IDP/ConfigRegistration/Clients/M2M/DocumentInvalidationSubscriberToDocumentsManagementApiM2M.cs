@@ -20,6 +20,10 @@ public sealed class DocumentInvalidationSubscriberToDocumentsManagementApiM2M
             ClientId = DocumentsManagementMicroservice.CLIENT_ID_FOR_IDP_FOR_DOCUMENT_INVALIDATION_SUBSCRIBER_TO_DOC_MGMT_API_M2M,
             ClientName = DocumentsManagementMicroservice.CLIENT_NAME_FOR_IDP_FOR_DOCUMENT_INVALIDATION_SUBSCRIBER_TO_DOC_MGMT_API_M2M,
             ClientSecrets = { ClientSecretStore.For(DocumentsManagementMicroservice.CLIENT_ID_FOR_IDP_FOR_DOCUMENT_INVALIDATION_SUBSCRIBER_TO_DOC_MGMT_API_M2M) },
+            // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+            // │ Client Credentials with ONE write scope: a machine identity for one caller-callee
+            // │ purpose; the receiving API also pins this client_id on its internal endpoint.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             AllowedGrantTypes = GrantTypes.ClientCredentials,
             AllowedScopes = { DocumentsManagementApiScopesRequired.DOCUMENTS_MANAGEMENT_WRITE }
         };

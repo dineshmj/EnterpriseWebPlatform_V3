@@ -22,9 +22,11 @@ public sealed class MfeAccounts
                     ClientName = AccountsMicroservice.CLIENT_NAME_FOR_IDP,
                     ClientSecrets = { ClientSecretStore.For(AccountsMicroservice.CLIENT_ID_FOR_IDP) },
 
+                    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+                    // │ Authorization Code (+ PKCE) for a confidential BFF: tokens are issued to the server,
+                    // │ never to the browser (no implicit or hybrid flow).
+                    // └──────────────────────────────────────────────────────────────────────────────────────
                     AllowedGrantTypes = GrantTypes.Code,
-                    // 🡡__ WHY   : A confidential BFF keeps the tokens on the server; the browser holds only a session cookie.
-                    // 🡡__ IF NOT: A browser-based flow would expose access tokens to JavaScript (XSS token theft).
 
                     RequirePkce = true,
 
@@ -36,9 +38,11 @@ public sealed class MfeAccounts
                     BackChannelLogoutUri = $"{AccountsMicroservice.BFF_CLIENT_BASE_URL}/bff/backchannel",
                     BackChannelLogoutSessionRequired = true,
 
+                    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+                    // │ Refresh tokens for the BFF (offline_access), so the session is renewed without a new
+                    // │ sign-in.
+                    // └──────────────────────────────────────────────────────────────────────────────────────
                     AllowOfflineAccess = true,
-                    // 🡡__ WHY   : Refresh tokens let the BFF renew the user's access token while the officer works an application.
-                    // 🡡__ IF NOT: The officer would have to sign in again whenever the access token expires.
 
                     AllowedScopes =
                     {
@@ -51,14 +55,17 @@ public sealed class MfeAccounts
                         AccountsApiScopesRequired.ACCOUNTS_WRITE
                     },
 
+                    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+                    // │ Each refresh re-reads the CURRENT roles and ABAC attributes (branch, clearance), so
+                    // │ an administrative change takes effect within one access-token lifetime.
+                    // └──────────────────────────────────────────────────────────────────────────────────────
                     UpdateAccessTokenClaimsOnRefresh = true,
-                    // 🡡__ WHY   : Each refresh re-reads the officer's CURRENT roles and ABAC attributes (branch, clearance),
-                    //              so an administrative change takes effect within one access-token lifetime.
-                    // 🡡__ IF NOT: Refreshed tokens keep the claims of the original sign-in until the officer signs in again.
 
+                    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+                    // │ Refresh-token rotation (OAuth 2.1 / RFC 9700): every refresh returns a new token and
+                    // │ invalidates the old one - a stolen refresh token dies at its next legitimate use.
+                    // └──────────────────────────────────────────────────────────────────────────────────────
                     RefreshTokenUsage = TokenUsage.OneTimeOnly,
-                    // 🡡__ WHY   : Rotation (OAuth 2.1 / RFC 9700): a stolen refresh token stops working after its next legitimate use.
-                    // 🡡__ IF NOT: One leaked refresh token stays valid until it expires.
 
                     RefreshTokenExpiration = TokenExpiration.Sliding,
                     SlidingRefreshTokenLifetime = 3600

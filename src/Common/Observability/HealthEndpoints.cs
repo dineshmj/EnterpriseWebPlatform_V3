@@ -15,6 +15,15 @@ using OpenTelemetry.Metrics;
 
 namespace EnterpriseWebPlatform.Common.Observability;
 
+// ┌─ :: ARCHITECTURE + SECURITY :: Liveness and readiness endpoints ───────────────────────────────
+// │ Why : An orchestrator must restart a dead process but must not restart one that only waits for
+// │       its database; and a health answer must not tell an attacker what is inside.
+// │ How : /health/live (the process works) and /health/ready (it can do its job now: database,
+// │       backlogs) are separate; responses list each check's status only, no exception details.
+// │       Workers serve them from a built-in listener.
+// │ Ref : Features 1.7.2 | Kubernetes probes | OWASP A05 |
+// │       Threat-Model R-8 (anonymous by design; network-controlled)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Kubernetes-style health endpoints, the same on every EWP component:
 ///  - GET /health/live  : liveness  - is the process working? (failing → restart it)

@@ -1,4 +1,10 @@
 {
+  // ┌─ :: SECURITY :: Development profile only ──────────────────────────────────────────────────────
+  // │ Why : Development-only secrets and settings must never be picked up by a deployed instance.
+  // │ How : This profile sets DOTNET_ENVIRONMENT=Development, the only environment that loads
+  // │       appsettings.Development.json; a deployment sets its own environment and secrets.
+  // │ Ref : Features 2.4.5 | OWASP A05 Security Misconfiguration
+  // └────────────────────────────────────────────────────────────────────────────────────────────────
   "profiles": {
     "CustomerOutboxPublisher": {
       "commandName": "Project",

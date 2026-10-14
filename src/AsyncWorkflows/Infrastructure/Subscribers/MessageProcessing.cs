@@ -9,6 +9,14 @@ public sealed record ConsumedMessage(
     string Value,
     IReadOnlyDictionary<string, string> Headers);
 
+// ┌─ :: ARCHITECTURE :: Transient versus permanent failure ────────────────────────────────────────
+// │ Why : Retrying a message that can never succeed blocks the partition; dead-lettering one that
+// │       would succeed in a minute loses work.
+// │ How : A processor answers Processed, ToDeadLetter(reason) for permanent failures (malformed,
+// │       unknown type, a 4xx from the API), or throws TransientProcessingException for a
+// │       dependency that is down (retried in place).
+// │ Ref : Features 1.3.3, 1.6.2 | Dead Letter Channel pattern
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>The decision for one consumed message.</summary>
 public sealed record ProcessingOutcome(bool DeadLetter, string? Reason)
 {
