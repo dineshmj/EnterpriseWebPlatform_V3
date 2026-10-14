@@ -58,7 +58,7 @@ Each document has one purpose. A fact is written in exactly one place; other doc
 | [End-to-End Processing Walkthrough](doc/End-to-End-Processing-Walkthrough.md) | One onboarding traced from the agent's submit to the KYC outcome, through every component, policy and domain check |
 | [Payment Saga diagram](doc/Payment%20Saga%20Orchestration.png) ([PDF](doc/Payment%20Saga%20Orchestration.pdf)) | The Payments saga's steps, replies, timeouts and compensation in one picture |
 | [Architect Review](doc/Fellow-architect-review-of-v3-ewp.md) | Point-in-time review findings and their remediation status |
-| [AI Architect Reviews](doc/AI-Architect-Reviews) | The external reviewers' verdicts (Microsoft, Google, xAI), kept as received |
+| [AI Architect Reviews](doc/AI-Architect-Reviews) | The external reviewers' verdicts (Microsoft, Google, xAI) of 12-OCT and 13-OCT-2026, kept as received, and the response to every finding |
 
 ### Per component (`src/**/doc/`)
 
