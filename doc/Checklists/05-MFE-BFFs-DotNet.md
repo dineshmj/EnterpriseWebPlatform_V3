@@ -15,8 +15,7 @@ Deployables: `src/Microservices/{CustomerOnboarding,Compliance,Accounts,Payments
 
 - [x] **The session cookie `__Host-Microservice-<Context>-bff` is HttpOnly, Secure, SameSite=Lax and `Path=/`; it lasts 30 minutes and slides.** *Because* script cannot read it, it never travels over HTTP, and it is not sent on cross-site sub-requests. → `Program.cs`, `src/Common/Landscape/CookieNames.cs`
 - [x] **Only the correlation and nonce cookies are SameSite=None (with Secure),** and only for the sign-in round trip.
-- [x] **The anti-forgery cookie `__Host-<Context>-Bff-CSRF` is Secure and SameSite=Lax.**
-- [ ] **Hardening: make the anti-forgery cookie HttpOnly too.** It is `HttpOnly = false` today. It holds no session, and the SPA reads the token from `/api/auth/csrf`, not from the cookie, so HttpOnly would cost nothing.
+- [x] **The anti-forgery cookie `__Host-<Context>-Bff-CSRF` is HttpOnly, Secure and SameSite=Lax.** *Because* the SPA gets the request token from `/api/auth/csrf`, never from the cookie, so script never needs it and an XSS bug cannot read it.
 
 ## 3. Requests
 

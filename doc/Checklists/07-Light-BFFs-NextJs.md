@@ -28,10 +28,9 @@ Deployables: `src/Microservices/Audit/BFF.Web`, `src/Microservices/Operations/BF
   - `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`.
 
   → `proxy.ts`
-- [x] **`frame-ancestors` is the Shell and the IDP only,** against clickjacking. `nosniff` and `Referrer-Policy: strict-origin-when-cross-origin` are also sent.
+- [x] **`frame-ancestors` is the Shell and the IDP only,** against clickjacking. Both origins are required settings: with one missing, the request fails rather than falling back to a development origin. `nosniff` and `Referrer-Policy: strict-origin-when-cross-origin` are also sent.
 - [x] **Fail-closed configuration:** a missing setting stops the app (`required()`). → `lib/server/config.ts`
 
 ## 5. Production (open)
 
 - [ ] **Secret store.** The client secret and the session key come from a secret store; `runnow.bat` values are for Development only (R-10).
-- [ ] **No fallback origins.** `proxy.ts` falls back to the development Shell and IDP origins when the variables are unset. Production should require them, as `config.ts` does.

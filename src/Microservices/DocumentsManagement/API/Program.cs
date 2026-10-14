@@ -180,8 +180,6 @@ builder.Services.AddAuthorization(options =>
 });
 
 builder.Services.AddProblemDetails();
-
-builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<EnterpriseWebPlatform.DocumentsManagement.API.ErrorHandling.ApiExceptionHandler>();
 
 // Health endpoints for the orchestrator's probes: /health/live (process working)

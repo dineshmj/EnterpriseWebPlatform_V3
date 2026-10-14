@@ -204,8 +204,6 @@ builder.Services.AddAuthorization(options =>
 });
 
 builder.Services.AddProblemDetails();
-
-builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<EnterpriseWebPlatform.CustomerOnboarding.API.ErrorHandling.ApiExceptionHandler>();
 
 // Health endpoints for the orchestrator's probes: /health/live (process working)

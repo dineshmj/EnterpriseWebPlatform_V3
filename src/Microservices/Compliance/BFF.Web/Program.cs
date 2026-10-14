@@ -59,7 +59,11 @@ builder.Services.AddAntiforgery(options =>
 {
     options.HeaderName = "X-CSRF-TOKEN";
     options.Cookie.Name = "__Host-Compliance-Bff-CSRF";
-    options.Cookie.HttpOnly = false;
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ HttpOnly: script never needs this cookie - the screen gets the request token from
+    // │ /api/auth/csrf - so an XSS bug cannot read it either.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    options.Cookie.HttpOnly = true;
     // Only ever needed by same-site requests from this MFE.
     options.Cookie.SameSite = SameSiteMode.Lax;
     options.Cookie.SecurePolicy = CookieSecurePolicy.Always;

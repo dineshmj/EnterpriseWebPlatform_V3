@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { config as settings } from './lib/server/config';
 
 // ┌─ :: SECURITY :: Operations web: security headers on every response ────────────────────────────
 // │ Why : The same browser threats as every MFE: injected script, framing by another site, MIME
@@ -15,8 +16,12 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 export function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
-  const shell = process.env.OPERATIONS_WEB_SHELL_ORIGIN ?? 'https://shell.dev.localhost:46367';
-  const idp = process.env.OPERATIONS_WEB_IDP_AUTHORITY ?? 'https://idp.dev.localhost:46392';
+  // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+  // │ If the Shell or IDP origin is not configured, fail the request - never fall back to
+  // │ a development origin, which would let the wrong site frame this app.
+  // └──────────────────────────────────────────────────────────────────────────────────────
+  const shell = settings.shellOrigin;
+  const idp = settings.authority;
 
   const csp = [
     "default-src 'self'",
