@@ -311,6 +311,10 @@ function ReconciliationPanel({ payment, user, onChanged }: { payment: PaymentDet
   const evidenceOk = evidence.trim().length >= 10 && evidence.trim().length <= 500;
   const referenceOk = outcome === 'NOT_SENT' || (networkReference.trim().length > 0 && networkReference.trim().length <= 100);
   const remarksOk = remarks.trim().length >= 10 && remarks.trim().length <= 500;
+  // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+  // │ The proposer sees no Approve / Reject - a convenience only: the saga refuses them
+  // │ anyway (four eyes).
+  // └──────────────────────────────────────────────────────────────────────────────────────
   const ownProposal = proposal?.proposedByUserId === user.sub;
 
   /** Why a button is still disabled: shown under the field instead of leaving the person guessing. */

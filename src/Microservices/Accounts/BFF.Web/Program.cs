@@ -25,8 +25,21 @@ using EnterpriseWebPlatform.Common.WebUtilities.Security;
 // session cookie only; the officer's tokens stay in this server-side session.
 // =============================================================================
 
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ Keep the IDP's claim names as issued - no remapping to Microsoft claim types.
+// └──────────────────────────────────────────────────────────────────────────────────────
 JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
 
+// ┌─ :: ARCHITECTURE + SECURITY :: Accounts BFF: Backend-for-Frontend ─────────────────────────────
+// │ Why : A browser app that holds OAuth tokens exposes them to every XSS bug; and a front end
+// │       calling APIs directly couples the browser to every service.
+// │ How : Confidential OIDC client (code + PKCE); tokens stay in the server-side session
+// │       (PostgreSQL); the browser gets only a __Host- cookie; every state-changing call needs the
+// │       anti-forgery header; the BFF forwards to its APIs with the person's token and holds no
+// │       business rules.
+// │ Ref : Features 2.1.1, 2.3, 3.3, 3.4 | IETF OAuth 2.0 for Browser-Based Apps (BFF) | OWASP A07 |
+// │       ASVS V3
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 var builder = WebApplication.CreateBuilder(args);
 
 // Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
@@ -38,6 +51,10 @@ builder.Services.Configure<AccountsBffOptions>(builder.Configuration.GetSection(
 builder.Services.AddHttpContextAccessor();
 // With views: [ValidateAntiForgeryToken] needs the MVC view-features services.
 builder.Services.AddControllersWithViews();
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ Anti-forgery token in a header (X-CSRF-TOKEN) for every state-changing call, with its
+// │ own __Host- cookie: a cross-site page can neither read nor send it.
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.Services.AddAntiforgery(options =>
 {
     options.HeaderName = "X-CSRF-TOKEN";
@@ -55,9 +72,17 @@ builder.Services.AddAntiforgery(options =>
 // are removed by Duende's clean-up job.
 var bffStateDb = builder.Configuration.GetConnectionString("BffStateDbConnection")
     ?? throw new InvalidOperationException("Connection string 'BffStateDbConnection' was not configured.");
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ Data Protection keys in PostgreSQL, encrypted, with a FIXED application name - every
+// │ instance reads the same cookies; a restart signs nobody out.
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.AddEwpPersistentDataProtection(bffStateDb, schema: "accounts_bff", applicationName: "ewp-accounts-bff");
 builder.Services.Configure<SessionStoreOptions>(options => options.DefaultSchema = "accounts_bff");
 builder.Services.AddBff()
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Server-side sessions: the cookie is only a reference, so back-channel logout can end
+    // │ the session and the tokens never ride in the cookie.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     .AddEntityFrameworkServerSideSessions(options => options.UseNpgsql(bffStateDb))
     .AddSessionCleanupBackgroundProcess();
 builder.Services.AddOpenIdConnectAccessTokenManagement();
@@ -76,10 +101,17 @@ builder.Services
         // Lax: never sent on cross-site sub-requests (second CSRF defence besides the
         // anti-forgery header). The Shell, this MFE and the IDP are one site, so the
         // framed MFE and the top-level IDP redirect (ResponseMode = query) still work.
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ SameSite=Lax: off cross-site sub-requests (a second CSRF defence) yet sent on the
+        // │ top-level redirect back from the IDP.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         options.Cookie.SameSite = SameSiteMode.Lax;
         options.Cookie.HttpOnly = true;
         options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
         options.SlidingExpiration = true;
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ 30-minute sliding session instead of the framework's 14-day default.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         options.ExpireTimeSpan = TimeSpan.FromMinutes(30);
     })
     .AddOpenIdConnect("oidc", options =>
@@ -90,13 +122,29 @@ builder.Services
         // Front-channel logout (/signout-oidc) must clear THIS BFF's session cookie.
         options.SignOutScheme = CookieAuthenticationDefaults.AuthenticationScheme;
         // From this deployable's configuration / secret store; never compiled in.
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ Client secret from configuration (Development settings or a secret store); missing =
+        // │ no start-up.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         options.ClientSecret = builder.Configuration["Oidc:ClientSecret"]
             ?? throw new InvalidOperationException("Oidc:ClientSecret is not configured.");
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ Authorization Code + PKCE: the code is exchanged on the server with the client secret
+        // │ - tokens never reach the browser.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         options.ResponseType = "code";
         options.ResponseMode = "query";
         options.UsePkce = true;
+        // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+        // │ Tokens kept in the server-side session for the API calls (refreshed when needed) -
+        // │ never sent to the browser.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         options.SaveTokens = true;
         options.GetClaimsFromUserInfoEndpoint = true;
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ Keep the original claim names in the sign-in principal (role, branch, lan_id,
+        // │ clearance_level).
+        // └──────────────────────────────────────────────────────────────────────────────────────
         options.MapInboundClaims = false;
         options.Scope.Clear();
         options.Scope.Add("openid");
@@ -114,6 +162,10 @@ builder.Services
         options.TokenValidationParameters.NameClaimType = "name";
         options.TokenValidationParameters.RoleClaimType = "role";
 
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ SameSite=None ONLY for the short-lived correlation and nonce cookies: they must
+        // │ survive the cross-site round trip to the IDP (Secure, sign-in only).
+        // └──────────────────────────────────────────────────────────────────────────────────────
         options.CorrelationCookie.SameSite = SameSiteMode.None;
         options.CorrelationCookie.SecurePolicy = CookieSecurePolicy.Always;
         options.NonceCookie.SameSite = SameSiteMode.None;
@@ -124,6 +176,10 @@ builder.Services
             // An API call (fetch) cannot follow a redirect to the IDP ("Failed to fetch"):
             // answer 401 instead, and the MFE signs in again silently and comes back -
             // e.g. after a restart cleared the in-memory server-side sessions.
+            // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+            // │ If an API call (fetch) needs a new sign-in, answer 401 instead of redirecting to the
+            // │ IDP - fetch cannot follow it; the screen then signs in silently and comes back.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             if (context.Request.Path.StartsWithSegments("/bff/api"))
             {
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
@@ -136,6 +192,10 @@ builder.Services
                 context.ProtocolMessage.Prompt = prompt;
             }
             // Step-up (AuthController.StepUp): ask the IDP for a fresh authenticator code.
+            // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+            // │ If this is a step-up (from /api/auth/step-up), ask the IDP for acr_values=mfa: a
+            // │ fresh authenticator code, no password.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             if (context.Properties.Items.TryGetValue("acr_values", out var acrValues))
             {
                 context.ProtocolMessage.AcrValues = acrValues;
@@ -156,6 +216,10 @@ builder.Services.AddHttpClient("AccountsApi", (serviceProvider, client) =>
     .AddUserAccessTokenHandler()
     .AddStandardResilienceHandler(options =>
     {
+        // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+        // │ Retry GETs only: a POST (a payment, a decision) is never repeated automatically - it
+        // │ could act twice.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         options.Retry.DisableForUnsafeHttpMethods();
         options.Retry.MaxRetryAttempts = 2;
         options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(10);
@@ -178,6 +242,9 @@ app.UseEwpRequestLogging();
 
 if (!app.Environment.IsDevelopment())
 {
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ HSTS outside Development only: browsers then refuse plain HTTP for this host.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     app.UseHsts();
 }
 
@@ -191,6 +258,10 @@ var shellOrigin = builder.Configuration["ShellOrigin"] ?? BSSShellBFF.SHELL_BFF_
 var idpOrigin = ContentSecurityPolicy.Origin(IDP.AUTHORITY);
 var csp = ContentSecurityPolicy.Build(
     app.Environment.WebRootPath,
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Framed only by the Shell (and the IDP during silent sign-in) - any other site framing
+    // │ it is blocked (clickjacking).
+    // └──────────────────────────────────────────────────────────────────────────────────────
     frameAncestors: [shellOrigin, idpOrigin],
     frameSources: []);
 // Security:CspReportOnly = true reports violations in the browser console instead of blocking.
@@ -216,6 +287,10 @@ app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
 app.UseEwpRateLimiting();
+// ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+// │ Duende order: UseBff after authentication and BEFORE authorization, so its
+// │ anti-forgery check and endpoint metadata are evaluated first.
+// └──────────────────────────────────────────────────────────────────────────────────────
 app.UseBff();
 app.UseAuthorization();
 

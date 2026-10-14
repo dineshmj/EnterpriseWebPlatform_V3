@@ -148,6 +148,13 @@ CREATE INDEX ix_accounts_customer_number ON accounts (customer_number);
 -- Funds reserved for ONE payment (Payments' PaymentRef, by value). The payment saga
 -- orchestrator sends ReserveFunds / SettleFunds / ReleaseFunds; every command for the
 -- same payment is idempotent and answered on accounts.funds.replies.
+-- ┌─ :: ARCHITECTURE + SECURITY :: Funds holds, guarded by the database too ───────────────────────
+-- │ Why : Money rules must hold even if code or a hand-edit goes wrong.
+-- │ How : One hold per payment (unique PaymentRef); CHECK constraints on status, amounts and
+-- │       refusal reasons; accounts keep balance and held amount with Version for optimistic
+-- │       concurrency.
+-- │ Ref : Features 1.4.3, 1.6.4 | Defence in depth
+-- └────────────────────────────────────────────────────────────────────────────────────────────────
 CREATE TABLE funds_holds (
     id BIGSERIAL PRIMARY KEY,
     payment_ref UUID NOT NULL,

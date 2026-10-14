@@ -177,6 +177,11 @@ public sealed class PaymentsApiController(
                     ContentType = "application/json"
                 };
             }
+            // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+            // │ If the API is down or its circuit is open, answer 503 at once ("temporarily
+            // │ unavailable") instead of letting the screen hang; the API's own answer (a 403, a
+            // │ validation problem) is relayed unchanged.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             catch (Exception ex) when (ex is BrokenCircuitException or TimeoutRejectedException or HttpRequestException)
             {
                 logger.LogWarning(ex, "{Api} unavailable for {Method} {Path}.", clientName, message.Method, message.RequestUri);

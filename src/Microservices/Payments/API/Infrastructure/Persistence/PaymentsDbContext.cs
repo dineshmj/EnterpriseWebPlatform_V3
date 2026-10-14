@@ -12,6 +12,13 @@ using EnterpriseWebPlatform.Payments.Api.Infrastructure.Messaging;
 
 namespace EnterpriseWebPlatform.Payments.Api.Infrastructure.Persistence;
 
+// ┌─ :: ARCHITECTURE :: One transaction: state, saga and Outbox ───────────────────────────────────
+// │ Why : Saving the change and publishing it separately loses events (dual write).
+// │ How : SaveAsync writes the aggregates, then the saga's commands and the payment's facts as
+// │       Outbox rows, in raise order, in the same transaction; inbox_messages records consumed
+// │       messages in the same transaction too.
+// │ Ref : Features 1.3.1, 1.3.2, 3.2 | Transactional Outbox and Inbox patterns
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 public sealed class PaymentsDbContext(DbContextOptions<PaymentsDbContext> options, TimeProvider clock)
     : DbContext(options), IPaymentsUnitOfWork, IInboxStore, ISagaTrace
 {

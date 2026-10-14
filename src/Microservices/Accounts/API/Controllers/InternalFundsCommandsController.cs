@@ -37,6 +37,10 @@ public sealed record FundsCommandRequest(
 public sealed class InternalFundsCommandsController(FundsCommandHandler handler) : ControllerBase
 {
     [HttpPost]
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Internal endpoint: only the one subscriber's client_id is accepted (pinned in
+    // │ Program.cs), not just the scope.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     [Authorize(Policy = "AccountsCommandSubscriberWrite")]
     public async Task<IActionResult> Apply([FromBody] FundsCommandRequest request, CancellationToken cancellationToken)
     {

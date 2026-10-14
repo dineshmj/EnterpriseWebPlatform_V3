@@ -95,6 +95,14 @@ CREATE INDEX ix_payments_customer_number ON payments (customer_number);
 -- The ORCHESTRATOR's persisted state: one saga per payment. It records which step the
 -- payment is at, which command it waits on and when to look again; the step runner and
 -- the reply handler lock this row, so one payment is never worked on twice at once.
+-- ┌─ :: ARCHITECTURE + SECURITY :: The saga's state, guarded by the database too ──────────────────
+-- │ Why : A bug or a hand-edit must not leave a saga in an impossible state (a timer on a finished
+-- │       saga, a half proposal).
+-- │ How : CHECK constraints mirror the state machine: steps and statuses, a timer exactly while
+-- │       running, DONE exactly when finished, a complete or absent four-eyes proposal; Version for
+-- │       optimistic concurrency.
+-- │ Ref : Features 1.4.3, 1.6.4 | Defence in depth | Saga plan 2.3
+-- └────────────────────────────────────────────────────────────────────────────────────────────────
 CREATE TABLE payment_sagas (
     id UUID PRIMARY KEY,
     payment_id BIGINT NOT NULL REFERENCES payments (id),

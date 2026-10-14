@@ -54,6 +54,17 @@ public sealed class SagaHistoryEntry
         new() { SagaId = sagaId, At = at, Step = step.ToCode(), Kind = kind, Detail = detail, MessageId = messageId };
 }
 
+// ┌─ :: ARCHITECTURE :: Orchestrated saga: a persisted state machine ──────────────────────────────
+// │ Why : A payment touches money in two places (the customer's account, the payment network) that
+// │       must agree, without a distributed transaction; a crash, a lost answer or a late reply
+// │       must never pay twice or lose money.
+// │ How : The saga is an aggregate in the Payments database and the ONLY place decisions are made;
+// │       each step is a short transaction (reply arrived, timer due, person decided) that saves
+// │       the state and the next command (Outbox) together; compensation releases the funds; an
+// │       unknown network outcome is reconciled, never released blind.
+// │ Ref : Features 1.4.3 | Saga plan 2 | Saga pattern (orchestration) | Threat-Model R-1, R-5, R-12 |
+// │       AI review 2: Microsoft EWP-04, EWP-06
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Aggregate root and ORCHESTRATOR of one payment: the persisted state machine that decides
 /// every next step. Participants (Accounts, the payment network) only do what they are
@@ -183,6 +194,10 @@ public sealed class PaymentSaga : AggregateRoot
         payment.FundsReserved(now);
         LastMessageId = messageId;
 
+        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // │ Above the approval tier, wait for a payments officer (no timer, a persisted state);
+        // │ otherwise go straight to the payment network.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (payment.ApprovalRequired)
         {
             MoveTo(SagaStep.AwaitApproval, SagaStatus.WaitingForPerson, nextCheckAt: null, now);
@@ -328,6 +343,11 @@ public sealed class PaymentSaga : AggregateRoot
         Attempts++;
         LastError = Truncate(error);
 
+        // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+        // │ If the network never answered, the outcome is UNKNOWN (it may have sent the payment):
+        // │ do not release - ask it (CONFIRM_WITH_NETWORK); otherwise retry with back-off (same
+        // │ Idempotency-Key: never paid twice).
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (Attempts >= policy.MaxNetworkAttempts)
         {
             Record(now, "NETWORK_UNAVAILABLE", $"Attempt {Attempts} of {policy.MaxNetworkAttempts} failed: {LastError}. No more sends.", null);
@@ -416,6 +436,10 @@ public sealed class PaymentSaga : AggregateRoot
         string proposerUserId, string proposerLabel, SagaPolicy policy, DateTimeOffset now)
     {
         EnsureStep(SagaStep.ConfirmWithNetwork);
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ A manual resolution is possible only after the alert time - before that the automatic
+        // │ enquiry must have its chance.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (!IsUnconfirmedTooLong(policy, now))
             throw new DomainConflictException(
                 $"The payment network is still being asked. A manual resolution is possible once the payment has been unconfirmed for {policy.UnconfirmedAlertAfter.TotalMinutes:F0} minutes.");
@@ -453,6 +477,10 @@ public sealed class PaymentSaga : AggregateRoot
         EnsureStep(SagaStep.ConfirmWithNetwork);
         if (ProposedOutcome is not { } outcome)
             throw new DomainConflictException("No resolution is waiting for a decision.");
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ Second pair of eyes only: the proposer can never decide their own resolution, nor can
+        // │ the payment's initiator.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (deciderUserId == ProposedByUserId)
             throw new SeparationOfDutiesViolationException("Four eyes: the person who proposed the resolution cannot decide it.");
         if (deciderUserId == InitiatedByUserId)
@@ -478,6 +506,10 @@ public sealed class PaymentSaga : AggregateRoot
         RaiseDomainEvent(new NetworkResolutionDomainEvent(NetworkResolutionDomainEvent.Approved, outcome, reference, evidence, proposer, deciderUserId, note, now));
         ClearProposal();
 
+        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // │ Approved as SENT: the money left - settle the reserved funds; approved as NOT SENT:
+        // │ release them (FAILED).
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (outcome == NetworkOutcome.Sent)
         {
             payment.SentToNetwork(reference!, now);
@@ -537,6 +569,11 @@ public sealed class PaymentSaga : AggregateRoot
         var command = CommandOf(Step);
         Record(now, "TIMEOUT", $"No reply to {command} (attempt {Attempts} of {policy.MaxCommandAttempts}).", CurrentCommandId);
 
+        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // │ No reply in time: resend the same command (Accounts is idempotent per PaymentRef). A
+        // │ settlement is resent for ever - the money already left; a reservation is given up and
+        // │ released; a release that keeps failing stops as COMPENSATION_FAILED for operations.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (Attempts < policy.MaxCommandAttempts || Step == SagaStep.SettleFunds)
         {
             SendFundsCommand(command, payment, policy, now);
@@ -627,6 +664,11 @@ public sealed class PaymentSaga : AggregateRoot
             return false;
         }
 
+        // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+        // │ A reply counts only if it answers the command the saga sent LAST (CausationId); a
+        // │ late answer to an earlier attempt is recorded and ignored - it can never move the
+        // │ payment out of order.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (!anyAttempt && causationId != CurrentCommandId)
         {
             Record(now, "REPLY_IGNORED", $"{replyType} answers an earlier command ({causationId}), not the current one: ignored.", messageId);

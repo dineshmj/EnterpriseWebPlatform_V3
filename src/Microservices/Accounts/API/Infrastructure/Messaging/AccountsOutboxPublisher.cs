@@ -30,6 +30,12 @@ public sealed class AccountsKafkaProducer(Microsoft.Extensions.Options.IOptions<
     }
 }
 
+// ┌─ :: ARCHITECTURE :: Transactional Outbox relay (in-process) ───────────────────────────────────
+// │ Why : Replies to the saga and account events must leave exactly when their transaction commits.
+// │ How : FOR UPDATE SKIP LOCKED, per-aggregate order, bounded attempts with back-off, parked after
+// │       MaxAttempts; the trace continues into Kafka.
+// │ Ref : Features 1.3.1 | Transactional Outbox pattern
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Relays committed Accounts Outbox rows to Kafka with the platform's relay
 /// guarantees: FOR UPDATE SKIP LOCKED (multi-instance safe), per-aggregate ordering,

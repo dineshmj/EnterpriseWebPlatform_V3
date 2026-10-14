@@ -37,6 +37,14 @@ public sealed class PaymentsKafkaProducer(Microsoft.Extensions.Options.IOptions<
 /// </summary>
 public sealed record OutboxPolicy(int MaxAttempts, double BaseDelaySeconds);
 
+// ┌─ :: ARCHITECTURE :: Transactional Outbox relay (in-process) ───────────────────────────────────
+// │ Why : The saga's commands and the payment's facts must reach Kafka exactly when the transaction
+// │       that produced them commits - never before, never lost.
+// │ How : Committed outbox rows are claimed with FOR UPDATE SKIP LOCKED, published in per-payment
+// │       order, retried with back-off and parked after Payments:Outbox:MaxAttempts; the trace
+// │       continues into Kafka.
+// │ Ref : Features 1.3.1, 1.6.2 | Transactional Outbox pattern | Threat-Model R-5
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Relays committed Payments Outbox rows to Kafka - the saga's commands to
 /// accounts.commands and the payments' outcomes to payments.payment.events - with the

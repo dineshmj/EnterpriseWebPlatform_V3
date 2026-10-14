@@ -72,6 +72,13 @@ public sealed partial record BankAccountRef
     private static partial Regex AccountNumberPattern();
 }
 
+// ┌─ :: SECURITY :: Approval limits by clearance ──────────────────────────────────────────────────
+// │ Why : Which officer may approve how much is a business rule that changes; hard-coding it in
+// │       screens would let the API drift from it.
+// │ How : Configuration (Payments:ApprovalLimits: an amount or "Unlimited" per clearance level),
+// │       read once and checked in the aggregate; below the lowest level nothing may be approved.
+// │ Ref : Features 2.2.4 | NIST SP 800-162 (ABAC) | OWASP A01
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// ABAC: how much a payments officer may approve, by clearance level (configuration
 /// Payments:ApprovalLimits). A level without a limit approves any amount; below the lowest

@@ -24,6 +24,15 @@ using EnterpriseWebPlatform.Payments.Api.Infrastructure.PaymentNetwork;
 using EnterpriseWebPlatform.Payments.Api.Infrastructure.Persistence;
 using EnterpriseWebPlatform.Payments.Api.Infrastructure.Saga;
 
+// ┌─ :: ARCHITECTURE + SECURITY :: Payments API: a resource server ────────────────────────────────
+// │ Why : The domain API owns its context's data and rules; it trusts nothing the caller says about
+// │       itself - not the UI, not the BFF.
+// │ How : Validates every JWT access token (issuer, audience, signature, lifetime, at+jwt), denies
+// │       by default, checks scope + permission + ABAC / ReBAC per action and inside the
+// │       aggregates, writes events through its Outbox and records consumed messages in its Inbox.
+// │ Ref : Features 1.1.1, 1.2, 2.2 | OAuth 2.0 resource server (RFC 6750, RFC 9068) |
+// │       OWASP API1 / API5 | Authorization-Model 4
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 var builder = WebApplication.CreateBuilder(args);
 
 // Distributed tracing: W3C trace context across HTTP and Kafka (OTLP export when configured).
@@ -42,11 +51,19 @@ var audience = builder.Configuration["Authentication:Audience"]
     ?? throw new InvalidOperationException("Authentication:Audience was not configured.");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Every request needs a JWT access token from our IDP: issuer, audience, lifetime and
+    // │ signature are checked against the IDP's published keys (metadata over HTTPS only).
+    // └──────────────────────────────────────────────────────────────────────────────────────
     .AddJwtBearer(options =>
     {
         options.Authority = authority;
         options.Audience = audience;
         options.RequireHttpsMetadata = true;
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ Keep claim names as issued (sub, role, permission, branch, amr, auth_time) - the
+        // │ policies read them by these names.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         options.MapInboundClaims = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
@@ -63,6 +80,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization(options =>
 {
     // Deny by default: an endpoint without its own policy still needs an authenticated caller.
+    // :: SECURITY :: Deny by default - see Common/WebUtilities/Security/ApiEndpointAuthorization.cs
     options.DenyAnonymousByDefault();
 
     // The reply courier's pinned machine identity: nobody else may hand replies to the saga.
@@ -77,6 +95,10 @@ builder.Services.AddAuthorization(options =>
     // Staff policies: scope for the kind of operation + any of the permissions + a branch.
     // Step-up (MFA): a payments officer's decision and operations' "Retry release", "Resend" and reconciliation need a sign-in with the authenticator code while "Mfa:Enabled"
     // is true (the token's amr contains "mfa"); with MFA off, nothing changes.
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ These policies also require a RECENT MFA sign-in (step-up): approve, reject, retry
+    // │ release, resend and reconcile.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     string[] stepUpPolicies = ["PaymentApprove", "PaymentReject", "PaymentRetryRelease", "PaymentOutboxResend", "PaymentReconcile"];
 
     void AddStaffPolicy(string name, string scope, params string[] anyOfPermissions) =>
@@ -126,6 +148,10 @@ builder.Services.AddScoped<ReconcileNetworkOutcomeCommandHandler>();
 // Financial controls fail closed: a missing or blank setting stops the start-up instead of
 // silently becoming a default (or, worse, "no limit").
 var payments = builder.Configuration.GetSection("Payments");
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ No approval threshold, or an unreadable approval limit, stops the start-up - the
+// │ approval rules never fall back to "anyone may approve anything".
+// └──────────────────────────────────────────────────────────────────────────────────────
 var approvalThreshold = payments.GetValue<decimal?>("ApprovalThreshold")
     ?? throw new InvalidOperationException("Payments:ApprovalThreshold is not configured.");
 if (approvalThreshold <= 0)
@@ -195,6 +221,7 @@ builder.Services.AddKeyedSingleton<LoopHeartbeat>(SagaStepRunner.HeartbeatKey);
 builder.Services.AddHostedService<SagaStepRunner>();
 
 // ---------------------------------------------------------------- Outbox relay (in-process)
+// :: SECURITY :: Kafka authentication, fail closed - see AsyncWorkflows/Infrastructure/Kafka/KafkaClientSecurity.cs
 builder.Services.AddKafkaOptions(builder.Configuration);   // validated at start-up
 builder.Services.AddSingleton<PaymentsKafkaProducer>();
 var outboxPolicy = new OutboxPolicy(
@@ -236,8 +263,10 @@ builder.Services.AddHealthChecks()
         HealthStatus.Degraded, [HealthEndpoints.ReadyTag]));
 
 // OWASP API4: per-caller rate limits on the API surface (429 + Retry-After); configuration "RateLimiting".
+// :: SECURITY :: Per-caller rate limits - see Common/WebUtilities/Security/RateLimiting.cs
 builder.Services.AddEwpRateLimiting(builder.Configuration, "/v1");
 builder.Services.AddEwpMfaStepUp();   // the step-up requirement and its clear 403 ("mfa_required")
+// :: SECURITY :: Step-up MFA - see Common/WebUtilities/Security/MfaStepUp.cs
 builder.RequireMfaOutsideDevelopment();   // fail closed: MFA can be off on a developer's machine only
 
 var app = builder.Build();
@@ -245,12 +274,24 @@ var app = builder.Build();
 // One structured log line per request (Serilog), with the caller and the trace ID.
 app.UseEwpRequestLogging();
 
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ Unexpected errors become problem details with a traceId only - no stack trace, SQL or
+// │ exception text reaches the caller; the details are logged under the same traceId.
+// └──────────────────────────────────────────────────────────────────────────────────────
 app.UseExceptionHandler();
 if (!app.Environment.IsDevelopment())
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ HSTS outside Development only: browsers then refuse plain HTTP for this host (in
+    // │ Development it would pin the developer certificate's host).
+    // └──────────────────────────────────────────────────────────────────────────────────────
     app.UseHsts();
 
 app.UseHttpsRedirection();
 app.UseAuthentication();
+// ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+// │ Order matters: authentication BEFORE the rate limiter (the budget is per person, read
+// │ from the token), authorization after it.
+// └──────────────────────────────────────────────────────────────────────────────────────
 app.UseEwpRateLimiting();
 
 // Remember the acting person's LAN ID (shown on screens and in events; rules use "sub").

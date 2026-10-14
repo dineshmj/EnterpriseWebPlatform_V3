@@ -31,6 +31,14 @@ public sealed record InitiatePaymentCommand(
 
 public sealed record InitiatePaymentResult(long PaymentId, string PaymentNumber, string Status, bool Created);
 
+// ┌─ :: ARCHITECTURE + SECURITY :: One payment per Idempotency-Key ────────────────────────────────
+// │ Why : A double-click, a retried POST or a lost answer must never create a second payment.
+// │ How : The payment, its saga and the first command are saved in ONE transaction and the request
+// │       answers 202 at once; the same key returns the payment already started - but only to the
+// │       same person with the same details (409 otherwise).
+// │ Ref : Features 1.4.3 | IETF draft "The Idempotency-Key HTTP Header" | AI review 1 fix R5 |
+// │       OWASP API6 (business flows)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Records the payment and starts its saga in ONE transaction - payment, saga state and the
 /// first command (ReserveFunds) in the Outbox - then returns at once (the API answers 202).
@@ -97,6 +105,10 @@ public sealed class InitiatePaymentCommandHandler(
 
         // A retry repeats the SAME payment. The same key with other details is not a retry - it
         // is refused rather than silently answered with the first payment.
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the same key comes with other details (amount, payee, accounts), refuse with 409 -
+        // │ a reused key never hides a changed payment.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (!IsSamePayment(existing, command))
             throw new DomainConflictException("This Idempotency-Key was already used for a payment with other details. Start a new payment instead.");
 

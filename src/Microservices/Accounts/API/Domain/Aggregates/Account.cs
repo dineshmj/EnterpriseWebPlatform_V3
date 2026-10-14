@@ -3,6 +3,14 @@ using EnterpriseWebPlatform.Accounts.Api.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.Accounts.Api.Domain.Aggregates;
 
+// ┌─ :: ARCHITECTURE + SECURITY :: Balance, held amount and branch scope ──────────────────────────
+// │ Why : Money must never be reserved twice or below zero, and a payment from one branch must not
+// │       touch another branch's customer.
+// │ How : Available = balance - held, never negative; a hold is refused unless the account belongs
+// │       to the customer, is ACTIVE and is in the initiator's branch; Version guards concurrent
+// │       changes.
+// │ Ref : Features 2.2.3, 1.6.4 | OWASP API1 BOLA | AI review 1 fix R1
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Aggregate root: a customer account, as opened by the core-banking system (which
 /// issues the BSB and account number). Simplified: no interest or statements; the
@@ -112,6 +120,10 @@ public sealed class Account
     /// </summary>
     public FundsRefusalReason? RefusalToHold(decimal amount, string currency, string customerNumber, BranchCode? initiatorBranch)
     {
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the payment was started in another branch, refuse (ACCOUNT_NOT_IN_BRANCH) - the
+        // │ command path cannot reach another branch's customer.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (!IsInBranch(initiatorBranch))
             return FundsRefusalReason.AccountNotInBranch;
         if (!string.Equals(CustomerNumber, customerNumber?.Trim(), StringComparison.OrdinalIgnoreCase))

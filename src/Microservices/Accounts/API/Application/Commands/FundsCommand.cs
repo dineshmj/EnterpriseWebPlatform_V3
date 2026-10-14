@@ -34,6 +34,13 @@ public sealed record FundsCommand(
 
 public sealed record FundsCommandResult(string HoldStatus, bool AlreadyProcessed);
 
+// ┌─ :: ARCHITECTURE :: Saga participant: reserve, settle, release ────────────────────────────────
+// │ Why : Accounts must take part in the payment without knowing the saga, and answer every command
+// │       exactly once in effect.
+// │ How : Inbox first (a repeat is answered, not re-executed); one local transaction changes the
+// │       hold and the balance and writes the reply to the Outbox (accounts.funds.replies).
+// │ Ref : Features 1.4.3, 1.3.2 | Saga participant | Inbox / Outbox patterns
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Applies one funds command in ONE local transaction: the hold row and the account row
 /// are locked, changed and saved together with the reply in the Outbox. Accounts decides
@@ -54,6 +61,10 @@ public sealed class FundsCommandHandler(
 
     public async Task<FundsCommandResult> HandleAsync(FundsCommand command, CancellationToken cancellationToken)
     {
+        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // │ If this command was already processed, do nothing (Inbox) - the hold's state already
+        // │ gives the same reply.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (await inbox.HasProcessedAsync(command.MessageId, InboxConsumer, cancellationToken))
             return new FundsCommandResult("UNCHANGED", AlreadyProcessed: true);
 

@@ -4,6 +4,12 @@ using Microsoft.AspNetCore.Authorization;
 
 namespace EnterpriseWebPlatform.Accounts.Api.Authorization;
 
+// ┌─ :: SECURITY :: Account officer: role, permission, department, clearance, branch ──────────────
+// │ Why : Opening an account is a decision only a qualified officer of the right branch may take.
+// │ How : RBAC (account_officer + the permission) plus ABAC (department ACCOUNTS, clearance, a
+// │       branch claim); the branch of the application is checked again on the record.
+// │ Ref : Features 2.2.4 | Authorization-Model 5 | OWASP API5
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// RBAC + ABAC requirement for acting on account applications and viewing accounts:
 /// role account_officer, department ACCOUNTS, clearance level 3 or above, and EVERY

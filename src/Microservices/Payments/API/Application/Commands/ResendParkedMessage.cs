@@ -7,6 +7,14 @@ public sealed record ResendParkedMessageCommand(Guid MessageId, string OperatorL
 
 public sealed record ResendParkedMessageResult(Guid MessageId, string EventType, string? PaymentNumber, int RedriveCount);
 
+// ┌─ :: ARCHITECTURE + SECURITY :: Resend a parked Outbox message ─────────────────────────────────
+// │ Why : A message parked after Kafka was down for long would block the payment for good; fixing
+// │       it by hand in the database would be unrecorded and could duplicate it.
+// │ How : Operations resend the SAME message (same ID) with a reason, workflow.reprocess and a
+// │       recent MFA code; consumers' Inboxes drop a copy that did arrive; who, when and why are
+// │       kept on the message and the timeline.
+// │ Ref : Features 1.6.2 | Threat-Model R-5 | Transactional Outbox pattern
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Operations recovery for a PARKED Outbox message (the relay gave up after its bounded
 /// attempts, e.g. Kafka was down for long): the same message - same id, same payload - goes

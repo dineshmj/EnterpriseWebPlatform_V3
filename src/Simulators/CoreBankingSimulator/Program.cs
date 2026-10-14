@@ -20,6 +20,14 @@ using System.Text.Json.Serialization;
 // may safely retry after a timeout without opening a second account.
 // =============================================================================
 
+// ┌─ :: ARCHITECTURE + SECURITY :: A stand-in external system ─────────────────────────────────────
+// │ Why : The platform must be shown coping with a third party that is slow, failing, down or
+// │       refusing - without depending on a real provider.
+// │ How : Same contract style as a real partner: an API key compared in constant time (no key = no
+// │       start), an Idempotency-Key that always returns the same result, and a behaviour switch
+// │       that answers loopback callers only.
+// │ Ref : Features 1.6.3, 1.7.4 | Threat-Model TB6 | CWE-208 (timing-safe comparison)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 var builder = WebApplication.CreateBuilder(args);
 var apiKey = builder.Configuration["Simulator:ApiKey"];
 if (string.IsNullOrWhiteSpace(apiKey))
@@ -117,6 +125,10 @@ app.MapGet("/health", () => Results.Ok(new { status = "Healthy" }));
 app.Run();
 
 static bool IsLocal(HttpContext http) =>
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ The behaviour switch answers only callers on this machine (loopback) - nobody on the
+    // │ network can switch the provider off.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     http.Connection.RemoteIpAddress is { } ip && IPAddress.IsLoopback(ip);
 
 // Logs show the last four digits only, like every platform component (LogMasking).

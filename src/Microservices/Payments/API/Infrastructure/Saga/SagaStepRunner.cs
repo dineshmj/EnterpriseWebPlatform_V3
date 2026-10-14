@@ -9,6 +9,14 @@ using EnterpriseWebPlatform.Payments.Api.Infrastructure.Persistence;
 
 namespace EnterpriseWebPlatform.Payments.Api.Infrastructure.Saga;
 
+// ┌─ :: ARCHITECTURE :: The saga's timer ──────────────────────────────────────────────────────────
+// │ Why : Time-outs and due network calls need a clock that survives restarts and runs on several
+// │       instances.
+// │ How : A background loop picks due sagas with FOR UPDATE SKIP LOCKED (one instance per saga),
+// │       hands each result to the saga, and stops a round when the network is failing; readiness
+// │       degrades for stuck, overdue or unconfirmed payments.
+// │ Ref : Features 1.4.3, 1.7.2 | Saga pattern
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// The saga's timer, in the Payments API: every second it runs the steps that are due -
 /// a payment to send to the network, or a reply from Accounts that did not come in time -

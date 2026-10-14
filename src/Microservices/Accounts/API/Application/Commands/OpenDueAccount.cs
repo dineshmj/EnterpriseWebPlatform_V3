@@ -20,6 +20,14 @@ public enum OpeningRunOutcome
     CoreBankingUnavailable
 }
 
+// ┌─ :: ARCHITECTURE :: Opening accounts in the background, safely retried ────────────────────────
+// │ Why : Calling core banking inside the officer's request would make the screen hang on an
+// │       outage, and a blind retry could open two accounts.
+// │ How : A worker picks due applications, calls core banking with the ApplicationRef as
+// │       Idempotency-Key, and records success, a retry with back-off, or a final refusal -
+// │       continuing the approval's trace.
+// │ Ref : Features 1.6.3, 1.7.1 | IETF Idempotency-Key draft | Circuit Breaker pattern
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Opens ONE approved account that is due: locks the application (SKIP LOCKED, so several
 /// API instances can share the work), asks the core-banking system, and records the

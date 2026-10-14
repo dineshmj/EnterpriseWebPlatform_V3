@@ -27,6 +27,13 @@ public sealed class PaymentNetworkOptions
     public string ApiKey { get; init; } = string.Empty;
 }
 
+// ┌─ :: ARCHITECTURE + SECURITY :: Anti-corruption layer to the payment network ───────────────────
+// │ Why : The network's wire format and failure modes must not leak into the domain, and a retried
+// │       send must never pay twice.
+// │ How : Every call carries the API key and the PaymentRef as Idempotency-Key; 422 is a final
+// │       refusal, 5xx / timeouts are "unavailable"; the status enquiry asks by the same key.
+// │ Ref : Features 1.4.3, 2.4.9 | DDD Anti-Corruption Layer | IETF Idempotency-Key draft
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// HTTP adapter to the external payment network (an NPP-style clearing service), and the
 /// anti-corruption layer for its wire format. Every request carries an Idempotency-Key

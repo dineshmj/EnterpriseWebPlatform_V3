@@ -5,6 +5,13 @@ using EnterpriseWebPlatform.Accounts.Api.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.Accounts.Api.Domain.Aggregates;
 
+// ┌─ :: ARCHITECTURE + SECURITY :: One idempotent funds hold per payment ──────────────────────────
+// │ Why : The saga resends commands after a timeout; a repeated "reserve" must never hold the money
+// │       twice, and a release that overtakes its reservation must not leave money held for nobody.
+// │ How : One hold per PaymentRef (unique); a repeated command repeats the same reply; a release
+// │       before any reservation is recorded, so a late reserve is refused (ALREADY_RELEASED).
+// │ Ref : Features 1.4.3 | Idempotent Receiver pattern | Integration-Event-Catalogue 4.5
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Aggregate root: the funds one payment reserved on one account, keyed by the payment's
 /// never-repeating PaymentRef. Accounts knows nothing about the payment saga: it reserves,
@@ -79,6 +86,10 @@ public sealed class FundsHold : AggregateRoot
         var hold = New(paymentRef, paymentNumber, account.Bsb, account.AccountNumber, customerNumber, amount, currency, initiatedByUserId, now);
         hold.AccountId = account.Id;
 
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the account is not ACTIVE, not the customer's, not in the initiator's branch, not
+        // │ AUD or short of funds, refuse the hold with the reason - nothing is reserved.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (account.RefusalToHold(hold.Amount, hold.Currency, hold.CustomerNumber, initiatorBranch) is { } refusal)
         {
             hold.Refuse(refusal, now);

@@ -5,6 +5,15 @@ using EnterpriseWebPlatform.Accounts.Api.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.Accounts.Api.Domain.Aggregates;
 
+// ┌─ :: ARCHITECTURE + SECURITY :: Account opening: separation of duties and a bounded external call ────
+// │ Why : The officer who opens the account must be independent of the people who started and
+// │       cleared the onboarding; and a core-banking outage must neither open two accounts nor wait
+// │       for ever.
+// │ How : Neither the initiator nor the Compliance approver may decide (fails closed when unknown);
+// │       opening retries with back-off up to MaxOpeningAttempts, a refusal is final; a failure is
+// │       published for compensation.
+// │ Ref : Features 2.2.6, 1.4.2, 1.6.3 | Authorization-Model 8 | OWASP A01
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Aggregate root: opening the account for ONE onboarding application that Compliance
 /// approved - the last step of the onboarding saga.
@@ -302,6 +311,10 @@ public sealed class AccountApplication : AggregateRoot
         OpeningAttempts++;
         LastOpeningError = Truncate(string.IsNullOrWhiteSpace(error) ? "Account opening failed." : error.Trim(), 2000);
 
+        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // │ After the last allowed attempt, stop retrying: the application FAILS and
+        // │ AccountOpeningFailed starts the compensation; until then, retry with back-off.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (OpeningAttempts >= maxAttempts)
         {
             Fail($"The core-banking system did not open the account after {OpeningAttempts} attempts. Last error: {LastOpeningError}", now);
@@ -361,6 +374,10 @@ public sealed class AccountApplication : AggregateRoot
 
         // Fail closed: without a known initiator the platform cannot prove that the
         // officer is not acting on their own workflow.
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the initiator is unknown, deny - separation of duties cannot be proven, so it
+        // │ fails closed.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (InitiatedByUserId is null)
             throw new SeparationOfDutiesViolationException(
                 "The workflow initiator of this application is unknown, so Separation of Duties cannot be verified. The action is denied.");

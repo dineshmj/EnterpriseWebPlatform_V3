@@ -37,6 +37,14 @@ public sealed class CoreBankingOptions
     public int MaxOpeningAttempts { get; init; } = 6;
 }
 
+// ┌─ :: ARCHITECTURE + SECURITY :: Anti-corruption layer to core banking ──────────────────────────
+// │ Why : A POST that opens an account is not naturally repeatable: a lost answer followed by a
+// │       retry could open two.
+// │ How : Every request carries the ApplicationRef as Idempotency-Key (core banking returns the
+// │       same account for it) and the API key; 422 is a final refusal, 5xx / timeouts are retried
+// │       by the worker.
+// │ Ref : Features 1.6.3, 2.4.9 | IETF Idempotency-Key draft | DDD Anti-Corruption Layer
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// HTTP adapter to the external core-banking system, and the anti-corruption layer for
 /// its wire format. Every request carries an Idempotency-Key (the onboarding
@@ -81,6 +89,10 @@ public sealed class CoreBankingClient(HttpClient http, IOptions<CoreBankingOptio
 
         using (response)
         {
+            // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+            // │ A 422 is a business "no" - final, never retried; anything else that fails is
+            // │ "unavailable" and is retried later.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             if (response.StatusCode == HttpStatusCode.UnprocessableEntity)
             {
                 var refusal = await TryReadAsync<Refusal>(response, cancellationToken);

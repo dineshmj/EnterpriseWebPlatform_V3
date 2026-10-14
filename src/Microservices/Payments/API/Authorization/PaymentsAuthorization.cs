@@ -8,6 +8,15 @@ using EnterpriseWebPlatform.Payments.Api.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.Payments.Api.Authorization;
 
+// ┌─ :: SECURITY :: Staff authorization: permission + branch (RBAC + ABAC) ────────────────────────
+// │ Why : A role alone must not open another branch's payments, and an auditor's all-branches
+// │       permission must not leak into the operational screens.
+// │ How : Each policy needs one of its permissions AND a branch claim; reads are limited to the
+// │       person's branch except for operations and audit; the auditor's permission counts only
+// │       when the Audit Journey API is the acting client.
+// │ Ref : Features 2.2.3, 2.2.4 | OWASP API1:2023 BOLA | Authorization-Model 5, 10 |
+// │       AI review 1 fix R4
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// RBAC + ABAC requirement for staff acting on payments: at least ONE of the listed
 /// permissions, and a branch (the ABAC scope every payment query and command is limited to).
@@ -47,6 +56,10 @@ public sealed class PaymentsStaffAuthorizationHandler : AuthorizationHandler<Pay
     /// </summary>
     public static IReadOnlySet<string> EffectivePermissionsOf(ClaimsPrincipal user)
     {
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ The auditor's permission counts only through the Audit Journey API (token exchange) -
+        // │ anywhere else it is dropped, even for a person who also holds another role.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         var viaAuditContext = ActingClientOf(user) == AuditMicroservice.CLIENT_ID_FOR_IDP_FOR_AUDIT_JOURNEY_API;
         return user.Claims
             .Where(c => c.Type == "permission" && (viaAuditContext || c.Value != AuditReadPermission))

@@ -41,6 +41,10 @@ export async function postJson<T>(url: string, body: unknown, extraHeaders: Reco
   }
   const text = await response.text();
   // A risky action whose authenticator code is too old: confirm it in a small window, then once more.
+  // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+  // │ If the API answers 403 mfa_required, confirm with a fresh authenticator code in a
+  // │ small window, then try ONCE more - never loop, never sign out.
+  // └──────────────────────────────────────────────────────────────────────────────────────
   if (!afterStepUp && needsStepUp(response.status, text)) {
     if (await confirmWithAuthenticator()) return postJson<T>(url, body, extraHeaders, true);
     throw new Error(NOT_CONFIRMED);

@@ -16,6 +16,14 @@ public sealed record SagaReplyRequest(
     bool? NothingWasHeld,
     Guid? CausationId = null);
 
+// ┌─ :: SECURITY :: Internal endpoint pinned to one machine client ────────────────────────────────
+// │ Why : Anyone holding the write scope could otherwise post a fake "funds reserved" reply and
+// │       move a payment.
+// │ How : Only the PaymentsSagaReplySubscriber's client_id is accepted (policy
+// │       PaymentsSagaReplySubscriberWrite) - the scope alone grants nothing.
+// │ Ref : Features 2.1.2 | OWASP API5 Broken Function Level Authorization |
+// │       AI review 1 (client pinning)
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Machine-only endpoint: called by the PaymentsSagaReplySubscriber (pinned M2M client) for
 /// each reply Accounts publishes on accounts.funds.replies. The saga decides what the reply

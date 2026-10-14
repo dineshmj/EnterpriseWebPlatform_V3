@@ -5,6 +5,14 @@ using EnterpriseWebPlatform.Payments.Api.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.Payments.Api.Domain.Aggregates;
 
+// ┌─ :: ARCHITECTURE + SECURITY :: The payment and its approval rules ─────────────────────────────
+// │ Why : The rules that protect money must hold whatever calls them - a screen, an API client or a
+// │       future channel.
+// │ How : The payment changes only through its saga; approval is checked here: the approver is
+// │       never the initiator (separation of duties) and the amount must be within the approver's
+// │       clearance limit (ABAC).
+// │ Ref : Features 2.2.4, 2.2.6 | Authorization-Model 5, 8 | OWASP A01 (business logic) | ASVS V4.3
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Aggregate root: one payment instruction, captured by a staff member for a customer
 /// (assisted channel) and carried out by the PaymentSaga. The payment owns the business
@@ -156,6 +164,10 @@ public sealed class Payment : AggregateRoot
     internal void Approve(string officerUserId, int clearance, ApprovalLimits limits, string? remarks, DateTimeOffset now)
     {
         EnsureMayDecide(officerUserId);
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the amount is above what this officer's clearance may approve, refuse (403) - ABAC
+        // │ by amount.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (!limits.Allows(clearance, Amount))
         {
             var max = limits.MaxFor(clearance);
@@ -181,6 +193,10 @@ public sealed class Payment : AggregateRoot
     {
         if (Status != PaymentStatus.PendingApproval)
             throw new DomainConflictException($"Payment {PaymentNumber} is {Status.ToCode()}: only a payment awaiting approval can be decided.");
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If the officer started this payment, refuse: nobody approves their own payment
+        // │ (maker-checker).
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (string.Equals(officerUserId, InitiatedByUserId, StringComparison.Ordinal))
             throw new SeparationOfDutiesViolationException("You started this payment, so you cannot decide it (separation of duties).");
     }

@@ -38,6 +38,10 @@ public sealed class InternalAccountApplicationsController(
     IStaffDirectory staffDirectory) : ControllerBase
 {
     [HttpPost("from-compliance-approved")]
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Internal endpoint: only the one subscriber's client_id is accepted (pinned in
+    // │ Program.cs), not just the scope.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     [Authorize(Policy = "AccountApplicationOpeningSubscriberWrite")]
     public async Task<IActionResult> Open([FromBody] OpenAccountApplicationRequest request, CancellationToken cancellationToken)
     {

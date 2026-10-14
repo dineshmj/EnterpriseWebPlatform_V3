@@ -17,6 +17,14 @@ public enum SagaStepRunOutcome
     NetworkStatusUnknown
 }
 
+// ┌─ :: ARCHITECTURE :: Claim, call, record: no transaction around the network call ───────────────
+// │ Why : Holding a row lock while waiting up to 20 seconds for an external system blocks every
+// │       other step of that payment and exhausts database connections.
+// │ How : A short transaction claims the step (a 60-second lease); the network is called with no
+// │       transaction open; the answer is recorded in another short transaction only if the saga's
+// │       Version is unchanged.
+// │ Ref : Features 1.4.3 | Threat-Model R-1 | AI review 1 #1 | Saga plan 2.2
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// The step runner's unit of work: ONE saga whose timer is due (SKIP LOCKED, so several API
 /// instances share the work). The decision itself is always the saga's.
@@ -164,6 +172,11 @@ public sealed class RunDueSagaStepCommandHandler(
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
 
         var saga = await sagas.GetForUpdateAsync(claim.PaymentRef, cancellationToken);
+        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // │ If the saga changed while the call was on its way (another decision, a reply),
+        // │ discard this answer - the step will be claimed again; the Idempotency-Key makes the
+        // │ repeat safe.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (saga is null || saga.Version != claim.Version)
         {
             // Only possible when the lease ran out and another step runner took the attempt: its

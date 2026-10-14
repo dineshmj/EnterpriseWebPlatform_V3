@@ -2,6 +2,13 @@ using System.Text.RegularExpressions;
 
 namespace EnterpriseWebPlatform.Accounts.Bff.Web.Configuration;
 
+// ┌─ :: SECURITY :: Return-URL allow-list ─────────────────────────────────────────────────────────
+// │ Why : A sign-in endpoint that returns to any URL it is given is an open redirector for phishing
+// │       links.
+// │ How : Only this MFE's own pages (and their "?id=<number>" deep links) are accepted as return
+// │       URLs; anything else is refused.
+// │ Ref : Features 2.3.5 | OWASP Unvalidated Redirects and Forwards Cheat Sheet | CWE-601
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 public static partial class BffRouteCatalog
 {
     // The three pages seeded in EwpBssShellDb.sql (View Account Applications, View

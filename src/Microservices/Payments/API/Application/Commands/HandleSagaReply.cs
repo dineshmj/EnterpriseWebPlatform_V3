@@ -23,6 +23,12 @@ public enum SagaReplyOutcome
     AlreadyProcessed
 }
 
+// ┌─ :: ARCHITECTURE :: Idempotent consumer (Inbox) for the saga's replies ────────────────────────
+// │ Why : Kafka delivers at least once: the same reply can arrive twice.
+// │ How : The reply's MessageId is recorded in inbox_messages in the SAME transaction as the saga
+// │       change; a repeat is acknowledged and ignored.
+// │ Ref : Features 1.3.2 | Idempotent Consumer pattern | Inbox pattern
+// └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Hands one reply to the payment's saga: locks the saga, lets it decide, and saves the
 /// saga, the payment and any next command in ONE transaction (with the Inbox record).
@@ -40,6 +46,10 @@ public sealed class HandleSagaReplyCommandHandler(
 
     public async Task<SagaReplyOutcome> HandleAsync(SagaReplyCommand reply, CancellationToken cancellationToken)
     {
+        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // │ If this reply was already processed, acknowledge it and do nothing (Inbox) - a
+        // │ redelivery never moves money twice.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (await inbox.HasProcessedAsync(reply.MessageId, InboxConsumer, cancellationToken))
             return SagaReplyOutcome.AlreadyProcessed;
 
