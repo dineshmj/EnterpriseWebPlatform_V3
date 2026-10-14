@@ -61,6 +61,8 @@ param(
 # After param(): PowerShell requires the param block to be the script's first statement.
 Clear-Host
 
+$stopwatch = [System.Diagnostics.Stopwatch]::StartNew();
+
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path   # the repository root (this script is in ps\)
 
@@ -434,3 +436,7 @@ if ($erasesData) {
 } else {
     Write-Host 'Nothing was erased; running services pick the changes up on their next connection.'
 }
+
+$stopwatch.Stop()
+
+Write-Host "`r`nResetting BSS finished in: $($stopwatch.Elapsed.ToString("m' minutes 's' seconds'"))" -ForegroundColor Green

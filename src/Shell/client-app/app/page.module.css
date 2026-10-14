@@ -23,6 +23,9 @@
 .connectionStatus { margin-left: auto; display: inline-flex; flex: 0 0 auto; align-items: center; gap: 7px; color: #475467; font-size: .74rem; white-space: nowrap; }
 .connectionDot { width: 7px; height: 7px; border-radius: 50%; background: #12b76a; box-shadow: 0 0 0 3px rgba(18,183,106,.12); }
 .connectionDotPending { width: 7px; height: 7px; border-radius: 50%; background: #f79009; box-shadow: 0 0 0 3px rgba(247,144,9,.14); }
+.connectionDotEnded { width: 7px; height: 7px; border-radius: 50%; background: #d92d20; box-shadow: 0 0 0 3px rgba(217,45,32,.14); }
+.signInAgain { margin-left: 6px; padding: 3px 10px; border: 1px solid #fda29b; border-radius: 7px; background: #fff; color: #b42318; font-size: .78rem; font-weight: 600; cursor: pointer; }
+.signInAgain:hover { background: #fef3f2; }
 .headerActions { display: flex; align-items: center; gap: 6px; }
 .error { margin-bottom: 10px; padding: 10px 14px; border: 1px solid #fecaca; border-radius: 9px; color: #991b1b; background: #fff7f7; font-size: .84rem; }
 .frameShell { flex: 1; min-height: 0; overflow: hidden; border: 1px solid var(--shell-border); border-radius: 12px; background: #fff; box-shadow: 0 8px 24px rgba(16,42,67,.08); }

@@ -12,10 +12,10 @@ public sealed class OnboardingAlertOptions
 {
     public const string SectionName = "Onboarding:Alerts";
 
-    /// <summary>A step a machine moves on (a worker, Kafka, core banking): minutes are already too long.</summary>
+    /// <summary>A step a machine moves on (a subscriber, Kafka, the Outbox relay): minutes are already too long.</summary>
     public int HandoverMinutes { get; init; }
 
-    /// <summary>A step that waits for an officer's decision (KYC, Compliance).</summary>
+    /// <summary>A step that waits for an officer's decision (KYC, Compliance, Accounts).</summary>
     public int OfficerDecisionMinutes { get; init; }
 }
 
@@ -36,21 +36,26 @@ public sealed class OnboardingAgeHealthCheck(
     IOptions<OnboardingAlertOptions> options,
     TimeProvider clock) : IHealthCheck
 {
-    /// <summary>Steps a machine moves on: the next hop is a subscriber, the relay or core banking.</summary>
+    /// <summary>Steps a machine moves on: the next hop is a subscriber or the Outbox relay.</summary>
     private static readonly OnboardingApplicationStatus[] HandoverSteps =
     [
         OnboardingApplicationStatus.Submitted,
         OnboardingApplicationStatus.KycCompleted,
         OnboardingApplicationStatus.ComplianceCompleted,
-        OnboardingApplicationStatus.AccountOpeningInProgress,
         OnboardingApplicationStatus.Compensating
     ];
 
+    // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+    // │ Account opening is an OFFICER step: the application enters it when Accounts creates
+    // │ the account application, which then waits for the account officer (core banking only
+    // │ follows the approval, with bounded retries that end in AccountOpeningFailed).
+    // └──────────────────────────────────────────────────────────────────────────────────────
     /// <summary>Steps that wait for an officer's decision.</summary>
     private static readonly OnboardingApplicationStatus[] OfficerSteps =
     [
         OnboardingApplicationStatus.KycInProgress,
-        OnboardingApplicationStatus.ComplianceInProgress
+        OnboardingApplicationStatus.ComplianceInProgress,
+        OnboardingApplicationStatus.AccountOpeningInProgress
     ];
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)

@@ -8,8 +8,10 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from '../lib/notifications';
+import { sessionState } from '../lib/session';
 
-export type LiveStatus = 'connecting' | 'live' | 'offline';
+/** 'ended': the Shell's own session is over - live updates stop until the person signs in again. */
+export type LiveStatus = 'connecting' | 'live' | 'offline' | 'ended';
 
 const MAX_ITEMS = 50;
 const MAX_TOASTS = 3;
@@ -50,8 +52,30 @@ export function useNotifications(onLive?: (notification: ShellNotification) => v
 
   useEffect(() => {
     let disposed = false;
+    let ended = false;
     let retryTimer: number | undefined;
+    let sessionCheck: number | undefined;
     const connection = createNotificationConnection();
+
+    // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+    // │ If reconnecting fails because the Shell's session has ended, stop and say so - never
+    // │ retry for ever while looking "almost live". The check does not extend the session.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    const stopIfSessionEnded = async (): Promise<boolean> => {
+      if (ended) return true;
+      if (await sessionState() !== 'ended') return false;
+      ended = true;
+      window.clearInterval(sessionCheck);
+      window.clearTimeout(retryTimer);
+      setStatus('ended');
+      await connection.stop();
+      return true;
+    };
+    const watchSession = () => {
+      window.clearInterval(sessionCheck);
+      void stopIfSessionEnded();
+      sessionCheck = window.setInterval(() => void stopIfSessionEnded(), 30_000);
+    };
 
     connection.on('notification', (notification: ShellNotification) => {
       setItems(previous => [notification, ...previous.filter(x => x.id !== notification.id)].slice(0, MAX_ITEMS));
@@ -59,8 +83,8 @@ export function useNotifications(onLive?: (notification: ShellNotification) => v
       setToasts(previous => [...previous, notification].slice(-MAX_TOASTS));
       onLiveRef.current?.(notification);
     });
-    connection.onreconnecting(() => setStatus('connecting'));
-    connection.onreconnected(() => { setStatus('live'); void reload(); });
+    connection.onreconnecting(() => { setStatus('connecting'); watchSession(); });
+    connection.onreconnected(() => { window.clearInterval(sessionCheck); setStatus('live'); void reload(); });
 
     // Started, or closed without an automatic reconnect (e.g. the API was down at
     // start-up): keep trying with back-off until the page goes away.
@@ -71,7 +95,7 @@ export function useNotifications(onLive?: (notification: ShellNotification) => v
         setStatus('live');
         void reload();
       } catch {
-        if (disposed) return;
+        if (disposed || await stopIfSessionEnded()) return;
         setStatus('offline');
         retryTimer = window.setTimeout(() => void start(attempt + 1), Math.min(30_000, 2_000 * 2 ** Math.min(attempt, 4)));
       }
@@ -82,7 +106,7 @@ export function useNotifications(onLive?: (notification: ShellNotification) => v
     // │ stored list.
     // └──────────────────────────────────────────────────────────────────────────────────────
     connection.onclose(() => {
-      if (disposed) return;
+      if (disposed || ended) return;
       setStatus('offline');
       retryTimer = window.setTimeout(() => void start(0), 2_000);
     });
@@ -93,6 +117,7 @@ export function useNotifications(onLive?: (notification: ShellNotification) => v
     return () => {
       disposed = true;
       window.clearTimeout(retryTimer);
+      window.clearInterval(sessionCheck);
       void connection.stop();
     };
   }, [reload]);

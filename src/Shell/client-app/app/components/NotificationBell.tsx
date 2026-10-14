@@ -68,7 +68,11 @@ export function NotificationBell({ items, unreadCount, status, onMarkRead, onMar
 
           {status !== 'live' && (
             <p className={styles.statusNote}>
-              {status === 'connecting' ? 'Connecting to live updates…' : 'Live updates paused - reconnecting. New notifications appear when the connection is back.'}
+              {status === 'ended'
+                ? 'Your session has ended. Sign in again to see new notifications.'
+                : status === 'connecting'
+                  ? 'Connecting to live updates…'
+                  : 'Live updates paused - reconnecting. New notifications appear when the connection is back.'}
             </p>
           )}
 

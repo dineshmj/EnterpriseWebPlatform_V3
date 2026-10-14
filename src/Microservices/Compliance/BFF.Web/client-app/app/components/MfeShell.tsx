@@ -134,6 +134,34 @@ export function useShellNotifications(listener: (notification: ShellNotification
   }, [listener]);
 }
 
+/** How often, at most, this application tells the Shell that the person is active here. */
+const ACTIVITY_REPORT_MS = 60_000;
+
+// ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+// │ While the person works here, tell the Shell (at most once a minute, its origin only,
+// │ no data) so the Shell keeps its OWN session alive - each BFF has its own session, and
+// │ the Shell's would otherwise end while the person is busy in this application.
+// └──────────────────────────────────────────────────────────────────────────────────────
+function useReportActivityToShell() {
+  useEffect(() => {
+    const parentWindow = window.parent;
+    if (!parentWindow || parentWindow === window) return;
+    let lastReport = 0;
+    const report = () => {
+      const now = Date.now();
+      if (now - lastReport < ACTIVITY_REPORT_MS) return;
+      lastReport = now;
+      parentWindow.postMessage({ type: 'BSS_MFE_ACTIVITY' }, SHELL_ORIGIN);
+    };
+    window.addEventListener('pointerdown', report, true);
+    window.addEventListener('keydown', report, true);
+    return () => {
+      window.removeEventListener('pointerdown', report, true);
+      window.removeEventListener('keydown', report, true);
+    };
+  }, []);
+}
+
 export function MfeShell({
   title = 'Compliance review',
   subtitle = 'Compliance',
@@ -148,6 +176,8 @@ export function MfeShell({
 }) {
   const [pendingNavigation, setPendingNavigation] =
     useState<PendingNavigationRequest | null>(null);
+
+  useReportActivityToShell();
 
   useEffect(() => {
     const origin = parentOrigin();

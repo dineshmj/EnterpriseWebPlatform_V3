@@ -60,8 +60,12 @@ public sealed class BssClient
                         NotificationsApiScopesRequired.NOTIFICATIONS_WRITE
                     },
 
-                    // For the Shell application, show the content page.
-                    RequireConsent = true,
+                    // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+                    // │ No consent page: the Shell is the bank's own first-party staff portal, not a
+                    // │ third-party app asking for the person's data - access is decided by roles and
+                    // │ policies, so a consent screen added nothing and reappeared on every new sign-in.
+                    // └──────────────────────────────────────────────────────────────────────────────────────
+                    RequireConsent = false,
 
                     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
                     // │ Each refresh re-reads the CURRENT roles and ABAC attributes (branch, clearance), so

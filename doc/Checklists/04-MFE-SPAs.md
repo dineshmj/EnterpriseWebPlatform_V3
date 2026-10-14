@@ -23,6 +23,7 @@ Deployables: `src/Microservices/<Context>/BFF.Web/client-app` for Customer Onboa
 
 - [x] **Shell messages are accepted only from the parent window AND the configured Shell origin;** messages are posted only to that origin. *Because* a page that frames the MFE must not pose as the Shell. → `app/components/MfeShell.tsx`
 - [x] **Rendering never trusts the screen.** Branch, role and permission decide only what is shown; every API authorizes again.
+- [x] **Activity is reported to the Shell:** a click or key sends `BSS_MFE_ACTIVITY` to the Shell's origin, at most once a minute, with no data. *Because* the Shell keeps its own session alive only while the person is active, wherever they work. → `app/components/MfeShell.tsx` (`useReportActivityToShell`)
 
 ## 4. Build
 

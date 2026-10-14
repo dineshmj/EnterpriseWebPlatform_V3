@@ -23,7 +23,8 @@ import { TopNavMenu } from './components/TopNavMenu';
 import { useAuth } from './hooks/useAuth';
 import { MenuResponse, MenuItem } from './types';
 import { addVisitedMicroservice, setDiscoveredMicroservices } from './lib/auth-utils';
-import { getClaimValue } from './lib/auth';
+import { getClaimValue, redirectToLogin } from './lib/auth';
+import { keepSessionAlive } from './lib/session';
 import { type LastVisit, readLastVisit, saveLastVisit } from './lib/last-visit';
 import { EMPTY_WORKSPACE_CONTEXT, type WorkspaceContext } from './workspace-context';
 import styles from './page.module.css';
@@ -85,6 +86,8 @@ function HomeContent() {
   const { user } = useAuth(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  // The Shell's own session ended (found while renewing it on activity).
+  const [shellSessionEnded, setShellSessionEnded] = useState(false);
   const [menuData, setMenuData] = useState<MenuResponse | null>(null);
   // Until the person opens a page, the Shell shows its welcome screen instead of an empty frame.
   const [frameActive, setFrameActive] = useState(false);
@@ -115,6 +118,28 @@ function HomeContent() {
     iframe.contentWindow.postMessage({ type: 'BSS_NOTIFICATION', notification }, origin);
   }, []);
   const notifications = useNotifications(relayToFrame);
+  const sessionEnded = shellSessionEnded || notifications.status === 'ended';
+  const touchSessionRef = useRef<() => Promise<void>>(async () => {});
+
+  // The person is active (here or in the application in the frame): renew the Shell's session.
+  const touchSession = useCallback(async () => {
+    if (await keepSessionAlive() === 'ended') setShellSessionEnded(true);
+  }, []);
+
+  // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+  // │ Clicks and keys in the Shell itself count as activity too; renewing happens at most
+  // │ every 5 minutes, and never without a person behind it (no timer keeps it alive).
+  // └──────────────────────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const onActivity = () => void touchSession();
+    window.addEventListener('pointerdown', onActivity, true);
+    window.addEventListener('keydown', onActivity, true);
+    return () => {
+      window.removeEventListener('pointerdown', onActivity, true);
+      window.removeEventListener('keydown', onActivity, true);
+    };
+  }, [touchSession]);
+  touchSessionRef.current = touchSession;
 
   useEffect(() => {
     function handleFrameMessage(event: MessageEvent) {
@@ -139,6 +164,16 @@ function HomeContent() {
           },
           event.origin,
         );
+        return;
+      }
+
+      if (event.data?.type === 'BSS_MFE_ACTIVITY') {
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ Activity counts only from the accepted application's origin; it carries no data and
+        // │ only renews the Shell's session (throttled), so a forged message gains nothing.
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        if (!currentFrameOriginRef.current || event.origin !== currentFrameOriginRef.current) return;
+        void touchSessionRef.current();
         return;
       }
 
@@ -354,10 +389,18 @@ function HomeContent() {
             )}
             <ApplicationWorkspace context={workspaceContext} />
 
-            <span className={styles.connectionStatus}>
-              <span className={notifications.status === 'live' ? styles.connectionDot : styles.connectionDotPending} />
-              {notifications.status === 'live' ? 'Session active · live updates' : 'Session active · reconnecting live updates'}
-            </span>
+            {sessionEnded ? (
+              <span className={styles.connectionStatus} role="status">
+                <span className={styles.connectionDotEnded} />
+                Session ended
+                <button type="button" className={styles.signInAgain} onClick={redirectToLogin}>Sign in again</button>
+              </span>
+            ) : (
+              <span className={styles.connectionStatus}>
+                <span className={notifications.status === 'live' ? styles.connectionDot : styles.connectionDotPending} />
+                {notifications.status === 'live' ? 'Session active · live updates' : 'Session active · reconnecting live updates'}
+              </span>
+            )}
           </div>
 
           {error && (

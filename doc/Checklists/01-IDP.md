@@ -26,6 +26,7 @@ Deployable: `src/IDP` · Database: `EwpIdentityAccessDb` (user `ewp_idp`)
 
   → e.g. `Clients/MFEs/MfePayments.cs`
 - [x] **They get only their own scopes,** plus the few read scopes they need. For example, Payments gets `accounts.read` for its account search. *Because* a stolen BFF token should reach as little as possible.
+- [x] **No consent page** for the bank's own staff applications (the Shell and the MFE BFFs): access is decided by roles and policies. The consent page remains for any future third-party client. → `Clients/BssShell.cs` (`RequireConsent = false`)
 - [x] **They do not have:** implicit or hybrid flow, `AllowAccessTokensViaBrowser`, wildcard redirect URIs, reusable refresh tokens, or a secret in code. *Because* tokens must never reach the browser or be replayable.
 
 ## 4. Machine (M2M) clients

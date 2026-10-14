@@ -26,8 +26,8 @@ Readiness (`/health/ready`) turns **Degraded**, never Unhealthy, when an onboard
 
 | Step | Setting | Production | Development |
 | --- | --- | --- | --- |
-| Machine steps: Submitted, KYC completed, Compliance completed, account opening, compensating | `HandoverMinutes` | 15 | 5 |
-| Officer steps: KYC in progress, Compliance in progress | `OfficerDecisionMinutes` | 1440 (one day) | 60 |
+| Machine steps: Submitted, KYC completed, Compliance completed, compensating | `HandoverMinutes` | 15 | 5 |
+| Officer steps: KYC in progress, Compliance in progress, account opening (the account officer's review, then core banking) | `OfficerDecisionMinutes` | 1440 (one day) | 60 |
 | CompensationFailed | — | always | always |
 
 The check reports counts per step only, because the endpoint is anonymous. It changes nothing: an application is never rejected or compensated because of its age. The Operations Platform Health screen shows the API as Degraded, and the `/metrics` health gauge carries the same state for alerting.

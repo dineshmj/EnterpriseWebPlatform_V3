@@ -20,6 +20,8 @@ Deployables: `src/Microservices/Audit/BFF.Web`, `src/Microservices/Operations/BF
 - [x] **State changes go only through server actions,** which Next.js accepts only as same-origin POSTs (its Origin / Host check).
 - [x] **Problem Details from the Journey API** (`detail`, `code`, 429) are shown as messages, never as raw errors.
 
+- [x] **Activity is reported to the Shell** (`BSS_MFE_ACTIVITY`, at most once a minute, the Shell's origin only, no data), so the Shell keeps its own session alive while the person works here. → `app/components/MfeShell.tsx`
+
 ## 4. Headers and configuration
 
 - [x] **A Content-Security-Policy with a per-request nonce, against XSS:**

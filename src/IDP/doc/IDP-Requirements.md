@@ -38,7 +38,7 @@ The IDP authenticates humans and services and issues the tokens and claims that 
 | No implicit flow and no Resource Owner Password Credentials (OAuth 2.1) | Present (the ROPC validator has been removed) |
 | A stable, opaque `sub` (a GUID `subject_id`), never a username | Present |
 | Refresh tokens only where a BFF needs them; rotation (one-time use) | Present (`TokenUsage.OneTimeOnly`) |
-| Consent where a user meaningfully delegates; none for first-party BFF silent login | Present (Shell requires consent; MFE BFFs do not) |
+| Consent where a user meaningfully delegates; none for first-party BFF silent login | Present: no first-party client asks for consent (the Shell and the MFE BFFs are the bank's own staff applications; access is decided by roles and policies). The consent page remains for any future third-party client. |
 | Signing keys from a key store, rotated; developer keys only in Development | Present: developer key only in Development; elsewhere `SigningCredential:CertificatePath` / `CertificatePassword` are required (`Security/SigningCredentialExtensions.cs`). Target: automatic key rotation. |
 
 ---
