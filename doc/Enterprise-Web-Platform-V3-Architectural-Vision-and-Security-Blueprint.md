@@ -127,6 +127,7 @@ payment network ◄── Payments API. BFF sessions and keys: EwpBffStateDb (on
 | Composition (not a business context) | — | Present | [Shell-Requirements.md](../src/Shell/doc/Shell-Requirements.md) |
 | Audit | Generic / supporting | Present (tamper-evident trail from Kafka; auditor screens in the customer's pattern: Next.js light BFF → NestJS Journey API → Domain APIs, token exchange at every hop) | [Audit API README](../src/Microservices/Audit/API/README.md) |
 | Notifications | Generic / supporting | Present (including deep links from a notification) | [Notifications API README](../src/Microservices/Notifications/API/README.md), [Shell-Requirements.md §7](../src/Shell/doc/Shell-Requirements.md#7-workflow-notifications) |
+| Operations | Generic / supporting | Present (Platform Health for operations administrators; the simulators' behaviour switch in Development and Test; the customer's pattern: Next.js light BFF → NestJS Journey API, token exchange) | [Operations Journey API README](../src/Microservices/Operations/JourneyApi/README.md), [Operations web README](../src/Microservices/Operations/BFF.Web/README.md) |
 
 ### Context map
 
@@ -224,6 +225,11 @@ The domain layer has no knowledge of HTTP, EF Core, Kafka or the IDP.
 | AccountsCommandSubscriber | Accounts | .NET worker | — | Present |
 | Payment Network Simulator | (external system stand-in) | ASP.NET Core 10 minimal API | — | Present |
 | Payments BFF + MFE | Payments | ASP.NET Core 10 + Next.js | — | Present |
+| Audit API (+ trail subscriber, chain monitor) | Audit | ASP.NET Core 10 | `EwpAuditDb` + write-once checkpoint storage | Present |
+| Audit Journey API | Audit | NestJS | — | Present |
+| Audit web (light BFF + SPA) | Audit | Next.js | `EwpBffStateDb` (`audit_bff`) | Present |
+| Operations Journey API | Operations | NestJS | — | Present |
+| Operations web (light BFF + SPA) | Operations | Next.js | `EwpBffStateDb` (`operations_bff`) | Present |
 
 An MFE and its BFF are one deployable: the MFE is a static export served by its BFF.
 
@@ -410,8 +416,8 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | RBAC | Present |
 | ABAC | Present (department and clearance on KYC, Compliance and Accounts actions; Compliance approval clearance by case risk; payment approval limit by clearance; branch scope in CO, KYC, Compliance, Accounts, Payments and DM; stage-specific KYC permissions) |
 | ReBAC | Present (owned by the contexts: CO managing agent, KYC, Compliance and Accounts assigned officer) |
-| Separation of Duties | Present across contexts (initiator excluded from KYC, Compliance and Accounts; KYC stage deciders excluded from Compliance; the Compliance approver excluded from Accounts; a payment's initiator never approves it; enforced in the aggregates, failing closed); Partial (four-eyes per KYC stage planned) |
-| Workflow-state authorization | Present (each aggregate allows an action only in the right state: CO transitions, KYC stages, Compliance and Accounts decisions, a payment decided only while PENDING_APPROVAL, "Retry release" only when COMPENSATION_FAILED) |
+| Separation of Duties | Present across contexts (initiator excluded from KYC, Compliance and Accounts; KYC stage deciders excluded from Compliance; the Compliance approver excluded from Accounts; a payment's initiator never approves it; four eyes for the manual reconciliation of a payment the network never confirmed; enforced in the aggregates, failing closed); Partial (four-eyes per KYC stage planned) |
+| Workflow-state authorization | Present (each aggregate allows an action only in the right state: CO transitions, KYC stages, Compliance and Accounts decisions, a payment decided only while PENDING_APPROVAL, "Retry release" only when COMPENSATION_FAILED, a resend only for a parked message, a reconciliation only at CONFIRM_WITH_NETWORK after the alert time) |
 | Object-level authorization | Present (branch scope on every read and write in CO, KYC, Compliance, Accounts, Payments and DM; payment operations read all branches but cannot decide; auditors read only through the Audit context, every look recorded) |
 | Transactional Outbox with `initiated_by` | Present (CO, KYC, Compliance, Accounts and Payments) |
 | Standard event envelope; Workflow / Correlation / Causation IDs | Present (CO, KYC, Compliance, Accounts and Payments, `SchemaVersion` 1; copies in Kafka headers) |
@@ -423,24 +429,28 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Dead-letter / poison-message handling | Present (every subscriber, one shared consume loop: `AsyncWorkflows.Infrastructure.Subscribers`) |
 | Saga choreography | Present (CO ⇄ KYC ⇄ Compliance ⇄ Accounts: submission to a COMPLETED onboarding) |
 | Compensation | Present (a rejection at any stage, and a failed account opening after approval: CO COMPENSATING → REJECTED; DM invalidates and retains the evidence; the customer returns to PROSPECT) |
-| Saga orchestration (Payments) | Present: persisted `PaymentSaga` state machine in the Payments API, commands / replies over Kafka with Outbox + Inbox, timeouts and resends, compensation (release funds), approval by a payments officer above the tier, COMPENSATION_FAILED as a recoverable state (Payment Processing Monitor, operations "Retry release"); assisted-channel screens |
+| Saga orchestration (Payments) | Present: persisted `PaymentSaga` state machine in the Payments API, commands / replies over Kafka with Outbox + Inbox, timeouts and resends, compensation (release funds), approval by a payments officer above the tier, COMPENSATION_FAILED as a recoverable state (Payment Processing Monitor, operations "Retry release"); network calls outside any transaction (claim → call → record); an unknown network outcome reconciled by status enquiry (CONFIRM_WITH_NETWORK), never released blind; unconfirmed for long → alert and four-eyes manual reconciliation; parked Outbox messages resent by operations; assisted-channel screens |
 | User-specific SignalR notifications | Present (Notifications API stores and pushes to `user:{sub}` / `staff:{role}:{branch}` audiences derived from the token; the Shell proxies REST and the hub and shows a bell and toasts; connections close at token expiry). A click opens the record through the menu-owned microservice and the normal navigation (4c). A backplane for several instances is planned |
-| Centralized audit trail | Present: the Audit Domain API records every business event from Kafka in an append-only, hash-chained trail (INSERT/SELECT-only user, trigger, scheduled chain verification on readiness and metrics; identifiers and people only, no personal data). Auditors search it, follow one record end to end (with its live status from the owning context) and verify integrity in the Audit Trail screen; every read is itself recorded. Partial: operations' "Retry release" is not yet an event |
+| Centralized audit trail | Present: the Audit Domain API records every business event from Kafka in an append-only, hash-chained trail (INSERT/SELECT-only user, trigger, scheduled chain verification on readiness and metrics; identifiers and people only, no personal data). Auditors search it, follow one record end to end (with its live status from the owning context) and verify integrity in the Audit Trail screen; every read is itself recorded. The chain is anchored outside its database: signed (ECDSA P-256) checkpoints in write-once storage, checked by every verification; readiness degrades when verification is overdue, the newest entry is not anchored or checkpoints go missing. Partial: operations' "Retry release" and "Resend" are on the payment's timeline but not events |
 | OpenTelemetry / distributed tracing | Present (.NET components: one trace across HTTP, the Outbox and Kafka via `traceparent`; OTLP export when configured); the KYC NestJS BFF propagates `traceparent` (no spans of its own); Partial (Audit Node.js tier not instrumented) |
 | Structured logs and metrics | Present (.NET components: Serilog with service name and trace ID, one line per request, JSON outside Development; Prometheus `/metrics` with HTTP, rate limiting, auth, resilience, database and runtime metrics plus Kafka publish / consume outcomes and every health check's status and numbers; logs and metrics over OTLP when configured). Dashboards and alerts belong to the deployment |
 | Security headers / CSP | Present: strict CSP on the Shell and the CO, KYC, Compliance, Accounts and Payments BFFs (hashed inline scripts, no inline styles, `frame-ancestors` / `frame-src`, `object-src 'none'`); the Audit web app by per-request nonce; IDP CSP on its pages; host filtering (`AllowedHosts`) per service; `nosniff`; Referrer-Policy |
 | Cookie hardening | Present: session and anti-forgery cookies HttpOnly (session), Secure, `SameSite=Lax`; OIDC correlation / nonce cookies `None` for the login round trip only |
 | Logout propagation | Present: front-channel and back-channel logout on the Shell and every MFE BFF |
-| Error responses without internals | Present: problem details with `traceId` only; details logged |
+| Error responses without internals | Present: problem details with `traceId` only; details logged; the NestJS Journey APIs answer RFC 9457 Problem Details too |
+| Deny by default | Present: every domain API through one helper (`MapEwpApiControllers` + an authenticated fallback policy); the Journey APIs refuse an endpoint without an access rule |
+| Calls to external systems | Present: addresses checked at start-up (outside Development https, `PermittedHosts`, no internal address), no redirects followed, API key, Idempotency-Key where a repeat could act twice |
+| Document encryption at rest | Present: envelope encryption (AES-256-GCM per document, rotatable key-encryption key, document ID bound in), fail closed; Target: keys in a key vault / HSM |
+| Platform health dashboard | Present: Operations > Platform Health (every component's readiness, every 10 s) and, in Development and Test, the simulators' behaviour switch |
 | Least-privilege database users | Present: one user per service, own database only, no DDL (`db/EwpServiceDbUsers.sql`); each BFF only its own schema of `EwpBffStateDb` (`db/EwpBffStateDb.sql`) |
 | Dependency vulnerability scanning | Present: `ps/build/Scan-Dependencies.ps1` (NuGet + pnpm); not yet wired into a CI pipeline |
-| Rate limiting | Present: IDP login throttling and lockout; every .NET BFF and API limits per caller (person by subject ID, with a tighter budget for changes; machine client by client ID; anonymous by IP) and answers 429 with Retry-After. Shared code: `Common.WebUtilities/Security/RateLimiting.cs`, configuration `RateLimiting` |
+| Rate limiting | Present: IDP login throttling and lockout; every .NET BFF and API limits per caller (person by subject ID, with a tighter budget for changes; machine client by client ID; anonymous by IP) and answers 429 with Retry-After. Shared code: `Common.WebUtilities/Security/RateLimiting.cs`, configuration `RateLimiting`. The NestJS Journey APIs: an overall limit and one per person and calling client; the SignalR hub: a cap on live connections per person |
 | Health checks | Present: `/health/live` and `/health/ready` on every .NET component (workers via a built-in listener); relay heartbeat and Outbox backlog (Degraded) checks |
 | Kafka authentication and authorization | Present: SCRAM-SHA-512 user per deployable, deny-by-default ACLs (own topics and consumer group only), no topic auto-creation; TLS (`SASL_SSL`) is a Production Concern |
 | IDP hardening (lockout, no enumeration, POST logout, front-channel logout, refresh-token rotation) | Present; refresh tokens, PAR requests and signing keys in Duende's operational store (PostgreSQL), so an IDP restart signs nobody out |
-| MFA and step-up | Present, off by default (`Mfa:Enabled`): TOTP with Google Authenticator for every user, enrolment at sign-in with recovery codes; tokens carry `amr`, and officer decisions and operations' retry require `mfa` while it is on |
+| MFA and step-up | Present, off by default in Development (`Mfa:Enabled`; cannot be switched off elsewhere - the IDP and the APIs refuse to start): TOTP with Google Authenticator for every user, enrolment at sign-in with recovery codes; tokens carry `amr` and `auth_time`, and risky actions (officer decisions, operations' retry, resend, reconciliation, simulator switch) require a RECENT MFA sign-in; a stale one is renewed in a small window with the code only, without signing out (`acr_values=mfa`) |
 | Server-side BFF sessions | Present for the .NET BFFs: Duende sessions and Data Protection keys in PostgreSQL (`EwpBffStateDb`, one schema and user per BFF), so restarts and several instances keep sessions; key rings encrypted at rest (certificate, or DPAPI in Development) or the application refuses to start. Present for the Node.js BFFs (KYC, Audit web): their own schema, hashed session key, AES-256-GCM-encrypted session. Present for the IDP: Duende server-side sessions, so sign-out revokes the sign-in cookie |
-| Automated tests | Planned (none yet) |
+| Automated tests | Partial: Playwright end-to-end, resilience and security suite through the real front ends (including the MFA step-up); unit tests planned |
 | Document content verification (allow-list + magic bytes) | Present |
 | Direct / pre-signed document upload, malware scanning | Planned / Target |
 | Secrets per deployable, fail closed when missing | Present |
@@ -481,7 +491,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [x] Compliance (backend and officer UI)
 - [x] Account opening (backend and officer UI)
 - [x] Compensation on rejection (DM document invalidation)
-- [ ] Failure recovery tooling (dead-letter replay; the Payments "Retry release" is present)
+- [ ] Failure recovery tooling (dead-letter replay; the Payments "Retry release" and the resend of parked Payments messages are present)
 - [ ] Workflow audit history
 
 **Phase 4 — Human workflow feedback**
@@ -504,11 +514,15 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [x] CSP and security headers
 - [x] Rate limiting
 - [x] Delegated user context (token exchange, RFC 8693: Audit, and the CO and KYC BFFs → Documents Management)
-- [x] MFA (TOTP, Google Authenticator) and step-up for officer decisions - off by default
+- [x] MFA (TOTP, Google Authenticator) and step-up for officer decisions - off by default in Development, required elsewhere
+- [x] Step-up requires a RECENT MFA sign-in (`auth_time`), renewed with the code only, without signing out
+- [x] Document encryption at rest (envelope, AES-256-GCM)
+- [x] Audit chain anchored outside its database (signed checkpoints, write-once)
+- [x] Deny by default through one helper in every domain API; checks on external-system addresses (SSRF)
 - [ ] Sender-constrained tokens where justified
 
 **Phase 6 — Secure delivery**
-- [ ] Automated tests
+- [ ] Automated tests (Partial: Playwright end-to-end, resilience and security suite; unit tests planned)
 - [ ] SAST, SCA, secret scanning
 - [ ] SBOM
 - [ ] Container and IaC scanning
@@ -520,7 +534,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [x] Structured logs (Serilog) and metrics (Prometheus `/metrics`, OTLP)
 - [ ] Centralized logs and metrics (a collector, Grafana / Observe - deployment)
 - [ ] Kafka monitoring
-- [ ] Workflow dashboards
+- [ ] Workflow dashboards (Partial: Operations Platform Health, the Payment Processing Monitor, the Onboarding Workflow Monitor)
 - [ ] Alerting
 - [ ] Backup / restore testing
 - [ ] Chaos testing
@@ -532,6 +546,10 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [x] Approval by a payments officer (tier, clearance limit, separation of duties)
 - [x] Assisted-channel screens, live saga timeline, notifications with deep links
 - [x] Payment Processing Monitor and operations "Retry release"
+- [x] Network calls outside any transaction (claim → call → record)
+- [x] Unknown network outcome: status enquiry, never a blind release (CONFIRM_WITH_NETWORK)
+- [x] Unconfirmed for long: alert, notification and four-eyes manual reconciliation
+- [x] Resend of parked Outbox messages (same message ID, reason, recent MFA)
 - [ ] Customer self-service channel, beneficiaries
 
 Details: [Saga plan §2](EWP-V3-Saga-Choreography-and-Orchestration-Plans.md#2-orchestration--payments), [Payments-Requirements.md](../src/Microservices/Payments/doc/Payments-Requirements.md).

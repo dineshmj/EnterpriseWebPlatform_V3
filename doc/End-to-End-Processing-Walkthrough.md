@@ -166,6 +166,8 @@ POST /v1/kyc/cases/{id}/identity-verification/approve
   "KycIdentityApprove": write scope + kyc_officer [RBAC]
        + kyc.case.approve AND kyc.identity.verify [RBAC, stage permission]
        + department KYC + clearance ≥ 3 [ABAC]
+       + (MFA on) an MFA sign-in at most 15 minutes old [step-up; else 403 mfa_required,
+         and the screen asks for a fresh code in a small window, without signing out]
   → controller: branch claim present [ABAC]
   → DecideVerificationStageCommandHandler (one transaction):
        SELECT … FOR UPDATE (row lock: concurrent deciders queue here)
@@ -279,6 +281,7 @@ kyc.case.approved|rejected, compliance.case.*, accounts.application.rejected, ac
 | **SoD** | Inside the `KycCase` aggregate | The initiator can't claim or decide; an unknown initiator is denied |
 | **Client pinning** | Policies on internal endpoints; the acting client (`act`) in DM | Only named M2M clients on internal endpoints, trusted headers (`X-Initiated-By-User-Id`) accepted only from them; in DM only the CO and KYC BFFs may act for a person |
 | **Workflow state** | Aggregates | Transition table, terminal states, version checks |
+| **Step-up** | `MfaStepUp` requirement on the decision policies (while `Mfa:Enabled`) | A decision needs a recent MFA sign-in (`amr` mfa, `auth_time`); a stale one is renewed with the code only |
 
 ## Known gaps on this path
 

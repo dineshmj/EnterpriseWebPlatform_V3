@@ -71,11 +71,13 @@ Each bounded context's requirements document lists the permissions that belong t
 | `workflow.view` | See operational workflow detail | `operations_administrator` |
 | `workflow.retry`, `workflow.pause`, `workflow.resume`, `workflow.reprocess` | Technical recovery of workflows | `operations_administrator` |
 | `integration.status.view`, `consumer.status.view`, `outbox.view`, `inbox.view` | Integration / messaging diagnostics | `operations_administrator` |
-| `service.health.view` | Service health | `operations_administrator`, `platform_administrator` |
+| `service.health.view` | Service health (the Operations Platform Health screen) | `operations_administrator`, `platform_administrator` |
+| `simulator.behaviour.manage` | Switch a simulated external system to Slow / Failing / Down / Refusing (Development and Test only; recent MFA) | `operations_administrator` |
+| `payment.reconcile` | Propose or decide, with a second person, what happened to a payment the network never confirmed (recent MFA; four eyes, §8.2) | `operations_administrator` |
 | `audit.view`, `audit.search`, `workflow.history.view`, `approval.history.view` | Audit and investigation | `auditor` |
 | `platform.configuration.view` / `.update`, `platform.user.view` / `.manage`, `platform.role.view` / `.manage`, `platform.permission.view`, `platform.health.view` | Platform administration | `platform_administrator` |
 
-None of these permissions authorizes a business approval.
+None of these permissions authorizes a business approval. `payment.reconcile` records a **fact** taken from the payment network's own records (sent / not sent), with evidence and two people; it never approves a payment.
 
 ### 3.3 Scopes vs Permissions
 
@@ -100,6 +102,9 @@ Scope (client may call this operation)
         │
         ▼
 RBAC (role → permission)
+        │
+        ▼
+Step-up (risky actions only: an MFA sign-in at most N minutes old)
         │
         ▼
 ABAC (user, resource and environment attributes)
@@ -129,6 +134,7 @@ A generic approval is permitted only when **all** of the following hold:
 8. Separation of Duties checks succeed.
 9. The required approval level is satisfied.
 10. The operation has not already been completed.
+11. For a risky action (a decision, an approval, a retry, a resend, a reconciliation, a simulator change), the person signed in with MFA **recently**: the token's `amr` contains `mfa` and its `auth_time` is at most `Mfa:StepUpMaxAgeMinutes` (default 15) old. Otherwise the answer is 403 `mfa_required`, and the screen asks for a fresh code without signing the person out.
 
 `InitiatedByUserId` is intentionally **not** a stage in this pipeline (see §9).
 
@@ -216,6 +222,8 @@ Workflow initiator     != KYC decision maker
 KYC decision maker     != Compliance approver
 Compliance approver    != Account-opening approver
 Payment initiator      != Payment approver
+Reconciliation proposer != Reconciliation approver   (four eyes)
+Payment initiator      != Reconciliation proposer or approver
 ```
 
 The exact SoD rules of a workflow step are defined in the owning context's requirements document, close to the operation, not as generic UI rules.
@@ -255,7 +263,7 @@ An M2M caller must be pinned by `client_id`, hold the narrowest scope that works
 
 When a downstream service genuinely needs to know **which human** an M2M call is acting for (e.g. Documents Management deciding whether a document may be read), the target pattern is delegated identity, such as OAuth 2.0 Token Exchange (RFC 8693) or a signed actor claim. Unsigned headers asserted by the caller are not a substitute. Token exchange is introduced only where it demonstrates a real authorization requirement.
 
-**Present in the Audit context** (the customer's pattern: Next.js light BFF → NestJS Journey API → Domain APIs). Each hop exchanges the token it holds at the IDP for a short-lived one aimed at the next service: the person stays `sub`, and the acting services form the `act` chain (`{client_id: Journey API, act: {client_id: web BFF}}`). The Audit API therefore checks both **who** (the person holds `audit.view` / `audit.search`, auditors only) and **through what** (the acting client must be the Journey API): a plain machine token, the BFF's token or the person's own token is refused. The Payments API, called by the same Journey API for a payment's status, simply sees the auditor and applies its usual rules (auditors read every branch). The IDP's allow-list decides who may exchange what; the Journey API has no client-credentials grant at all. **Present for Documents Management** too: the Customer Onboarding BFF (`documents-management.write`) and the KYC BFF (`documents-management.read`) exchange the signed-in person's token; Documents Management takes the branch from the exchanged token and requires one of those two BFFs as the acting client (only Customer Onboarding may delete). The former `X-Actor-Branch` header and the two BFF machine clients are retired.
+**Present in the Audit context** (the customer's pattern: Next.js light BFF → NestJS Journey API → Domain APIs). Each hop exchanges the token it holds at the IDP for a short-lived one aimed at the next service: the person stays `sub`, and the acting services form the `act` chain (`{client_id: Journey API, act: {client_id: web BFF}}`). The Audit API therefore checks both **who** (the person holds `audit.view` / `audit.search`, auditors only) and **through what** (the acting client must be the Journey API): a plain machine token, the BFF's token or the person's own token is refused. The Payments API, called by the same Journey API for a payment's status, simply sees the auditor and applies its usual rules (auditors read every branch). The IDP's allow-list decides who may exchange what; the Journey API has no client-credentials grant at all. **Present for Documents Management** too: the Customer Onboarding BFF (`documents-management.write`) and the KYC BFF (`documents-management.read`) exchange the signed-in person's token; Documents Management takes the branch from the exchanged token and requires one of those two BFFs as the acting client (only Customer Onboarding may delete). The former `X-Actor-Branch` header and the two BFF machine clients are retired. **Present for Operations** as well (Next.js light BFF → NestJS Journey API): the Journey API accepts only a token exchanged by the Operations web BFF for a signed-in person, and checks the scope, the permission and - for a simulator change - a recent MFA sign-in. Token exchange keeps the person's original `auth_time` and `amr`, so the step-up rule (§4) holds at every hop.
 
 ---
 
@@ -283,13 +291,22 @@ Workflow event ──► candidate audience (initiator, assigned officer, superv
 
 The platform never treats "all connected users" as an implicit audience.
 
-**Implementation (Notifications API, 4a).** Three kinds of audience: a person (`user:{sub}`, e.g. the initiator told about a KYC decision), the staff of one work-queue role in one branch (`staff:kyc_officer:SYD001`, told about new work), and the staff of a role whose work is not branch-bound in every branch (`staff:operations_administrator:*`, e.g. told that a payment's release must be retried). A connection joins only the audiences derived from its own access token (subject ID, roles, branch); the hub offers clients no way to join a group, and the REST queries and "mark read" apply the same audiences. Read state is per person.
+**Implementation (Notifications API, 4a).** Three kinds of audience: a person (`user:{sub}`, e.g. the initiator told about a KYC decision), the staff of one work-queue role in one branch (`staff:kyc_officer:SYD001`, told about new work), and the staff of a role whose work is not branch-bound in every branch (`staff:operations_administrator:*`, e.g. told that a payment's release must be retried, that a payment the network never confirmed needs reconciling, or that a proposed resolution waits for a second person). A connection joins only the audiences derived from its own access token (subject ID, roles, branch); the hub offers clients no way to join a group, and the REST queries and "mark read" apply the same audiences. Read state is per person.
 
 ---
 
 ## 12. Operational and Compensation Actions
 
 Retry, reprocess, pause, resume and compensation are **operational** actions. They must be explicitly authorized, auditable, idempotent where possible, restricted to eligible workflow states, and must never constitute or imply a business approval.
+
+**Implemented (Payments and Operations):**
+
+| Action | Permission | Also required | Recorded |
+|---|---|---|---|
+| Retry the release of a stuck compensation | `workflow.retry` | recent MFA; only a `COMPENSATION_FAILED` payment | the payment's timeline |
+| Resend a parked Outbox message (the same message ID) | `workflow.reprocess` | a reason; recent MFA; only a parked message | the message and the payment's timeline |
+| Reconcile a payment the network never confirmed | `payment.reconcile` | recent MFA; only after the alert time; evidence; a **second** person approves | the timeline, and published events (audit trail) |
+| Switch a simulator's behaviour | `simulator.behaviour.manage` | recent MFA; Development / Test only; reverts after 15 minutes | the Operations Journey API log, with the LAN ID |
 
 ---
 
@@ -333,4 +350,6 @@ Every bounded context must demonstrate both positive and negative cases in each 
 | SoD | The conflicting previous actor is denied; missing SoD data fails closed |
 | Operational vs business | `operations_administrator` and `platform_administrator` cannot approve |
 | Initiator | Being the initiator grants nothing |
+| Step-up | A risky action with an MFA sign-in older than the limit is refused (403 `mfa_required`); after a fresh code it succeeds without signing out - automated in `tst/playwright/tests/40-security/mfa` |
+| Four eyes | The proposer of a reconciliation cannot approve it |
 | Object level | List endpoints return only resources the caller may see |

@@ -2,12 +2,12 @@
 
 Enterprise Web Platform V3 (EWP V3) is a demonstration banking-services platform. It is built as an **architectural reference**: a working example of how enterprise concerns compose without sliding into a distributed monolith.
 
-- **Bounded contexts.** Customer Onboarding, Customer KYC, Compliance, Accounts, Payments, Notifications and Documents Management are implemented. Each is governed by **Domain-Driven Design**, owns its own database, and is independently deployable.
+- **Bounded contexts.** Customer Onboarding, Customer KYC, Compliance, Accounts, Payments, Notifications, Documents Management, Audit and Operations are implemented. Each is governed by **Domain-Driven Design**, owns its own database, and is independently deployable.
 - **Micro-frontends.** Each business context has its own MFE, hosted in iframes by a business-neutral **Shell** that provides branding, navigation and the Application Workspace.
 - **Security boundaries.** Each MFE sits behind its own **BFF**. A BFF calls its own domain API with the **user's access token**, and other contexts' APIs with **M2M tokens**, keeping human identity and service identity separate.
-- **Identity.** **Duende IdentityServer 8** provides OpenID Connect and OAuth 2.1 (Authorization Code + PKCE, Client Credentials).
+- **Identity.** **Duende IdentityServer 8** provides OpenID Connect and OAuth 2.1 (Authorization Code + PKCE, Client Credentials, Token Exchange), with two-step sign-in (TOTP) and a **step-up** for risky actions that needs a recent code - renewed in a small window, without signing out.
 - **Authorization** goes beyond RBAC: **ABAC, ReBAC, workflow-state authorization and Separation of Duties**.
-- **Asynchronous workflows** use **CQRS, Transactional Outbox, Kafka**, idempotent consumers and **sagas** (choreography for onboarding, orchestration for payments).
+- **Asynchronous workflows** use **CQRS, Transactional Outbox, Kafka**, idempotent consumers and **sagas** (choreography for onboarding, orchestration for payments - including reconciliation when the payment network's answer is lost, four-eyes manual resolution, and the resend of parked messages).
 - **Traceability.** Workflow, correlation and causation IDs and the accountable human initiator are carried end to end. Human approvals (e.g. KYC review) are accountable steps.
 - **Operations.** Resilience, rate limiting, observability, auditability and **SignalR** user notifications are covered at different stages of maturity (see the capability matrix).
 - **New contexts** follow the customer's pattern: Next.js SPA with a light BFF → NestJS Journey API → ASP.NET Core Domain APIs. Existing contexts keep their current stack.
@@ -32,6 +32,7 @@ Enterprise Web Platform V3 (EWP V3) is a demonstration banking-services platform
 | Notifications (API with SignalR hub, Notifications Subscriber; displayed by the Shell) | `src/Microservices/Notifications`, `src/AsyncWorkflows/Subscribers/Notifications` | ASP.NET Core 10, SignalR, .NET worker | Present |
 | Payments (MFE/BFF, API with the saga orchestrator, Payments Saga Reply Subscriber; Accounts Command Subscriber on the Accounts side) | `src/Microservices/Payments`, `src/AsyncWorkflows/Subscribers/Payments`, `src/AsyncWorkflows/Subscribers/Accounts/AccountsCommandSubscriber` | Next.js, ASP.NET Core 10, .NET workers | Present |
 | Audit (Next.js SPA + light BFF; NestJS Journey API; Domain API with the trail's Kafka consumer inside - the customer's pattern, token exchange at every hop) | `src/Microservices/Audit` | Next.js, NestJS, ASP.NET Core 10 | Present |
+| Operations (Next.js SPA + light BFF; NestJS Journey API: Platform Health and, in Development / Test, the simulators' behaviour switch) | `src/Microservices/Operations` | Next.js, NestJS | Present |
 | Payment Network Simulator (stand-in for the payment network: BSB directory, Confirmation of Payee) | `src/Simulators/PaymentNetworkSimulator` | ASP.NET Core 10 | Present |
 | BFF state (sessions and Data Protection keys of the .NET BFFs) | `db/EwpBffStateDb.sql` | PostgreSQL, one schema per BFF | Present |
 | Infrastructure | PostgreSQL 18 and Kafka 4 (KRaft) installed natively; Kafka secured with [ps/kafka/Setup-KafkaSecurity.ps1](kafka/README.md) | SCRAM-SHA-512 users, per-topic ACLs, Kafka UI (read-only) | Present |
@@ -57,6 +58,7 @@ Each document has one purpose. A fact is written in exactly one place; other doc
 | [End-to-End Processing Walkthrough](doc/End-to-End-Processing-Walkthrough.md) | One onboarding traced from the agent's submit to the KYC outcome, through every component, policy and domain check |
 | [Payment Saga diagram](doc/Payment%20Saga%20Orchestration.png) ([PDF](doc/Payment%20Saga%20Orchestration.pdf)) | The Payments saga's steps, replies, timeouts and compensation in one picture |
 | [Architect Review](doc/Fellow-architect-review-of-v3-ewp.md) | Point-in-time review findings and their remediation status |
+| [AI Architect Reviews](doc/AI-Architect-Reviews) | The external reviewers' verdicts (Microsoft, Google, xAI), kept as received |
 
 ### Per component (`src/**/doc/`)
 
@@ -78,15 +80,15 @@ Business requirements of one component: boundary, persona rules within it, permi
 
 How to build, configure and run one deployable:
 
-- BFFs: [CO](src/Microservices/CustomerOnboarding/BFF.Web/README.md), [KYC](src/Microservices/CustomerKyc/BFF.Web/README.md), [Compliance](src/Microservices/Compliance/BFF.Web/README.md), [Accounts](src/Microservices/Accounts/BFF.Web/README.md), [Payments](src/Microservices/Payments/BFF.Web/README.md), [Audit (Next.js SPA + light BFF)](src/Microservices/Audit/BFF.Web/README.md)
-- APIs: [DM API](src/Microservices/DocumentsManagement/API/README.md), [Notifications API](src/Microservices/Notifications/API/README.md), [Payments API](src/Microservices/Payments/API/README.md), [Audit API](src/Microservices/Audit/API/README.md), [Audit Journey API](src/Microservices/Audit/JourneyApi/README.md)
+- BFFs: [CO](src/Microservices/CustomerOnboarding/BFF.Web/README.md), [KYC](src/Microservices/CustomerKyc/BFF.Web/README.md), [Compliance](src/Microservices/Compliance/BFF.Web/README.md), [Accounts](src/Microservices/Accounts/BFF.Web/README.md), [Payments](src/Microservices/Payments/BFF.Web/README.md), [Audit (Next.js SPA + light BFF)](src/Microservices/Audit/BFF.Web/README.md), [Operations (Next.js SPA + light BFF)](src/Microservices/Operations/BFF.Web/README.md)
+- APIs: [DM API](src/Microservices/DocumentsManagement/API/README.md), [Notifications API](src/Microservices/Notifications/API/README.md), [Payments API](src/Microservices/Payments/API/README.md), [Audit API](src/Microservices/Audit/API/README.md), [Audit Journey API](src/Microservices/Audit/JourneyApi/README.md), [Operations Journey API](src/Microservices/Operations/JourneyApi/README.md)
 - Subscribers: [KYC Case Opening](src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/README.md), [Compliance Case Opening](src/AsyncWorkflows/Subscribers/Compliance/ComplianceCaseOpeningSubscriber/README.md), [Account Application Opening](src/AsyncWorkflows/Subscribers/Accounts/AccountApplicationOpeningSubscriber/README.md), [Onboarding Outcome](src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/README.md), [Document Invalidation](src/AsyncWorkflows/Subscribers/DocumentsManagement/DocumentInvalidationSubscriber/README.md), [Accounts Command](src/AsyncWorkflows/Subscribers/Accounts/AccountsCommandSubscriber/README.md), [Payments Saga Reply](src/AsyncWorkflows/Subscribers/Payments/PaymentsSagaReplySubscriber/README.md), [Notifications](src/AsyncWorkflows/Subscribers/Notifications/NotificationsSubscriber/README.md)
 - Simulators: [Screening Provider](src/Simulators/ScreeningProviderSimulator/README.md), [Core Banking](src/Simulators/CoreBankingSimulator/README.md), [Payment Network](src/Simulators/PaymentNetworkSimulator/README.md)
 - [Design system](src/Common/DesignSystem/README.md)
 
 ### Local development
 
-[ReadMe.txt](ReadMe.txt): host names, HTTPS, databases, Kafka topics, start-up, troubleshooting and Bruno API testing.
+[ReadMe.txt](ReadMe.txt): host names, HTTPS, databases, Kafka topics, start-up, troubleshooting and Bruno API testing. Automated tests (Playwright, including the MFA tests): [tst/README.md](tst/README.md).
 
 ---
 

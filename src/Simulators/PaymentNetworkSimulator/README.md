@@ -1,6 +1,6 @@
 # Payment Network Simulator
 
-Stands in for the **external payment network** - an NPP-style clearing service that moves the money to the payee's bank - so the Payments saga can show what happens when a third party is slow, failing, down or refusing: retries, the circuit breaker, and **compensation** (releasing the reserved funds) after a failure. It belongs to no bounded context; it keeps its payments in memory.
+Stands in for the **external payment network** - an NPP-style clearing service that moves the money to the payee's bank - so the Payments saga can show what happens when a third party is slow, failing, down, refusing or loses its answers: retries, the circuit breaker, **compensation** (releasing the reserved funds) after a refusal, and **reconciliation** (asking whether a payment was sent) when the outcome is unknown. It belongs to no bounded context; it keeps its payments in memory.
 
 URL: `https://localhost:46386` (launch profile `https`). The Payments API's saga step runner calls it **directly over HTTP** (not through Kafka).
 
@@ -9,6 +9,7 @@ URL: `https://localhost:46386` (launch profile `https`). The Payments API's saga
 | Endpoint | Who | Purpose |
 |---|---|---|
 | `POST /v1/payments` | Payments API, headers `X-Api-Key` (constant-time comparison) and **`Idempotency-Key`** | Send a payment: `201 { networkReference, status: "SETTLED" }`, or `422 { reason }` |
+| `GET /v1/payments/by-idempotency-key/{key}` | Payments API, `X-Api-Key` | Status enquiry: `{ status: "SENT", networkReference }`, `{ status: "REFUSED", reason }` or 404 `{ status: "NOT_FOUND" }` (never received); 503 / 500 while `Down` / `Failing` |
 | `GET /v1/bsb/{bsb}` | Payments API, `X-Api-Key` | BSB directory: `{ bsb, bank, branch, state, npp }`; 404 when unknown |
 | `POST /v1/payee-confirmations` | Payments API, `X-Api-Key` | Confirmation of Payee: `{ result: MATCH / CLOSE_MATCH / NO_MATCH, accountNameHeld }` |
 | `GET /admin/behaviour` | localhost only | Current behaviour |
@@ -25,10 +26,13 @@ The same `Idempotency-Key` always returns the **same** answer (the payment's net
 |---|---|---|
 | `Healthy` | 201 | Settles the funds: payment COMPLETED |
 | `Slow` | 201 after `SlowDelaySeconds` (12) | The 5-second attempt timeout fires: retried |
-| `Failing` / `Down` | 500 / 503 | Retries with back-off; after 4 attempts, releases the funds: payment FAILED |
+| `Failing` / `Down` | 500 / 503 (the status enquiry too) | Retries with back-off; after 4 attempts the outcome is unknown, so it asks the status (CONFIRM_WITH_NETWORK) - again and again while the network is down, funds still reserved. Back to Healthy: "never received" → releases the funds, payment FAILED. Unconfirmed for too long: operations reconcile it with four eyes |
+| `LosingAnswers` | 504 for every send - but the payment IS sent (once per key) | After 4 sends without an answer it asks the status: "sent" → settles, payment COMPLETED - paid once, never refunded by mistake |
 | `Refusing` | 422 `{ reason }` | A permanent "no": releases the funds at once: payment FAILED |
 
 Whatever the behaviour, a **payee BSB starting with 999** is refused ("the payee's account is closed"), so one payment can show the compensation path without changing anything. A BSB that is not in the directory is refused too.
+
+The same switch is on the Operations **Platform Health** screen (`daniel.ops`, Development and Test only; it goes back to Healthy by itself after 15 minutes).
 
 ## BSB directory and Confirmation of Payee (demo rules)
 
@@ -37,7 +41,7 @@ Whatever the behaviour, a **payee BSB starting with 999** is refused ("the payee
 
 ```powershell
 $pns = 'https://localhost:46386/admin/behaviour'
-Invoke-RestMethod $pns -Method Put -ContentType 'application/json' -Body '{"behaviour":"Down"}'      # or Failing / Slow / Refusing / Healthy
+Invoke-RestMethod $pns -Method Put -ContentType 'application/json' -Body '{"behaviour":"Down"}'      # or Failing / Slow / Refusing / LosingAnswers / Healthy
 Invoke-RestMethod $pns
 ```
 

@@ -21,6 +21,10 @@ The document answers *how the platform is built and protected*, not *which busin
 | How do you avoid losing an event when the database commit succeeds but Kafka is down? | [1.3.1](#131-transactional-outbox) |
 | What if a payment fails halfway, after the money was reserved? Can the money be lost? | [1.4.3](#143-orchestration-the-payments-saga) |
 | Can a double-click or a retried request send a payment twice? | [1.4.3](#143-orchestration-the-payments-saga) |
+| The payment network took the payment but its answer was lost. Is the money released anyway? | [1.4.3](#143-orchestration-the-payments-saga) |
+| The network cannot say for hours what happened to a payment. Who decides, and can one person do it alone? | [1.4.3](#143-orchestration-the-payments-saga), [2.2.6](#226-separation-of-duties-makerchecker) |
+| Kafka was down for long and messages were parked. How are they sent again without doing anything twice? | [1.6.2](#162-dead-letter-handling) |
+| How do operations see the whole platform's health, and show what happens when a provider is down? | [1.7.4](#174-operations-platform-health-and-the-simulator-switch) |
 | Are events processed in order? | [1.3.5](#135-ordering-guarantees) |
 | How do you trace one business transaction across services? | [1.3.4](#134-workflow-correlation-and-causation-identity), [1.7.1](#171-distributed-tracing-across-http-and-kafka) |
 | What can Prometheus / Grafana see? Are the logs structured? | [1.7.3](#173-structured-logs-and-metrics) |
@@ -34,13 +38,15 @@ The document answers *how the platform is built and protected*, not *which busin
 | Is it safe to retry a POST to an external system? Could a timeout open two bank accounts? | [1.6.3](#163-timeouts-retries-and-circuit-breakers) |
 | Can a junior officer approve a high-risk customer, or a large payment? | [2.2.4](#224-abac-department-clearance-and-stage-permissions) |
 | How do services authenticate to each other? | [2.1.2](#212-separate-human-and-machine-identities) |
+| Is an MFA sign-in from this morning enough to approve a payment this afternoon? Must the officer sign out to enter a fresh code? | [2.1.5](#215-step-up-mfa-for-risky-actions) |
 | Does signing out of one application sign the user out everywhere? | [2.1.4](#214-single-sign-out) |
 | How are XSS, clickjacking and CSRF handled? | [2.3](#23-browser-and-session-security) |
-| What stops a malicious file upload? | [2.4.4](#244-file-upload-security) |
+| What stops a malicious file upload? Are KYC documents encrypted on disk? | [2.4.4](#244-file-upload-security) |
 | What does an attacker learn from an error response? | [2.4.1](#241-error-responses-that-leak-nothing) |
 | If one service is compromised, what can it reach in the database? | [2.4.3](#243-least-privilege-database-users) |
 | Is Kafka secured? Could someone publish a fake event? | [2.4.6](#246-kafka-authentication-and-per-topic-acls) |
 | Can one user or a script flood an API? | [2.4.7](#247-rate-limiting) |
+| Could a wrong or tampered setting send an API key, or customer data, to the wrong server? | [2.4.9](#249-calls-to-external-systems) |
 | Who did what, and can the record be trusted? Could an administrator quietly change it? | [2.4.8](#248-tamper-evident-audit-trail) |
 | A service calls another for a person - does the second one still know who it is? | [2.1.2](#212-separate-human-and-machine-identities) |
 | Does restarting a BFF sign everybody out? | [2.3.4](#234-session-management), [1.6.1](#161-pod-replacement-and-horizontal-scaling) |
@@ -88,12 +94,14 @@ The document answers *how the platform is built and protected*, not *which busin
     - [1.7.1 Distributed tracing across HTTP and Kafka](#171-distributed-tracing-across-http-and-kafka)
     - [1.7.2 Health endpoints for liveness and readiness](#172-health-endpoints-for-liveness-and-readiness)
     - [1.7.3 Structured logs and metrics](#173-structured-logs-and-metrics)
+    - [1.7.4 Operations: Platform Health and the simulator switch](#174-operations-platform-health-and-the-simulator-switch)
 - [2. Security features](#2-security-features)
   - [2.1 Identity](#21-identity)
     - [2.1.1 OIDC Authorization Code + PKCE through a BFF](#211-oidc-authorization-code--pkce-through-a-bff)
     - [2.1.2 Separate human and machine identities](#212-separate-human-and-machine-identities)
     - [2.1.3 Identity provider hardening](#213-identity-provider-hardening)
     - [2.1.4 Single sign-out](#214-single-sign-out)
+    - [2.1.5 Step-up MFA for risky actions](#215-step-up-mfa-for-risky-actions)
   - [2.2 Authorization beyond RBAC](#22-authorization-beyond-rbac)
     - [2.2.1 Deny by default and strict token validation](#221-deny-by-default-and-strict-token-validation)
     - [2.2.2 RBAC with per-operation scopes](#222-rbac-with-per-operation-scopes)
@@ -116,6 +124,7 @@ The document answers *how the platform is built and protected*, not *which busin
     - [2.4.6 Kafka authentication and per-topic ACLs](#246-kafka-authentication-and-per-topic-acls)
     - [2.4.7 Rate limiting](#247-rate-limiting)
     - [2.4.8 Tamper-evident audit trail](#248-tamper-evident-audit-trail)
+    - [2.4.9 Calls to external systems](#249-calls-to-external-systems)
   - [2.5 Supply chain](#25-supply-chain)
     - [2.5.1 Dependency vulnerability scanning](#251-dependency-vulnerability-scanning)
 - [3. Anti-patterns avoided](#3-anti-patterns-avoided)
@@ -318,12 +327,20 @@ A payment touches money in two places that must agree: the customer's account (A
 
 **One payment per request.** The screen creates one `Idempotency-Key` per payment form; a double-click or a retried POST returns the payment already started rather than a second one.
 
+**The network's answer is lost: ask, never guess.** When the payment network does not answer the send (four attempts), the outcome is *unknown*: the payment may have gone out with only its answer lost. Releasing the funds then could pay the payee and refund the customer. So the saga moves to **CONFIRM_WITH_NETWORK** and asks the network, by the same `Idempotency-Key`, whether it sent the payment: *sent* → settle (the money left), *never received* or *refused* → release. While the network cannot say, the funds stay reserved and the enquiry repeats with back-off, for as long as it takes. The network call itself is made **outside any database transaction**: the step runner claims the step (a short transaction and a 60-second lease), calls the network, then records the answer only if the saga's `Version` is unchanged, so a slow network never holds a row lock.
+
+**Unknown for too long: two people decide.** After `Payments:Saga:UnconfirmedAlertMinutes` (60 in production, 2 in Development) the payment is an alert: readiness turns Degraded, the Processing Monitor shows it, and operations are notified ("Payment to reconcile"). Only then may operations resolve it by hand, with **four eyes**: one person, after checking the network's own records, proposes *sent* (with the network's reference) or *not sent*, with evidence; a **different** person approves or rejects it ([2.2.6](#226-separation-of-duties-makerchecker)). A time-out alone never releases anything, the enquiry keeps running, and if the network answers first its answer wins and the proposal lapses. Every step is on the payment's timeline and published, so the audit trail names both people.
+
+Demo: switch the Payment Network simulator to **LosingAnswers** (sends, every answer lost) on Daniel's Platform Health page ([1.7.4](#174-operations-platform-health-and-the-simulator-switch)): the payment is sent, the enquiry finds it, and it settles - paid once. Switch it to **Down** instead and the payment waits in CONFIRM_WITH_NETWORK until two operators reconcile it.
+
 **Where to look at:**
 
 - The state machine: [PaymentSaga.cs](../src/Microservices/Payments/API/Domain/Aggregates/PaymentSaga.cs) (`OnFundsReserved`, `OnNetworkRefused`, `OnReplyTimeout`, `RetryCompensation`, …); the payment: [Payment.cs](../src/Microservices/Payments/API/Domain/Aggregates/Payment.cs)
 - Timers and network calls: [SagaStepRunner.cs](../src/Microservices/Payments/API/Infrastructure/Saga/SagaStepRunner.cs), [RunDueSagaStep.cs](../src/Microservices/Payments/API/Application/Commands/RunDueSagaStep.cs)
 - The participant: [FundsHold.cs](../src/Microservices/Accounts/API/Domain/Aggregates/FundsHold.cs), [FundsCommand.cs](../src/Microservices/Accounts/API/Application/Commands/FundsCommand.cs)
 - One payment per key: `Idempotency-Key` in [PaymentsController.cs](../src/Microservices/Payments/API/Controllers/PaymentsController.cs) and [InitiatePayment.cs](../src/Microservices/Payments/API/Application/Commands/InitiatePayment.cs)
+- Unknown outcome: `OnNetworkUnavailable`, `OnNetworkConfirmedSent` / `NotSent`, `OnNetworkStatusUnknown` in [PaymentSaga.cs](../src/Microservices/Payments/API/Domain/Aggregates/PaymentSaga.cs); claim / call / record and the status enquiry in [RunDueSagaStep.cs](../src/Microservices/Payments/API/Application/Commands/RunDueSagaStep.cs); the network's enquiry endpoint and `LosingAnswers`: [Payment Network Simulator](../src/Simulators/PaymentNetworkSimulator/README.md)
+- Four-eyes reconciliation: `ProposeNetworkResolution` / `DecideNetworkResolution` in [PaymentSaga.cs](../src/Microservices/Payments/API/Domain/Aggregates/PaymentSaga.cs), [NetworkReconciliationController.cs](../src/Microservices/Payments/API/Controllers/NetworkReconciliationController.cs); the alert: `SagaBacklogHealthCheck` in [SagaStepRunner.cs](../src/Microservices/Payments/API/Infrastructure/Saga/SagaStepRunner.cs); the panel: `ReconciliationPanel` in [view-details/page.tsx](../src/Microservices/Payments/BFF.Web/client-app/app/v1/payments/view-details/page.tsx)
 - Live evidence: the payment's status page shows the saga timeline (`payment_saga_history`)
 - Design, diagram and failure table: [Saga plan §2](EWP-V3-Saga-Choreography-and-Orchestration-Plans.md#2-orchestration--payments); business rules: [Payments-Requirements.md](../src/Microservices/Payments/doc/Payments-Requirements.md)
 
@@ -372,6 +389,8 @@ In the Shell, a bell with the unread count and live toasts show them; the Shell 
 
 Clicking a notification opens the record (4c): new work opens the case or application, progress opens the application list. The Shell finds the server in the person's own menu (the notification holds only a path), asks the current MFE first so unsaved changes are protected, and the target BFF accepts the path only from its allow-list.
 
+One person may hold at most `Notifications:MaxConnectionsPerPerson` live connections (default 10); one more is closed at once and logged, so a stolen session or a runaway script cannot exhaust the hub ([NotificationsHub.cs](../src/Microservices/Notifications/API/Hubs/NotificationsHub.cs)).
+
 **Not yet:** a SignalR backplane for more than one API instance.
 
 ### 1.6 Resilience and scale-out
@@ -413,7 +432,11 @@ Two kinds of failure are told apart. **Transient** failures (a dependency is dow
 
 Parked Outbox rows are not silent either: the relay's readiness check turns *Degraded* while any row is parked or has waited more than two minutes ([1.7.2](#172-health-endpoints-for-liveness-and-readiness)).
 
-**Not yet:** a replay tool for dead-lettered messages, and alerting on dead-letter topic growth.
+**Resending parked messages (Payments).** On the Payment Processing Monitor, operations see the payment messages the relay parked (Kafka was unreachable for long), with the last error and how many of the payment's later messages wait behind each (per-payment order). **Resend** needs a reason, `workflow.reprocess` and a recent MFA code ([2.1.5](#215-step-up-mfa-for-risky-actions)). It puts back the **same** message, with the same ID, so a consumer that did receive an earlier attempt drops it in its Inbox and nothing happens twice. Who resent it, when and why is kept on the message and on the payment's timeline. The attempts and back-off before parking are configuration (`Payments:Outbox`; 3 attempts in Development so it can be shown in about two minutes).
+
+- [OutboxController.cs](../src/Microservices/Payments/API/Controllers/OutboxController.cs), [ResendParkedMessage.cs](../src/Microservices/Payments/API/Application/Commands/ResendParkedMessage.cs), [ParkedOutbox.cs](../src/Microservices/Payments/API/Infrastructure/Messaging/ParkedOutbox.cs); the panel: `ParkedMessagesCard` in [processing/view-all/page.tsx](../src/Microservices/Payments/BFF.Web/client-app/app/v1/payments/processing/view-all/page.tsx)
+
+**Not yet:** a replay tool for dead-lettered messages, the same resend for the other contexts' Outboxes, and alerting on dead-letter topic growth.
 
 #### 1.6.3 Timeouts, retries and circuit breakers
 
@@ -450,13 +473,14 @@ Two users acting on the same record at the same moment cannot overwrite each oth
 
 #### 1.6.5 Fail-closed configuration
 
-A component that is missing a required secret or setting refuses to start, rather than running with a default. Client secrets have no compiled-in values; options are validated at start-up; the KYC API refuses to start without its audience. The IDP uses its development signing key only in the Development environment. A misconfiguration shows up immediately at deployment, not as a silent security gap in production.
+A component that is missing a required secret or setting refuses to start, rather than running with a default. Client secrets have no compiled-in values; options are validated at start-up; the KYC API refuses to start without its audience. The IDP uses its development signing key only in the Development environment. Outside Development, MFA cannot be switched off: the IDP and every API that requires step-up refuse to start unless `Mfa:Enabled` is true. The Operations Journey API has no default environment, refuses to start outside Development with MFA off or (outside Development and Test) with the simulator switch on, and accepts a switch only as exactly `true` or `false`, so a misspelt setting cannot silently mean "off". The addresses of external systems are checked at start-up too ([2.4.9](#249-calls-to-external-systems)). A misconfiguration shows up immediately at deployment, not as a silent security gap in production.
 
 **Where to look at:**
 
 - `ValidateOnStart` with secret checks: [SubscriberServiceCollectionExtensions.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/SubscriberServiceCollectionExtensions.cs)
 - Required audience: [CustomerKyc API Program.cs](../src/Microservices/CustomerKyc/API/Program.cs)
 - Development-only signing key: [SigningCredentialExtensions.cs](../src/IDP/Security/SigningCredentialExtensions.cs)
+- MFA required outside Development: `RequireMfaOutsideDevelopment` in [MfaStepUp.cs](../src/Common/WebUtilities/Security/MfaStepUp.cs); the Operations Journey API: `assertSafeOutsideDevelopment` in [journey-options.ts](../src/Microservices/Operations/JourneyApi/src/configuration/journey-options.ts)
 
 ### 1.7 Observability
 
@@ -501,6 +525,17 @@ The three signals are set up once, in the shared observability library, and ever
 The KYC BFF (NestJS) follows the same rules: the same log formats and request line, and `/metrics` with the same metric names plus its circuit breakers and token exchanges ([logger.ts](../src/Microservices/CustomerKyc/BFF.Web/src/observability/logger.ts), [metrics.ts](../src/Microservices/CustomerKyc/BFF.Web/src/observability/metrics.ts)).
 
 **Not yet:** dashboards and alert rules (they belong to the deployment's Grafana / Observe); logs and metrics in the Audit Journey API and Audit web app.
+
+#### 1.7.4 Operations: Platform Health and the simulator switch
+
+An operations administrator (`daniel.ops`) has one screen for the whole platform: **Operations > Platform > Platform Health** shows every deployable part's readiness - APIs, BFFs, workers, the IDP, the simulators - with its response time, refreshed every 10 seconds. Only the status and the time leave the server: no probe details, URLs or internals. It is the newest context and is built in the customer's pattern for new services (Next.js SPA with a light BFF → token exchange → NestJS Journey API), with the person carried at every hop ([2.1.2](#212-separate-human-and-machine-identities)).
+
+In Development and Test only, the same screen switches the **simulated external systems** (screening provider, core banking, payment network) to Slow, Failing, Down or Refusing - and the payment network to LosingAnswers - to show how the platform copes. A change needs `simulator.behaviour.manage` and a recent MFA code, is logged with the person's LAN ID, is accepted by the simulators from the local machine only, and goes back to Healthy by itself after 15 minutes so a forgotten "Down" cannot break the next demo.
+
+**Where to look at:**
+
+- The probes and the switch: [platform.services.ts](../src/Microservices/Operations/JourneyApi/src/platform/platform.services.ts), [Operations Journey API README](../src/Microservices/Operations/JourneyApi/README.md); the screen: [Operations web README](../src/Microservices/Operations/BFF.Web/README.md)
+- The simulators' behaviour endpoints: [Payment Network Simulator](../src/Simulators/PaymentNetworkSimulator/README.md) (and the other two simulators' READMEs)
 
 ---
 
@@ -560,7 +595,7 @@ The IDP (Duende IdentityServer 8) applies the standard defences of a sign-in ser
 - Operational store and server-side sessions: `AddOperationalStore`, `AddServerSideSessions` in [IDP Program.cs](../src/IDP/Program.cs), tables in [IdentityAccessDb.sql](../src/IDP/IdentityAccessDB/IdentityAccessDb.sql) (schema `identity_server`)
 - Key-ring encryption, fail closed: [PersistentDataProtection.cs](../src/Common/WebUtilities/Security/PersistentDataProtection.cs)
 
-**Two-step sign-in and step-up (MFA), switched off by default.** With `Mfa:Enabled` on, every user signs in with the password AND the 6-digit code from Google Authenticator; someone without one enrols at their next sign-in (QR code, one confirming code, ten single-use recovery codes). The authenticator secret is stored only encrypted with the IDP's key ring, recovery codes only as hashes; a wrong code counts towards the lockout, and a code is never accepted twice. Every token then says how the person signed in (`amr`), and the APIs require `mfa` for the risky actions - a payments officer's approval or rejection, operations' "Retry release", and the KYC, Compliance and account-opening decisions - answering 403 with a clear reason otherwise (step-up, in the spirit of RFC 9470).
+**Two-step sign-in and step-up (MFA), switched off by default.** With `Mfa:Enabled` on, every user signs in with the password AND the 6-digit code from Google Authenticator; someone without one enrols at their next sign-in (QR code, one confirming code, ten single-use recovery codes). The authenticator secret is stored only encrypted with the IDP's key ring, recovery codes only as hashes; a wrong code counts towards the lockout, and a code is never accepted twice. Every token then says how the person signed in (`amr`) and when (`auth_time`), and the APIs require a **recent** MFA sign-in for the risky actions ([2.1.5](#215-step-up-mfa-for-risky-actions)).
 
 - Sign-in steps: [Login.cshtml.cs](../src/IDP/Pages/Account/Login.cshtml.cs), [Mfa.cshtml.cs](../src/IDP/Pages/Account/Mfa.cshtml.cs), [MfaSetup.cshtml.cs](../src/IDP/Pages/Account/MfaSetup.cshtml.cs); codes and secrets: [Totp.cs](../src/IDP/Security/Totp.cs), [MfaService.cs](../src/IDP/Security/MfaService.cs)
 - Step-up in the APIs: [MfaStepUp.cs](../src/Common/WebUtilities/Security/MfaStepUp.cs), and `stepUpPolicies` in the Payments, Accounts, Compliance and KYC APIs' `Program.cs`
@@ -578,15 +613,30 @@ Signing out ends the session everywhere, on the server too: the IDP deletes its 
 - Back-channel endpoints: Duende BFF `/bff/backchannel` (.NET BFFs), [backchannel-logout.controller.ts](../src/Microservices/CustomerKyc/BFF.Web/src/auth/backchannel-logout.controller.ts) with [session-registry.ts](../src/Microservices/CustomerKyc/BFF.Web/src/auth/session-registry.ts) (NestJS)
 - Client registration (`BackChannelLogoutUri`): [BssShell.cs](../src/IDP/ConfigRegistration/Clients/BssShell.cs)
 
+#### 2.1.5 Step-up MFA for risky actions
+
+Some actions need more than being signed in: a payments officer's approval or rejection, operations' "Retry release", resending a parked message and reconciling a payment, the KYC, Compliance and account-opening decisions, and switching a simulator. For these the API requires an MFA sign-in that is **recent**: the token's `amr` contains `mfa` **and** its `auth_time` is at most `Mfa:StepUpMaxAgeMinutes` old (15 by default; a missing or future time is refused). A session that began with the code in the morning does not approve a payment in the afternoon. Token exchange keeps the person's original `auth_time` and `amr`, so the Journey APIs apply the same rule.
+
+**No sign-out needed.** When the API answers 403 `mfa_required`, the screen opens a small window on its own BFF (`/api/auth/step-up`). The BFF asks the IDP for `prompt=login` with `acr_values=mfa`; the IDP sees the person is already signed in and asks **only for a fresh code** ("Confirm it's you"), then issues a new sign-in with a new `auth_time`. The window lands on the BFF's fixed `/api/auth/step-up-done`, the screen closes it and tries the action once more. The IDP's sign-in pages stay unframeable, which is why this is a window and not part of the MFE's frame.
+
+**Where to look at:**
+
+- The rule: [MfaStepUp.cs](../src/Common/WebUtilities/Security/MfaStepUp.cs), `stepUpPolicies` in the Payments, Accounts, Compliance and KYC APIs' `Program.cs`; the Journey API twin: `recentMfa` in [delegated-token.guard.ts](../src/Microservices/Operations/JourneyApi/src/auth/delegated-token.guard.ts); `auth_time` and `amr` kept through the exchange: [TokenExchangeGrantValidator.cs](../src/IDP/Security/TokenExchangeGrantValidator.cs)
+- Code only for a signed-in person: `StepUpAcr` in [Login.cshtml.cs](../src/IDP/Pages/Account/Login.cshtml.cs), [Mfa.cshtml.cs](../src/IDP/Pages/Account/Mfa.cshtml.cs)
+- The window and the retry: `StepUp` in each .NET BFF's `AuthController.cs`, the KYC BFF's [auth.controller.ts](../src/Microservices/CustomerKyc/BFF.Web/src/auth/auth.controller.ts), [step-up.ts](../src/Microservices/Payments/BFF.Web/client-app/app/lib/step-up.ts) and `postJson` in each MFE's `api.ts`
+- Automated proof: [step-up-without-sign-out.spec.ts](../tst/playwright/tests/40-security/mfa/step-up-without-sign-out.spec.ts) (runs with MFA on, see [tst/README.md](../tst/README.md))
+
+**Not yet:** passkeys / FIDO2 for the step-up.
+
 ### 2.2 Authorization beyond RBAC
 
 #### 2.2.1 Deny by default and strict token validation
 
-APIs reject anything not explicitly allowed. Every API validates the token's issuer, audience, lifetime and signature against the IDP's published keys, and keeps the original claim names (no silent claim remapping). Customer Onboarding and Documents Management require an authorization policy on every controller by default; the KYC API puts a policy on every controller and action. The UI may hide a button, but it is never what protects an operation.
+APIs reject anything not explicitly allowed. Every API validates the token's issuer, audience, lifetime, signature and type (`at+jwt` access tokens only) against the IDP's published keys, and keeps the original claim names (no silent claim remapping). Every domain API maps its controllers through one shared helper that requires an authenticated caller on top of each action's own policy, and sets a fallback policy so that any other endpoint without one is refused too; only health and metrics are explicitly anonymous. A controller added later without any attribute is therefore never public. The Journey APIs refuse an endpoint that has no access rule. The UI may hide a button, but it is never what protects an operation.
 
 **Where to look at:**
 
-- `MapControllers().RequireAuthorization(...)` and `MapInboundClaims = false`: [CustomerOnboarding API Program.cs](../src/Microservices/CustomerOnboarding/API/Program.cs), [DocumentsManagement API Program.cs](../src/Microservices/DocumentsManagement/API/Program.cs)
+- `MapEwpApiControllers` and `DenyAnonymousByDefault`: [ApiEndpointAuthorization.cs](../src/Common/WebUtilities/Security/ApiEndpointAuthorization.cs), used by every domain API's `Program.cs`; `MapInboundClaims = false`: e.g. [CustomerOnboarding API Program.cs](../src/Microservices/CustomerOnboarding/API/Program.cs)
 - Per-action policies: [KycCasesController.cs](../src/Microservices/CustomerKyc/API/Controllers/KycCasesController.cs)
 
 #### 2.2.2 RBAC with per-operation scopes
@@ -641,12 +691,12 @@ Some decisions depend on the relationship between a user and a specific record, 
 
 The person who starts a workflow can never approve it. The agent who submits an onboarding application can neither take nor decide its KYC case. The rule lives inside the `KycCase` aggregate, so no code path can bypass it. It also fails closed: if the initiator is unknown, every decision is denied rather than allowed.
 
-The rule also spans contexts. A Compliance case may not be handled by the initiator **nor by either officer who decided the KYC stages** of the same application, so one person can never both verify a customer and clear them for financial crime. KYC publishes who decided each stage on `kyc.case.approved`; Compliance stores them on the case and checks them in the aggregate. In the same way, the account officer may be neither the initiator nor the Compliance officer who approved the application (the approver travels on `compliance.case.approved`). A payment above the approval tier is decided by a payments officer who is never the person who started it.
+The rule also spans contexts. A Compliance case may not be handled by the initiator **nor by either officer who decided the KYC stages** of the same application, so one person can never both verify a customer and clear them for financial crime. KYC publishes who decided each stage on `kyc.case.approved`; Compliance stores them on the case and checks them in the aggregate. In the same way, the account officer may be neither the initiator nor the Compliance officer who approved the application (the approver travels on `compliance.case.approved`). A payment above the approval tier is decided by a payments officer who is never the person who started it. A payment whose network outcome is unknown is reconciled with **four eyes**: the operator who proposes "sent" or "not sent" can never also approve it, and neither can the payment's initiator ([1.4.3](#143-orchestration-the-payments-saga)).
 
 **Where to look at:**
 
 - `EnsureSeparationOfDuties` in [KycCase.cs](../src/Microservices/CustomerKyc/API/Domain/Aggregates/KycCase.cs)
-- Payments: `EnsureMayDecide` in [Payment.cs](../src/Microservices/Payments/API/Domain/Aggregates/Payment.cs)
+- Payments: `EnsureMayDecide` in [Payment.cs](../src/Microservices/Payments/API/Domain/Aggregates/Payment.cs); four-eyes reconciliation: `DecideNetworkResolution` in [PaymentSaga.cs](../src/Microservices/Payments/API/Domain/Aggregates/PaymentSaga.cs)
 - Cross-context SoD: `EnsureOfficerMayAct` in [ComplianceCase.cs](../src/Microservices/Compliance/API/Domain/Aggregates/ComplianceCase.cs) and [AccountApplication.cs](../src/Microservices/Accounts/API/Domain/Aggregates/AccountApplication.cs); the stage deciders on the event: [KycIntegrationEvents.cs](../src/Microservices/CustomerKyc/API/Infrastructure/Messaging/KycIntegrationEvents.cs)
 - The initiator captured at the source and carried through Kafka: `initiated_by` in the Outbox tables, see [1.3.4](#134-workflow-correlation-and-causation-identity)
 - People on screen: officers appear by LAN ID (`etpar`, `olben`), never by subject ID, but every rule compares subject IDs: a LAN ID can change or be reused, a subject ID cannot. Each context keeps its own `staff_members` table (subject ID → LAN ID), filled from the officer's token and from the events that name people.
@@ -718,6 +768,7 @@ An unexpected error returns a standard problem response with a `traceId` and not
 **Where to look at:**
 
 - [ApiExceptionHandler.cs (KYC)](../src/Microservices/CustomerKyc/API/Controllers/ApiExceptionHandler.cs), [ApiExceptionHandler.cs (CO)](../src/Microservices/CustomerOnboarding/API/API/ErrorHandling/ApiExceptionHandler.cs), [ApiExceptionHandler.cs (DM)](../src/Microservices/DocumentsManagement/API/API/ErrorHandling/ApiExceptionHandler.cs), [ApiExceptionHandler.cs (CMP)](../src/Microservices/Compliance/API/Controllers/ApiExceptionHandler.cs)
+- The NestJS Journey APIs answer in the same format (RFC 9457 `application/problem+json`, with a `code` such as `mfa_required` where the caller must react): [problem-details.filter.ts](../src/Microservices/Operations/JourneyApi/src/http/problem-details.filter.ts); the IDP's failure reasons stay in the Audit Journey API's log
 
 #### 2.4.2 Injection protection
 
@@ -747,7 +798,11 @@ An uploaded document is trusted for nothing it declares about itself. The conten
 - Inline vs attachment, `nosniff`: [kyc-cases.controller.ts](../src/Microservices/CustomerKyc/BFF.Web/src/controllers/kyc-cases.controller.ts)
 - Path traversal guard: [LocalFileSystemDocumentStorage.cs](../src/Microservices/DocumentsManagement/API/Infrastructure/Storage/LocalFileSystemDocumentStorage.cs)
 
-**Not yet:** malware scanning, and encryption at rest of stored documents.
+**Encrypted at rest.** Every stored document is encrypted with its own AES-256-GCM key, and that key is wrapped by a rotatable key-encryption key (envelope encryption); the document's ID is bound into the encryption, so a file swapped with another document's fails to decrypt. Without a key ring the service refuses to start, and an old unencrypted file is refused rather than served.
+
+- [EncryptedDocumentStorage.cs](../src/Microservices/DocumentsManagement/API/Infrastructure/Storage/EncryptedDocumentStorage.cs) (key ring `DocumentStorage:Encryption`)
+
+**Not yet:** malware scanning; the key-encryption keys in a key vault / HSM instead of configuration.
 
 #### 2.4.5 Secrets per deployable
 
@@ -779,6 +834,7 @@ Every .NET BFF and API limits how fast each caller may send requests (OWASP API4
 **Where to look at:**
 
 - [RateLimiting.cs](../src/Common/WebUtilities/Security/RateLimiting.cs) (`AddEwpRateLimiting` / `UseEwpRateLimiting`), used by every BFF's and API's `Program.cs`; limits in the `RateLimiting` configuration section
+- The NestJS Journey APIs: an overall limit before any token is checked (600 a minute) and one per person and calling client (120 reads, and for Operations 10 changes, a minute): [rate-limit.ts](../src/Microservices/Operations/JourneyApi/src/http/rate-limit.ts)
 
 #### 2.4.8 Tamper-evident audit trail
 
@@ -790,7 +846,21 @@ Who did what is recorded once, centrally, and cannot be quietly changed. The Aud
 - What is kept from an event: [AuditEventMapper.cs](../src/Microservices/Audit/API/Application/AuditEventMapper.cs)
 - The three tiers: [Audit web](../src/Microservices/Audit/BFF.Web/README.md), [Audit Journey API](../src/Microservices/Audit/JourneyApi/README.md), [Audit API](../src/Microservices/Audit/API/README.md)
 
-**Not yet:** operations' "Retry release" on a payment is not an event, so it is not in the trail; the chain is not anchored outside the database (e.g. periodically to WORM storage).
+**Anchored outside its database.** A privileged administrator could disable the trigger and recompute every hash, and the chain would still verify. So after each verification that passes, the newest entry is **anchored**: a checkpoint (its sequence and hash) is signed with an ECDSA P-256 key the database never sees and written to write-once storage. Verification then also requires every checkpoint's signature, the anchored hash at its position, and no trail shorter than the latest checkpoint, so a complete rewrite or a truncation is detected. Readiness also turns Degraded when the verification is overdue, the newest entry is not anchored, or checkpoint files disappear.
+
+- [AuditAnchors.cs](../src/Microservices/Audit/API/Infrastructure/AuditAnchors.cs), [AuditChainMonitor.cs](../src/Microservices/Audit/API/Infrastructure/AuditChainMonitor.cs)
+
+**Not yet:** operations' "Retry release" and "Resend" are on the payment's timeline but are not events, so they are not in the trail (the manual reconciliation is); in production the signing key belongs in an HSM and the checkpoints in immutable storage under another administrator.
+
+#### 2.4.9 Calls to external systems
+
+The addresses of the external systems (core banking, the screening provider, the payment network) are configuration, never caller input - but a wrong or tampered value would send the API key, and customer data, wherever it points (server-side request forgery by configuration). So each address is checked at start-up: an absolute URL without a user name or password; outside Development also https, a host listed in the section's `PermittedHosts`, and no loopback, private or link-local address (such as a cloud metadata endpoint). The clients follow no redirects, so a 3xx cannot move a call elsewhere. Each call carries the system's API key and, where repeating could act twice, an `Idempotency-Key` ([1.6.3](#163-timeouts-retries-and-circuit-breakers)).
+
+**Where to look at:**
+
+- [ExternalEndpoint.cs](../src/Common/WebUtilities/Security/ExternalEndpoint.cs) (`Problem`, `WithoutRedirects`), used in the Accounts, Compliance and Payments APIs' `Program.cs`; `PermittedHosts` in their `appsettings.json`
+
+**Not yet:** mutual TLS to the external systems.
 
 ### 2.5 Supply chain
 

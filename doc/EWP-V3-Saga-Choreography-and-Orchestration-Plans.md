@@ -113,12 +113,12 @@ The infrastructure is the same in both: Outbox, Inbox, Kafka, and courier worker
 |---|---|---|
 | `PaymentSaga` | Payments API | The orchestrator: a persisted state machine, the ONLY place decisions are made. |
 | `Payment` | Payments API | The business state people see; changed only by its saga. |
-| `SagaStepRunner` | Payments API (background service) | The saga's timer: calls the payment network (direct HTTP, Idempotency-Key, timeout, retry, circuit breaker) and wakes sagas whose reply is overdue. Decides nothing. |
-| Outbox publisher | Payments API (background service) | Commands to `accounts.commands`, outcomes to `payments.payment.events`. |
+| `SagaStepRunner` | Payments API (background service) | The saga's timer: calls the payment network (direct HTTP, Idempotency-Key, timeout, retry, circuit breaker) - the send, or the status enquiry when the outcome is unknown - and wakes sagas whose reply is overdue. Each call is claim → call → record: a short transaction takes the step with a 60 s lease, the call holds no transaction or row lock, and the answer is recorded only if the saga's `Version` is unchanged. Decides nothing. |
+| Outbox publisher | Payments API (background service) | Commands to `accounts.commands`, outcomes to `payments.payment.events`. Parks a message after `Payments:Outbox:MaxAttempts`; operations resend it (same message ID) from the Payment Processing Monitor. |
 | `AccountsCommandSubscriber` | console worker (Accounts) | Courier: commands → Accounts API. |
 | Accounts API | participant | Reserves, settles or releases in ONE local transaction (`funds_holds` + the account's balance), replies through its own Outbox on `accounts.funds.replies`. Knows nothing about the saga. |
 | `PaymentsSagaReplySubscriber` | console worker (Payments) | Courier: replies → the Payments API's internal endpoint → the saga. |
-| Payment Network Simulator | external | Accepts, refuses (422) or fails like a real third party. |
+| Payment Network Simulator | external | Accepts, refuses (422) or fails like a real third party; answers a status enquiry by Idempotency-Key; `LosingAnswers` sends but loses every answer. |
 
 `POST /v1/payments` saves the payment, the saga and the first command in one transaction and answers **202 Accepted** at once. Each later step is a short, separate piece of work (a reply arrived, a timer is due) that locks the saga row, decides, and saves the new state with the next command in one transaction. Nothing waits in memory; a restart resumes from the saved step.
 
@@ -127,8 +127,11 @@ The infrastructure is the same in both: Outbox, Inbox, Kafka, and courier worker
 ```text
 payment_sagas:        Id (SagaId), PaymentId, PaymentRef, Step, Status, Attempts, NextCheckAt, LastError,
                       CurrentCommandId, LastMessageId (the next message's CausationId), WorkflowId, CorrelationId,
-                      InitiatedByUserId, trace_parent, CreatedAt, UpdatedAt, Version
-payment_saga_history: every command sent, reply received / ignored, timeout, network call and decision (the timeline)
+                      InitiatedByUserId, trace_parent, CreatedAt, UpdatedAt, Version,
+                      UnconfirmedSince, UnconfirmedAlertedAt (CONFIRM_WITH_NETWORK only),
+                      Proposed* (a manual resolution waiting for a second person)
+payment_saga_history: every command sent, reply received / ignored, timeout, network call, decision,
+                      resend and reconciliation step (the timeline)
 ```
 
 ## 2.4 Successful path
@@ -143,8 +146,10 @@ Above the approval tier (`Payments:ApprovalThreshold`) the saga stops at `AWAIT_
 
 ```text
 RESERVE_FUNDS ─FundsReservationFailed─► DONE (REJECTED: nothing reserved, nothing to undo)
-SEND_TO_NETWORK ─refused / unavailable after N tries─► RELEASE_FUNDS ─FundsReleased─► DONE (FAILED: funds released)
+SEND_TO_NETWORK ─refused─► RELEASE_FUNDS ─FundsReleased─► DONE (FAILED: funds released)
 ```
+
+A network that does not answer is NOT a refusal: see 2.7.
 
 ## 2.6 Timeouts and compensation failure
 
@@ -157,6 +162,21 @@ RELEASE not confirmed after N tries ─► STUCK, payment COMPENSATION_FAILED �
 ```
 
 The saga never claims a rollback that did not happen. It records the truth, publishes `PaymentCompensationFailed`, turns `/health/ready` Degraded, and exposes a recoverable operational state.
+
+## 2.7 Unknown outcome: reconcile, never release blind
+
+```text
+SEND_TO_NETWORK ─no answer after N tries─► CONFIRM_WITH_NETWORK (ask by Idempotency-Key, with back-off, until it answers)
+    ─sent─► SETTLE_FUNDS (the money left: never released)
+    ─never received / refused─► RELEASE_FUNDS ─► FAILED
+    ─cannot say for UnconfirmedAlertMinutes─► alert (PaymentUnconfirmedByNetwork, readiness Degraded, Processing Monitor)
+          ─► operator A proposes SENT (network reference) / NOT_SENT with evidence
+          ─► operator B (never A, never the initiator) approves ─► SETTLE_FUNDS / RELEASE_FUNDS
+                                                    or rejects ─► the enquiry goes on
+          the network's own answer, if it comes first, supersedes the proposal
+```
+
+A lost answer may hide a payment that did go out: releasing the funds then would pay the payee AND refund the customer. So the saga asks before it acts, keeps the funds reserved while nobody can know, and lets people decide only with evidence and four eyes. Every step is on the timeline and published (the audit trail names both people).
 
 Payment business states, approval tiers and rules: [Payments-Requirements.md](../src/Microservices/Payments/doc/Payments-Requirements.md). How to run it: [Payments API README](../src/Microservices/Payments/API/README.md).
 
@@ -218,6 +238,10 @@ Retry, timeout and circuit breaker protect **individual technical interactions**
 - [x] Human approval as a long-running state: the saga waits with no timer; the payments officer's approve / reject resumes it (5b-2)
 - [x] Notifications: approval required → the branch's payments officers; outcomes → the initiator (5b-2)
 - [x] End-to-end observability by WorkflowId, CorrelationId, CausationId and one trace per payment (5a)
+- [x] Network calls outside any transaction: claim → call → record with a lease and a Version check
+- [x] Unknown outcome: CONFIRM_WITH_NETWORK status enquiry; never a blind release
+- [x] Unknown for too long: alert, notification and four-eyes manual reconciliation with evidence
+- [x] Parked Outbox messages resent by operations (same message ID, reason, recent MFA)
 
 ---
 
@@ -232,4 +256,5 @@ These apply in addition to the platform principles in the [Blueprint §2](Enterp
 5. Retry is not compensation; a circuit breaker is not compensation.
 6. Never report a successful rollback when compensation failed.
 7. Every saga step preserves causality and the initiating human. The initiator is accountability, not authorization.
+8. An unknown outcome is not a failure: ask the participant before compensating, and never compensate on a time-out alone.
 8. Business-relevant documents are invalidated and retained, not deleted, as compensation.

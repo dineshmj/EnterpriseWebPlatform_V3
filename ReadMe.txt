@@ -256,6 +256,9 @@ Operations Journey API (NestJS)	https://operations-journey.dev.localhost:46382  
 			.\ps\kafka\Setup-KafkaSecurity.ps1 -Phase Acls        (Kafka running: grants each user only what it needs)
 
 		A NEW component (a new Kafka user or topic) needs only Prepare and Acls again, with Kafka running - no restart.
+		Start Kafka day to day: .\ps\kafka\Start-Kafka.ps1 - it opens Kafka in a console window of its own (also from
+		PowerShell ISE), clears the read-only flags a hard stop leaves behind, and waits until localhost:9092 answers. Give
+		the consumers about a minute to rejoin their groups before running the Playwright tests (readiness shows it).
 		Stop Kafka without its window (e.g. under PowerShell ISE): .\ps\kafka\Stop-Kafka.ps1.
 		Optional: Kafka UI (read-only browser) - installation steps in kafka\README.md section 2.
 
@@ -382,7 +385,24 @@ Operations Journey API (NestJS)	https://operations-journey.dev.localhost:46382  
 		Details: src\Microservices\Payments\API\README.md. To see compensation, pay to a BSB starting with 999 (the network refuses it) or:
 
 			$pns = 'https://localhost:46386/admin/behaviour'
-			Invoke-RestMethod $pns -Method Put -ContentType 'application/json' -Body '{"behaviour":"Refusing"}'   # or Down / Failing / Slow / Healthy
+			Invoke-RestMethod $pns -Method Put -ContentType 'application/json' -Body '{"behaviour":"Refusing"}'   # or Down / Failing / Slow / LosingAnswers / Healthy
+
+		daniel.ops can switch the simulators on Operations -> Platform Health instead (Development / Test only; a change goes
+		back to Healthy by itself after 15 minutes).
+
+		An UNKNOWN outcome (reconciliation): switch the Payment Network to LosingAnswers and pay $100. The network sends the
+		payment but every answer is lost; after 4 sends the saga asks the network (CONFIRM_WITH_NETWORK) whether it sent it,
+		learns "sent" and settles: COMPLETED, paid once. Switch it to Down instead and the payment waits in CONFIRM_WITH_NETWORK,
+		funds reserved: after 2 minutes (Development; production 60) it is an alert - "Unconfirmed by network" on the Processing
+		Monitor, "Payment to reconcile" in the operators' bell, readiness Degraded. daniel.ops opens the payment and PROPOSES
+		"not sent" (or "sent" with the network's reference) with evidence of at least 10 characters; platform.admin (the second
+		operations administrator) APPROVES it - the funds are released, FAILED - or rejects it. Nobody decides their own
+		proposal; the network's own answer, if it comes first, wins.
+
+		PARKED messages (resend): stop Kafka and pay $100. After 3 failed publish attempts (Development; Payments:Outbox) the
+		message is parked and shows under "Parked messages" on daniel.ops's Payment Processing Monitor. Start Kafka again,
+		press Resend... and give a reason: the SAME message goes out again (a copy that did arrive earlier is ignored by the
+		receiver), and the payment's timeline records who resent it and why.
 
 	e) Audit - the tamper-evident trail, in the customer's pattern (Next.js light BFF -> NestJS Journey API -> Domain APIs):
 
@@ -396,16 +416,20 @@ Operations Journey API (NestJS)	https://operations-journey.dev.localhost:46382  
 	f) Two-step sign-in (MFA) with Google Authenticator - OFF by default:
 
 		Switch it on in FIVE appsettings.json files (keep them equal): src\IDP ("Mfa": { "Enabled": true }) - the sign-in -
-		and the Payments, Accounts, Compliance and Customer KYC APIs - the step-up for decisions. Restart them.
+		and the Payments, Accounts, Compliance and Customer KYC APIs - the step-up for risky actions - plus
+		OPERATIONS_MFA_ENABLED=true in src\Microservices\Operations\JourneyApi\runnow.bat (the simulator switch). Restart them.
+		Outside Development MFA cannot be switched off: the IDP and those APIs refuse to start.
 
 		- Every user is asked to enrol at their next sign-in: in Google Authenticator tap +, "Scan a QR code" (or "Enter a
 		  setup key"); the entry appears as "EWP V3 Demo: <username>". Enter the 6-digit code it shows, save the 10 recovery
 		  codes (shown once), continue. ONE phone holds any number of users - one entry each.
 		- From then on: password, then the current code (or one unused recovery code). Wrong codes count towards the same
 		  lockout as wrong passwords (5 attempts, 15 minutes); a code is never accepted twice.
-		- Step-up: approving or rejecting a payment, "Retry release", and the KYC, Compliance and account-opening decisions
-		  need a sign-in WITH the code (the token's amr contains "mfa"). A session from before MFA was switched on is refused
-		  with "This action needs a sign-in with your authenticator code" - sign out and in again.
+		- Step-up: approving or rejecting a payment, "Retry release", resending a parked message, reconciling a payment, the
+		  KYC, Compliance and account-opening decisions and the simulator switch need a RECENT sign-in with the code: at most
+		  Mfa:StepUpMaxAgeMinutes (15) old. Older, the screen opens a small window that asks ONLY for a fresh code ("Confirm
+		  it's you"), closes it and carries on - nobody signs out. Allow pop-ups for *.dev.localhost.
+		- Automated: tst\README.md, "MFA tests" (Playwright plays Google Authenticator for daniel.ops).
 		- Switch it off again (false in the same five files): sign-in and decisions work as before. Enrolments are kept, so
 		  switching it on later does not ask anybody to enrol again.
 		Details: src\IDP\doc\IDP-Requirements.md (section 7).

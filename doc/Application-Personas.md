@@ -28,12 +28,12 @@ It deliberately does **not** contain:
 | Persona | Role code | Primary responsibility | Works in |
 |---|---|---|---|
 | Customer | `customer` | Initiates and reviews their own banking activities | Customer Onboarding, Accounts, Payments |
-| Customer Service Agent | `customer_service_agent` | Creates and manages customers and onboarding applications on a customer's behalf | Customer Onboarding |
+| Customer Service Agent | `customer_service_agent` | Creates and manages customers and onboarding applications on a customer's behalf; captures payments for a customer (assisted channel) | Customer Onboarding, Payments |
 | KYC Officer | `kyc_officer` | Verifies customer identity and submitted documents | Customer KYC |
 | Compliance Officer | `compliance_officer` | Makes AML, risk and compliance decisions | Compliance |
 | Account Officer | `account_officer` | Reviews and approves account opening | Accounts |
 | Payments Officer | `payments_officer` | Reviews and processes payment instructions | Payments |
-| Operations Administrator | `operations_administrator` | Monitors workflows and handles technical exceptions (retry, reprocess) | All contexts — operational views only |
+| Operations Administrator | `operations_administrator` | Monitors workflows and the platform's health and handles technical exceptions: retries a failed release, resends parked messages, reconciles - always with a second operator - payments the network never confirmed; in Development and Test switches the simulated external systems | All contexts — operational views only; Operations (Platform Health) |
 | Auditor | `auditor` | Independent, read-only review of business activity and history | All contexts — read-only, through the Audit context only (the Audit Trail), where every look is itself recorded; never the operational screens |
 | Platform Administrator | `platform_administrator` | Administers the platform: users, roles, configuration, health | IDP, Shell — never business approvals |
 
@@ -57,6 +57,13 @@ The approval chain for Customer Onboarding illustrates how the personas hand ove
 Customer Service Agent ──submits──► KYC Officer ──verifies──► Compliance Officer ──approves──► Account Officer ──opens account
 ```
 
+And for Payments (maker–checker), with operations only for technical exceptions:
+
+```text
+Customer Service Agent ──captures──► (above the tier) Payments Officer ──approves / rejects──► the saga sends it
+outcome unknown for long ──► Operations Administrator A proposes ──► Operations Administrator B decides
+```
+
 How these principles are enforced is described in [Authorization-Model.md](Authorization-Model.md).
 
 ---
@@ -73,6 +80,8 @@ How these principles are enforced is described in [Authorization-Model.md](Autho
 | Documents Management | [DocumentsManagement-Requirements.md](../src/Microservices/DocumentsManagement/doc/DocumentsManagement-Requirements.md) |
 | Shell | [Shell-Requirements.md](../src/Shell/doc/Shell-Requirements.md) |
 | Identity Provider | [IDP-Requirements.md](../src/IDP/doc/IDP-Requirements.md) |
+| Audit | [Audit API README](../src/Microservices/Audit/API/README.md) |
+| Operations | [Operations Journey API README](../src/Microservices/Operations/JourneyApi/README.md) |
 
 ---
 
