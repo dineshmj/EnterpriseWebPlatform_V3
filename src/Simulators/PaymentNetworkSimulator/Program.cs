@@ -137,7 +137,14 @@ app.MapPost("/v1/payments", async (HttpContext http, PaymentRequest request, Can
             return Refuse(idempotencyKey, request, "The payment network rejected the payment: the payee's bank is not reachable for real-time payments.");
         case Behaviour.Slow:
             log.LogWarning("Payment {EndToEndId}: simulating SLOWNESS ({Delay} s).", request.EndToEndId, current.SlowDelaySeconds);
-            await Task.Delay(TimeSpan.FromSeconds(current.SlowDelaySeconds), ct);
+            // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+            // │ A slow network still PROCESSES the payment after the caller gave up waiting: the
+            // │ delay ignores the request's cancellation, so the payment is recorded and a resend
+            // │ (same Idempotency-Key) or the status enquiry finds it SENT - the unknown outcome the
+            // │ saga must reconcile, never pay twice. (Honouring the cancellation made "Slow" a
+            // │ network that silently drops every slow payment.)
+            // └──────────────────────────────────────────────────────────────────────────────────────
+            await Task.Delay(TimeSpan.FromSeconds(current.SlowDelaySeconds), CancellationToken.None);
             break;
     }
 

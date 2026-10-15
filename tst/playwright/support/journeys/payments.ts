@@ -1,4 +1,4 @@
-import { test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { lanIds, type ExpectedEntry } from '../audit';
 import { newSydneyCustomer } from '../data';
 import { PaymentApprovalsMfe, PaymentsMfe, type Payee, type PaymentOutcome } from '../pages/mfes';
@@ -99,3 +99,41 @@ export const paymentTrail = {
   ],
   failedAndReleased: [{ event: 'FundsReserved' }, { event: 'FundsReleased' }, { event: 'PaymentFailed' }] as ExpectedEntry[],
 };
+
+/** The saga's timeline line once the payment has waited past Payments:Saga:UnconfirmedAlertMinutes (Development 2). */
+export const UNCONFIRMED_ALERT = /Unconfirmed by the network for more than \d+ minutes/;
+
+/** An operator opens the payment from the Payment Processing Monitor (operations see every branch). */
+export async function openAsOperator(operator: ShellPage, paymentNumber: string): Promise<void> {
+  await operator.openMenuItem('Payments', 'Payment Processing Monitor');
+  await operator.waitForScreen('Payment processing monitor');
+  const link = operator.workspace().getByRole('link', { name: paymentNumber, exact: true }).first();
+  await expect(link).toBeVisible({ timeout: 60_000 });
+  await link.click();
+  await operator.waitForScreen(`Payment · ${paymentNumber}`);
+}
+
+/** The first operator proposes how the network actually handled the payment (with evidence). */
+export async function proposeResolution(operator: ShellPage, outcome: 'SENT' | 'NOT_SENT', evidence: string, networkReference?: string): Promise<void> {
+  await test.step(`Operator proposes: ${outcome}`, async () => {
+    const mfe = operator.workspace();
+    await expect(mfe.getByText('Reconciliation with the payment network')).toBeVisible({ timeout: 30_000 });
+    await mfe.locator('#resolution-outcome').selectOption(outcome);
+    if (networkReference) await mfe.locator('#resolution-reference').fill(networkReference);
+    await mfe.locator('#resolution-evidence').fill(evidence);
+    await mfe.getByRole('button', { name: 'Propose resolution', exact: true }).click();
+    await mfe.getByRole('alertdialog').getByRole('button', { name: 'Propose', exact: true }).click();
+    await expect(mfe.getByText('You proposed this resolution: another operator must approve or reject it.')).toBeVisible({ timeout: 30_000 });
+  });
+}
+
+/** The SECOND operator approves or rejects the proposal (rejecting needs remarks). */
+export async function decideResolution(operator: ShellPage, action: 'Approve' | 'Reject', remarks?: string): Promise<void> {
+  await test.step(`Second operator: ${action} the proposal`, async () => {
+    const mfe = operator.workspace();
+    await expect(mfe.getByText('Waiting for a second person')).toBeVisible({ timeout: 30_000 });
+    if (remarks) await mfe.locator('#resolution-remarks').fill(remarks);
+    await mfe.getByRole('button', { name: action, exact: true }).first().click();
+    await mfe.getByRole('alertdialog').getByRole('button', { name: action, exact: true }).click();
+  });
+}

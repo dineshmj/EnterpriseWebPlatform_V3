@@ -80,6 +80,13 @@ A sign-in is saved to `.auth\<user>.json` and reused for 20 minutes (`EWP_SESSIO
 
 With MFA on, the other tests stop at the code page - switch it off again for them.
 
+### Journeys, resilience and security - what they need
+
+- The simulators are switched through their loopback-only `PUT /admin/behaviour` (Down, Refusing, LosingAnswers, a forced screening outcome); every resilience spec sets them back to Healthy afterwards. No console window is ever closed.
+- `35-resilience` is slow on purpose: retries back off for real, and the four-eyes reconciliation tests wait out the "unconfirmed by the network" alert (2 minutes in Development) - allow about an hour for the project.
+- The reconciliation tests need a second operator: `platform.admin` (signs in with `EWP_PASSWORD_DEFAULT` unless `.env` names its own password).
+- `40-security/api/token-parity` asks the IDP for a client-credentials token of the KYC case-opening subscriber (a token for ANOTHER API); its development-only secret is read from that subscriber's `appsettings.Development.json` at run time.
+
 ### Conventions
 
 - Arrange / Act / Assert sections in every test; multi-step walk-throughs use `test.step` so each step is named in the report.

@@ -30,7 +30,7 @@ export const lanIds = {
   'sophie.cs': 'somit', 'mia.cs': 'mirob',
   'ethan.kyc': 'etpar', 'liam.kyc': 'liand', 'noah.kyc': 'nohug',
   'olivia.compliance': 'olben', 'grace.compliance': 'grwal',
-  'jack.accounts': 'jawil', 'emily.payments': 'emcar', 'daniel.ops': 'dacoo', 'sarah.audit': 'sacol',
+  'jack.accounts': 'jawil', 'emily.payments': 'emcar', 'daniel.ops': 'dacoo', 'platform.admin': 'mitur', 'sarah.audit': 'sacol',
 } as const;
 
 export class AuditTrail {

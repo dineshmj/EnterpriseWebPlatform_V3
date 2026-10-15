@@ -8,7 +8,7 @@ export type PersonaName =
   | 'grace.compliance' | 'olivia.compliance'
   | 'jack.accounts'
   | 'emily.payments'
-  | 'daniel.ops'
+  | 'daniel.ops' | 'platform.admin'
   | 'sarah.audit';
 
 export interface Persona {
@@ -43,6 +43,16 @@ export const personas: Record<PersonaName, Persona> = {
   },
   'daniel.ops': {
     username: 'daniel.ops', role: 'operations_administrator',
+    menu: {
+      'Customer Onboarding': ['View Customers', 'View Onboarding Applications', 'Onboarding Workflow Monitor'],
+      Payments: ['View Payments', 'Payment Processing Monitor'],
+      Operations: ['Platform Health'],
+    },
+  },
+  // Michael Turner: platform administrator AND operations administrator - the second person of
+  // four-eyes reconciliation (with Daniel). His menu is Daniel's (the platform role adds nothing more).
+  'platform.admin': {
+    username: 'platform.admin', role: 'platform_administrator',
     menu: {
       'Customer Onboarding': ['View Customers', 'View Onboarding Applications', 'Onboarding Workflow Monitor'],
       Payments: ['View Payments', 'Payment Processing Monitor'],

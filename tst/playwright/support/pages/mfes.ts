@@ -60,17 +60,7 @@ export class OnboardingMfe {
    */
   async submitNewCustomer(customer: NewCustomer, evidence?: Evidence): Promise<Submitted> {
     const mfe = this.shell.workspace();
-    await mfe.locator('#firstName').fill(customer.firstName);
-    await mfe.locator('#lastName').fill(customer.lastName);
-    await mfe.locator('#email').fill(customer.email);
-    await mfe.locator('#phoneNumber').fill(customer.phoneNumber);
-    await mfe.locator('#addressLine1').fill(customer.addressLine1);
-    await mfe.locator('#city').fill(customer.city);
-    await mfe.locator('#countryCode').fill(customer.countryCode);
-    await mfe.locator('#state').selectOption(customer.state);
-    await mfe.locator('#postalCode').fill(customer.postalCode);
-    await mfe.locator('#kycProof').setInputFiles(evidence?.identityProof ?? samplePdf(`Identity proof ${customer.lastName}`));
-    await mfe.locator('#taxProof').setInputFiles(evidence?.taxProof ?? samplePdf(`Tax proof ${customer.lastName}`));
+    await this.fillNewCustomer(customer, evidence);
     await mfe.getByRole('button', { name: 'Submit application', exact: true }).click();
 
     const success = mfe.getByRole('status').filter({ hasText: 'Application submitted' });
@@ -82,6 +72,22 @@ export class OnboardingMfe {
     return { customerNumber, applicationNumber: applicationNumber.replace(/\.$/, '') };
   }
 
+  /** Fills the form; with `omitTaxProof` the tax proof is left out (the submission must then be refused). */
+  async fillNewCustomer(customer: NewCustomer, evidence?: Evidence, omitTaxProof = false): Promise<void> {
+    const mfe = this.shell.workspace();
+    await mfe.locator('#firstName').fill(customer.firstName);
+    await mfe.locator('#lastName').fill(customer.lastName);
+    await mfe.locator('#email').fill(customer.email);
+    await mfe.locator('#phoneNumber').fill(customer.phoneNumber);
+    await mfe.locator('#addressLine1').fill(customer.addressLine1);
+    await mfe.locator('#city').fill(customer.city);
+    await mfe.locator('#countryCode').fill(customer.countryCode);
+    await mfe.locator('#state').selectOption(customer.state);
+    await mfe.locator('#postalCode').fill(customer.postalCode);
+    await mfe.locator('#kycProof').setInputFiles(evidence?.identityProof ?? samplePdf(`Identity proof ${customer.lastName}`));
+    if (!omitTaxProof) await mfe.locator('#taxProof').setInputFiles(evidence?.taxProof ?? samplePdf(`Tax proof ${customer.lastName}`));
+  }
+
   /** Waits until the application's status (as the agent sees it) is `status`, e.g. "Completed". */
   async expectStatus(applicationNumber: string, status: string): Promise<void> {
     const mfe = this.shell.workspace();
@@ -89,6 +95,32 @@ export class OnboardingMfe {
     await expect(async () => {
       await mfe.getByRole('button', { name: 'Refresh', exact: true }).click();
       await expect(row()).toContainText(status, { timeout: 2_000 });
+    }).toPass(WORKFLOW_WAIT);
+  }
+}
+
+/** Customer Onboarding: "View Customers" - the branch's customers, their status and what can be done next. */
+export class CustomersMfe {
+  static readonly title = 'Customers';
+
+  constructor(private readonly shell: ShellPage) {}
+
+  async open(): Promise<void> {
+    await this.shell.openMenuItem('Customer Onboarding', 'View Customers');
+    await this.shell.waitForScreen(CustomersMfe.title);
+  }
+
+  /** The customer's row (empty when the customer is not visible to this person). */
+  row(customerNumber: string): Locator {
+    return this.shell.workspace().locator('tbody tr').filter({ hasText: customerNumber });
+  }
+
+  /** Waits until the row shows `text` (the list reflects the workflow a moment later). */
+  async expectRowText(customerNumber: string, text: string | RegExp): Promise<void> {
+    await expect(async () => {
+      await this.shell.reloadWorkspace();
+      await this.shell.waitForScreen(CustomersMfe.title);
+      await expect(this.row(customerNumber)).toContainText(text, { timeout: 3_000 });
     }).toPass(WORKFLOW_WAIT);
   }
 }
