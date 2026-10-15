@@ -13,6 +13,7 @@ import {
 } from '@/lib/operations-types';
 import { confirmWithAuthenticator, NOT_CONFIRMED } from '@/lib/step-up';
 import { changeSimulator, loadPlatformHealth, loadSimulators } from '../../actions';
+import { ParkedMessagesCard } from './ParkedMessagesCard';
 
 const REFRESH_MS = 10_000;
 
@@ -177,6 +178,8 @@ export default function PlatformHealthPage() {
             </CardContent>
           </Card>
         )}
+
+        <ParkedMessagesCard />
       </div>
     </MfeShell>
   );

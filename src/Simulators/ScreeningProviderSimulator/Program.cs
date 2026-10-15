@@ -27,6 +27,9 @@ using System.Text.Json.Serialization;
 // │       that answers loopback callers only.
 // │ Ref : Features 1.6.3, 1.7.4 | Threat-Model TB6 | CWE-208 (timing-safe comparison)
 // └────────────────────────────────────────────────────────────────────────────────────────────────
+// A friendly console window title (instead of the EXE's full path) on a local Windows run.
+if (OperatingSystem.IsWindows() && !Console.IsOutputRedirected) Console.Title = "Screening Provider Simulator";
+
 var builder = WebApplication.CreateBuilder(args);
 var apiKey = builder.Configuration["Simulator:ApiKey"];
 if (string.IsNullOrWhiteSpace(apiKey))

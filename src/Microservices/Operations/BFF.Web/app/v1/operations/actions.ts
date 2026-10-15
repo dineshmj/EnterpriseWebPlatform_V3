@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 import { config, SESSION_COOKIE } from '@/lib/server/config';
 import { exchangeForJourneyApi, freshAccessToken } from '@/lib/server/oidc';
 import { readSession, updateSession } from '@/lib/server/session-store';
-import { BEHAVIOURS, type ActionResult, type Behaviour, type PlatformHealth, type SimulatorState } from '@/lib/operations-types';
+import { BEHAVIOURS, type ActionResult, type Behaviour, type ContextParkedMessages, type PlatformHealth, type SimulatorState } from '@/lib/operations-types';
 
 /*
  * The light BFF's server actions - the browser's ajax calls in the customer's pattern
@@ -35,8 +35,23 @@ export async function changeSimulator(key: string, behaviour: Behaviour): Promis
 // │       the screen.
 // │ Ref : Features 3.3, 2.1.2 | Customer pattern (Next.js BFF -> NestJS Journey API -> domain API)
 // └────────────────────────────────────────────────────────────────────────────────────────────────
+export async function loadParkedMessages(): Promise<ActionResult<ContextParkedMessages[]>> {
+  return callJourney<ContextParkedMessages[]>('operations-journey.read', 'GET', '/v1/journeys/operations/parked-messages');
+}
+
+export async function resendParkedMessage(context: string, messageId: string, reason: string): Promise<ActionResult<unknown>> {
+  // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+  // │ Only the two known contexts and a GUID go into the path; the reason is checked again by
+  // │ the Journey API and the Domain API (10-500 characters).
+  // └──────────────────────────────────────────────────────────────────────────────────────
+  if (!['accounts', 'compliance'].includes(context) || !/^[0-9a-fA-F-]{36}$/.test(messageId)) return { ok: false, error: 'Unknown message.' };
+  const trimmed = reason.trim();
+  if (trimmed.length < 10 || trimmed.length > 500) return { ok: false, error: 'A reason of 10 to 500 characters is required.' };
+  return callJourney<unknown>('operations-journey.write', 'POST', `/v1/journeys/operations/parked-messages/${context}/${messageId}/resend`, { reason: trimmed });
+}
+
 async function callJourney<T>(
-  scope: 'operations-journey.read' | 'operations-journey.write', method: 'GET' | 'PUT', path: string, body?: unknown,
+  scope: 'operations-journey.read' | 'operations-journey.write', method: 'GET' | 'PUT' | 'POST', path: string, body?: unknown,
 ): Promise<ActionResult<T>> {
   const cookieStore = await cookies();
   const cookieValue = cookieStore.get(SESSION_COOKIE)?.value;
@@ -69,6 +84,11 @@ async function callJourney<T>(
       return problem?.code === 'mfa_required'
         ? { ok: false, stepUp: true, error: problem.detail ?? 'This change needs a recent confirmation with your authenticator code.' }
         : { ok: false, error: 'You are not allowed to do this.' };
+    }
+    if (response.status === 400 || response.status === 409) {
+      // Our own refusal texts (a reason too short, a message no longer parked) - shown as they are.
+      const problem = (await response.json().catch(() => null)) as { detail?: string } | null;
+      return { ok: false, error: problem?.detail ?? 'The request was refused.' };
     }
     if (response.status === 404) return { ok: false, error: 'Not available in this environment.' };
     if (response.status === 429) return { ok: false, error: 'Too many requests. Wait a minute, then try again.' };

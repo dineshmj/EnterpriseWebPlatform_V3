@@ -93,6 +93,27 @@ builder.Services.AddAuthorization(options =>
     // and the operation's permission. Case-level rules live in the aggregate.
     // Step-up (MFA): a compliance officer's decision (approve or reject) need a sign-in with the authenticator code while "Mfa:Enabled"
     // is true (the token's amr contains "mfa"); with MFA off, nothing changes.
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Parked Outbox messages: only through the Operations Journey API, acting for an operator
+    // │ (delegated token, act = that API) with outbox.view - and, to resend, workflow.reprocess
+    // │ and a recent MFA sign-in. Never a screen, a machine or any other client directly.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    options.AddPolicy("ComplianceOutboxView", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireClaim("scope", ComplianceApiScopesRequired.COMPLIANCE_READ);
+        policy.RequireClaim("permission", "outbox.view");
+        policy.RequireDelegationBy(OperationsMicroservice.CLIENT_ID_FOR_IDP_FOR_OPERATIONS_JOURNEY_API);
+    });
+    options.AddPolicy("ComplianceOutboxResend", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireClaim("scope", ComplianceApiScopesRequired.COMPLIANCE_WRITE);
+        policy.RequireClaim("permission", "workflow.reprocess");
+        policy.RequireDelegationBy(OperationsMicroservice.CLIENT_ID_FOR_IDP_FOR_OPERATIONS_JOURNEY_API);
+        policy.RequireMfa();
+    });
+
     string[] stepUpPolicies = ["ComplianceCaseApprove", "ComplianceCaseReject"];
 
     void AddOfficerPolicy(string name, string scope, params string[] permissions) =>
@@ -173,6 +194,7 @@ builder.Services.AddSingleton<ComplianceKafkaProducer>();
 builder.Services.AddScoped<ComplianceOutboxPublisher>();
 builder.Services.AddKeyedSingleton<LoopHeartbeat>(ComplianceOutboxPublisherHostedService.HeartbeatKey);
 builder.Services.AddHostedService<ComplianceOutboxPublisherHostedService>();
+builder.Services.AddScoped<ParkedOutbox>();   // operations: list / resend parked messages
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<EnterpriseWebPlatform.Compliance.Api.Controllers.ApiExceptionHandler>();

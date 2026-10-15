@@ -16,6 +16,8 @@ import { CHANGE_LIMIT, RateLimiter, READ_LIMIT } from '../http/rate-limit';
 /** The person this request acts for. */
 export interface Delegation {
   sub: string;
+  /** The token this API received: the subject of a further exchange (Accounts / Compliance). */
+  subjectToken: string;
   lanId?: string;
   permissions: string[];
 }
@@ -121,6 +123,7 @@ export class DelegatedTokenGuard implements CanActivate {
 
     request.delegation = {
       sub: payload.sub,
+      subjectToken: token,
       lanId: typeof payload.lan_id === 'string' ? payload.lan_id : undefined,
       permissions,
     };

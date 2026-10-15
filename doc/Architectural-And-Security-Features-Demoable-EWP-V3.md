@@ -436,7 +436,11 @@ Parked Outbox rows are not silent either: the relay's readiness check turns *Deg
 
 - [OutboxController.cs](../src/Microservices/Payments/API/Controllers/OutboxController.cs), [ResendParkedMessage.cs](../src/Microservices/Payments/API/Application/Commands/ResendParkedMessage.cs), [ParkedOutbox.cs](../src/Microservices/Payments/API/Infrastructure/Messaging/ParkedOutbox.cs); the panel: `ParkedMessagesCard` in [processing/view-all/page.tsx](../src/Microservices/Payments/BFF.Web/client-app/app/v1/payments/processing/view-all/page.tsx)
 
-**Not yet:** a replay tool for dead-lettered messages, the same resend for the other contexts' Outboxes, and alerting on dead-letter topic growth.
+**Resending parked messages (Accounts and Compliance).** The same resend, for these two contexts, is on the Operations **Platform Health** page ("Parked messages - Accounts and Compliance"). The Operations Journey API exchanges the operator's token again for each context (RFC 8693), and the Accounts or Compliance API accepts only that delegated token, with the same reason, permission and step-up rules. One atomic `UPDATE` resends a message only while it is still parked.
+
+- [ParkedMessagesCard.tsx](../src/Microservices/Operations/BFF.Web/app/v1/operations/platform/view-all/ParkedMessagesCard.tsx), [parked-messages.service.ts](../src/Microservices/Operations/JourneyApi/src/recovery/parked-messages.service.ts), Accounts / Compliance [OutboxController.cs](../src/Microservices/Accounts/API/Controllers/OutboxController.cs) and `ParkedOutbox.cs`
+
+**Not yet:** a replay tool for dead-lettered messages, the resend for Customer Onboarding's and KYC's Outboxes, and alerting on dead-letter topic growth.
 
 #### 1.6.3 Timeouts, retries and circuit breakers
 

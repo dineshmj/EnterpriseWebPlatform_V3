@@ -31,6 +31,11 @@ set "OPERATIONS_JOURNEY_PUBLIC_ORIGIN=https://operations-journey.dev.localhost:4
 set "OPERATIONS_JOURNEY_IDP_AUTHORITY=https://idp.dev.localhost:46392"
 set "OPERATIONS_JOURNEY_AUDIENCE=operations-journey-api"
 set "OPERATIONS_JOURNEY_CALLER_CLIENT_ID=Operations.Microservice.Web.ClientID"
+REM This API's own client: token exchange only (parked Outbox messages of Accounts and Compliance).
+set "OPERATIONS_JOURNEY_CLIENT_ID=Operations.JourneyApi.ClientID"
+set "OPERATIONS_JOURNEY_CLIENT_SECRET=5594deaa-c45c-4299-b628-f877ef42d405"
+set "OPERATIONS_JOURNEY_ACCOUNTS_API=https://accounts-api.dev.localhost:48486"
+set "OPERATIONS_JOURNEY_COMPLIANCE_API=https://compliance-api.dev.localhost:46306"
 
 REM DEVELOPMENT ONLY: the simulators' behaviour switch (never set outside Development / test).
 set "OPERATIONS_SIMULATOR_CONTROLS_ENABLED=true"

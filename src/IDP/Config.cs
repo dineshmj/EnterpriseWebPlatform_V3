@@ -106,7 +106,8 @@ public static class Config
             AccountsCommandSubscriberToAccountsApiM2M.Client,
             PaymentsSagaReplySubscriberToPaymentsApiM2M.Client,
 
-            // Token exchange only (delegation): the Audit Journey API acts for a signed-in person.
-            AuditJourneyApiTokenExchange.Client
+            // Token exchange only (delegation): the Journey APIs act for a signed-in person.
+            AuditJourneyApiTokenExchange.Client,
+            OperationsJourneyApiTokenExchange.Client
         ];
 }

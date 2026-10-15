@@ -48,6 +48,9 @@ public static class ObservabilityExtensions
         string serviceName,
         Action<TracerProviderBuilder>? configureTracing = null)
     {
+        // A friendly console window title for every service that uses this helper (local runs).
+        ConsoleTitle.Set(ConsoleTitle.FromServiceName(serviceName));
+
         var otlpEndpoint =
             builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"] ??
             builder.Configuration["OpenTelemetry:OtlpEndpoint"];

@@ -427,7 +427,7 @@ These are the production requirements from all three rounds. Each is recorded in
 **Operations and monitoring**
 
 11. A security-event stream and dashboards: sign-in failures, MFA lockouts, token-exchange refusals, dead-letter depth.
-12. A resend tool for parked Accounts and Compliance Outbox messages (Payments has one).
+12. A resend tool for parked Customer Onboarding and KYC Outbox messages (Payments, Accounts and Compliance have one since 15-OCT).
 13. Retention and access rules for stored notifications.
 
 **Load and contracts**

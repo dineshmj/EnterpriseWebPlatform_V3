@@ -55,6 +55,7 @@ The IDP authenticates humans and services and issues the tokens and claims that 
 | `Payments.Microservice.BFF.ClientID` | Interactive (confidential) | Payments BFF | Present |
 | `Audit.Microservice.Web.ClientID` | Interactive (confidential) **+ token exchange** | Audit web BFF (Next.js): signs the person in, then exchanges their token for one aimed at the Audit Journey API (`audit-journey.read`) | Present (front end in 6e-3) |
 | `Audit.JourneyApi.ClientID` | **Token exchange only** (no client credentials) | Audit Journey API (NestJS) → Audit API (`audit.read`) and Payments API (`payments.read`), always for a person | Present |
+| `Operations.JourneyApi.ClientID` | **Token exchange only** (no client credentials) | Operations Journey API (NestJS) → Accounts and Compliance APIs (`accounts.read/write`, `compliance.read/write`) for their parked Outbox messages, always for the signed-in operator; only a token the Operations web BFF exchanged | Present |
 | `Operations.Microservice.Web.ClientID` | Interactive (confidential) **+ token exchange** | Operations web BFF (Next.js): signs the operations administrator in, then exchanges their token for the Operations Journey API (`operations-journey.read` / `.write`) | Present |
 | ~~`DocumentsManagement.Microservice.BFF.ClientID`~~ | — | — | Removed: DM has no MFE by design |
 | ~~`CustomerOnboarding.BFF.To.DocumentsManagement.M2M.ClientID`~~ | — | — | Removed: the CO BFF exchanges the agent's token instead |

@@ -60,6 +60,12 @@ public sealed class TokenExchangeGrantValidator(
             token.Audiences.Contains(MicroserviceApiResourceNames.AUDIT_JOURNEY_API) &&
             token.ActingClientId == AuditMicroservice.CLIENT_ID_FOR_IDP,
 
+        // The Operations Journey API: only a token the Operations web BFF exchanged for it (parked
+        // Outbox messages of Accounts and Compliance; the scopes are its AllowedScopes).
+        [OperationsMicroservice.CLIENT_ID_FOR_IDP_FOR_OPERATIONS_JOURNEY_API] = token =>
+            token.Audiences.Contains(MicroserviceApiResourceNames.OPERATIONS_JOURNEY_API) &&
+            token.ActingClientId == OperationsMicroservice.CLIENT_ID_FOR_IDP,
+
         // Documents Management for the signed-in agent (upload, clean-up of an unfinished submission).
         [CustomerOnboardingMicroservice.CLIENT_ID_FOR_IDP] = token =>
             token.ClientId == CustomerOnboardingMicroservice.CLIENT_ID_FOR_IDP && token.ActingClientId is null,

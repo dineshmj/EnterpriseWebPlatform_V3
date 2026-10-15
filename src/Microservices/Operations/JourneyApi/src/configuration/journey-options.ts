@@ -30,6 +30,13 @@ export interface JourneyOptions {
   mfaEnabled: boolean;
   mfaMaxAgeMinutes: number;
 
+  /** This API's own client at the IDP: token exchange only, never client credentials. */
+  clientId: string;
+  clientSecret: string;
+  /** The Domain APIs whose parked Outbox messages operations may see and resend. */
+  accountsApiBaseUrl: string;
+  complianceApiBaseUrl: string;
+
   tlsPfxPath: string;
   tlsPfxPassword: string;
 }
@@ -101,6 +108,10 @@ export function loadOptions(): JourneyOptions {
     simulatorAutoRevertMinutes: minutes('OPERATIONS_SIMULATOR_AUTO_REVERT_MINUTES'),
     mfaEnabled: flag('OPERATIONS_MFA_ENABLED'),
     mfaMaxAgeMinutes: minutes('OPERATIONS_MFA_MAX_AGE_MINUTES'),
+    clientId: required('OPERATIONS_JOURNEY_CLIENT_ID'),
+    clientSecret: required('OPERATIONS_JOURNEY_CLIENT_SECRET'),
+    accountsApiBaseUrl: required('OPERATIONS_JOURNEY_ACCOUNTS_API').replace(/\/$/, ''),
+    complianceApiBaseUrl: required('OPERATIONS_JOURNEY_COMPLIANCE_API').replace(/\/$/, ''),
     tlsPfxPath: required('OPERATIONS_JOURNEY_TLS_PFX_PATH'),
     tlsPfxPassword: required('OPERATIONS_JOURNEY_TLS_PFX_PASSWORD'),
   };

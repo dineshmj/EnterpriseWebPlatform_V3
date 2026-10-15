@@ -876,6 +876,15 @@ Feature: Recovering payments that need an operator
     Then the release is sent again and, once confirmed, the payment is FAILED with the funds released
 
   @boundary
+  Scenario: A parked Accounts or Compliance message is resent from Platform Health
+    Given an outgoing Accounts or Compliance message was parked after its delivery attempts
+    Then it appears on Daniel's Platform Health page under "Parked messages", without its content
+    When Daniel resends it with a reason of 10 to 500 characters and a recent authenticator code
+    Then the same message, with the same ID, is published again
+    And the message records who resent it, when and why
+    And resending a message that is no longer parked is refused as "Nothing to resend"
+
+  @boundary
   Scenario: A message could not be delivered to Kafka
     Given an outgoing payment message was parked after its delivery attempts
     Then it appears under "Parked messages" for operations, without its content
