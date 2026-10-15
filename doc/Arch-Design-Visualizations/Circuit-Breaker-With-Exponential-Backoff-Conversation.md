@@ -46,7 +46,7 @@ Below is a concise, realistic dialogue between the three “people” that captu
   - **P2:** `onFailure()` in `HALF_OPEN` — I immediately `trip` back to `OPEN` and restart the `openDurationMs` timer.
 
 **Other important notes**
-- **P2:** I emit metrics (failures, state changes, rejection counts) and logs so operators can see when I open and why.  
+- **P2:** I emit metrics (failures, state changes, rejection counts) and logs so operators can see when I open and why (through tools like Grafana, Prometheus, etc.)  
 - **P2:** I distinguish transient vs permanent failures: timeouts/5xx are transient; 4xx client errors may be permanent and should not count toward tripping.  
 - **P1:** I check `P2.isAvailable()` before attempting expensive calls so I can fast-fail and avoid wasted work.  
 - **P1:** When P2 fast-fails, I may fallback (cached data / degraded UX) rather than keep retrying.  
