@@ -342,7 +342,7 @@ Demo: switch the Payment Network simulator to **LosingAnswers** (sends, every an
 - Unknown outcome: `OnNetworkUnavailable`, `OnNetworkConfirmedSent` / `NotSent`, `OnNetworkStatusUnknown` in [PaymentSaga.cs](../src/Microservices/Payments/API/Domain/Aggregates/PaymentSaga.cs); claim / call / record and the status enquiry in [RunDueSagaStep.cs](../src/Microservices/Payments/API/Application/Commands/RunDueSagaStep.cs); the network's enquiry endpoint and `LosingAnswers`: [Payment Network Simulator](../src/Simulators/PaymentNetworkSimulator/README.md)
 - Four-eyes reconciliation: `ProposeNetworkResolution` / `DecideNetworkResolution` in [PaymentSaga.cs](../src/Microservices/Payments/API/Domain/Aggregates/PaymentSaga.cs), [NetworkReconciliationController.cs](../src/Microservices/Payments/API/Controllers/NetworkReconciliationController.cs); the alert: `SagaBacklogHealthCheck` in [SagaStepRunner.cs](../src/Microservices/Payments/API/Infrastructure/Saga/SagaStepRunner.cs); the panel: `ReconciliationPanel` in [view-details/page.tsx](../src/Microservices/Payments/BFF.Web/client-app/app/v1/payments/view-details/page.tsx)
 - Live evidence: the payment's status page shows the saga timeline (`payment_saga_history`)
-- Design, diagram and failure table: [Saga plan §2](EWP-V3-Saga-Choreography-and-Orchestration-Plans.md#2-orchestration--payments); business rules: [Payments-Requirements.md](../src/Microservices/Payments/doc/Payments-Requirements.md)
+- Design, diagram and failure table: [Saga plan §2](EWP-V3-Saga-Choreography-and-Orchestration-Plans.md#2-orchestration--payments); business rules: [Payments-Requirements.md](Requirements/Payments-Requirements.md)
 
 ### 1.5 Front-end composition
 
@@ -353,7 +353,7 @@ The Shell provides branding, sign-in, the menu and the Application Workspace, an
 **Where to look at:**
 
 - Shell host page: [page.tsx](../src/Shell/client-app/app/page.tsx); menu: [MenuController.cs](../src/Shell/Controllers/MenuController.cs), [EwpBssShellDb.sql](../src/Shell/MenuDB/EwpBssShellDb.sql)
-- Requirements: [Shell-Requirements.md](../src/Shell/doc/Shell-Requirements.md)
+- Requirements: [Shell-Requirements.md](Requirements/Shell-Requirements.md)
 
 #### 1.5.2 Shell–MFE protocol and the Application Workspace
 
@@ -363,7 +363,7 @@ The Shell and the MFEs talk through an explicit `postMessage` protocol: ready, c
 
 - MFE side: [MfeShell.tsx (KYC)](../src/Microservices/CustomerKyc/BFF.Web/client-app/app/components/MfeShell.tsx), [MfeShell.tsx (CO)](../src/Microservices/CustomerOnboarding/BFF.Web/client-app/app/components/MfeShell.tsx), [MfeShell.tsx (CMP)](../src/Microservices/Compliance/BFF.Web/client-app/app/components/MfeShell.tsx)
 - Shell side: [page.tsx](../src/Shell/client-app/app/page.tsx), [ApplicationWorkspace.tsx](../src/Shell/client-app/app/components/ApplicationWorkspace.tsx)
-- Protocol and selection rules: [Shell-Requirements.md §3–4](../src/Shell/doc/Shell-Requirements.md#3-application-workspace)
+- Protocol and selection rules: [Shell-Requirements.md §3–4](Requirements/Shell-Requirements.md#3-application-workspace)
 
 #### 1.5.3 One design system across independent front ends
 
@@ -562,7 +562,7 @@ Humans and services authenticate differently. Workers and BFFs use OAuth 2.0 Cli
 
 - M2M clients: [IDP ConfigRegistration/Clients/M2M](../src/IDP/ConfigRegistration/Clients/M2M)
 - Pinned-client policies `KycCaseOpeningSubscriberWrite` and `OnboardingOutcomeSubscriberWrite`: [CustomerKyc API Program.cs](../src/Microservices/CustomerKyc/API/Program.cs), [CustomerOnboarding API Program.cs](../src/Microservices/CustomerOnboarding/API/Program.cs)
-- Client and scope inventory: [IDP-Requirements.md](../src/IDP/doc/IDP-Requirements.md)
+- Client and scope inventory: [IDP-Requirements.md](Requirements/IDP-Requirements.md)
 
 **Delegated user context (token exchange, RFC 8693).** Where a service calls another **for a person**, a plain machine token would lose who that person is. The Audit context therefore uses token exchange at every hop: the caller swaps the token it holds for one aimed at the next service, in which the person stays the subject (so roles, permissions and branch still decide) and the acting services are listed in a nested `act` claim. The Audit API accepts a token only when the person is an auditor **and** the acting client is the Audit Journey API; the IDP decides, by an allow-list, which client may exchange which token, and the Journey API has no grant other than token exchange, so it can never act without a person.
 
@@ -611,7 +611,7 @@ Signing out ends the session everywhere, on the server too: the IDP deletes its 
 **Where to look at:**
 
 - Front-channel iframe: [LoggedOut.cshtml](../src/IDP/Pages/Account/LoggedOut.cshtml), [signout-redirect.js](../src/IDP/wwwroot/js/signout-redirect.js)
-- Back-channel endpoints: Duende BFF `/bff/backchannel` (.NET BFFs), [backchannel-logout.controller.ts](../src/Microservices/CustomerKyc/BFF.Web/src/auth/backchannel-logout.controller.ts) with [session-registry.ts](../src/Microservices/CustomerKyc/BFF.Web/src/auth/session-registry.ts) (NestJS)
+- Back-channel endpoints: Duende BFF `/bff/backchannel` (.NET BFFs), [backchannel-logout.controller.ts](../src/Microservices/CustomerKyc/BFF.Web/src/auth/backchannel-logout.controller.ts) with [session-store.ts](../src/Microservices/CustomerKyc/BFF.Web/src/auth/session-store.ts) (NestJS)
 - Client registration (`BackChannelLogoutUri`): [BssShell.cs](../src/IDP/ConfigRegistration/Clients/BssShell.cs)
 
 #### 2.1.5 Step-up MFA for risky actions

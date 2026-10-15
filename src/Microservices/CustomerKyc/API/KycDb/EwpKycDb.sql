@@ -258,6 +258,6 @@ CREATE INDEX IF NOT EXISTS ix_kyc_inbox_messages_message_id ON inbox_messages (m
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ewp_kyc_api') THEN
-        GRANT SELECT, INSERT, UPDATE, DELETE ON inbox_messages, staff_members TO ewp_kyc_api;
+        GRANT SELECT, INSERT, UPDATE ON inbox_messages, staff_members TO ewp_kyc_api;   -- no DELETE: nothing is ever deleted
     END IF;
 END $$;

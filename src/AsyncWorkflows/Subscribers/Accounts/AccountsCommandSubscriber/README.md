@@ -1,6 +1,6 @@
 # AccountsCommandSubscriber
 
-Kafka subscriber **owned by the Accounts (ACC) bounded context**. It is the courier that carries the **Payments saga orchestrator's commands** to the Accounts API: reserve, settle (debit) or release a payment's funds. It decides nothing: Accounts applies each command to its own data and answers through its own Outbox on `accounts.funds.replies`. Business requirements: [Accounts-Requirements.md](../../../../Microservices/Accounts/doc/Accounts-Requirements.md). Contracts: [Integration-Event-Catalogue.md](../../../../../doc/Integration-Event-Catalogue.md).
+Kafka subscriber **owned by the Accounts (ACC) bounded context**. It is the courier that carries the **Payments saga orchestrator's commands** to the Accounts API: reserve, settle (debit) or release a payment's funds. It decides nothing: Accounts applies each command to its own data and answers through its own Outbox on `accounts.funds.replies`. Business requirements: [Accounts-Requirements.md](../../../../../doc/Requirements/Accounts-Requirements.md). Contracts: [Integration-Event-Catalogue.md](../../../../../doc/Integration-Event-Catalogue.md).
 
 ## Flow
 

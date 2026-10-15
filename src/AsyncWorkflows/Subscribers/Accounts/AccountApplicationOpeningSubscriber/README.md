@@ -1,6 +1,6 @@
 # AccountApplicationOpeningSubscriber
 
-Kafka subscriber **owned by the Accounts (ACC) bounded context**: it is deployed and versioned with Accounts, even though it lives under `src/AsyncWorkflows`. It opens the account application for each onboarding application that Compliance approved — the last step of the onboarding saga. Business requirements: [Accounts-Requirements.md](../../../../Microservices/Accounts/doc/Accounts-Requirements.md). Topic contracts: [Integration-Event-Catalogue.md](../../../../../doc/Integration-Event-Catalogue.md).
+Kafka subscriber **owned by the Accounts (ACC) bounded context**: it is deployed and versioned with Accounts, even though it lives under `src/AsyncWorkflows`. It opens the account application for each onboarding application that Compliance approved — the last step of the onboarding saga. Business requirements: [Accounts-Requirements.md](../../../../../doc/Requirements/Accounts-Requirements.md). Topic contracts: [Integration-Event-Catalogue.md](../../../../../doc/Integration-Event-Catalogue.md).
 
 ## Flow
 

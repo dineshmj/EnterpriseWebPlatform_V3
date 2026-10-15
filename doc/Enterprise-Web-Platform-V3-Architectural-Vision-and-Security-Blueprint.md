@@ -117,16 +117,16 @@ payment network ◄── Payments API. BFF sessions and keys: EwpBffStateDb (on
 
 | Bounded context | Subdomain | Status | Requirements |
 |---|---|---|---|
-| Customer Onboarding | Core | Present | [CustomerOnboarding-Requirements.md](../src/Microservices/CustomerOnboarding/doc/CustomerOnboarding-Requirements.md) |
-| Customer KYC | Core | Present (first slice) | [CustomerKyc-Requirements.md](../src/Microservices/CustomerKyc/doc/CustomerKyc-Requirements.md) |
-| Compliance | Core | Present | [Compliance-Requirements.md](../src/Microservices/Compliance/doc/Compliance-Requirements.md) |
-| Accounts | Core (simplified) | Present | [Accounts-Requirements.md](../src/Microservices/Accounts/doc/Accounts-Requirements.md) |
-| Payments | Core | Present (orchestrated saga, assisted-channel screens, approval by tier and clearance, notifications) | [Payments-Requirements.md](../src/Microservices/Payments/doc/Payments-Requirements.md) |
-| Documents Management | Generic / supporting | Present | [DocumentsManagement-Requirements.md](../src/Microservices/DocumentsManagement/doc/DocumentsManagement-Requirements.md) |
-| Identity and access | Generic | Present | [IDP-Requirements.md](../src/IDP/doc/IDP-Requirements.md) |
-| Composition (not a business context) | — | Present | [Shell-Requirements.md](../src/Shell/doc/Shell-Requirements.md) |
+| Customer Onboarding | Core | Present | [CustomerOnboarding-Requirements.md](Requirements/CustomerOnboarding-Requirements.md) |
+| Customer KYC | Core | Present (first slice) | [CustomerKyc-Requirements.md](Requirements/CustomerKyc-Requirements.md) |
+| Compliance | Core | Present | [Compliance-Requirements.md](Requirements/Compliance-Requirements.md) |
+| Accounts | Core (simplified) | Present | [Accounts-Requirements.md](Requirements/Accounts-Requirements.md) |
+| Payments | Core | Present (orchestrated saga, assisted-channel screens, approval by tier and clearance, notifications) | [Payments-Requirements.md](Requirements/Payments-Requirements.md) |
+| Documents Management | Generic / supporting | Present | [DocumentsManagement-Requirements.md](Requirements/DocumentsManagement-Requirements.md) |
+| Identity and access | Generic | Present | [IDP-Requirements.md](Requirements/IDP-Requirements.md) |
+| Composition (not a business context) | — | Present | [Shell-Requirements.md](Requirements/Shell-Requirements.md) |
 | Audit | Generic / supporting | Present (tamper-evident trail from Kafka; auditor screens in the customer's pattern: Next.js light BFF → NestJS Journey API → Domain APIs, token exchange at every hop) | [Audit API README](../src/Microservices/Audit/API/README.md) |
-| Notifications | Generic / supporting | Present (including deep links from a notification) | [Notifications API README](../src/Microservices/Notifications/API/README.md), [Shell-Requirements.md §7](../src/Shell/doc/Shell-Requirements.md#7-workflow-notifications) |
+| Notifications | Generic / supporting | Present (including deep links from a notification) | [Notifications API README](../src/Microservices/Notifications/API/README.md), [Shell-Requirements.md §7](Requirements/Shell-Requirements.md#7-workflow-notifications) |
 | Operations | Generic / supporting | Present (Platform Health for operations administrators; the simulators' behaviour switch in Development and Test; the customer's pattern: Next.js light BFF → NestJS Journey API, token exchange) | [Operations Journey API README](../src/Microservices/Operations/JourneyApi/README.md), [Operations web README](../src/Microservices/Operations/BFF.Web/README.md) |
 
 ### Context map
@@ -252,7 +252,7 @@ An MFE and its BFF are one deployable: the MFE is a static export served by its 
 
 ## 8. Front-End Composition
 
-EWP V3 composes independently deployable Next.js MFEs inside a business-neutral Shell, using iframe isolation and an explicit `postMessage` protocol. Each MFE is backed by its own BFF. The menu, Application Workspace, MFE protocol, sign-in and logout are specified in [Shell-Requirements.md](../src/Shell/doc/Shell-Requirements.md).
+EWP V3 composes independently deployable Next.js MFEs inside a business-neutral Shell, using iframe isolation and an explicit `postMessage` protocol. Each MFE is backed by its own BFF. The menu, Application Workspace, MFE protocol, sign-in and logout are specified in [Shell-Requirements.md](Requirements/Shell-Requirements.md).
 
 ---
 
@@ -262,7 +262,7 @@ EWP V3 composes independently deployable Next.js MFEs inside a business-neutral 
 - **Machine authentication:** OAuth 2.0 Client Credentials, one pinned client per caller–callee purpose.
 - **Human initiator:** captured at the Outbox boundary (`initiated_by`) and carried in events. It provides accountability and determines the notification audience; it is never a grant.
 - **Authorization:** RBAC + ABAC + ReBAC + workflow state + SoD; see [Authorization-Model.md](Authorization-Model.md).
-- IDP clients, scopes, claims and demo data: [IDP-Requirements.md](../src/IDP/doc/IDP-Requirements.md).
+- IDP clients, scopes, claims and demo data: [IDP-Requirements.md](Requirements/IDP-Requirements.md).
 
 ---
 
@@ -322,7 +322,7 @@ Customer Onboarding uses **choreography**; Payments will use **orchestration**. 
 
 ### 10.6 Real-time notifications
 
-A separate Notifications component turns business events into neutral, addressed notifications and pushes them over SignalR to the right users only. The Shell renders them. Present since 4a: [Notifications API README](../src/Microservices/Notifications/API/README.md). See [Shell-Requirements §7](../src/Shell/doc/Shell-Requirements.md#7-workflow-notifications) and [Authorization-Model §11](Authorization-Model.md#11-notification-authorization).
+A separate Notifications component turns business events into neutral, addressed notifications and pushes them over SignalR to the right users only. The Shell renders them. Present since 4a: [Notifications API README](../src/Microservices/Notifications/API/README.md). See [Shell-Requirements §7](Requirements/Shell-Requirements.md#7-workflow-notifications) and [Authorization-Model §11](Authorization-Model.md#11-notification-authorization).
 
 ---
 
@@ -552,7 +552,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [x] Resend of parked Outbox messages (same message ID, reason, recent MFA)
 - [ ] Customer self-service channel, beneficiaries
 
-Details: [Saga plan §2](EWP-V3-Saga-Choreography-and-Orchestration-Plans.md#2-orchestration--payments), [Payments-Requirements.md](../src/Microservices/Payments/doc/Payments-Requirements.md).
+Details: [Saga plan §2](EWP-V3-Saga-Choreography-and-Orchestration-Plans.md#2-orchestration--payments), [Payments-Requirements.md](Requirements/Payments-Requirements.md).
 
 ---
 

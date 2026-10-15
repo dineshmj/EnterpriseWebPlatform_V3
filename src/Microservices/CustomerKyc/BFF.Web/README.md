@@ -11,7 +11,7 @@ NestJS BFF for the Customer KYC Next.js MFE.
 
 The browser never receives the KYC API access token. The BFF keeps the OIDC session and forwards the access token server-to-server to the KYC API.
 
-Business requirements for this context: [CustomerKyc-Requirements.md](../doc/CustomerKyc-Requirements.md).
+Business requirements for this context: [CustomerKyc-Requirements.md](../../../../doc/Requirements/CustomerKyc-Requirements.md).
 
 ## What the BFF does
 

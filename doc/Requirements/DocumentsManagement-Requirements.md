@@ -4,7 +4,7 @@
 **Subdomain type:** Generic / supporting  
 **Status:** Present (API, and its first subscriber: document invalidation on a rejected onboarding)
 
-Platform-wide rules are not repeated here. See [doc/](../../../../doc/).
+Platform-wide rules are not repeated here. See [doc/](..).
 
 ---
 
@@ -27,7 +27,7 @@ Documents Management stores documents and their metadata **on behalf of other bo
 | DM API | `API` | ASP.NET Core 10, EF Core, PostgreSQL |
 | Storage | `API/DocumentStorage` (local file system, `LocalFileSystemDocumentStorage`) | Replaceable behind `IDocumentStorage` (object storage or a DMS in a cloud deployment) |
 | Database | `EwpDocumentsManagementDb` (`API/DocumentMgmtDB/EwpDocumentsManagementDb.sql`) | PostgreSQL (`documents`, `inbox_messages`) |
-| DocumentInvalidationSubscriber | [Subscribers/DocumentsManagement](../../../AsyncWorkflows/Subscribers/DocumentsManagement/DocumentInvalidationSubscriber/README.md) | .NET worker; consumes `onboarding.application.rejected` (saga compensation) |
+| DocumentInvalidationSubscriber | [Subscribers/DocumentsManagement](../../src/AsyncWorkflows/Subscribers/DocumentsManagement/DocumentInvalidationSubscriber/README.md) | .NET worker; consumes `onboarding.application.rejected` (saga compensation) |
 
 ---
 
@@ -90,7 +90,7 @@ ATTACHED / INVALIDATED ──retention period ends──► DISPOSED
 | Upload | `documents-management.write` + an actor branch is required (it becomes the document's resource branch) | A narrowly scoped upload grant (document type + business reference) |
 | Delete | `documents-management.write` + only the Customer Onboarding BFF client + same branch + the document is AVAILABLE (attached and invalidated documents are retained) | Restricted to documents not yet part of a submitted application |
 | Invalidate (internal) | `documents-management.write` + only the DocumentInvalidationSubscriber client; only documents of the event's branch | — |
-| Actor branch | The `branch` claim of a delegated token: a person (`sub`) with the CO or KYC BFF as the acting client (`act`). A person's own token, a machine token or any other acting client has no branch and is denied (fail closed). See [Authorization-Model §9.3](../../../../doc/Authorization-Model.md#93-delegated-user-context). | — |
+| Actor branch | The `branch` claim of a delegated token: a person (`sub`) with the CO or KYC BFF as the acting client (`act`). A person's own token, a machine token or any other acting client has no branch and is denied (fail closed). See [Authorization-Model §9.3](../Authorization-Model.md#93-delegated-user-context). | — |
 
 Upload path: currently the BFF uploads on the user's behalf with a token exchanged for the user. The target is a direct, narrowly authorized upload (for example a pre-signed object-storage URL issued by DM), so that large files bypass the BFF and the user's context is preserved.
 

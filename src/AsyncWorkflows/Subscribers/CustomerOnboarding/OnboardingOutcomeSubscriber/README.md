@@ -1,6 +1,6 @@
 # OnboardingOutcomeSubscriber
 
-Kafka subscriber **owned by the Customer Onboarding bounded context**. It records Customer KYC, Compliance and Accounts outcomes on the onboarding application, which is the return path of the onboarding choreography. Business requirements: [CustomerOnboarding-Requirements.md](../../../../Microservices/CustomerOnboarding/doc/CustomerOnboarding-Requirements.md). Topic contracts: [Integration-Event-Catalogue.md](../../../../../doc/Integration-Event-Catalogue.md).
+Kafka subscriber **owned by the Customer Onboarding bounded context**. It records Customer KYC, Compliance and Accounts outcomes on the onboarding application, which is the return path of the onboarding choreography. Business requirements: [CustomerOnboarding-Requirements.md](../../../../../doc/Requirements/CustomerOnboarding-Requirements.md). Topic contracts: [Integration-Event-Catalogue.md](../../../../../doc/Integration-Event-Catalogue.md).
 
 ## Flow
 

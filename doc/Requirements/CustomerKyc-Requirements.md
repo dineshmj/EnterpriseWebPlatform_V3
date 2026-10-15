@@ -4,7 +4,7 @@
 **Subdomain type:** Core  
 **Status:** Present (first slice) — human review works end to end on a `KycCase` aggregate
 
-Platform-wide rules are not repeated here. See [doc/](../../../../doc/).
+Platform-wide rules are not repeated here. See [doc/](..).
 
 ---
 
@@ -140,7 +140,7 @@ Target additional states: `AWAITING_INFORMATION` (more evidence requested; retur
 | Consumed by | Customer Onboarding (`OnboardingOutcomeSubscriber`) records `kyc.case.created` / `approved` / `rejected` on the application | Present |
 | Sync | KYC BFF → Documents Management (`documents-management.read`, M2M) for the identity proof and tax proof | Present |
 
-Contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Event-Catalogue.md).
+Contracts: [Integration-Event-Catalogue.md](../Integration-Event-Catalogue.md).
 
 ---
 

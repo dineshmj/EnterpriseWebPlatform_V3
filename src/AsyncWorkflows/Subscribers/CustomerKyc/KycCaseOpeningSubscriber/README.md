@@ -1,6 +1,6 @@
 # KycCaseOpeningSubscriber
 
-Kafka subscriber **owned by the Customer KYC bounded context**: it is deployed and versioned with KYC, even though it lives under `src/AsyncWorkflows`. It opens the KYC case for each submitted onboarding application. Business requirements: [CustomerKyc-Requirements.md](../../../../Microservices/CustomerKyc/doc/CustomerKyc-Requirements.md). Topic contracts: [Integration-Event-Catalogue.md](../../../../../doc/Integration-Event-Catalogue.md).
+Kafka subscriber **owned by the Customer KYC bounded context**: it is deployed and versioned with KYC, even though it lives under `src/AsyncWorkflows`. It opens the KYC case for each submitted onboarding application. Business requirements: [CustomerKyc-Requirements.md](../../../../../doc/Requirements/CustomerKyc-Requirements.md). Topic contracts: [Integration-Event-Catalogue.md](../../../../../doc/Integration-Event-Catalogue.md).
 
 ## Flow
 

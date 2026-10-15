@@ -9,9 +9,12 @@ public sealed class GetCustomersQueryHandler
 {
     private readonly ICustomerReadContext _readContext;
 
-    public GetCustomersQueryHandler(ICustomerReadContext readContext)
+    private readonly IOnboardingApplicationReadContext _applications;
+
+    public GetCustomersQueryHandler(ICustomerReadContext readContext, IOnboardingApplicationReadContext applications)
     {
         _readContext = readContext;
+        _applications = applications;
     }
 
     public async Task<PagedResult<CustomerListItemDto>> HandleAsync(
@@ -58,6 +61,19 @@ public sealed class GetCustomersQueryHandler
             })
             .ToListAsync(cancellationToken);
 
+        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // │ The latest application of each customer on this page (one query, this page only),
+        // │ so a PROSPECT whose application was rejected says so instead of looking brand new.
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        var customerIds = rows.Select(x => x.Id).ToList();
+        var latestApplications = (await _applications.OnboardingApplications
+                .AsNoTracking()
+                .Where(a => customerIds.Contains(a.CustomerId))
+                .Select(a => new { a.CustomerId, ApplicationNumber = a.ApplicationNumber.Value, a.Status, a.UpdatedAt, a.CreatedAt })
+                .ToListAsync(cancellationToken))
+            .GroupBy(a => a.CustomerId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(a => a.CreatedAt).First());
+
         var items = rows
             .Select(x => new CustomerListItemDto(
                 x.Id,
@@ -66,7 +82,10 @@ public sealed class GetCustomersQueryHandler
                 x.LastName,
                 x.Email,
                 x.CustomerType,
-                x.Status.ToString().ToUpperInvariant()))
+                x.Status.ToString().ToUpperInvariant(),
+                latestApplications.TryGetValue(x.Id, out var latest)
+                    ? new LatestApplicationDto(latest.ApplicationNumber, latest.Status.ToString(), latest.UpdatedAt)
+                    : null))
             .ToList();
 
         return new PagedResult<CustomerListItemDto>(
@@ -85,7 +104,12 @@ public sealed record CustomerListItemDto(
     string Email,
     Domain.Enums.CustomerType CustomerType,
     // PROSPECT / ONBOARDING / ACTIVE / SUSPENDED / CLOSED: tells the UI whether onboarding can start.
-    string Status);
+    string Status,
+    // The customer's most recent onboarding application (null: none yet).
+    LatestApplicationDto? LatestApplication);
+
+/// <summary>The outcome of a customer's most recent onboarding application, for the customer list.</summary>
+public sealed record LatestApplicationDto(string ApplicationNumber, string Status, DateTimeOffset UpdatedAt);
 
 public sealed record PagedResult<T>(
     IReadOnlyCollection<T> Items,

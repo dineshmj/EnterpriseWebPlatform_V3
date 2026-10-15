@@ -4,7 +4,7 @@
 **Subdomain type:** Core (simplified — not a core-banking ledger)  
 **Status:** Present: API, account-application opening subscriber and core-banking simulator (3a); officer UI, BFF + MFE (3b); compensation of a failed opening (3c); balances and funds holds as the participant of the Payments saga (5a).
 
-Platform-wide rules are not repeated here. See [doc/](../../../../doc/).
+Platform-wide rules are not repeated here. See [doc/](..).
 
 ---
 
@@ -23,13 +23,13 @@ Accounts opens customer accounts once onboarding prerequisites are complete. It 
 
 | Component | Location | Technology | Status |
 |---|---|---|---|
-| Accounts MFE | [BFF.Web/client-app](../BFF.Web/README.md) — work queue, application page, accounts, lifecycle | Next.js static export | Present |
-| Accounts BFF | [BFF.Web](../BFF.Web/README.md) — `https://accounts.dev.localhost:45456` | ASP.NET Core 10 (Duende BFF) | Present |
-| Accounts API | [API](../API/) — `https://accounts-api.dev.localhost:48486` | ASP.NET Core 10 REST, EF Core, PostgreSQL; in-process Outbox relay and account-opening worker | Present |
-| AccountApplicationOpeningSubscriber | [Subscribers/Accounts](../../../AsyncWorkflows/Subscribers/Accounts/AccountApplicationOpeningSubscriber/README.md) | .NET worker on the shared reliable subscriber pipeline; consumes `compliance.case.approved` | Present |
-| AccountsCommandSubscriber | [Subscribers/Accounts](../../../AsyncWorkflows/Subscribers/Accounts/AccountsCommandSubscriber/README.md) | .NET worker (courier); consumes `accounts.commands` from the Payments orchestrator | Present |
-| Database | `EwpAccountsDb` — [EwpAccountsDb.sql](../API/AccountsDb/EwpAccountsDb.sql) | PostgreSQL; service user `ewp_accounts_api` | Present |
-| External system | [Core Banking Simulator](../../../Simulators/CoreBankingSimulator/README.md) — `https://localhost:46376` | Switchable Healthy / Slow / Failing / Down / Refusing; idempotent per `Idempotency-Key` | Present |
+| Accounts MFE | [BFF.Web/client-app](../../src/Microservices/Accounts/BFF.Web/README.md) — work queue, application page, accounts, lifecycle | Next.js static export | Present |
+| Accounts BFF | [BFF.Web](../../src/Microservices/Accounts/BFF.Web/README.md) — `https://accounts.dev.localhost:45456` | ASP.NET Core 10 (Duende BFF) | Present |
+| Accounts API | [API](../../src/Microservices/Accounts/API) — `https://accounts-api.dev.localhost:48486` | ASP.NET Core 10 REST, EF Core, PostgreSQL; in-process Outbox relay and account-opening worker | Present |
+| AccountApplicationOpeningSubscriber | [Subscribers/Accounts](../../src/AsyncWorkflows/Subscribers/Accounts/AccountApplicationOpeningSubscriber/README.md) | .NET worker on the shared reliable subscriber pipeline; consumes `compliance.case.approved` | Present |
+| AccountsCommandSubscriber | [Subscribers/Accounts](../../src/AsyncWorkflows/Subscribers/Accounts/AccountsCommandSubscriber/README.md) | .NET worker (courier); consumes `accounts.commands` from the Payments orchestrator | Present |
+| Database | `EwpAccountsDb` — [EwpAccountsDb.sql](../../src/Microservices/Accounts/API/AccountsDb/EwpAccountsDb.sql) | PostgreSQL; service user `ewp_accounts_api` | Present |
+| External system | [Core Banking Simulator](../../src/Simulators/CoreBankingSimulator/README.md) — `https://localhost:46376` | Switchable Healthy / Slow / Failing / Down / Refusing; idempotent per `Idempotency-Key` | Present |
 
 ---
 
@@ -111,9 +111,9 @@ hold ▼  │ release              OPENING ──refused, or still failing after
 | Out | `accounts.application.created` → CO: ACCOUNT_OPENING_IN_PROGRESS; `accounts.account.opened` → CO: COMPLETED; `accounts.application.rejected` → CO: REJECTED (+ document invalidation); `accounts.account.opening.failed` → CO: COMPENSATING → REJECTED (+ document invalidation). All via the Outbox and `OnboardingOutcomeSubscriber`. |
 | Out (synchronous) | `POST /v1/accounts` to the core-banking system (API key, `Idempotency-Key`; resilience pipeline) |
 | Payments screen (read) | `GET /v1/accounts/for-payment?search=` for the Payments BFF, with the staff member's own token: the branch's ACTIVE accounts whose holder name or customer number matches, with the amount available (policy: `accounts.read` + `payment.initiate` + branch). A convenience for the screen; the reservation is the authoritative check. |
-| Payments saga (participant) | In: `accounts.commands` (`ReserveFunds`, `SettleFunds`, `ReleaseFunds`) → `AccountsCommandSubscriber` → `POST internal/v1/accounts/funds/commands` (pinned M2M client; Inbox, plus one funds hold per `PaymentRef`). Out: `accounts.funds.replies` (`FundsReserved`, `FundsReservationFailed`, `FundsSettled`, `FundsReleased`) through the Outbox. Each command is applied in ONE local transaction with the account row locked, so two payments can never spend the same money; a repeated command repeats the reply. Reservation is refused for an unknown, foreign (another customer's), inactive or non-AUD account, or insufficient available funds. A new account starts with the demo deposit `Accounts:DemoOpeningDeposit` (Development: 5,000.00). See [Saga plan §2](../../../../doc/EWP-V3-Saga-Choreography-and-Orchestration-Plans.md#2-orchestration--payments). |
+| Payments saga (participant) | In: `accounts.commands` (`ReserveFunds`, `SettleFunds`, `ReleaseFunds`) → `AccountsCommandSubscriber` → `POST internal/v1/accounts/funds/commands` (pinned M2M client; Inbox, plus one funds hold per `PaymentRef`). Out: `accounts.funds.replies` (`FundsReserved`, `FundsReservationFailed`, `FundsSettled`, `FundsReleased`) through the Outbox. Each command is applied in ONE local transaction with the account row locked, so two payments can never spend the same money; a repeated command repeats the reply. Reservation is refused for an unknown, foreign (another customer's), inactive or non-AUD account, or insufficient available funds. A new account starts with the demo deposit `Accounts:DemoOpeningDeposit` (Development: 5,000.00). See [Saga plan §2](../EWP-V3-Saga-Choreography-and-Orchestration-Plans.md#2-orchestration--payments). |
 
-Contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Event-Catalogue.md).
+Contracts: [Integration-Event-Catalogue.md](../Integration-Event-Catalogue.md).
 
 ---
 

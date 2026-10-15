@@ -131,6 +131,14 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ewp_custo
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_customer_onboarding_api;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ewp_customer_onboarding_api;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ewp_customer_onboarding_api;
+-- ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+-- │ DELETE stays only where drafts or unsubmitted uploads are removed; the Outbox and Inbox
+-- │ are never deleted (evidence of what was published and consumed).
+-- └──────────────────────────────────────────────────────────────────────────────────────
+DO $$ BEGIN
+    IF to_regclass('public.outbox_messages') IS NOT NULL THEN REVOKE DELETE ON outbox_messages FROM ewp_customer_onboarding_api; END IF;
+    IF to_regclass('public.inbox_messages') IS NOT NULL THEN REVOKE DELETE ON inbox_messages FROM ewp_customer_onboarding_api; END IF;
+END $$;
 -- The outbox relay may only read and mark Outbox rows (granted per table, so it
 -- is (re)applied at the end of EwpCustomerDb.sql as well). On a new, empty
 -- database the table does not exist yet: EwpCustomerDb.sql grants it then.
@@ -144,9 +152,16 @@ END $$;
 \connect EwpKycDb
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 GRANT USAGE ON SCHEMA public TO ewp_kyc_api;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ewp_kyc_api;
+-- ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+-- │ No DELETE: this API never deletes a row - history, Outbox and Inbox are kept, so a
+-- │ compromised API (or an injection) cannot erase evidence. REVOKE makes a refresh of
+-- │ the users remove a DELETE granted by an earlier version.
+-- └──────────────────────────────────────────────────────────────────────────────────────
+GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO ewp_kyc_api;
+REVOKE DELETE ON ALL TABLES IN SCHEMA public FROM ewp_kyc_api;
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_kyc_api;
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ewp_kyc_api;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE DELETE ON TABLES FROM ewp_kyc_api;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE ON TABLES TO ewp_kyc_api;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ewp_kyc_api;
 
 \connect EwpDocumentsManagementDb
@@ -156,37 +171,73 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ewp_docum
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_documents_api;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ewp_documents_api;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ewp_documents_api;
+-- ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+-- │ DELETE stays only where drafts or unsubmitted uploads are removed; the Outbox and Inbox
+-- │ are never deleted (evidence of what was published and consumed).
+-- └──────────────────────────────────────────────────────────────────────────────────────
+DO $$ BEGIN
+    IF to_regclass('public.outbox_messages') IS NOT NULL THEN REVOKE DELETE ON outbox_messages FROM ewp_documents_api; END IF;
+    IF to_regclass('public.inbox_messages') IS NOT NULL THEN REVOKE DELETE ON inbox_messages FROM ewp_documents_api; END IF;
+END $$;
 
 \connect EwpComplianceDb
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 GRANT USAGE ON SCHEMA public TO ewp_compliance_api;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ewp_compliance_api;
+-- ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+-- │ No DELETE: this API never deletes a row - history, Outbox and Inbox are kept, so a
+-- │ compromised API (or an injection) cannot erase evidence. REVOKE makes a refresh of
+-- │ the users remove a DELETE granted by an earlier version.
+-- └──────────────────────────────────────────────────────────────────────────────────────
+GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO ewp_compliance_api;
+REVOKE DELETE ON ALL TABLES IN SCHEMA public FROM ewp_compliance_api;
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_compliance_api;
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ewp_compliance_api;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE DELETE ON TABLES FROM ewp_compliance_api;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE ON TABLES TO ewp_compliance_api;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ewp_compliance_api;
 
 \connect EwpAccountsDb
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 GRANT USAGE ON SCHEMA public TO ewp_accounts_api;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ewp_accounts_api;
+-- ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+-- │ No DELETE: this API never deletes a row - history, Outbox and Inbox are kept, so a
+-- │ compromised API (or an injection) cannot erase evidence. REVOKE makes a refresh of
+-- │ the users remove a DELETE granted by an earlier version.
+-- └──────────────────────────────────────────────────────────────────────────────────────
+GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO ewp_accounts_api;
+REVOKE DELETE ON ALL TABLES IN SCHEMA public FROM ewp_accounts_api;
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_accounts_api;
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ewp_accounts_api;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE DELETE ON TABLES FROM ewp_accounts_api;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE ON TABLES TO ewp_accounts_api;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ewp_accounts_api;
 
 \connect EwpNotificationsDb
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 GRANT USAGE ON SCHEMA public TO ewp_notifications_api;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ewp_notifications_api;
+-- ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+-- │ No DELETE: this API never deletes a row - history, Outbox and Inbox are kept, so a
+-- │ compromised API (or an injection) cannot erase evidence. REVOKE makes a refresh of
+-- │ the users remove a DELETE granted by an earlier version.
+-- └──────────────────────────────────────────────────────────────────────────────────────
+GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO ewp_notifications_api;
+REVOKE DELETE ON ALL TABLES IN SCHEMA public FROM ewp_notifications_api;
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_notifications_api;
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ewp_notifications_api;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE DELETE ON TABLES FROM ewp_notifications_api;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE ON TABLES TO ewp_notifications_api;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ewp_notifications_api;
 
 \connect EwpPaymentsDb
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 GRANT USAGE ON SCHEMA public TO ewp_payments_api;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ewp_payments_api;
+-- ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+-- │ No DELETE: this API never deletes a row - history, Outbox and Inbox are kept, so a
+-- │ compromised API (or an injection) cannot erase evidence. REVOKE makes a refresh of
+-- │ the users remove a DELETE granted by an earlier version.
+-- └──────────────────────────────────────────────────────────────────────────────────────
+GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO ewp_payments_api;
+REVOKE DELETE ON ALL TABLES IN SCHEMA public FROM ewp_payments_api;
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_payments_api;
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ewp_payments_api;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE DELETE ON TABLES FROM ewp_payments_api;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE ON TABLES TO ewp_payments_api;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ewp_payments_api;
 
 \connect EwpAuditDb

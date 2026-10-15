@@ -4,7 +4,7 @@
 **Subdomain type:** Core  
 **Status:** Present: the Payments API with the saga orchestrator, Accounts funds holds, payment network simulator and two courier workers (5a); the Payments BFF and MFE - new payment, status page with the live timeline, payments list (5b-1); human approval by a payments officer and notifications (5b-2); the Payment Processing Monitor and the operations "Retry release" (5c); network reconciliation for unknown outcomes (CONFIRM_WITH_NETWORK), the resend of parked Outbox messages, and four-eyes manual reconciliation of payments the network never confirmed (the 2026-10-13 architect re-review).
 
-Platform-wide rules are not repeated here. See [doc/](../../../../doc/). Payments is the **orchestrated-saga** demonstration; the orchestration pattern itself is described in the [Saga plan](../../../../doc/EWP-V3-Saga-Choreography-and-Orchestration-Plans.md).
+Platform-wide rules are not repeated here. See [doc/](..). Payments is the **orchestrated-saga** demonstration; the orchestration pattern itself is described in the [Saga plan](../EWP-V3-Saga-Choreography-and-Orchestration-Plans.md).
 
 ---
 
@@ -23,8 +23,8 @@ Payments accepts payment instructions captured by bank staff for a customer (an 
 
 | Component | Location | Technology | Status |
 |---|---|---|---|
-| Payments MFE | [BFF.Web/client-app](../BFF.Web/README.md) — new payment, status page, payments list, approval queue | Next.js static export | Present |
-| Payments BFF | [BFF.Web](../BFF.Web/README.md) — `https://payments.dev.localhost:46388` | ASP.NET Core 10 + Duende BFF | Present |
+| Payments MFE | [BFF.Web/client-app](../../src/Microservices/Payments/BFF.Web/README.md) — new payment, status page, payments list, approval queue | Next.js static export | Present |
+| Payments BFF | [BFF.Web](../../src/Microservices/Payments/BFF.Web/README.md) — `https://payments.dev.localhost:46388` | ASP.NET Core 10 + Duende BFF | Present |
 | Payments API | `API` | ASP.NET Core 10, EF Core, PostgreSQL | Present |
 | Payment saga orchestrator | `PaymentSaga` inside the Payments API, with its step runner | Persisted state machine | Present |
 | PaymentsSagaReplySubscriber | `src/AsyncWorkflows/Subscribers/Payments` | .NET worker (courier) | Present |
@@ -65,7 +65,7 @@ API scopes: `payments.read`, `payments.write`.
 
 - **`Payment`** aggregate: payer account, beneficiary, amount, currency, risk classification, status.
 - **`Beneficiary`** aggregate: owned by a customer.
-- **Payment saga state:** owned by this context's orchestrator. Its fields, steps, compensation and compensation-failure handling are specified in the [Saga plan §2](../../../../doc/EWP-V3-Saga-Choreography-and-Orchestration-Plans.md#2-orchestration--payments).
+- **Payment saga state:** owned by this context's orchestrator. Its fields, steps, compensation and compensation-failure handling are specified in the [Saga plan §2](../EWP-V3-Saga-Choreography-and-Orchestration-Plans.md#2-orchestration--payments).
 
 ### Payment states (implemented)
 
@@ -123,7 +123,7 @@ Approve / reject from PENDING_APPROVAL: present (5b-2). Planned: hold and releas
 
 ## 7. Integration
 
-Commands to Accounts (`accounts.commands`), Accounts' replies (`accounts.funds.replies`) and the payments' outcomes (`payments.payment.events`): [Integration-Event-Catalogue.md §4.5](../../../../doc/Integration-Event-Catalogue.md). The payment network is called directly over HTTP with the PaymentRef as Idempotency-Key.
+Commands to Accounts (`accounts.commands`), Accounts' replies (`accounts.funds.replies`) and the payments' outcomes (`payments.payment.events`): [Integration-Event-Catalogue.md §4.5](../Integration-Event-Catalogue.md). The payment network is called directly over HTTP with the PaymentRef as Idempotency-Key.
 
 ---
 

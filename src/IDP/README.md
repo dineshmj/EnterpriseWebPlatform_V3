@@ -1,6 +1,6 @@
 # Identity Provider (Duende IdentityServer)
 
-Signs people and services in for the whole platform and issues their tokens. Requirements and the client catalogue: [IDP-Requirements.md](doc/IDP-Requirements.md).
+Signs people and services in for the whole platform and issues their tokens. Requirements and the client catalogue: [IDP-Requirements.md](../../doc/Requirements/IDP-Requirements.md).
 
 ## Security controls
 

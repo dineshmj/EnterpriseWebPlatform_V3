@@ -1,6 +1,6 @@
 # Documents Management API
 
-Technical guide to the Documents Management API. Purpose, boundary, rules and gaps: [DocumentsManagement-Requirements.md](../doc/DocumentsManagement-Requirements.md).
+Technical guide to the Documents Management API. Purpose, boundary, rules and gaps: [DocumentsManagement-Requirements.md](../../../../doc/Requirements/DocumentsManagement-Requirements.md).
 
 ## Run
 

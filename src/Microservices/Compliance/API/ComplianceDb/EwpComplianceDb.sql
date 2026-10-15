@@ -162,7 +162,7 @@ CREATE TABLE inbox_messages (
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ewp_compliance_api') THEN
-        GRANT SELECT, INSERT, UPDATE, DELETE ON compliance_cases, outbox_messages, inbox_messages, staff_members TO ewp_compliance_api;
+        GRANT SELECT, INSERT, UPDATE ON compliance_cases, outbox_messages, inbox_messages, staff_members TO ewp_compliance_api;   -- no DELETE: nothing is ever deleted
         GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_compliance_api;
     ELSE
         RAISE WARNING 'Role ewp_compliance_api does not exist yet: run db/EwpServiceDbUsers.sql, then this script again.';

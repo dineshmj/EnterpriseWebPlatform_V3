@@ -60,7 +60,7 @@ CREATE TABLE inbox_messages (
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ewp_notifications_api') THEN
-        GRANT SELECT, INSERT, UPDATE, DELETE ON notifications, notification_reads, inbox_messages TO ewp_notifications_api;
+        GRANT SELECT, INSERT, UPDATE ON notifications, notification_reads, inbox_messages TO ewp_notifications_api;   -- no DELETE: nothing is ever deleted
         GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_notifications_api;
     ELSE
         RAISE WARNING 'Role ewp_notifications_api does not exist yet: run ps\database\Apply-EwpServiceDbUsers.ps1, then this script again.';

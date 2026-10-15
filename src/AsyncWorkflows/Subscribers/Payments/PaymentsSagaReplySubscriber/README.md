@@ -1,6 +1,6 @@
 # PaymentsSagaReplySubscriber
 
-Kafka subscriber **owned by the Payments bounded context**. It is the courier that brings **Accounts' replies** back to the payment saga orchestrator in the Payments API. It decides nothing: the `PaymentSaga` decides what each reply means (and ignores a late or duplicated one). Requirements: [Payments-Requirements.md](../../../../Microservices/Payments/doc/Payments-Requirements.md). Contracts: [Integration-Event-Catalogue.md](../../../../../doc/Integration-Event-Catalogue.md).
+Kafka subscriber **owned by the Payments bounded context**. It is the courier that brings **Accounts' replies** back to the payment saga orchestrator in the Payments API. It decides nothing: the `PaymentSaga` decides what each reply means (and ignores a late or duplicated one). Requirements: [Payments-Requirements.md](../../../../../doc/Requirements/Payments-Requirements.md). Contracts: [Integration-Event-Catalogue.md](../../../../../doc/Integration-Event-Catalogue.md).
 
 ## Flow
 

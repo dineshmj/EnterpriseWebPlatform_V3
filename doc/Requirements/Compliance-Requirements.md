@@ -4,7 +4,7 @@
 **Subdomain type:** Core  
 **Status:** Present: API, case-opening subscriber and screening provider simulator (increment 2a); officer UI, BFF + MFE (increment 2b).
 
-Platform-wide rules are not repeated here. See [doc/](../../../../doc/).
+Platform-wide rules are not repeated here. See [doc/](..).
 
 ---
 
@@ -24,12 +24,12 @@ Compliance makes the **financial-crime and regulatory decision** on an onboardin
 
 | Component | Location | Technology | Status |
 |---|---|---|---|
-| Compliance MFE | [BFF.Web/client-app](../BFF.Web/README.md) — work queue and case page | Next.js static export | Present |
-| Compliance BFF | [BFF.Web](../BFF.Web/README.md) — `https://compliance.dev.localhost:46399` | ASP.NET Core 10 (Duende BFF) | Present |
-| Compliance API | [API](../API/) — `https://compliance-api.dev.localhost:46306` | ASP.NET Core 10 REST, EF Core, PostgreSQL; in-process Outbox relay and screening worker | Present |
-| ComplianceCaseOpeningSubscriber | [Subscribers/Compliance](../../../AsyncWorkflows/Subscribers/Compliance/ComplianceCaseOpeningSubscriber/) | .NET worker on the shared reliable subscriber pipeline; consumes `kyc.case.approved` | Present |
-| Database | `EwpComplianceDb` — [EwpComplianceDb.sql](../API/ComplianceDb/EwpComplianceDb.sql) | PostgreSQL; service user `ewp_compliance_api` | Present |
-| External provider | [Screening Provider Simulator](../../../Simulators/ScreeningProviderSimulator/) — `https://localhost:46366` | Switchable Healthy / Slow / Failing / Down, to demonstrate timeout, retry and circuit breaker | Present |
+| Compliance MFE | [BFF.Web/client-app](../../src/Microservices/Compliance/BFF.Web/README.md) — work queue and case page | Next.js static export | Present |
+| Compliance BFF | [BFF.Web](../../src/Microservices/Compliance/BFF.Web/README.md) — `https://compliance.dev.localhost:46399` | ASP.NET Core 10 (Duende BFF) | Present |
+| Compliance API | [API](../../src/Microservices/Compliance/API) — `https://compliance-api.dev.localhost:46306` | ASP.NET Core 10 REST, EF Core, PostgreSQL; in-process Outbox relay and screening worker | Present |
+| ComplianceCaseOpeningSubscriber | [Subscribers/Compliance](../../src/AsyncWorkflows/Subscribers/Compliance/ComplianceCaseOpeningSubscriber) | .NET worker on the shared reliable subscriber pipeline; consumes `kyc.case.approved` | Present |
+| Database | `EwpComplianceDb` — [EwpComplianceDb.sql](../../src/Microservices/Compliance/API/ComplianceDb/EwpComplianceDb.sql) | PostgreSQL; service user `ewp_compliance_api` | Present |
+| External provider | [Screening Provider Simulator](../../src/Simulators/ScreeningProviderSimulator) — `https://localhost:46366` | Switchable Healthy / Slow / Failing / Down, to demonstrate timeout, retry and circuit breaker | Present |
 
 ---
 
@@ -102,7 +102,7 @@ SCREENING ──result──► UNDER_REVIEW ──approve──► APPROVED (te
 | Out | `compliance.case.screened` (Outbox) → `NotificationsSubscriber`: the branch's compliance officers are told when screening is done and the case awaits a decision. `compliance.case.created`, `compliance.case.approved`, `compliance.case.rejected` (Outbox) → `OnboardingOutcomeSubscriber` → Customer Onboarding (COMPLIANCE_IN_PROGRESS / COMPLIANCE_COMPLETED / REJECTED) |
 | Out (synchronous) | `POST /v1/screenings` to the screening provider (API key; resilience pipeline) |
 
-Contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Event-Catalogue.md).
+Contracts: [Integration-Event-Catalogue.md](../Integration-Event-Catalogue.md).
 
 ---
 

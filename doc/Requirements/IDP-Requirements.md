@@ -4,7 +4,7 @@
 **Subdomain type:** Generic (identity and access)  
 **Status:** Present
 
-Platform-wide authorization mechanics live in [Authorization-Model.md](../../../doc/Authorization-Model.md). This document owns what the IDP issues and stores, and its demo data.
+Platform-wide authorization mechanics live in [Authorization-Model.md](../Authorization-Model.md). This document owns what the IDP issues and stores, and its demo data.
 
 ---
 
@@ -18,7 +18,7 @@ The IDP authenticates humans and services and issues the tokens and claims that 
 | Client registrations, API resources and scopes | Resource attributes (branch of a customer, risk of a case) — owned by each context |
 | Users, roles, permissions, role–permission mapping | Business authorization decisions — made by each BFF and API |
 | User attributes for ABAC (employment profile) | |
-| | ReBAC relationships (who manages a customer, who is assigned a case) — owned by the context that owns the resource, see [Authorization-Model §6](../../../doc/Authorization-Model.md#6-rebac--relationship-based-access-control) |
+| | ReBAC relationships (who manages a customer, who is assigned a case) — owned by the context that owns the resource, see [Authorization-Model §6](../Authorization-Model.md#6-rebac--relationship-based-access-control) |
 
 ### Deployable component
 
@@ -88,7 +88,7 @@ Identity scopes: `openid`, `profile`, `email`, `roles`, `organization`.
 
 ### Token exchange (RFC 8693, delegation)
 
-Grant `urn:ietf:params:oauth:grant-type:token-exchange` (`Security/TokenExchangeGrantValidator.cs`). A service presents the access token it received (`subject_token`) and receives a new one for the next service: the **person stays the subject** (their roles, permissions and branch are re-read by the profile service at every exchange; a deactivated person's exchange fails), and the requesting client is added to the **`act`** claim, nested when the token was already delegated. Who may exchange what is an explicit allow-list (fail closed): the Audit web BFF and the Operations web BFF only their own sign-in tokens; the Audit Journey API only tokens the Audit web BFF exchanged for it; the CO and KYC BFFs for Documents Management. A token without a person (`sub`) is never exchanged. The exchanged token keeps the person's original `auth_time` and `amr`, so the step-up rule (a recent MFA sign-in) holds at every hop. Used by the Audit and Operations contexts and for Documents Management ([Audit Journey API README](../../Microservices/Audit/JourneyApi/README.md), [Operations Journey API README](../../Microservices/Operations/JourneyApi/README.md)).
+Grant `urn:ietf:params:oauth:grant-type:token-exchange` (`Security/TokenExchangeGrantValidator.cs`). A service presents the access token it received (`subject_token`) and receives a new one for the next service: the **person stays the subject** (their roles, permissions and branch are re-read by the profile service at every exchange; a deactivated person's exchange fails), and the requesting client is added to the **`act`** claim, nested when the token was already delegated. Who may exchange what is an explicit allow-list (fail closed): the Audit web BFF and the Operations web BFF only their own sign-in tokens; the Audit Journey API only tokens the Audit web BFF exchanged for it; the CO and KYC BFFs for Documents Management. A token without a person (`sub`) is never exchanged. The exchanged token keeps the person's original `auth_time` and `amr`, so the step-up rule (a recent MFA sign-in) holds at every hop. Used by the Audit and Operations contexts and for Documents Management ([Audit Journey API README](../../src/Microservices/Audit/JourneyApi/README.md), [Operations Journey API README](../../src/Microservices/Operations/JourneyApi/README.md)).
 
 ## 5. Claims Issued
 
@@ -142,7 +142,7 @@ All staff are `FULL_TIME`. `ethan.kyc` and `noah.kyc` are deliberately unassigne
 
 **Departments:** CUSTOMER_SERVICE, KYC, COMPLIANCE, ACCOUNTS, PAYMENTS, OPERATIONS, AUDIT, IT.
 
-Role → permission mappings: see the permission tables in each context's requirements document and [Authorization-Model §3.2](../../../doc/Authorization-Model.md#32-permissions).
+Role → permission mappings: see the permission tables in each context's requirements document and [Authorization-Model §3.2](../Authorization-Model.md#32-permissions).
 
 ---
 
@@ -152,7 +152,7 @@ Role → permission mappings: see the permission tables in each context's requir
 - **Two-step sign-in (MFA), off by default.** With `Mfa:Enabled` true, the password is only the first factor: the person is not signed in until the 6-digit code from Google Authenticator (or a recovery code) is entered (`Pages/Account/Mfa`). Someone without an authenticator enrols first (`Pages/Account/MfaSetup`: QR code or setup key, one confirming code, then 10 recovery codes shown once). In between, an encrypted 5-minute cookie remembers who passed the password. The SSO session records `amr` = `pwd otp mfa`, which every token carries; the silent sign-ins of the MFE BFFs inherit it. **Step-up without signing out:** a client's request with `acr_values=mfa` and `prompt=login` for a person already signed in asks only for a fresh code ("Confirm it's you", no password) and issues a new sign-in with a new `auth_time`; the BFFs open it in a small window when an API answers 403 `mfa_required` (`Pages/Account/Login.cshtml.cs`, `StepUpAcr`). TOTP: RFC 6238, HMAC-SHA1, 6 digits, 30 s, ±30 s drift (`Security/Totp.cs`, checked against the RFC's test vectors).
 - **What the IDP remembers survives a restart and is shared by instances.** Refresh tokens (stored by a hash of the handle; details encrypted), pushed authorization requests and Duende's signing keys live in Duende's operational store, and the IDP's Data Protection keys (its cookies, the encrypted columns) next to them: `EwpIdentityAccessDb`, schema `identity_server`, used only by `ewp_idp`. Expired rows are removed hourly.
 - **Sign-in sessions are kept on the server** (Duende server-side sessions, `identity_server."ServerSideSessions"`): the IDP cookie only refers to its row. Sign-out deletes the row, so a copied cookie is refused afterwards; an expired session triggers back-channel logout to the clients; the session's display name (`name` claim) allows an administrator to find and end it. Duende licenses this feature with its Business Edition (unlicensed use is allowed in development).
-- Each interactive client registers a front-channel logout URI **and a back-channel logout URI** (Shell and CO BFF: Duende `/bff/backchannel`; KYC BFF: `/backchannel-logout`). On end-session the IDP notifies every participating client both ways; the back-channel call (a signed logout token, server-to-server) ends the BFF session even when the browser blocks the front-channel iframes. The user-facing logout flow is owned by the [Shell](../../Shell/doc/Shell-Requirements.md#6-logout).
+- Each interactive client registers a front-channel logout URI **and a back-channel logout URI** (Shell and CO BFF: Duende `/bff/backchannel`; KYC BFF: `/backchannel-logout`). On end-session the IDP notifies every participating client both ways; the back-channel call (a signed logout token, server-to-server) ends the BFF session even when the browser blocks the front-channel iframes. The user-facing logout flow is owned by the [Shell](Shell-Requirements.md#6-logout).
 
 ---
 

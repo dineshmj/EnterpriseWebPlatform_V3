@@ -242,7 +242,7 @@ CREATE TABLE staff_members (
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ewp_payments_api') THEN
-        GRANT SELECT, INSERT, UPDATE, DELETE ON payments, payment_sagas, payment_saga_history, outbox_messages, inbox_messages, staff_members TO ewp_payments_api;
+        GRANT SELECT, INSERT, UPDATE ON payments, payment_sagas, payment_saga_history, outbox_messages, inbox_messages, staff_members TO ewp_payments_api;   -- no DELETE: nothing is ever deleted
         GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_payments_api;
     ELSE
         RAISE WARNING 'Role ewp_payments_api does not exist yet: run ps\database\Apply-EwpServiceDbUsers.ps1, then this script again.';

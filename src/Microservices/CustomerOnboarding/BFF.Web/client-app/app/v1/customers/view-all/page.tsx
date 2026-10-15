@@ -19,6 +19,18 @@ interface Customer {
   email: string;
   phoneNumber: string;
   status: string;
+  /** The customer's most recent onboarding application, if any. */
+  latestApplication: { applicationNumber: string; status: string; updatedAt: string } | null;
+}
+
+/** "Last application APP-… rejected 14 Oct" - only for a prospect whose last attempt ended without an account. */
+function lastAttempt(c: Customer): string | null {
+  const latest = c.latestApplication;
+  if (!latest || c.status.toUpperCase() !== 'PROSPECT') return null;
+  const outcome = latest.status.toUpperCase();
+  if (outcome !== 'REJECTED' && outcome !== 'CANCELLED') return null;
+  const when = new Date(latest.updatedAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short' });
+  return `Last application ${latest.applicationNumber} ${outcome.toLowerCase()} ${when}`;
 }
 
 /** Only a prospect can start onboarding: the Customer Onboarding API enforces it; the grid only reflects it. */
@@ -132,7 +144,10 @@ export default function CustomersPage() {
                   <Td className="font-mono text-[13px] font-medium">{c.customerNumber}</Td>
                   <Td className="font-medium">{c.firstName} {c.lastName}</Td>
                   <Td className="text-ink-muted">{c.email}</Td>
-                  <Td><StatusBadge status={c.status} /></Td>
+                  <Td>
+                    <StatusBadge status={c.status} />
+                    {lastAttempt(c) && <p className="mt-1 text-[12px] text-ink-muted">{lastAttempt(c)}</p>}
+                  </Td>
                   <Td className="text-right">
                     {onboardingState(c.status) === 'can-start' && (
                       <Button variant="secondary" size="sm" onClick={() => startOnboarding(c)}>

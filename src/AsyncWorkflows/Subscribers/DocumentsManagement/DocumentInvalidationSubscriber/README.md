@@ -5,7 +5,7 @@ Kafka subscriber **owned by the Documents Management (DM) bounded context**, and
 - **Submission** (`onboarding.application.submitted`): the application's evidence documents become **ATTACHED**. From then on they are KYC records and can no longer be deleted.
 - **Rejection** (`onboarding.application.rejected`, by KYC, Compliance or Accounts): the saga's **compensation**. The evidence documents are marked **INVALIDATED**.
 
-In both cases the documents are **retained, never deleted**, because audit and regulatory retention (AML/CTF record keeping) require them. The project keeps its original name; it now handles both topics through `DocumentEvidenceProcessor`. Business requirements: [DocumentsManagement-Requirements.md](../../../../Microservices/DocumentsManagement/doc/DocumentsManagement-Requirements.md). Topic contracts: [Integration-Event-Catalogue.md](../../../../../doc/Integration-Event-Catalogue.md).
+In both cases the documents are **retained, never deleted**, because audit and regulatory retention (AML/CTF record keeping) require them. The project keeps its original name; it now handles both topics through `DocumentEvidenceProcessor`. Business requirements: [DocumentsManagement-Requirements.md](../../../../../doc/Requirements/DocumentsManagement-Requirements.md). Topic contracts: [Integration-Event-Catalogue.md](../../../../../doc/Integration-Event-Catalogue.md).
 
 ## Flow
 

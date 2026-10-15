@@ -20,7 +20,7 @@ Deployable: `src/Shell/client-app` (Next.js `output: 'export'`, served by the Sh
 - [x] **The iframe's origin is taken from the selected menu entry's `baseURL`, never from an incoming message.** *Because* a frame that navigated elsewhere must not receive the workspace context. → `app/page.tsx` (`expectedFrameOriginRef`)
 - [x] **Messages are accepted only from the iframe's window AND the expected origin;** messages are posted only to that origin. `BSS_MFE_ACTIVITY` carries no data and only renews the Shell's session (throttled). → `app/page.tsx` (`handleFrameMessage`)
 - [x] **Notification deep links are checked.** A path opens only if it matches a fixed pattern (`/v1/...` with one optional numeric or reference parameter), and only through a microservice in the person's own menu. That BFF checks the path again. *Because* an event must never turn into an arbitrary URL (open redirect). → `app/lib/notifications.ts` (`OPENABLE_PATH`)
-- [ ] **Hardening idea: a `sandbox` attribute on the MFE iframe** (`allow-scripts allow-same-origin allow-forms allow-popups`). The CSP `frame-src` allow-list already limits what can load there.
+- [x] **Considered and not adopted: a `sandbox` attribute on the MFE iframe.** A sandbox is inherited by nested frames, and Chrome refuses to render PDFs in sandboxed frames, so KYC evidence review would break. The protection comes instead from the CSP `frame-src` allow-list, the origin checks on every message, and the MFE's own `frame-ancestors`.
 
 ## 4. Build
 

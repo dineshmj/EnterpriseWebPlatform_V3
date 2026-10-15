@@ -17,7 +17,7 @@ It does not define the rules themselves. Those live in:
 - **[Domain]** business rule
 - **[CSRF]** forgery protection
 
-**Actors** (demo users, see [IDP-Requirements §6](../src/IDP/doc/IDP-Requirements.md#6-demo-data)):
+**Actors** (demo users, see [IDP-Requirements §6](Requirements/IDP-Requirements.md#6-demo-data)):
 - `sophie.cs`: Customer Service Agent, branch SYD001;
 - `ethan.kyc` and `noah.kyc`: KYC Officers, branch SYD001.
 

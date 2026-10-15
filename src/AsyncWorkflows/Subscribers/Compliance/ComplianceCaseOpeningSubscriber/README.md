@@ -1,6 +1,6 @@
 # ComplianceCaseOpeningSubscriber
 
-Kafka subscriber **owned by the Compliance bounded context**: it is deployed and versioned with Compliance, even though it lives under `src/AsyncWorkflows`. It opens the Compliance case for each application whose KYC case was approved. Business requirements: [Compliance-Requirements.md](../../../../Microservices/Compliance/doc/Compliance-Requirements.md). Topic contracts: [Integration-Event-Catalogue.md](../../../../../doc/Integration-Event-Catalogue.md).
+Kafka subscriber **owned by the Compliance bounded context**: it is deployed and versioned with Compliance, even though it lives under `src/AsyncWorkflows`. It opens the Compliance case for each application whose KYC case was approved. Business requirements: [Compliance-Requirements.md](../../../../../doc/Requirements/Compliance-Requirements.md). Topic contracts: [Integration-Event-Catalogue.md](../../../../../doc/Integration-Event-Catalogue.md).
 
 ## Flow
 

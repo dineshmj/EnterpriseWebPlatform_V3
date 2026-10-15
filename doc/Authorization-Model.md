@@ -16,7 +16,7 @@ This document defines **how authorization decisions are made** across EWP V3. It
 |---|---|
 | Authorization principles and the decision pipeline | Persona descriptions and role codes → [Application-Personas.md](Application-Personas.md) |
 | Permission naming and platform-level (cross-context) permissions | Context-specific permissions, states and approval rules → each context's requirements document |
-| Scopes vs permissions | Claims the IDP issues, demo users, attributes and relationships → [IDP-Requirements.md](../src/IDP/doc/IDP-Requirements.md) |
+| Scopes vs permissions | Claims the IDP issues, demo users, attributes and relationships → [IDP-Requirements.md](Requirements/IDP-Requirements.md) |
 | ABAC, ReBAC, SoD, workflow-state and notification authorization mechanics | Which rules each service enforces today → the "Implementation status" section of each context's requirements document |
 | Human vs service identity in authorization | Event envelope fields → [Integration-Event-Catalogue.md](Integration-Event-Catalogue.md) |
 

@@ -178,7 +178,7 @@ SEND_TO_NETWORK ─no answer after N tries─► CONFIRM_WITH_NETWORK (ask by Id
 
 A lost answer may hide a payment that did go out: releasing the funds then would pay the payee AND refund the customer. So the saga asks before it acts, keeps the funds reserved while nobody can know, and lets people decide only with evidence and four eyes. Every step is on the timeline and published (the audit trail names both people).
 
-Payment business states, approval tiers and rules: [Payments-Requirements.md](../src/Microservices/Payments/doc/Payments-Requirements.md). How to run it: [Payments API README](../src/Microservices/Payments/API/README.md).
+Payment business states, approval tiers and rules: [Payments-Requirements.md](Requirements/Payments-Requirements.md). How to run it: [Payments API README](../src/Microservices/Payments/API/README.md).
 
 ---
 

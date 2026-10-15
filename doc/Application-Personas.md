@@ -18,7 +18,7 @@ It deliberately does **not** contain:
 |---|---|
 | What a persona may / must not do inside a bounded context | That context's requirements document (see section 4) |
 | Role codes, permission naming, the authorization decision pipeline, ABAC / ReBAC / SoD mechanics | [Authorization-Model.md](Authorization-Model.md) |
-| Demo users, their attributes and relationships | [IDP requirements](../src/IDP/doc/IDP-Requirements.md) |
+| Demo users, their attributes and relationships | [IDP requirements](Requirements/IDP-Requirements.md) |
 | Cross-context workflows | [EWP-V3-Saga-Choreography-and-Orchestration-Plans.md](EWP-V3-Saga-Choreography-and-Orchestration-Plans.md) |
 
 ---
@@ -72,14 +72,14 @@ How these principles are enforced is described in [Authorization-Model.md](Autho
 
 | Bounded context | Requirements document |
 |---|---|
-| Customer Onboarding | [CustomerOnboarding-Requirements.md](../src/Microservices/CustomerOnboarding/doc/CustomerOnboarding-Requirements.md) |
-| Customer KYC | [CustomerKyc-Requirements.md](../src/Microservices/CustomerKyc/doc/CustomerKyc-Requirements.md) |
-| Compliance | [Compliance-Requirements.md](../src/Microservices/Compliance/doc/Compliance-Requirements.md) |
-| Accounts | [Accounts-Requirements.md](../src/Microservices/Accounts/doc/Accounts-Requirements.md) |
-| Payments | [Payments-Requirements.md](../src/Microservices/Payments/doc/Payments-Requirements.md) |
-| Documents Management | [DocumentsManagement-Requirements.md](../src/Microservices/DocumentsManagement/doc/DocumentsManagement-Requirements.md) |
-| Shell | [Shell-Requirements.md](../src/Shell/doc/Shell-Requirements.md) |
-| Identity Provider | [IDP-Requirements.md](../src/IDP/doc/IDP-Requirements.md) |
+| Customer Onboarding | [CustomerOnboarding-Requirements.md](Requirements/CustomerOnboarding-Requirements.md) |
+| Customer KYC | [CustomerKyc-Requirements.md](Requirements/CustomerKyc-Requirements.md) |
+| Compliance | [Compliance-Requirements.md](Requirements/Compliance-Requirements.md) |
+| Accounts | [Accounts-Requirements.md](Requirements/Accounts-Requirements.md) |
+| Payments | [Payments-Requirements.md](Requirements/Payments-Requirements.md) |
+| Documents Management | [DocumentsManagement-Requirements.md](Requirements/DocumentsManagement-Requirements.md) |
+| Shell | [Shell-Requirements.md](Requirements/Shell-Requirements.md) |
+| Identity Provider | [IDP-Requirements.md](Requirements/IDP-Requirements.md) |
 | Audit | [Audit API README](../src/Microservices/Audit/API/README.md) |
 | Operations | [Operations Journey API README](../src/Microservices/Operations/JourneyApi/README.md) |
 

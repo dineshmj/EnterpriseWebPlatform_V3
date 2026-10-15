@@ -263,6 +263,7 @@ Feature: Onboarding a new customer
   Scenario: A new attempt after a rejection
     Given Jason's last application was REJECTED
     Then Jason's status is PROSPECT again
+    And the customer list shows "Last application APP-… rejected" under his status
     And Sophie may start a new application for Jason
 
   @boundary
@@ -1065,15 +1066,15 @@ Feature: Platform-wide rules
 
 | Section | Main source | Smoke tests |
 | --- | --- | --- |
-| 2. Signing in | [IDP-Requirements.md](../../src/IDP/doc/IDP-Requirements.md) | ST-1 |
-| 3. The Shell | [Shell-Requirements.md](../../src/Shell/doc/Shell-Requirements.md) | ST-1, ST-2 |
-| 4. Customers and onboarding | [CustomerOnboarding-Requirements.md](../../src/Microservices/CustomerOnboarding/doc/CustomerOnboarding-Requirements.md) | ST-2 |
-| 5. Evidence documents | [DocumentsManagement-Requirements.md](../../src/Microservices/DocumentsManagement/doc/DocumentsManagement-Requirements.md) | ST-2, ST-10 |
-| 6. KYC review | [CustomerKyc-Requirements.md](../../src/Microservices/CustomerKyc/doc/CustomerKyc-Requirements.md) | ST-2 |
-| 7. Compliance review | [Compliance-Requirements.md](../../src/Microservices/Compliance/doc/Compliance-Requirements.md) | ST-2, ST-10 |
-| 8. Account opening | [Accounts-Requirements.md](../../src/Microservices/Accounts/doc/Accounts-Requirements.md) | ST-2, ST-10 |
+| 2. Signing in | [IDP-Requirements.md](IDP-Requirements.md) | ST-1 |
+| 3. The Shell | [Shell-Requirements.md](Shell-Requirements.md) | ST-1, ST-2 |
+| 4. Customers and onboarding | [CustomerOnboarding-Requirements.md](CustomerOnboarding-Requirements.md) | ST-2 |
+| 5. Evidence documents | [DocumentsManagement-Requirements.md](DocumentsManagement-Requirements.md) | ST-2, ST-10 |
+| 6. KYC review | [CustomerKyc-Requirements.md](CustomerKyc-Requirements.md) | ST-2 |
+| 7. Compliance review | [Compliance-Requirements.md](Compliance-Requirements.md) | ST-2, ST-10 |
+| 8. Account opening | [Accounts-Requirements.md](Accounts-Requirements.md) | ST-2, ST-10 |
 | 9. Monitoring onboarding | [Customer Onboarding API README](../../src/Microservices/CustomerOnboarding/API/README.md) | — |
-| 10–12. Payments | [Payments-Requirements.md](../../src/Microservices/Payments/doc/Payments-Requirements.md) | ST-3 to ST-9 |
+| 10–12. Payments | [Payments-Requirements.md](Payments-Requirements.md) | ST-3 to ST-9 |
 | 13. Audit trail | [Audit API README](../../src/Microservices/Audit/API/README.md) | ST-11 |
 | 14. Operations | [Operations Journey API README](../../src/Microservices/Operations/JourneyApi/README.md) | ST-1, ST-8 to ST-10 |
 | 15. Platform-wide rules | [Authorization-Model.md](../Authorization-Model.md), [Threat-Model.md](../Threat-Model.md) | all |

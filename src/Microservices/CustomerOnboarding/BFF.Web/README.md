@@ -1,6 +1,6 @@
 # Customer Onboarding MFE — Next.js SPA + ASP.NET Core 10 BFF
 
-Technical guide to the Customer Onboarding MFE and BFF. Business requirements: [CustomerOnboarding-Requirements.md](../doc/CustomerOnboarding-Requirements.md).
+Technical guide to the Customer Onboarding MFE and BFF. Business requirements: [CustomerOnboarding-Requirements.md](../../../../doc/Requirements/CustomerOnboarding-Requirements.md).
 
 ## Runtime topology
 

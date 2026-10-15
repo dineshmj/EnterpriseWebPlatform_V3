@@ -1,6 +1,6 @@
 # Accounts BFF + MFE
 
-The account officer's front end: a **Next.js** micro-frontend (static export) served by an **ASP.NET Core 10** BFF (Duende BFF). The Shell embeds it as the **Account Applications**, **Accounts** and **Account Lifecycle** menu items. Business requirements: [Accounts-Requirements.md](../doc/Accounts-Requirements.md).
+The account officer's front end: a **Next.js** micro-frontend (static export) served by an **ASP.NET Core 10** BFF (Duende BFF). The Shell embeds it as the **Account Applications**, **Accounts** and **Account Lifecycle** menu items. Business requirements: [Accounts-Requirements.md](../../../../doc/Requirements/Accounts-Requirements.md).
 
 URL: `https://accounts.dev.localhost:45456` (launch profile `https`).
 

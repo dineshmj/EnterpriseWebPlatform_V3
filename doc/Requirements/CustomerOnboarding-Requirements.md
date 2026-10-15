@@ -4,7 +4,7 @@
 **Subdomain type:** Core  
 **Status:** Present — the most mature context in EWP V3
 
-Platform-wide rules (authorization mechanics, event envelope, saga rules) are not repeated here. See [doc/](../../../../doc/).
+Platform-wide rules (authorization mechanics, event envelope, saga rules) are not repeated here. See [doc/](..).
 
 ---
 
@@ -170,7 +170,7 @@ Any non-terminal ──StartCompensation──► COMPENSATING ──► COMPENS
 | `AccountApplicationRejected` | ACCOUNT_OPENING_IN_PROGRESS → REJECTED (+ `OnboardingApplicationRejected`, stage `ACCOUNTS`) | Present |
 | `AccountOpeningFailed` | → COMPENSATING → REJECTED (`RejectedBy: ACCOUNT_OPENING`); customer back to PROSPECT; evidence invalidated | Present |
 
-Event contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Event-Catalogue.md). Overall workflow: [Saga plan](../../../../doc/EWP-V3-Saga-Choreography-and-Orchestration-Plans.md).
+Event contracts: [Integration-Event-Catalogue.md](../Integration-Event-Catalogue.md). Overall workflow: [Saga plan](../EWP-V3-Saga-Choreography-and-Orchestration-Plans.md).
 
 ---
 
@@ -203,7 +203,7 @@ Event contracts: [Integration-Event-Catalogue.md](../../../../doc/Integration-Ev
 
 | MFE route | Purpose |
 |---|---|
-| `/v1/customers/view-all` | Customer list and details |
+| `/v1/customers/view-all` | Customer list and details. A PROSPECT whose latest application was rejected or cancelled shows it under the status ("Last application APP-… rejected 14 Oct"), so a returning customer is not mistaken for a new one |
 | `/v1/onboarding/applications/new` | The onboarding form (create customer, upload documents, submit) - customer service agents |
 | `/v1/onboarding/applications/view-all` | The branch's applications and their status; progress notifications open it at their application (`?applicationNumber=`) |
 | `/v1/onboarding/workflow/view-all` | Workflow progress (Outbox activity and IDs) |

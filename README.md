@@ -62,21 +62,21 @@ Each document has one purpose. A fact is written in exactly one place; other doc
 | [BSS Requirements](doc/Requirements/BSS-Requirements.md) | What the Banking Services System must do, in Gherkin: happy paths and boundary situations per business capability, tagged (@happy-path, @boundary, @security, @resilience, @sod, @compensation, @smoke); with the [smoke test cases](doc/Requirements/Smoke-Test-Cases.md) |
 | [Checklists](doc/Checklists/README.md) | One checklist per deployable tier (IDP, Shell, MFE SPAs and BFFs, Journey and domain APIs, Outbox publishers, subscribers, Kafka, PostgreSQL users and grants): what is true today, and what is open |
 
-### Per component (`src/**/doc/`)
+### Per component (`doc/Requirements/`)
 
 Business requirements of one component: boundary, persona rules within it, permissions, domain model, states, business rules, integration, implementation status and gaps.
 
 | Component | Requirements |
 |---|---|
-| Customer Onboarding | [CustomerOnboarding-Requirements.md](src/Microservices/CustomerOnboarding/doc/CustomerOnboarding-Requirements.md) |
-| Customer KYC | [CustomerKyc-Requirements.md](src/Microservices/CustomerKyc/doc/CustomerKyc-Requirements.md) |
-| Documents Management | [DocumentsManagement-Requirements.md](src/Microservices/DocumentsManagement/doc/DocumentsManagement-Requirements.md) |
-| Compliance | [Compliance-Requirements.md](src/Microservices/Compliance/doc/Compliance-Requirements.md) |
-| Accounts | [Accounts-Requirements.md](src/Microservices/Accounts/doc/Accounts-Requirements.md) |
-| Payments | [Payments-Requirements.md](src/Microservices/Payments/doc/Payments-Requirements.md) |
+| Customer Onboarding | [CustomerOnboarding-Requirements.md](doc/Requirements/CustomerOnboarding-Requirements.md) |
+| Customer KYC | [CustomerKyc-Requirements.md](doc/Requirements/CustomerKyc-Requirements.md) |
+| Documents Management | [DocumentsManagement-Requirements.md](doc/Requirements/DocumentsManagement-Requirements.md) |
+| Compliance | [Compliance-Requirements.md](doc/Requirements/Compliance-Requirements.md) |
+| Accounts | [Accounts-Requirements.md](doc/Requirements/Accounts-Requirements.md) |
+| Payments | [Payments-Requirements.md](doc/Requirements/Payments-Requirements.md) |
 | Local Kafka (security set-up, users and ACLs, Kafka UI) | [kafka/README.md](kafka/README.md) |
-| Identity Provider (clients, scopes, claims, **demo users**) | [IDP-Requirements.md](src/IDP/doc/IDP-Requirements.md) |
-| Shell (menu, workspace, MFE protocol, logout, notifications) | [Shell-Requirements.md](src/Shell/doc/Shell-Requirements.md) |
+| Identity Provider (clients, scopes, claims, **demo users**) | [IDP-Requirements.md](doc/Requirements/IDP-Requirements.md) |
+| Shell (menu, workspace, MFE protocol, logout, notifications) | [Shell-Requirements.md](doc/Requirements/Shell-Requirements.md) |
 
 ### Technical how-to (next to the code)
 
