@@ -65,6 +65,8 @@ What the platform is, how it is designed and what each component must do are doc
 
 	6. Front ends - build and export the MFEs, the Shell SPA and the KYC NestJS BFF:
 			.\ps\build\CompileAndExportBFFClients_V3.ps1
+	   Required after every clone: the exports (each BFF's wwwroot, the Shell's wwwroot) are build output and are
+	   not in Git - without this step the BFFs have no pages to serve.
 
 	7. Visual Studio - open EnterpriseWebPlatform.BSS.slnx, choose the multi-project launch profile ("New Profile",
 	   EnterpriseWebPlatform.BSS.slnLaunch) and Start. It builds and starts the IDP, every API, BFF, worker and

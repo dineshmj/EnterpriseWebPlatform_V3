@@ -79,3 +79,10 @@ desktop.ini
 /CodeHierarchy.md
 *.zip
 /smartzipper.exclude.json
+
+# Generated static exports (CompileAndExport) and TypeScript build caches - never committed.
+# src/IDP/wwwroot is hand-written source and stays tracked.
+**/client-app/out/
+src/Shell/wwwroot/
+src/Microservices/*/BFF.Web/wwwroot/
+**/tsconfig.tsbuildinfo
