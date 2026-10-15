@@ -212,6 +212,46 @@ function Build-NestJS-BFF {
     Write-Host "`r`nNestJS BFF build complete: $Directory`r`n" -ForegroundColor Green
 }
 
+# ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+# │ Software composition analysis at every export: `pnpm install` only restores the versions
+# │ pinned in each pnpm-lock.yaml, so a newly published advisory would otherwise go unseen
+# │ until an external scan (Snyk, Dependabot). Each project is audited and summarised; a
+# │ high or critical finding is a WARNING, not a failure - the export still completes. Fix
+# │ a finding with an "overrides" entry in that project's pnpm-workspace.yaml (the fixed
+# │ version of the transitive package), or by upgrading the direct dependency.
+# └──────────────────────────────────────────────────────────────────────────────────────
+function Test-PnpmAudit {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Directory
+    )
+
+    Push-Location -LiteralPath $Directory
+    try {
+        $previousErrorActionPreference = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        try {
+            $output = (cmd.exe /d /c "$PnpmCommand audit 2>&1") -join "`n"
+        }
+        finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+        }
+    }
+    finally {
+        Pop-Location
+    }
+
+    if ($output -match 'No known vulnerabilities found') {
+        return [pscustomobject]@{ Result = 'clean'; Detail = ''; Serious = $false }
+    }
+    if ($output -match '(\d+) vulnerabilit(y|ies) found') {
+        $severity = if ($output -match 'Severity:\s*([^\r\n]+)') { $Matches[1].Trim() } else { '' }
+        return [pscustomobject]@{ Result = 'FINDINGS'; Detail = $severity; Serious = ($severity -match 'high|critical') }
+    }
+    # No answer from the registry (offline, proxy): say so rather than claim "clean".
+    return [pscustomobject]@{ Result = 'not checked'; Detail = 'the npm registry did not answer'; Serious = $false }
+}
+
 ### TEMPORARILIY COMMENTED OUT:   # ----------------------------------------------------------------------------------------------------------------------
 ### TEMPORARILIY COMMENTED OUT:   # Do not run while Visual Studio or VS Code is open.
 ### TEMPORARILIY COMMENTED OUT:   # This preserves the behaviour of the original V2 script.
@@ -388,4 +428,45 @@ Write-Host "  5. Compliance Next.js client"
 Write-Host "  6. Accounts Next.js client"
 Write-Host "  7. Payments Next.js client"
 Write-Host "`r`nRestart the Shell, Customer Onboarding, KYC, Compliance, Accounts and Payments BFFs: their Content-Security-Policy hashes are computed at start-up." -ForegroundColor Yellow
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Step 8 - Known vulnerabilities in the Node.js packages of EVERY Node project (also those this script does not build)
+# ----------------------------------------------------------------------------------------------------------------------
+
+Write-Banner "Step #8: Known vulnerabilities in Node.js packages (pnpm audit)"
+
+$auditedProjects = [ordered]@{
+    "Shell (Next.js)"                    = $shellSpaAppFolder
+    "Customer Onboarding (Next.js)"      = $customerOnboardingSpaAppFolder
+    "KYC (Next.js)"                      = $kycSpaAppFolder
+    "KYC BFF (NestJS)"                   = $kycBffFolder
+    "Compliance (Next.js)"               = $complianceSpaAppFolder
+    "Accounts (Next.js)"                 = $accountsSpaAppFolder
+    "Payments (Next.js)"                 = $paymentsSpaAppFolder
+    "Audit web (Next.js light BFF)"      = Join-Path $codeRootFolder "src\Microservices\Audit\BFF.Web"
+    "Audit Journey API (NestJS)"         = Join-Path $codeRootFolder "src\Microservices\Audit\JourneyApi"
+    "Operations web (Next.js light BFF)" = Join-Path $codeRootFolder "src\Microservices\Operations\BFF.Web"
+    "Operations Journey API (NestJS)"    = Join-Path $codeRootFolder "src\Microservices\Operations\JourneyApi"
+    "Playwright tests"                   = Join-Path $codeRootFolder "tst\playwright"
+}
+
+$seriousFindings = @()
+foreach ($project in $auditedProjects.GetEnumerator()) {
+    if (-not (Test-Path -LiteralPath (Join-Path $project.Value "node_modules") -PathType Container)) {
+        Write-Host ("  {0,-38} not installed - skipped" -f $project.Key) -ForegroundColor DarkGray
+        continue
+    }
+    $audit = Test-PnpmAudit -Directory $project.Value
+    $colour = if ($audit.Serious) { "Yellow" } elseif ($audit.Result -eq 'clean') { "Green" } else { "Gray" }
+    Write-Host ("  {0,-38} {1} {2}" -f $project.Key, $audit.Result, $audit.Detail) -ForegroundColor $colour
+    if ($audit.Serious) { $seriousFindings += $project.Key }
+}
+
+if ($seriousFindings.Count -gt 0) {
+    Write-Host "`r`nWARNING: high or critical advisories in: $($seriousFindings -join ', ')." -ForegroundColor Yellow
+    Write-Host "Run 'pnpm audit' in that folder for the details. The export itself has completed." -ForegroundColor Yellow
+}
+else {
+    Write-Host "`r`nNo high or critical advisories." -ForegroundColor Green
+}
 Write-Host "`r`n"

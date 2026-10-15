@@ -1,1 +1,4 @@
 packages: []
+# Fixed versions of vulnerable transitive packages (pnpm audit); only the vulnerable versions are rewritten.
+overrides:
+  source-map-js@>=1.0.0 <1.2.2: ^1.2.2
