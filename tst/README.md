@@ -3,7 +3,7 @@
 | Folder | What | Tooling |
 |---|---|---|
 | [playwright](playwright) | End-to-end, journey and security tests through the real front ends, in Microsoft Edge | Playwright (TypeScript), run from VS Code |
-| `dotnet` (to come) | Unit tests of the .NET libraries and APIs; adapter tests against simulated back ends | NUnit, NBuilder, Moq, AwesomeAssertions, WireMock.Net - own solution, not the main one |
+| [dotnet](dotnet) | Unit tests of the .NET APIs' decisions (Payments, Accounts so far) | NUnit, Moq, AwesomeAssertions - own solution `EwpTests.slnx`, not the main one |
 
 ## Playwright
 
@@ -93,3 +93,30 @@ With MFA on, the other tests stop at the code page - switch it off again for the
 - No fixed sleeps: anything that happens through Kafka is awaited with `expect.poll` / `toPass` and a time limit.
 - The tests share one platform and its data, so they run one at a time (`workers: 1`). Records created by tests carry unique names; the seed scenarios create the fixed demo customers.
 - Failed sign-ins use an unknown username, never a real user's wrong password (that would count towards the user's lockout).
+
+## .NET unit tests
+
+`tst\dotnet\EwpTests.slnx` - its own solution, so the main one does not grow. No running platform, database or Kafka is needed.
+
+| Project | What it checks |
+|---|---|
+| `Payments.Api.Tests` | the payment's rules and approval tier; the saga - reserve first, replies matched to the current command (CausationId), approval limits and maker-checker, network retries with doubling waits, the unknown outcome confirmed with the network (never released blind), four-eyes reconciliation, reply timeouts, stuck compensation; one payment per Idempotency-Key; staff authorization (branch, audit permission only through the Audit Journey API) |
+| `Accounts.Api.Tests` | when funds may be held (branch first, owner, currency, available funds); idempotent reserve / settle / release, a release that overtakes its reservation; separation of duties on account opening; bounded core-banking retries; the account officer policy |
+
+### Running
+
+The APIs are usually running while you work, and they lock their own `bin` folders - so build the tests somewhere else:
+
+```powershell
+dotnet test tst\dotnet\EwpTests.slnx --artifacts-path $env:TEMP\ewp-tests
+```
+
+In Visual Studio: open `EwpTests.slnx` in a second instance and use Test Explorer (stop the Payments and Accounts APIs first, or the build cannot overwrite their DLLs).
+
+### Conventions
+
+- Plain NUnit in Given / When / Then style: method names `Given_<situation>_When_<action>_Then_<outcome>`, and `// Given`, `// When`, `// Then` sections.
+- `[Category]` uses the Gherkin tags of BSS-Requirements.md: `Happy`, `Boundary`, `Security`, `SoD`, `Resilience`, `Compensation`.
+- File and class: `<Class>_<Method>_<Happy|Edge>_<Case>`; several inputs through `[TestCase]`.
+- Decisions, not coverage: aggregates, value objects, policies, authorization handlers and the decision branches of command handlers. `Program.cs`, DTOs, EF mappings, thin controllers and hosted-service plumbing are not unit-tested.
+- Test data comes from small helpers (`Support\*TestData.cs`) that build aggregates through their own public factories and methods - the domain has no public setters, so NBuilder is not used.
