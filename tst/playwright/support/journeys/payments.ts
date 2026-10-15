@@ -123,7 +123,7 @@ export async function proposeResolution(operator: ShellPage, outcome: 'SENT' | '
     await mfe.locator('#resolution-evidence').fill(evidence);
     await mfe.getByRole('button', { name: 'Propose resolution', exact: true }).click();
     await mfe.getByRole('alertdialog').getByRole('button', { name: 'Propose', exact: true }).click();
-    await expect(mfe.getByText('You proposed this resolution: another operator must approve or reject it.')).toBeVisible({ timeout: 30_000 });
+    await expect(mfe.getByText('You proposed this resolution: another operator must approve or reject it.', { exact: true })).toBeVisible({ timeout: 30_000 });
   });
 }
 
@@ -131,7 +131,7 @@ export async function proposeResolution(operator: ShellPage, outcome: 'SENT' | '
 export async function decideResolution(operator: ShellPage, action: 'Approve' | 'Reject', remarks?: string): Promise<void> {
   await test.step(`Second operator: ${action} the proposal`, async () => {
     const mfe = operator.workspace();
-    await expect(mfe.getByText('Waiting for a second person')).toBeVisible({ timeout: 30_000 });
+    await expect(mfe.getByText('Waiting for a second person', { exact: true })).toBeVisible({ timeout: 30_000 });
     if (remarks) await mfe.locator('#resolution-remarks').fill(remarks);
     await mfe.getByRole('button', { name: action, exact: true }).first().click();
     await mfe.getByRole('alertdialog').getByRole('button', { name: action, exact: true }).click();
