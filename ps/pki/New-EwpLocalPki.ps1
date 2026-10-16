@@ -19,6 +19,11 @@
         ewp-partner-client.pfx  + .password   EWP's client certificate (mutual TLS towards the
                                               Partner Bank) - stays on this laptop, never on the PC
 
+        ewp-request-signing.pfx + .password   EWP's request-signing key (ECDSA P-256, ES256): EWP signs
+                                              its pushed authorization requests with it (JAR) - the key
+                                              stays on this laptop; the Partner Bank gets ONLY
+                                              ewp-request-signing.cer (the public part) -> copy to the PC
+
     Windows' certificate stores are used only briefly to create and sign the certificates, and are
     cleaned again: the services trust ewp-trust-root.cer through their own configuration. Browsers
     that open Partner Bank pages need the root in "Trusted Root Certification Authorities" - that is a
@@ -43,6 +48,7 @@ $partnerHostNames = @('partner-auth.ewp.home.arpa', 'partner-products.ewp.home.a
 $rootSubject      = 'CN=EWP Local Trust Root (DEVELOPMENT ONLY), O=EWP V3 PoC'
 $serverSubject    = 'CN=partner-auth.ewp.home.arpa, O=Partner Bank (PoC)'
 $clientSubject    = 'CN=EWP BSS Partner Products Client, O=Four Walls Inc.'
+$signingSubject   = 'CN=EWP BSS Request Signing, O=Four Walls Inc.'
 $store            = 'Cert:\CurrentUser\My'
 
 # ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
@@ -101,12 +107,19 @@ else {
 }
 
 try {
-    # ------------------------------------------------------------------------------- server and client
+    # ---------------------------------------------------------------------- server, client and signing
 
+    # ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    # │ EWP's request-signing key is SEPARATE from its mutual-TLS key (one key, one job): a
+    # │ leaked TLS key cannot sign requests, and the signing key can be rotated on its own.
+    # │ ECDSA P-256 (JWS alg ES256 - allowed by FAPI 2.0); no Extended Key Usage, so it can
+    # │ neither serve TLS nor authenticate a TLS client.
+    # └──────────────────────────────────────────────────────────────────────────────────────
     $issued = @(
-        @{ Name = 'partner-bank-server'; Subject = $serverSubject; Purpose = '1.3.6.1.5.5.7.3.1'; Usage = @('DigitalSignature', 'KeyEncipherment');
+        @{ Name = 'partner-bank-server'; Subject = $serverSubject; Algorithm = 'RSA'; Purpose = '1.3.6.1.5.5.7.3.1'; Usage = @('DigitalSignature', 'KeyEncipherment');
            Extra = @('2.5.29.17={text}' + (($partnerHostNames | ForEach-Object { "DNS=$_" }) -join '&')) },
-        @{ Name = 'ewp-partner-client'; Subject = $clientSubject; Purpose = '1.3.6.1.5.5.7.3.2'; Usage = @('DigitalSignature'); Extra = @() }
+        @{ Name = 'ewp-partner-client'; Subject = $clientSubject; Algorithm = 'RSA'; Purpose = '1.3.6.1.5.5.7.3.2'; Usage = @('DigitalSignature'); Extra = @() },
+        @{ Name = 'ewp-request-signing'; Subject = $signingSubject; Algorithm = 'ECDSA_nistP256'; Purpose = $null; Usage = @('DigitalSignature'); Extra = @() }
     )
 
     foreach ($certificate in $issued) {
@@ -121,10 +134,13 @@ try {
         # │ cannot authenticate a client, and EWP's client certificate cannot serve TLS. One year,
         # │ never beyond the root's own validity.
         # └──────────────────────────────────────────────────────────────────────────────────────
-        $created = New-SelfSignedCertificate -Type Custom -Subject $certificate.Subject -Signer $root `
-            -KeyAlgorithm RSA -KeyLength 3072 -HashAlgorithm SHA256 -KeyExportPolicy Exportable `
+        $extensions = @($certificate.Extra)
+        if ($certificate.Purpose) { $extensions = @("2.5.29.37={text}$($certificate.Purpose)") + $extensions }
+        $options = if ($certificate.Algorithm -eq 'RSA') { @{ KeyAlgorithm = 'RSA'; KeyLength = 3072 } } else { @{ KeyAlgorithm = $certificate.Algorithm } }
+        if ($extensions.Count -gt 0) { $options.TextExtension = $extensions }
+        $created = New-SelfSignedCertificate -Type Custom -Subject $certificate.Subject -Signer $root @options `
+            -HashAlgorithm SHA256 -KeyExportPolicy Exportable `
             -KeyUsage $certificate.Usage `
-            -TextExtension (@("2.5.29.37={text}$($certificate.Purpose)") + $certificate.Extra) `
             -NotAfter (Get-Date).AddYears(1) -CertStoreLocation $store
         try {
             Export-WithPassword -Certificate $created -Name $certificate.Name
@@ -141,5 +157,5 @@ finally {
 
 Write-Host ''
 Write-Host "Written to $OutputFolder"
-Write-Host '  Home PC (Partner Bank): copy ewp-trust-root.cer, partner-bank-server.pfx and partner-bank-server.pfx.password'
-Write-Host '  Never copy ewp-trust-root.pfx or ewp-partner-client.pfx off this laptop.'
+Write-Host '  Home PC (Partner Bank): copy ewp-trust-root.cer, ewp-request-signing.cer, partner-bank-server.pfx and partner-bank-server.pfx.password'
+Write-Host '  Never copy ewp-trust-root.pfx, ewp-partner-client.pfx or ewp-request-signing.pfx off this laptop.'
