@@ -159,7 +159,9 @@ VALUES
     ('Payments',            'https://payments.dev.localhost:46388'),
     -- The customer's pattern: a Next.js app (SPA + light BFF), not an ASP.NET Core BFF.
     ('Audit',               'https://audit.dev.localhost:46380'),
-    ('Operations',          'https://operations.dev.localhost:46381');
+    ('Operations',          'https://operations.dev.localhost:46381'),
+    -- EWP as the Partner Bank's distributor (Digital Gold): the same Next.js pattern.
+    ('Partner Products',    'https://ewp-partner.dev.localhost:46384');
 
 -- ============================================================
 -- Seed: Management Areas
@@ -242,6 +244,11 @@ VALUES
         'Platform',
         'The health of every component and, in development and test, the simulated external systems.',
         (SELECT id FROM microservices WHERE name = 'Operations')
+    ),
+    (
+        'Partner Products',
+        'Products of the Partner Bank that EWP distributes at its counters: the customer signs the paper form, EWP records it.',
+        (SELECT id FROM microservices WHERE name = 'Partner Products')
     );
 
 -- ============================================================
@@ -458,6 +465,16 @@ VALUES
            AND microservice_id =
                (SELECT id FROM microservices
                 WHERE name = 'Operations'))
+    ),
+    (
+        'Digital Gold',
+        '/v1/partner-products/digital-gold/view-all',
+        'fa-coins',
+        (SELECT id FROM management_areas
+         WHERE name = 'Partner Products'
+           AND microservice_id =
+               (SELECT id FROM microservices
+                WHERE name = 'Partner Products'))
     );
 
 -- ============================================================
@@ -677,6 +694,17 @@ CROSS JOIN
         ('operations_administrator')
 ) AS r(role_short_name)
 WHERE mi.task_name = 'Platform Health';
+
+-- Digital Gold: customer service agents at the counter (partner.gold.view / partner.gold.order).
+INSERT INTO menu_items_and_roles (menu_item_id, role_short_name)
+SELECT mi.id, r.role_short_name
+FROM menu_items mi
+CROSS JOIN
+(
+    VALUES
+        ('customer_service_agent')
+) AS r(role_short_name)
+WHERE mi.task_name = 'Digital Gold';
 
 -- ============================================================
 -- Verification queries

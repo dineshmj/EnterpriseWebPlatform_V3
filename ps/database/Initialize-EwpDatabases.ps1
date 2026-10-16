@@ -4,7 +4,7 @@
     one order that works - with a single command. For a NEW laptop, or to start again from scratch.
 
 .DESCRIPTION
-    1. Creates each database that does not exist yet (11 of them).
+    1. Creates each database that does not exist yet (12 of them).
     2. Creates / refreshes the service users (Apply-EwpServiceDbUsers.ps1) - BEFORE the scripts, so
        the grants inside the scripts find their users (no "Role ... does not exist" warnings).
     3. Runs every database's consolidated script, each connected to ITS OWN database.
@@ -45,6 +45,7 @@ $databases = [ordered]@{
     'EwpNotificationsDb'       = 'src\Microservices\Notifications\API\NotificationsDb\EwpNotificationsDb.sql'
     'EwpPaymentsDb'            = 'src\Microservices\Payments\API\PaymentsDb\EwpPaymentsDb.sql'
     'EwpAuditDb'               = 'src\Microservices\Audit\API\AuditDb\EwpAuditDb.sql'
+    'EwpPartnerProductsDb'     = 'src\Microservices\PartnerProducts\API\PartnerProductsDb\EwpPartnerProductsDb.sql'
     'EwpBffStateDb'            = 'db\EwpBffStateDb.sql'
 }
 

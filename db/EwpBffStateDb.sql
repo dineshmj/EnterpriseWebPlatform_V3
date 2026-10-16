@@ -16,6 +16,7 @@
 --   kyc_bff                 ewp_kyc_bff          (Customer KYC BFF - NestJS; its own table, below)
 --   audit_bff               ewp_audit_web        (Audit web - the Next.js light BFF; its own table, below)
 --   operations_bff          ewp_operations_web   (Operations web - the Next.js light BFF; same table, below)
+--   partner_products_bff    ewp_partner_products_web (Partner Products web - the Next.js light BFF; same table, below)
 --
 -- "UserSessions" is Duende BFF's server-side session table, exactly as its EF store maps it
 -- (PascalCase names are Duende's). data_protection_keys holds the BFF's key ring, which
@@ -145,6 +146,37 @@ BEGIN
         GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA operations_bff TO ewp_operations_web;
     ELSE
         RAISE WARNING 'Role ewp_operations_web does not exist yet: run ps\database\Apply-EwpServiceDbUsers.ps1, then this script again.';
+    END IF;
+END $$;
+
+-- -----------------------------------------------------------------------------
+-- partner_products_bff: the Next.js light BFF of the Partner Products context - the same design as
+-- audit_bff (cookie SHA-256 as key, tokens AES-256-GCM encrypted with PARTNER_PRODUCTS_WEB_SESSION_KEY).
+-- -----------------------------------------------------------------------------
+DROP SCHEMA IF EXISTS partner_products_bff CASCADE;
+CREATE SCHEMA partner_products_bff;
+
+CREATE TABLE partner_products_bff.sessions (
+    session_hash CHAR(64)     NOT NULL,
+    subject_id   VARCHAR(200) NOT NULL,
+    sid          VARCHAR(200) NULL,       -- the IDP session: front- and back-channel logout end it
+    data         TEXT         NOT NULL,   -- AES-256-GCM: iv | tag | ciphertext, base64
+    created_at   TIMESTAMPTZ  NOT NULL,
+    renewed_at   TIMESTAMPTZ  NOT NULL,
+    expires_at   TIMESTAMPTZ  NOT NULL,   -- sliding, 30 minutes
+    CONSTRAINT pk_partner_products_bff_sessions PRIMARY KEY (session_hash)
+);
+CREATE INDEX ix_partner_products_bff_sessions_sid ON partner_products_bff.sessions (sid);
+CREATE INDEX ix_partner_products_bff_sessions_subject ON partner_products_bff.sessions (subject_id);
+CREATE INDEX ix_partner_products_bff_sessions_expires ON partner_products_bff.sessions (expires_at);
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ewp_partner_products_web') THEN
+        GRANT USAGE ON SCHEMA partner_products_bff TO ewp_partner_products_web;
+        GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA partner_products_bff TO ewp_partner_products_web;
+    ELSE
+        RAISE WARNING 'Role ewp_partner_products_web does not exist yet: run ps\database\Apply-EwpServiceDbUsers.ps1, then this script again.';
     END IF;
 END $$;
 

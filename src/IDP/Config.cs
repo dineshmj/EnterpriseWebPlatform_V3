@@ -58,7 +58,13 @@ public static class Config
 
             // Operations (Journey API only)
             OperationsApiScope.JourneyRead,
-            OperationsApiScope.JourneyWrite
+            OperationsApiScope.JourneyWrite,
+
+            // Partner Products (Domain API and Journey API)
+            PartnerProductsApiScope.Read,
+            PartnerProductsApiScope.Write,
+            PartnerProductsApiScope.JourneyRead,
+            PartnerProductsApiScope.JourneyWrite
         ];
 
     public static IEnumerable<ApiResource> ApiResources =>
@@ -72,7 +78,9 @@ public static class Config
             NotificationsApiResource.ApiResource,
             AuditApiResource.ApiResource,
             AuditApiResource.JourneyApiResource,
-            OperationsApiResource.ApiResource
+            OperationsApiResource.ApiResource,
+            PartnerProductsApiResource.ApiResource,
+            PartnerProductsApiResource.JourneyApiResource
         ];
 
     /// <summary>
@@ -95,6 +103,7 @@ public static class Config
             MfePayments.Client,
             MfeAudit.Client,
             MfeOperations.Client,
+            MfePartnerProducts.Client,
 
             // M2M Clients
             KycCaseOpeningSubscriberToCustomerKycApiM2M.Client,
@@ -108,6 +117,7 @@ public static class Config
 
             // Token exchange only (delegation): the Journey APIs act for a signed-in person.
             AuditJourneyApiTokenExchange.Client,
-            OperationsJourneyApiTokenExchange.Client
+            OperationsJourneyApiTokenExchange.Client,
+            PartnerProductsJourneyApiTokenExchange.Client
         ];
 }

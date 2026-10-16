@@ -21,6 +21,13 @@ import { traceMiddleware } from './observability/trace-context';
 // │ Ref : Features 2.1.1, 2.3 | BFF pattern | OWASP A05, A07 | ASVS V3
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 async function bootstrap() {
+  // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+  // │ A friendly console window title, like the .NET services (Common/Observability/
+  // │ ConsoleTitle.cs): on Windows process.title names the console window - set here, in the
+  // │ service itself, so pnpm and node do not leave their own command line as the title.
+  // └──────────────────────────────────────────────────────────────────────────────────────
+  process.title = 'Customer KYC BFF';
+
   const options = loadOptions();
   const logger = new EwpLogger('customer-kyc-bff');
 

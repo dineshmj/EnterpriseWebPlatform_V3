@@ -19,6 +19,7 @@ export const components: PlatformComponent[] = [
   { name: 'Payments BFF', group: 'Front ends', readiness: 'https://payments.dev.localhost:46388/health/ready' },
   { name: 'Audit web', group: 'Front ends', readiness: 'https://audit.dev.localhost:46380/' },
   { name: 'Operations web', group: 'Front ends', readiness: 'https://operations.dev.localhost:46381/' },
+  { name: 'Partner Products web', group: 'Front ends', readiness: 'https://ewp-partner.dev.localhost:46384/' },
 
   { name: 'Customer Onboarding API', group: 'Domain APIs', readiness: 'https://customer-api.dev.localhost:46363/health/ready' },
   { name: 'Customer KYC API', group: 'Domain APIs', readiness: 'https://kyc-api.dev.localhost:46305/health/ready' },
@@ -28,9 +29,11 @@ export const components: PlatformComponent[] = [
   { name: 'Payments API', group: 'Domain APIs', readiness: 'https://payments-api.dev.localhost:44488/health/ready' },
   { name: 'Notifications API', group: 'Domain APIs', readiness: 'https://notifications-api.dev.localhost:46377/health/ready' },
   { name: 'Audit API', group: 'Domain APIs', readiness: 'https://audit-api.dev.localhost:46378/health/ready' },
+  { name: 'Partner Products API', group: 'Domain APIs', readiness: 'https://partner-products-api.dev.localhost:46387/health/ready' },
 
   { name: 'Audit Journey API', group: 'Journey APIs', readiness: 'https://audit-journey.dev.localhost:46379/health/ready' },
   { name: 'Operations Journey API', group: 'Journey APIs', readiness: 'https://operations-journey.dev.localhost:46382/health/ready' },
+  { name: 'Partner Products Journey API', group: 'Journey APIs', readiness: 'https://partner-products-journey.dev.localhost:46385/health/ready' },
 
   { name: 'CustomerOutboxPublisher', group: 'Workers', readiness: 'http://localhost:5101/health/ready' },
   { name: 'KycCaseOpeningSubscriber', group: 'Workers', readiness: 'http://localhost:5102/health/ready' },

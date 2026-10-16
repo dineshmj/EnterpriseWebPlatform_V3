@@ -12,19 +12,22 @@
         Audit web (Next.js SPA + light BFF)   https://audit.dev.localhost:46380
         Operations Journey API (NestJS)       https://operations-journey.dev.localhost:46382
         Operations web (Next.js + light BFF)  https://operations.dev.localhost:46381
+        Partner Products Journey API (NestJS) https://partner-products-journey.dev.localhost:46385
+        Partner Products web (Next.js + BFF)  https://ewp-partner.dev.localhost:46384
 
     Each web app is started after its Journey API is listening (it calls it).
     To DEBUG one of them: close its window (or Ctrl+C), then run it from VS Code - see ReadMe.txt
     section 6c. The others keep running.
 
 .EXAMPLE
-    .\ps\run\Start-NodeServices.ps1                    # start all five
+    .\ps\run\Start-NodeServices.ps1                    # start all seven
     .\ps\run\Start-NodeServices.ps1 -Only Audit        # only the two Audit services
     .\ps\run\Start-NodeServices.ps1 -Only Operations   # only the two Operations services
-    .\ps\run\Start-NodeServices.ps1 -Stop              # stop all five (the processes listening on their ports)
+    .\ps\run\Start-NodeServices.ps1 -Only PartnerProducts   # only the two Partner Products services
+    .\ps\run\Start-NodeServices.ps1 -Stop              # stop all seven (the processes listening on their ports)
 #>
 param(
-    [ValidateSet('All', 'Kyc', 'Audit', 'Operations')]
+    [ValidateSet('All', 'Kyc', 'Audit', 'Operations', 'PartnerProducts')]
     [string] $Only = 'All',
     [switch] $Stop
 )
@@ -40,6 +43,8 @@ $services = @(
     [pscustomobject]@{ Name = 'Audit web';         Group = 'Audit'; Port = 46380; Folder = 'src\Microservices\Audit\BFF.Web' }
     [pscustomobject]@{ Name = 'Operations Journey API'; Group = 'Operations'; Port = 46382; Folder = 'src\Microservices\Operations\JourneyApi' }
     [pscustomobject]@{ Name = 'Operations web';         Group = 'Operations'; Port = 46381; Folder = 'src\Microservices\Operations\BFF.Web' }
+    [pscustomobject]@{ Name = 'Partner Products Journey API'; Group = 'PartnerProducts'; Port = 46385; Folder = 'src\Microservices\PartnerProducts\JourneyApi' }
+    [pscustomobject]@{ Name = 'Partner Products web';         Group = 'PartnerProducts'; Port = 46384; Folder = 'src\Microservices\PartnerProducts\BFF.Web' }
 ) | Where-Object { $Only -eq 'All' -or $_.Group -eq $Only }
 
 function Get-Listener([int] $port) {
@@ -59,8 +64,8 @@ if ($Stop) {
     return
 }
 
-# The Audit and Operations services read the development certificate from the user profile.
-if (($services.Group -contains 'Audit' -or $services.Group -contains 'Operations') -and -not (Test-Path "$env:USERPROFILE\.aspnet\https\ewp-v3-dev.pfx")) {
+# The Audit, Operations and Partner Products services read the development certificate from the user profile.
+if (($services.Group -contains 'Audit' -or $services.Group -contains 'Operations' -or $services.Group -contains 'PartnerProducts') -and -not (Test-Path "$env:USERPROFILE\.aspnet\https\ewp-v3-dev.pfx")) {
     Write-Host 'The development certificate is not exported yet. Run once:' -ForegroundColor Red
     Write-Host '  dotnet dev-certs https -ep "$env:USERPROFILE\.aspnet\https\ewp-v3-dev.pfx" -p "dev-password"'
     Write-Host '  dotnet dev-certs https -ep "$env:USERPROFILE\.aspnet\https\ewp-v3-dev.pem" --format Pem --no-password'
@@ -74,7 +79,11 @@ foreach ($s in $services) {
     }
 
     # A web app calls its Journey API: give the Journey API time to listen first.
-    $journey = @{ 'Audit web' = @('Audit Journey API', 46379); 'Operations web' = @('Operations Journey API', 46382) }[$s.Name]
+    $journey = @{
+        'Audit web'            = @('Audit Journey API', 46379)
+        'Operations web'       = @('Operations Journey API', 46382)
+        'Partner Products web' = @('Partner Products Journey API', 46385)
+    }[$s.Name]
     if ($journey -and $services.Name -contains $journey[0]) {
         Write-Host "Waiting for the $($journey[0])..." -ForegroundColor DarkGray
         $deadline = (Get-Date).AddMinutes(3)

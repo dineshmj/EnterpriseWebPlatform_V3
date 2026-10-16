@@ -12,6 +12,13 @@ import { overallRateLimit, RateLimiter } from './http/rate-limit';
  * business rules; it composes Domain API calls for one screen, always acting for the person.
  */
 async function bootstrap() {
+  // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+  // │ A friendly console window title, like the .NET services (Common/Observability/
+  // │ ConsoleTitle.cs): on Windows process.title names the console window - set here, in the
+  // │ service itself, so pnpm and node do not leave their own command line as the title.
+  // └──────────────────────────────────────────────────────────────────────────────────────
+  process.title = 'Audit Journey API';
+
   const options = loadOptions();
 
   const app = await NestFactory.create(AppModule, {

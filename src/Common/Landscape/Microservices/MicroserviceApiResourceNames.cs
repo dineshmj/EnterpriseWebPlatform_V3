@@ -32,4 +32,10 @@ public static class MicroserviceApiResourceNames
 
     public const string OPERATIONS_JOURNEY_API =
         "operations-journey-api";
+
+    public const string PARTNER_PRODUCTS_API =
+        "partner-products-api";
+
+    public const string PARTNER_PRODUCTS_JOURNEY_API =
+        "partner-products-journey-api";
 }

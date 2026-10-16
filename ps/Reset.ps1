@@ -5,7 +5,7 @@
 .DESCRIPTION
     Run it with PostgreSQL running. Without -Level it shows a menu:
 
-      1  Data only               the 11 databases and every ewp_* user dropped and recreated (tables,
+      1  Data only               the 12 databases and every ewp_* user dropped and recreated (tables,
                                  grants, seed data), the stored documents emptied. Kafka is left as
                                  it is: its messages stay, but every consumer has already read them.
       2  Data + Kafka messages   level 1, plus every Kafka topic emptied (Reset-KafkaRecords): no old
@@ -68,14 +68,14 @@ $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path   # the repository ro
 
 $databases = @(
     'EwpIdentityAccessDb', 'EwpBssShellDb', 'EwpCustomerDb', 'EwpKycDb', 'EwpDocumentsManagementDb',
-    'EwpComplianceDb', 'EwpAccountsDb', 'EwpNotificationsDb', 'EwpPaymentsDb', 'EwpAuditDb', 'EwpBffStateDb'
+    'EwpComplianceDb', 'EwpAccountsDb', 'EwpNotificationsDb', 'EwpPaymentsDb', 'EwpAuditDb', 'EwpPartnerProductsDb', 'EwpBffStateDb'
 )
 
 # Every port a platform process listens on (ReadMe.txt section 3): IDP, Shell, BFFs, APIs,
 # Node.js services, simulators and the workers' health ports. Not Kafka (9092/9093) or PostgreSQL.
 $platformPorts = @(
     46392, 46367, 46311, 46363, 33800, 46305, 49486, 46399, 46306, 45456, 48486,
-    46377, 44488, 46388, 46378, 46379, 46380, 46381, 46382, 46366, 46376, 46386,
+    46377, 44488, 46388, 46378, 46379, 46380, 46381, 46382, 46384, 46385, 46387, 46366, 46376, 46386,
     5101, 5102, 5103, 5104, 5105, 5106, 5107, 5108, 5109
 )
 
@@ -395,7 +395,7 @@ if ($erasesData -and -not $Force) {
     Write-Host '  - the running platform is stopped (Visual Studio session, Node.js services, workers, simulators)'
     if ($wipesKafka) { Write-Host "  - Kafka: everything in $script:logDirs (topics, messages, consumer groups, users, ACLs)" }
     if ($clearsKafkaMessages) { Write-Host '  - Kafka: every message on every topic (the topics, consumer groups, users and ACLs stay)' }
-    Write-Host '  - PostgreSQL: the 11 EWP databases and every ewp_* user (recreated empty, with seed data)'
+    Write-Host '  - PostgreSQL: the 12 EWP databases and every ewp_* user (recreated empty, with seed data)'
     Write-Host "  - the stored documents ($storage)"
     Write-Host "  - the audit chain's checkpoints ($auditAnchors)"
     Write-Host '  - the Playwright saved sign-ins and test results'

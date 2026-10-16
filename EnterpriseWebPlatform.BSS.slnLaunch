@@ -43,6 +43,11 @@
         "DebugTarget": "https"
       },
       {
+        "Path": "src\\Microservices\\PartnerProducts\\API\\EnterpriseWebPlatform.PartnerProducts.Api.csproj",
+        "Action": "Start",
+        "DebugTarget": "https"
+      },
+      {
         "Path": "src\\Microservices\\Payments\\API\\EnterpriseWebPlatform.Payments.Api.csproj",
         "Action": "Start",
         "DebugTarget": "https"

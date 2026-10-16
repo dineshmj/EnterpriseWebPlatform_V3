@@ -1,0 +1,25 @@
+// Starts the Next.js app over HTTPS (the Shell is HTTPS, and cookies are Secure). The
+// development certificate comes from the user profile (runnow.bat), never from the repo.
+import { createServer } from 'node:https';
+import { readFileSync } from 'node:fs';
+import next from 'next';
+
+// ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+// │ A friendly console window title, like the .NET services (Common/Observability/
+// │ ConsoleTitle.cs): on Windows process.title names the console window - set here, in the
+// │ service itself, so pnpm and node do not leave their own command line as the title.
+// └──────────────────────────────────────────────────────────────────────────────────────
+process.title = 'Partner Products web';
+
+const port = Number(process.env.PARTNER_PRODUCTS_WEB_PORT ?? '46384');
+const pfx = process.env.PARTNER_PRODUCTS_WEB_TLS_PFX_PATH;
+if (!pfx) throw new Error('PARTNER_PRODUCTS_WEB_TLS_PFX_PATH is not set (see runnow.bat).');
+
+// PARTNER_PRODUCTS_WEB_DEV=true (runnow.bat dev): development mode - no build, source maps, reload on save.
+const dev = process.env.PARTNER_PRODUCTS_WEB_DEV === 'true';
+const app = next({ dev });
+const handle = app.getRequestHandler();
+await app.prepare();
+
+createServer({ pfx: readFileSync(pfx), passphrase: process.env.PARTNER_PRODUCTS_WEB_TLS_PFX_PASSWORD }, (req, res) => handle(req, res))
+  .listen(port, '0.0.0.0', () => console.log(`Partner Products web listening on ${process.env.PARTNER_PRODUCTS_WEB_PUBLIC_ORIGIN ?? 'https://ewp-partner.dev.localhost:' + port}`));

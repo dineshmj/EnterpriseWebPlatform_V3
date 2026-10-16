@@ -447,6 +447,8 @@ $auditedProjects = [ordered]@{
     "Audit Journey API (NestJS)"         = Join-Path $codeRootFolder "src\Microservices\Audit\JourneyApi"
     "Operations web (Next.js light BFF)" = Join-Path $codeRootFolder "src\Microservices\Operations\BFF.Web"
     "Operations Journey API (NestJS)"    = Join-Path $codeRootFolder "src\Microservices\Operations\JourneyApi"
+    "Partner Products web (Next.js light BFF)" = Join-Path $codeRootFolder "src\Microservices\PartnerProducts\BFF.Web"
+    "Partner Products Journey API (NestJS)"    = Join-Path $codeRootFolder "src\Microservices\PartnerProducts\JourneyApi"
     "Playwright tests"                   = Join-Path $codeRootFolder "tst\playwright"
 }
 

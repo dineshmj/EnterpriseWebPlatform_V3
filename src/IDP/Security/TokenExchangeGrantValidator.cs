@@ -66,6 +66,19 @@ public sealed class TokenExchangeGrantValidator(
             token.Audiences.Contains(MicroserviceApiResourceNames.OPERATIONS_JOURNEY_API) &&
             token.ActingClientId == OperationsMicroservice.CLIENT_ID_FOR_IDP,
 
+        // The Partner Products web BFF: only the person's own token from its sign-in, for its Journey API.
+        [PartnerProductsMicroservice.CLIENT_ID_FOR_IDP] = token =>
+            token.ClientId == PartnerProductsMicroservice.CLIENT_ID_FOR_IDP && token.ActingClientId is null,
+
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ The Partner Products Journey API: only a token the Partner Products web BFF exchanged
+        // │ for it - so the customer lookup, the account lookup and the scan upload it makes are
+        // │ always FOR the signed-in staff member, within their own branch and permissions.
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        [PartnerProductsMicroservice.CLIENT_ID_FOR_IDP_FOR_PARTNER_PRODUCTS_JOURNEY_API] = token =>
+            token.Audiences.Contains(MicroserviceApiResourceNames.PARTNER_PRODUCTS_JOURNEY_API) &&
+            token.ActingClientId == PartnerProductsMicroservice.CLIENT_ID_FOR_IDP,
+
         // Documents Management for the signed-in agent (upload, clean-up of an unfinished submission).
         [CustomerOnboardingMicroservice.CLIENT_ID_FOR_IDP] = token =>
             token.ClientId == CustomerOnboardingMicroservice.CLIENT_ID_FOR_IDP && token.ActingClientId is null,

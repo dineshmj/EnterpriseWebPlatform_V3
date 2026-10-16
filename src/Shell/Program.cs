@@ -332,6 +332,7 @@ var shellCsp = ContentSecurityPolicy.Build(
         ContentSecurityPolicy.Origin(EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo.PaymentsMicroservice.BFF_CLIENT_BASE_URL),
         ContentSecurityPolicy.Origin(EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo.AuditMicroservice.WEB_CLIENT_BASE_URL),
         ContentSecurityPolicy.Origin(EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo.OperationsMicroservice.WEB_CLIENT_BASE_URL),
+        ContentSecurityPolicy.Origin(EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo.PartnerProductsMicroservice.WEB_CLIENT_BASE_URL),
         ContentSecurityPolicy.Origin(IDP.AUTHORITY)
     ]);
 // Security:CspReportOnly = true reports violations in the browser console instead of blocking.

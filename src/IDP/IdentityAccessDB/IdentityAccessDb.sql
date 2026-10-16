@@ -324,6 +324,8 @@ INSERT INTO permissions (name, code, description) VALUES
 ('View Consumer Status','consumer.status.view','View Kafka consumer status'),
 ('View Audit','audit.view','View audit records'),
 ('Search Audit','audit.search','Search audit records'),
+('View Partner Digital Gold','partner.gold.view','See a customer''s Digital Gold forms and purchases recorded for the Partner Bank (EWP as distributor)'),
+('Record Partner Digital Gold','partner.gold.order','Record a customer''s signed Form VII (open a Digital Gold account) or transfer authorization slip (buy gold) for the Partner Bank'),
 ('View Workflow History','workflow.history.view','View workflow history'),
 ('View Customer History','customer.history.view','View customer history'),
 ('View KYC History','kyc.history.view','View KYC history'),
@@ -542,7 +544,10 @@ JOIN permissions p ON p.code IN (
     -- Assisted channel: capture a customer's payment and follow it (never approve it).
     'payment.initiate',
     'payment.view',
-    'workflow.status.view'
+    'workflow.status.view',
+    -- Assisted channel, as the Partner Bank's distributor: the customer's signed Digital Gold forms.
+    'partner.gold.view',
+    'partner.gold.order'
 )
 WHERE r.code = 'customer_service_agent';
 

@@ -1,0 +1,18 @@
+{
+  // ┌─ :: SECURITY :: HTTPS on the component's own host name ────────────────────────────────────────
+  // │ Why : Tokens are bearer secrets: nothing may travel over plain HTTP.
+  // │ How : HTTPS only, on partner-products-api.dev.localhost; ASPNETCORE_ENVIRONMENT=Development is
+  // │       the only environment that loads the development settings.
+  // │ Ref : Features 2.3.3, 2.4.5 | OWASP A02 (TLS)
+  // └────────────────────────────────────────────────────────────────────────────────────────────────
+  "profiles": {
+    "https": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "applicationUrl": "https://partner-products-api.dev.localhost:46387",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

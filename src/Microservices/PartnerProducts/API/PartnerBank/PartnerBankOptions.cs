@@ -1,0 +1,34 @@
+namespace EnterpriseWebPlatform.PartnerProducts.Api.PartnerBank;
+
+/// <summary>The "PartnerBank" section: how EWP reaches the Partner Bank as its distributor.</summary>
+public sealed class PartnerBankOptions
+{
+    public const string SectionName = "PartnerBank";
+
+    /// <summary>The Partner Bank's token endpoint on its mutual-TLS port, e.g. https://partner-auth.ewp.home.arpa:47411/connect/token.</summary>
+    public string TokenEndpoint { get; init; } = string.Empty;
+
+    /// <summary>The Partner Bank's API for distributors (mutual TLS), e.g. https://partner-api.ewp.home.arpa:47403.</summary>
+    public string ApiBaseUrl { get; init; } = string.Empty;
+
+    /// <summary>EWP's client ID at the Partner Bank's authorization server.</summary>
+    public string ClientId { get; init; } = string.Empty;
+
+    /// <summary>EWP's mutual-TLS client certificate (PKCS#12) and the file holding its password.</summary>
+    public string ClientCertificatePath { get; init; } = string.Empty;
+
+    public string ClientCertificatePasswordPath { get; init; } = string.Empty;
+
+    /// <summary>EWP's request-signing key (ECDSA P-256, PKCS#12) and its password file: every instruction is signed with it.</summary>
+    public string SigningCertificatePath { get; init; } = string.Empty;
+
+    public string SigningCertificatePasswordPath { get; init; } = string.Empty;
+
+    /// <summary>The ONLY root the Partner Bank's server certificate may chain to.</summary>
+    public string TrustRootPath { get; init; } = string.Empty;
+
+    /// <summary>Outside Development: the host names the two URLs may use (see ExternalEndpoint).</summary>
+    public string[] PermittedHosts { get; init; } = [];
+
+    public int TimeoutSeconds { get; init; } = 15;
+}

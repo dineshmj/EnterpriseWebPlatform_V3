@@ -127,6 +127,9 @@ What the platform is, how it is designed and what each component must do are doc
 		127.0.0.1    audit-journey.dev.localhost
 		127.0.0.1    operations.dev.localhost
 		127.0.0.1    operations-journey.dev.localhost
+		127.0.0.1    ewp-partner.dev.localhost
+		127.0.0.1    partner-products-journey.dev.localhost
+		127.0.0.1    partner-products-api.dev.localhost
 
 	b) Check each name with "ping <hostname>"; each must resolve to 127.0.0.1. (Browsers resolve any *.localhost name
 	   to this machine by themselves - PowerShell, Node.js and .NET use the hosts file, so a missing line shows there first.)
@@ -172,6 +175,9 @@ What the platform is, how it is designed and what each component must do are doc
 		Audit Journey API (NestJS)		https://audit-journey.dev.localhost:46379   (Node.js; outside Visual Studio)
 Operations web (Next.js SPA + BFF)	https://operations.dev.localhost:46381   (Node.js; outside Visual Studio; menu "Platform Health")
 Operations Journey API (NestJS)	https://operations-journey.dev.localhost:46382   (Node.js; outside Visual Studio)
+		Partner Products web (Next.js SPA + BFF)	https://ewp-partner.dev.localhost:46384   (Node.js; outside Visual Studio; menu "Digital Gold")
+		Partner Products Journey API (NestJS)	https://partner-products-journey.dev.localhost:46385   (Node.js; outside Visual Studio)
+		Partner Products API			https://partner-products-api.dev.localhost:46387   (EWP's side of the Partner Bank's Digital Gold)
 		Kafka UI						http://localhost:8080   (optional)
 
 		Workers (health and metrics only): http://localhost:5101 ... 5109 - see section 9a.
@@ -510,6 +516,7 @@ Operations Journey API (NestJS)	https://operations-journey.dev.localhost:46382  
 			PaymentsSagaReplySubscriber:  http://localhost:5109/health/live | /health/ready
 			Audit Journey API (Node.js):  https://audit-journey.dev.localhost:46379/health/live | /health/ready
 Operations Journey API (Node.js):  https://operations-journey.dev.localhost:46382/health/live | /health/ready
+			Partner Products Journey API (Node.js):  https://partner-products-journey.dev.localhost:46385/health/live | /health/ready
 
 		live  = the process (and its background loop) is working; 503 means "restart it".
 		ready = its dependencies are reachable (database; for a subscriber, its Kafka consumer group). "Degraded" (still 200)

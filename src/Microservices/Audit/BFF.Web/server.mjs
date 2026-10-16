@@ -4,6 +4,13 @@ import { createServer } from 'node:https';
 import { readFileSync } from 'node:fs';
 import next from 'next';
 
+// ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+// │ A friendly console window title, like the .NET services (Common/Observability/
+// │ ConsoleTitle.cs): on Windows process.title names the console window - set here, in the
+// │ service itself, so pnpm and node do not leave their own command line as the title.
+// └──────────────────────────────────────────────────────────────────────────────────────
+process.title = 'Audit web';
+
 const port = Number(process.env.AUDIT_WEB_PORT ?? '46380');
 const pfx = process.env.AUDIT_WEB_TLS_PFX_PATH;
 if (!pfx) throw new Error('AUDIT_WEB_TLS_PFX_PATH is not set (see runnow.bat).');

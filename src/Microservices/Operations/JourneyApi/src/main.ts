@@ -12,6 +12,13 @@ import { overallRateLimit, RateLimiter } from './http/rate-limit';
  * gathers the platform's health for one screen and, in Development, switches the simulators.
  */
 async function bootstrap() {
+  // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+  // │ A friendly console window title, like the .NET services (Common/Observability/
+  // │ ConsoleTitle.cs): on Windows process.title names the console window - set here, in the
+  // │ service itself, so pnpm and node do not leave their own command line as the title.
+  // └──────────────────────────────────────────────────────────────────────────────────────
+  process.title = 'Operations Journey API';
+
   const options = loadOptions();
 
   const app = await NestFactory.create(AppModule, {

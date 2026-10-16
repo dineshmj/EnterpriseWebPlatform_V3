@@ -67,6 +67,9 @@
   <Folder Name="/Microservices/Notifications/">
     <Project Path="src/Microservices/Notifications/API/EnterpriseWebPlatform.Notifications.Api.csproj" />
   </Folder>
+  <Folder Name="/Microservices/PartnerProducts/">
+    <Project Path="src/Microservices/PartnerProducts/API/EnterpriseWebPlatform.PartnerProducts.Api.csproj" />
+  </Folder>
   <Folder Name="/Microservices/Payments/">
     <Project Path="src/Microservices/Payments/API/EnterpriseWebPlatform.Payments.Api.csproj" />
     <Project Path="src/Microservices/Payments/BFF.Web/EnterpriseWebPlatform.Payments.Bff.Web.csproj" />

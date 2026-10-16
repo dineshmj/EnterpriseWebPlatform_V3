@@ -48,6 +48,7 @@ BEGIN
         ('ewp_notifications_api',       'ewp-notifications-api-dev'),
         ('ewp_payments_api',            'ewp-payments-api-dev'),
         ('ewp_audit_api',               'ewp-audit-api-dev'),
+        ('ewp_partner_products_api',    'ewp-partner-products-api-dev'),
         -- The MFE BFFs' own users, for their sessions and keys in EwpBffStateDb (the Shell uses ewp_shell).
         ('ewp_co_bff',                  'ewp-co-bff-dev'),
         ('ewp_compliance_bff',          'ewp-compliance-bff-dev'),
@@ -55,7 +56,8 @@ BEGIN
         ('ewp_payments_bff',            'ewp-payments-bff-dev'),
         ('ewp_kyc_bff',                 'ewp-kyc-bff-dev'),
         ('ewp_audit_web',               'ewp-audit-web-dev'),
-        ('ewp_operations_web',          'ewp-operations-web-dev')
+        ('ewp_operations_web',          'ewp-operations-web-dev'),
+        ('ewp_partner_products_web',    'ewp-partner-products-web-dev')
     ) AS t(role_name, role_password)
     LOOP
         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r.role_name) THEN
@@ -80,6 +82,7 @@ REVOKE CONNECT ON DATABASE "EwpAccountsDb"            FROM PUBLIC;
 REVOKE CONNECT ON DATABASE "EwpNotificationsDb"       FROM PUBLIC;
 REVOKE CONNECT ON DATABASE "EwpPaymentsDb"            FROM PUBLIC;
 REVOKE CONNECT ON DATABASE "EwpAuditDb"               FROM PUBLIC;
+REVOKE CONNECT ON DATABASE "EwpPartnerProductsDb"     FROM PUBLIC;
 REVOKE CONNECT ON DATABASE "EwpBffStateDb"            FROM PUBLIC;
 
 GRANT CONNECT ON DATABASE "EwpIdentityAccessDb"      TO ewp_idp;
@@ -92,7 +95,8 @@ GRANT CONNECT ON DATABASE "EwpAccountsDb"            TO ewp_accounts_api;
 GRANT CONNECT ON DATABASE "EwpNotificationsDb"       TO ewp_notifications_api;
 GRANT CONNECT ON DATABASE "EwpPaymentsDb"            TO ewp_payments_api;
 GRANT CONNECT ON DATABASE "EwpAuditDb"               TO ewp_audit_api;
-GRANT CONNECT ON DATABASE "EwpBffStateDb"            TO ewp_shell, ewp_co_bff, ewp_compliance_bff, ewp_accounts_bff, ewp_payments_bff, ewp_kyc_bff, ewp_audit_web, ewp_operations_web;
+GRANT CONNECT ON DATABASE "EwpPartnerProductsDb"     TO ewp_partner_products_api;
+GRANT CONNECT ON DATABASE "EwpBffStateDb"            TO ewp_shell, ewp_co_bff, ewp_compliance_bff, ewp_accounts_bff, ewp_payments_bff, ewp_kyc_bff, ewp_audit_web, ewp_operations_web, ewp_partner_products_web;
 
 -- -----------------------------------------------------------------------------
 -- 3. Per database: data access for the owning service role
@@ -247,6 +251,20 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 GRANT USAGE ON SCHEMA public TO ewp_audit_api;
 GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA public TO ewp_audit_api;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT ON TABLES TO ewp_audit_api;
+
+\connect EwpPartnerProductsDb
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+GRANT USAGE ON SCHEMA public TO ewp_partner_products_api;
+-- ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+-- │ No DELETE: the customer's signed forms and what the Partner Bank answered are evidence
+-- │ (EWP as distributor) - kept, never erased, also not by a compromised API or an injection.
+-- └──────────────────────────────────────────────────────────────────────────────────────
+GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO ewp_partner_products_api;
+REVOKE DELETE ON ALL TABLES IN SCHEMA public FROM ewp_partner_products_api;
+GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_partner_products_api;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE DELETE ON TABLES FROM ewp_partner_products_api;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE ON TABLES TO ewp_partner_products_api;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ewp_partner_products_api;
 
 \connect EwpBffStateDb
 -- No objects in public; each BFF gets data access to ITS OWN schema only - granted by
