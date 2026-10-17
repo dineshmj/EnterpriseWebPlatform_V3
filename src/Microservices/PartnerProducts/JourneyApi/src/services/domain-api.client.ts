@@ -95,7 +95,9 @@ export class DomainApiClient {
 
     const detail = payload.detail ?? Object.values(payload.errors ?? {}).flat()[0];
     switch (response.status) {
-      case 400: throw new BadRequestException(detail ?? 'The request was not valid.');
+      // 400, and 422 from Documents Management (e.g. a file whose content is not what its type says): the reason passes.
+      case 400:
+      case 422: throw new BadRequestException(detail ?? 'The request was not valid.');
       case 401:
       case 403: throw new ForbiddenException('You are not allowed to do this.');
       case 404: throw new NotFoundException('Not found.');
