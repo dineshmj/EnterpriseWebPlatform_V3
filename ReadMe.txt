@@ -426,6 +426,7 @@ Operations Journey API (NestJS)	https://operations-journey.dev.localhost:46382  
 		Switch it on in FIVE appsettings.json files (keep them equal): src\IDP ("Mfa": { "Enabled": true }) - the sign-in -
 		and the Payments, Accounts, Compliance and Customer KYC APIs - the step-up for risky actions - plus
 		OPERATIONS_MFA_ENABLED=true in src\Microservices\Operations\JourneyApi\runnow.bat (the simulator switch). Restart them.
+		Quickest: .\ps\Toggle-MFA.ps1 -On (or -Off) switches all of them - and EWP_MFA_ENABLED in tst\playwright\.env - at once.
 		Outside Development MFA cannot be switched off: the IDP and those APIs refuse to start.
 
 		- Every user is asked to enrol at their next sign-in: in Google Authenticator tap +, "Scan a QR code" (or "Enter a

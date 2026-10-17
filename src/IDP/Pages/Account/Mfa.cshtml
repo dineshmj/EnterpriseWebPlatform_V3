@@ -22,6 +22,14 @@
 
     <partial name="_ValidationSummary" />
 
+    @if (Model.Locked)
+    {
+        <div class="actions">
+            <a class="btn btn-primary btn-block" asp-page="/Account/Login">Back to sign-in</a>
+        </div>
+    }
+    else
+    {
     <form method="post" novalidate>
         <div class="field">
             <label asp-for="Code">Code</label>
@@ -36,4 +44,5 @@
             <a class="btn btn-ghost btn-block" asp-page="/Account/Login">Cancel</a>
         </div>
     </form>
+    }
 </section>

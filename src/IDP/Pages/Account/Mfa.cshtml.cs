@@ -67,12 +67,38 @@ public sealed class MfaModel(
         // │ If the code is right, complete the sign-in with amr "pwd otp mfa" and a new
         // │ auth_time; otherwise count a failure (lockout) and ask again.
         // └──────────────────────────────────────────────────────────────────────────────────────
+        if (user.LockoutEnd > time.GetUtcNow())
+            return LockedOut();
+
         if (await mfa.VerifyAsync(user, Code ?? string.Empty, HttpContext.RequestAborted))
             return await SignInCompletion.CompleteAsync(this, interaction, events, user, pending.RememberLogin, pending.ReturnUrl, withMfa: true);
 
         await events.RaiseAsync(new UserLoginFailureEvent(user.UserName, "invalid authenticator code"), HttpContext.RequestAborted);
+
+        // The failure was just counted: if it was the last one allowed, the account is now locked.
+        var reloaded = await users.FindBySubjectIdAsync(pending.SubjectId, HttpContext.RequestAborted);
+        if (reloaded?.LockoutEnd > time.GetUtcNow())
+            return LockedOut();
+
         ModelState.AddModelError(string.Empty, "That code is not valid. Enter the current 6-digit code from Google Authenticator, or a recovery code.");
         Code = string.Empty;
         return Page();
     }
+
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Locked (5 wrong codes or passwords): the half-finished sign-in is ENDED - no further
+    // │ code is even looked at - and the person is told plainly to wait. This person has
+    // │ already proved the password, so saying "locked" reveals nothing to a stranger.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    private IActionResult LockedOut()
+    {
+        PendingSignIn.Clear(HttpContext);
+        ModelState.AddModelError(string.Empty, "Too many wrong codes: this account is locked for 15 minutes. Wait, then sign in again - or ask an administrator.");
+        Code = string.Empty;
+        Locked = true;
+        return Page();
+    }
+
+    /// <summary>The sign-in attempt ended because the account is locked: the page shows no code field.</summary>
+    public bool Locked { get; private set; }
 }
