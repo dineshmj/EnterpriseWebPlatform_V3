@@ -27,6 +27,11 @@ public sealed class PartnerBankOptions
     /// <summary>The ONLY root the Partner Bank's server certificate may chain to.</summary>
     public string TrustRootPath { get; init; } = string.Empty;
 
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Addresses and key FILE PATHS only - never a key or password in configuration: the
+    // │ keys stay in %USERPROFILE%\.ewp-pki (a key vault in production). Outside Development
+    // │ the two URLs must use these host names (ExternalEndpoint: no SSRF by configuration).
+    // └──────────────────────────────────────────────────────────────────────────────────────
     /// <summary>Outside Development: the host names the two URLs may use (see ExternalEndpoint).</summary>
     public string[] PermittedHosts { get; init; } = [];
 

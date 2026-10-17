@@ -17,8 +17,11 @@ public static class PartnerProductsMicroservice
 	public const string CLIENT_ID_FOR_IDP = "PartnerProducts.Microservice.Web.ClientID";
 
 
-	// The NestJS Journey API: may ONLY exchange a token it received from the Partner Products web
-	// BFF (no client credentials - it can never act without a person behind it).
+	// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+	// │ The NestJS Journey API: may ONLY exchange a token it received from the Partner Products
+	// │ web BFF (no client credentials - it can never act without a person behind it). It holds
+	// │ no key of the Partner Bank's: the Partner Products API is EWP's adapter to it.
+	// └──────────────────────────────────────────────────────────────────────────────────────
 	public const string CLIENT_NAME_FOR_IDP_FOR_PARTNER_PRODUCTS_JOURNEY_API = "Partner Products Journey API Client";
 
 	public const string CLIENT_ID_FOR_IDP_FOR_PARTNER_PRODUCTS_JOURNEY_API = "PartnerProducts.JourneyApi.ClientID";

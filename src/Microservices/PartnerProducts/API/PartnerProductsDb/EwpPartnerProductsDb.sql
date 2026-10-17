@@ -52,7 +52,12 @@ CREATE TABLE gold_account_applications (
     CONSTRAINT ck_gold_account_applications_open CHECK (status <> 'OPENED' OR partner_account_number IS NOT NULL)
 );
 
--- One active application (or account) per customer: a refused one may be followed by a new Form VII.
+-- ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+-- │ Once only, enforced by the database whatever the code does: one active application
+-- │ per customer (a refused one may be followed by a new Form VII), one per form, one per
+-- │ signed instruction; one purchase per slip. A double click, two counters at once or a
+-- │ resend after a lost answer can never open two accounts or buy twice on one slip.
+-- └──────────────────────────────────────────────────────────────────────────────────────
 CREATE UNIQUE INDEX uq_gold_account_applications_active_customer
     ON gold_account_applications (customer_number) WHERE status <> 'REFUSED';
 CREATE INDEX ix_gold_account_applications_branch ON gold_account_applications (branch_code, status, id DESC);

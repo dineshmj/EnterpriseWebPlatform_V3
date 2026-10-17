@@ -38,6 +38,11 @@ public sealed class PartnerProductsDbContext(DbContextOptions<PartnerProductsDbC
             e.Property(x => x.SentAt).HasColumnName("sent_at");
             e.Property(x => x.SentByLanId).HasColumnName("sent_by_lan_id").HasMaxLength(50);
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+            // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+            // │ Optimistic concurrency: every change raises the version and is saved only if
+            // │ nobody changed the row meanwhile - two people sending the same Form VII at once
+            // │ get one send and one 409, never two.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             e.Property(x => x.Version).HasColumnName("version").IsConcurrencyToken();
             e.Ignore(x => x.IsOpen);
             e.Ignore(x => x.IsActive);

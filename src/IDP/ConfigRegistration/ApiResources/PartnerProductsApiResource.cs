@@ -18,6 +18,10 @@ public sealed class PartnerProductsApiResource : IDuendeApiResource
                 "Partner Products API")
         {
             Scopes = { PartnerProductsApiScopesRequired.PARTNER_PRODUCTS_READ, PartnerProductsApiScopesRequired.PARTNER_PRODUCTS_WRITE },
+            // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+            // │ Exactly what the Domain API decides on: the permission (view / order), the branch
+            // │ (every record and list is branch-scoped) and the LAN ID it records as the actor.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             UserClaims = { "role", "name", "permission", "lan_id", "branch" }
         };
 

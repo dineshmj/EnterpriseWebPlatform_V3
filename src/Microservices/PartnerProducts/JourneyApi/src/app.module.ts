@@ -7,6 +7,10 @@ import { RateLimiter } from './http/rate-limit';
 import { DomainApiClient } from './services/domain-api.client';
 import { TokenExchangeService } from './services/token-exchange.service';
 
+// ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+// │ Probes only report that the process runs: this API holds no state of its own, and a
+// │ Domain API being down shows on that API's own probe (Operations -> Platform Health).
+// └──────────────────────────────────────────────────────────────────────────────────────
 /** Probes for the orchestrator, like every other component. */
 @Controller('health')
 export class HealthController {
