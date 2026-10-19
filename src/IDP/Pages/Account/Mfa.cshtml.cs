@@ -49,7 +49,15 @@ public sealed class MfaModel(
             return RedirectToPage("/Account/Login");
 
         StepUp = pending.StepUp;
+        AllowShellOverlayFor(pending);
         return Page();
+    }
+
+    // Only a step-up's code page may be shown in the Shell's overlay (SecurityHeadersAttribute).
+    private void AllowShellOverlayFor(PendingSignIn pending)
+    {
+        if (pending.StepUp)
+            HttpContext.Items[SecurityHeadersAttribute.ShellMayFrameKey] = true;
     }
 
     public async Task<IActionResult> OnPost()
@@ -58,6 +66,7 @@ public sealed class MfaModel(
         if (pending is null)
             return RedirectToPage("/Account/Login");
         StepUp = pending.StepUp;
+        AllowShellOverlayFor(pending);
 
         var user = await users.FindBySubjectIdAsync(pending.SubjectId, HttpContext.RequestAborted);
         if (user is null || !user.IsActive)

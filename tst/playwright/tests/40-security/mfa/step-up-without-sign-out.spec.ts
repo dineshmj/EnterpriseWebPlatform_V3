@@ -7,9 +7,9 @@ import { resetAllSimulators } from '../../../support/simulators';
 
 /**
  * Step-up without signing out (Threat-Model R-13). A risky action needs a RECENT sign-in with the
- * authenticator code; when the person's code is older than that, the screen opens a small window
- * in which the IDP asks ONLY for a fresh code (no password), and the action then goes through -
- * the person never signs out.
+ * authenticator code; when the person's code is older than that, the Shell shows an in-page overlay
+ * (no pop-up) in which the IDP asks ONLY for a fresh code (no password), and the action then goes
+ * through - the person never signs out. Outside the Shell, a BFF's step-up still works in a window.
  *
  * Runs only with MFA switched on (EWP_MFA_ENABLED=true in tst\playwright\.env and the settings in
  * tst\README.md, "MFA tests"); the rest of the suite runs with MFA off, so it is skipped there.
@@ -20,9 +20,9 @@ const maxAgeMinutes = Number(process.env.EWP_STEP_UP_MAX_AGE_MINUTES ?? '1');
 
 // ┌─ :: SECURITY :: What this test proves ─────────────────────────────────────────────────────────
 // │ Why : Threat-Model R-13: a risky action used to need a full sign-out to refresh MFA.
-// │ How : Past the step-up age a risky change opens a code-only window (no password) and completes
-// │       without signing out; while the code is fresh no window opens; the window returns to the
-// │       fixed step-up-done address.
+// │ How : Past the step-up age a risky change shows the Shell's code-only overlay (no password, no
+// │       pop-up) and completes without signing out; while the code is fresh no prompt appears; the
+// │       BFF's window flow (outside the Shell) returns to the fixed step-up-done address.
 // │ Ref : Features 2.1.5 | RFC 9470 | Threat-Model R-13 | AI review 2: xAI F-3
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 test.describe('MFA step-up without signing out', () => {
@@ -52,18 +52,21 @@ test.describe('MFA step-up without signing out', () => {
     await page.waitForTimeout(Math.max(0, signedInAt + maxAgeMinutes * 60_000 + 5_000 - Date.now()));
 
     // Act: he switches the Payment Network to Slow - a risky change.
-    const codeWindowOpens = context.waitForEvent('page');
+    const noWindow = context.waitForEvent('page', { timeout: 15_000 }).then(() => 'window', () => 'none');
     await paymentNetwork.selectOption('Slow');
-    const codeWindow = await codeWindowOpens;
 
-    // Assert: the window asks only for the code - no password, no new sign-in.
-    await codeWindow.waitForURL(u => isMfaCodePage(u), { timeout: 30_000 });
-    await expect(codeWindow.getByRole('heading', { name: 'Enter your code to continue', exact: true })).toBeVisible();
-    await expect(codeWindow.getByLabel('Password')).toHaveCount(0);
+    // Assert: the Shell shows its in-page overlay (no pop-up window), which asks only for the
+    // code - no password, no new sign-in.
+    const overlay = page.getByRole('dialog', { name: "Confirm it's you" });
+    await expect(overlay).toBeVisible({ timeout: 30_000 });
+    const codePage = page.frameLocator('iframe[title="Authenticator code"]');
+    await expect(codePage.getByRole('heading', { name: 'Enter your code to continue', exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(codePage.getByLabel('Password')).toHaveCount(0);
+    expect(await noWindow, 'no pop-up window: the code is asked in the overlay').toBe('none');
 
-    await codeWindow.getByRole('textbox', { name: 'Code', exact: true }).fill(await authenticator.nextCode(codeWindow));
-    await codeWindow.getByRole('button', { name: 'Confirm', exact: true }).click();
-    await waitUntilClosed(codeWindow);
+    await codePage.getByRole('textbox', { name: 'Code', exact: true }).fill(await authenticator.nextCode(page));
+    await codePage.getByRole('button', { name: 'Confirm', exact: true }).click();
+    await expect(overlay, 'the overlay closes once the code is confirmed').toBeHidden({ timeout: 30_000 });
 
     // ... the change went through (the switch shows what the simulator now does), and he is
     // still signed in (same Shell, same screen).
@@ -71,11 +74,10 @@ test.describe('MFA step-up without signing out', () => {
     await expect(shell.workspace().getByRole('row').filter({ has: paymentNetwork }), 'the change is recorded with his LAN ID').toContainText('dacoo');
     await expect(shell.contextButton('Operations')).toBeVisible();
 
-    // ... and while the new code is recent, the next change needs no window at all.
-    const noWindow = context.waitForEvent('page', { timeout: 5_000 }).then(() => 'window', () => 'none');
+    // ... and while the new code is recent, the next change needs no code at all.
     await paymentNetwork.selectOption('Healthy');
     await expect(paymentNetwork).toHaveValue('Healthy', { timeout: 30_000 });
-    expect(await noWindow, 'no code window for a change right after a fresh code').toBe('none');
+    await expect(overlay, 'no code prompt for a change right after a fresh code').toHaveCount(0);
 
     await context.close();
   });
@@ -107,13 +109,6 @@ test.describe('MFA step-up without signing out', () => {
     await context.close();
   });
 });
-
-/** The screen closes the window once it is back on the BFF; a consent page (if the IDP asks) comes first. */
-async function waitUntilClosed(window: Page): Promise<void> {
-  const closed = window.waitForEvent('close', { timeout: 60_000 });
-  await allowConsentIfAsked(window).catch(() => { /* already closed */ });
-  await closed;
-}
 
 async function allowConsentIfAsked(window: Page): Promise<void> {
   const consent = await window.waitForURL(u => IdpConsentPage.isAt(u), { timeout: 3_000 }).then(() => true, () => false);

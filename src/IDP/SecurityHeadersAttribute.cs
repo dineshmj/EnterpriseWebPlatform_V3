@@ -19,6 +19,9 @@ namespace EnterpriseWebPlatform.IdentityServer;
 public sealed class SecurityHeadersAttribute
     : ActionFilterAttribute
 {
+    /// <summary>HttpContext.Items key: the one page the Shell may frame (the step-up code page).</summary>
+    public const string ShellMayFrameKey = "ewp.idp.shell-may-frame";
+
     public override void OnResultExecuting(ResultExecutingContext context)
     {
         if (context.Result is not (ViewResult or PageResult))
@@ -30,8 +33,19 @@ public sealed class SecurityHeadersAttribute
 
         headers.TryAdd("X-Content-Type-Options", "nosniff");
 
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ ONE exception to "never framed": the authenticator-code page of a STEP-UP (a person
+        // │ already signed in, confirming a risky action - no password on it) may be framed by
+        // │ the Shell's origin only, for the Shell's in-page overlay. The sign-in, enrolment,
+        // │ consent and every other page - and the code page of a normal sign-in - stay 'none'.
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        var frameAncestors = context.HttpContext.Items.ContainsKey(ShellMayFrameKey)
+            ? ContentSecurityPolicyOrigin(EnterpriseWebPlatform.Common.Landscape.BSSShellBFF.SHELL_BFF_CLIENT_BASE_URL)
+            : "'none'";
+
         // The login page must never be framed (clickjacking / credential capture).
-        headers.TryAdd("X-Frame-Options", "DENY");
+        if (frameAncestors == "'none'")
+            headers.TryAdd("X-Frame-Options", "DENY");
 
         headers.TryAdd("Referrer-Policy", "no-referrer");
 
@@ -46,9 +60,11 @@ public sealed class SecurityHeadersAttribute
             "script-src 'self'; " +
             "font-src 'self'; " +
             "frame-src 'self'; " +
-            "frame-ancestors 'none'; " +
+            $"frame-ancestors {frameAncestors}; " +
             "object-src 'none'; " +
             "base-uri 'self'; " +
             "form-action 'self' https:;");
     }
+
+    private static string ContentSecurityPolicyOrigin(string url) => new Uri(url).GetLeftPart(UriPartial.Authority);
 }

@@ -48,20 +48,21 @@ public sealed class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Step-up for a risky action: opened by the MFE in a small window (the IDP's pages are never
-    /// framed). prompt=login + acr_values=mfa: the IDP asks the signed-in person only for a fresh
-    /// authenticator code, and this BFF's session gets tokens with a new auth_time. The window
-    /// then lands on step-up-done, which the MFE recognises and closes.
+    /// Step-up for a risky action: opened by the Shell in its in-page overlay (in=shell), or in a
+    /// small window when the MFE runs outside the Shell. prompt=login + acr_values=mfa: the IDP asks
+    /// the signed-in person only for a fresh authenticator code (its step-up code page is the only IDP
+    /// page the Shell may frame), and this BFF's session gets tokens with a new auth_time.
     /// </summary>
     [HttpGet("step-up")]
     [Authorize]
-    public IActionResult StepUp()
+    public IActionResult StepUp([FromQuery(Name = "in")] string? host = null)
     {
-        var properties = new AuthenticationProperties { RedirectUri = StepUpDonePath };
+        // In the Shell's overlay ("in=shell") the end is the Shell's own done page; in a window, this BFF's.
+        var properties = new AuthenticationProperties { RedirectUri = host == "shell" ? $"{StepUpDonePath}?in=shell" : StepUpDonePath };
         properties.Items["prompt"] = "login";
         // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
         // │ Step-up: prompt=login + acr_values=mfa - the IDP asks the signed-in person only for a
-        // │ fresh code; the window returns to the fixed step-up-done address.
+        // │ fresh code; the frame or window returns to the fixed step-up-done address.
         // └──────────────────────────────────────────────────────────────────────────────────────
         properties.Items["acr_values"] = "mfa";
         return Challenge(properties, "oidc");
@@ -69,14 +70,28 @@ public sealed class AuthController : ControllerBase
 
     public const string StepUpDonePath = "/api/auth/step-up-done";
 
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ In the Shell's overlay the step-up ends on the Shell's OWN fixed page (configured
+    // │ ShellOrigin + /step-up-done.html - never an address from the request): the Shell can
+    // │ read its own page's address and closes the overlay. A forged "done" gains nothing -
+    // │ the action is retried once and the API checks the fresh MFA itself.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     [HttpGet("step-up-done")]
     [Authorize]
-    public ContentResult StepUpDone() => new()
+    public IActionResult StepUpDone([FromQuery(Name = "in")] string? host, [FromServices] IConfiguration configuration)
     {
-        ContentType = "text/html; charset=utf-8",
-        Content = "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Confirmed</title></head>" +
-                  "<body><p>Confirmed. You can close this window; the action continues.</p></body></html>"
-    };
+        if (host == "shell")
+        {
+            var shellOrigin = configuration["ShellOrigin"] ?? EnterpriseWebPlatform.Common.Landscape.BSSShellBFF.SHELL_BFF_CLIENT_BASE_URL;
+            return Redirect($"{new Uri(shellOrigin).GetLeftPart(UriPartial.Authority)}/step-up-done.html");
+        }
+        return new ContentResult
+        {
+            ContentType = "text/html; charset=utf-8",
+            Content = "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Confirmed</title></head>" +
+                      "<body><p>Confirmed. You can close this window; the action continues.</p></body></html>"
+        };
+    }
 
     [HttpGet("user")]
     [AllowAnonymous]

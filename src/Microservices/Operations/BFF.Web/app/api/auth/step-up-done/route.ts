@@ -1,9 +1,17 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { config } from '@/lib/server/config';
 
 export const dynamic = 'force-dynamic';
 
-/** The end of the step-up window: the page that opened it sees this address and closes it. */
-export function GET() {
+/**
+ * The end of a step-up. In the Shell's overlay it goes on to the Shell's OWN fixed page (configured
+ * Shell origin - never an address from the request), which the Shell recognises; in a window, the
+ * page that opened it sees this address and closes it.
+ */
+export function GET(request: NextRequest) {
+  if (request.nextUrl.searchParams.get('in') === 'shell') {
+    return NextResponse.redirect(`${new URL(config.shellOrigin).origin}/step-up-done.html`, { headers: { 'Cache-Control': 'no-store' } });
+  }
   return new NextResponse(
     '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Confirmed</title></head>' +
     '<body><p>Confirmed. You can close this window; the change continues.</p></body></html>',

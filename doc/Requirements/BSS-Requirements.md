@@ -136,7 +136,7 @@ Feature: Signing in to the Banking Services System
     Given multi-factor authentication is switched on
     And Emily signed in with her authenticator code more than 15 minutes ago
     When she approves a payment
-    Then a small window asks only for a fresh authenticator code, not her password
+    Then an overlay on the page asks only for a fresh authenticator code, not her password
     And after a valid code the approval is carried out once
     And she stays signed in
 ```

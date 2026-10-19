@@ -41,7 +41,7 @@ REM DEVELOPMENT ONLY: the simulators' behaviour switch (never set outside Develo
 set "OPERATIONS_SIMULATOR_CONTROLS_ENABLED=true"
 set "OPERATIONS_SIMULATOR_AUTO_REVERT_MINUTES=15"
 REM Keep equal to the IDP's Mfa:Enabled: a simulator change then needs a recent MFA sign-in.
-set "OPERATIONS_MFA_ENABLED=false"
+set "OPERATIONS_MFA_ENABLED=true"
 set "OPERATIONS_MFA_MAX_AGE_MINUTES=15"
 
 set "OPERATIONS_JOURNEY_TLS_PFX_PATH=%CERT_DIR%\ewp-v3-dev.pfx"

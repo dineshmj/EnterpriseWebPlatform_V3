@@ -24,9 +24,13 @@
 
     @if (Model.Locked)
     {
-        <div class="actions">
-            <a class="btn btn-primary btn-block" asp-page="/Account/Login">Back to sign-in</a>
-        </div>
+        @* In a step-up overlay the sign-in page cannot be shown (never framed): the overlay's own Close ends it. *@
+        @if (!Model.StepUp)
+        {
+            <div class="actions">
+                <a class="btn btn-primary btn-block" asp-page="/Account/Login">Back to sign-in</a>
+            </div>
+        }
     }
     else
     {
@@ -41,7 +45,10 @@
 
         <div class="actions">
             <button class="btn btn-primary btn-block">@(Model.StepUp ? "Confirm" : "Verify and sign in")</button>
-            <a class="btn btn-ghost btn-block" asp-page="/Account/Login">Cancel</a>
+            @if (!Model.StepUp)
+            {
+                <a class="btn btn-ghost btn-block" asp-page="/Account/Login">Cancel</a>
+            }
         </div>
     </form>
     }

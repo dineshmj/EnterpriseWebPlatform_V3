@@ -18,6 +18,7 @@ import { useNotifications } from './hooks/useNotifications';
 import { type ShellNotification, areaOf, openablePath } from './lib/notifications';
 import { ApplicationWorkspace } from './components/ApplicationWorkspace';
 import { WelcomePanel } from './components/WelcomePanel';
+import { StepUpOverlay } from './components/StepUpOverlay';
 import Image from 'next/image';
 import { TopNavMenu } from './components/TopNavMenu';
 import { useAuth } from './hooks/useAuth';
@@ -100,6 +101,26 @@ function HomeContent() {
 
   const currentFrameOriginRef = useRef<string | null>(null);
 
+  // A step-up the application in the frame asked for: the overlay is shown while this is set.
+  const [stepUp, setStepUp] = useState<{ origin: string; requestId: string } | null>(null);
+  const stepUpRef = useRef<{ origin: string; requestId: string } | null>(null);
+  const startStepUp = useCallback((request: { origin: string; requestId: string }) => {
+    if (stepUpRef.current) return;   // one at a time
+    stepUpRef.current = request;
+    setStepUp(request);
+  }, []);
+
+  /** Closes the overlay and tells the application that asked (its origin only) whether the code was confirmed. */
+  const finishStepUp = useCallback((confirmed: boolean) => {
+    const current = stepUpRef.current;
+    stepUpRef.current = null;
+    setStepUp(null);
+    const iframe = document.getElementById('microservice-frame') as HTMLIFrameElement | null;
+    if (current && iframe?.contentWindow && currentFrameOriginRef.current === current.origin) {
+      iframe.contentWindow.postMessage({ type: 'BSS_STEP_UP_RESULT', requestId: current.requestId, confirmed }, current.origin);
+    }
+  }, []);
+
   // The origin of the MFE the Shell itself loaded (from its menu's baseURL). Only that origin
   // may announce itself as ready: a frame navigated elsewhere keeps the same window, so the
   // message's source alone proves nothing (CSP frame-src is the second layer).
@@ -120,6 +141,8 @@ function HomeContent() {
   const notifications = useNotifications(relayToFrame);
   const sessionEnded = shellSessionEnded || notifications.status === 'ended';
   const touchSessionRef = useRef<() => Promise<void>>(async () => {});
+  const startStepUpRef = useRef(startStepUp);
+  startStepUpRef.current = startStepUp;
 
   // The person is active (here or in the application in the frame): renew the Shell's session.
   const touchSession = useCallback(async () => {
@@ -174,6 +197,19 @@ function HomeContent() {
         // └──────────────────────────────────────────────────────────────────────────────────────
         if (!currentFrameOriginRef.current || event.origin !== currentFrameOriginRef.current) return;
         void touchSessionRef.current();
+        return;
+      }
+
+      if (event.data?.type === 'BSS_STEP_UP_REQUEST') {
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ A step-up only for the accepted application in the frame (its origin and window);
+        // │ the overlay frames THAT origin's fixed /api/auth/step-up - nothing from the message
+        // │ but a request ID (checked) goes anywhere.
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        if (!currentFrameOriginRef.current || event.origin !== currentFrameOriginRef.current) return;
+        const requestId = typeof event.data.requestId === 'string' && event.data.requestId.length <= 64 ? event.data.requestId : null;
+        if (!requestId) return;
+        startStepUpRef.current({ origin: event.origin, requestId });
         return;
       }
 
@@ -428,6 +464,8 @@ function HomeContent() {
               onNavigate={item => void handleMenuItemClick(item)}
             />
           )}
+
+          {stepUp && <StepUpOverlay key={stepUp.requestId} origin={stepUp.origin} onFinish={finishStepUp} />}
 
           <div className={styles.frameShell} hidden={!frameActive}>
             <iframe

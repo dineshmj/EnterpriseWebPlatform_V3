@@ -1,11 +1,21 @@
 /**
- * Step-up for a risky action (an approval, a decision, a resend, a reconciliation): the API answers
- * 403 "mfa_required" when the person's last sign-in with the authenticator code is too old. This
- * opens a small window on this app's BFF (/api/auth/step-up), where the IDP asks only for a fresh
- * code - its pages are never shown inside a frame - and the BFF's session gets tokens with a new
- * auth_time. When the window is back on this app's own address (/api/auth/step-up-done) it is
- * closed here and the action is tried once more. The person stays signed in throughout.
+ * Step-up for a risky action (a resend, a simulator change): the API answers
+ * 403 "mfa_required" when the person's last sign-in with the authenticator code is too old. Inside
+ * the Shell, this asks the Shell to show its in-page overlay with the IDP's code page; the BFF's
+ * session gets tokens with a new auth_time, and the change is tried once more. Outside the Shell
+ * (the page opened on its own), a small window does the same. The person stays signed in throughout.
  */
+// ┌─ :: SECURITY :: Step-up in the Shell's overlay ────────────────────────────────────────────────
+// │ Why : A risky action inside an MFE frame may need a fresh code; pop-up windows are blocked by
+// │       many company browsers and nobody expects a code prompt in one.
+// │ How : postMessage to the Shell ONLY (its fixed origin): BSS_STEP_UP_REQUEST; the Shell frames
+// │       this app's /api/auth/step-up?in=shell in a modal overlay (the IDP's step-up code page is
+// │       the only IDP page it may frame) and answers BSS_STEP_UP_RESULT - accepted only from the
+// │       parent window and the Shell's origin, for this request's ID. Confirmed or not, the action
+// │       is retried at most once: the API itself checks the fresh MFA.
+// │ Ref : Features 2.1.5 | RFC 9470 | HTML postMessage security | Threat-Model R-13
+// └────────────────────────────────────────────────────────────────────────────────────────────────
+const SHELL_ORIGIN = process.env.NEXT_PUBLIC_SHELL_ORIGIN ?? 'https://shell.dev.localhost:46367';
 const STEP_UP_URL = '/api/auth/step-up';
 const STEP_UP_DONE_PATH = '/api/auth/step-up-done';
 const GIVE_UP_AFTER_MS = 5 * 60_000;
@@ -20,8 +30,31 @@ export function needsStepUp(status: number, body: string): boolean {
   }
 }
 
-/** Opens the code window and resolves true once the code was confirmed, false when the window was closed first. */
+/** Resolves true once the code was confirmed, false when the person closed the prompt first. */
 export function confirmWithAuthenticator(): Promise<boolean> {
+  return window.parent !== window ? askTheShell() : inAWindow();
+}
+
+function askTheShell(): Promise<boolean> {
+  const requestId = crypto.randomUUID();
+  return new Promise(resolve => {
+    const finish = (confirmed: boolean) => {
+      window.removeEventListener('message', onMessage);
+      window.clearTimeout(timer);
+      resolve(confirmed);
+    };
+    function onMessage(event: MessageEvent) {
+      if (event.source !== window.parent || event.origin !== SHELL_ORIGIN) return;
+      if (event.data?.type !== 'BSS_STEP_UP_RESULT' || event.data.requestId !== requestId) return;
+      finish(event.data.confirmed === true);
+    }
+    window.addEventListener('message', onMessage);
+    const timer = window.setTimeout(() => finish(false), GIVE_UP_AFTER_MS + 30_000);
+    window.parent.postMessage({ type: 'BSS_STEP_UP_REQUEST', requestId }, SHELL_ORIGIN);
+  });
+}
+
+function inAWindow(): Promise<boolean> {
   const popup = window.open(STEP_UP_URL, 'ewp-step-up', 'popup,width=480,height=720');
   if (!popup) {
     return Promise.reject(new Error(
@@ -46,4 +79,4 @@ export function confirmWithAuthenticator(): Promise<boolean> {
   });
 }
 
-export const NOT_CONFIRMED = 'The action needs a recent confirmation with your authenticator code. Try again, and enter the code in the window that opens.';
+export const NOT_CONFIRMED = 'The action needs a recent confirmation with your authenticator code. Try again, and enter the code when asked.';

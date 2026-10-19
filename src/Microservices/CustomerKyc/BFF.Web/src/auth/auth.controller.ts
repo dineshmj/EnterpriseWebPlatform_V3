@@ -35,21 +35,29 @@ export class AuthController {
   }
 
   /**
-   * Step-up for a risky action, opened by the MFE in a small window (the IDP's pages are never
-   * framed): the IDP asks only for a fresh authenticator code, and the new session's tokens carry
-   * a new auth_time. The window then lands on step-up-done, which the MFE recognises and closes.
+   * Step-up for a risky action: opened by the Shell in its in-page overlay (in=shell), or in a small
+   * window when the MFE runs outside the Shell. The IDP asks only for a fresh authenticator code
+   * (its step-up code page is the only IDP page the Shell may frame), and the new session's tokens
+   * carry a new auth_time.
    */
   @Get('step-up')
-  async stepUp(@Res() res: Response) {
-    const url = await this.oidc.authorizationUrl(res, AuthController.stepUpDonePath, false, true);
+  async stepUp(@Query('in') host: string | undefined, @Res() res: Response) {
+    const done = host === 'shell' ? `${AuthController.stepUpDonePath}?in=shell` : AuthController.stepUpDonePath;
+    const url = await this.oidc.authorizationUrl(res, done, false, true);
     return res.redirect(url);
   }
 
   static readonly stepUpDonePath = '/api/auth/step-up-done';
 
+  // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+  // │ In the Shell's overlay the step-up ends on the Shell's OWN fixed page (configured
+  // │ shell origin + /step-up-done.html - never an address from the request); a forged
+  // │ "done" gains nothing: the action is retried once and the API checks the fresh MFA.
+  // └──────────────────────────────────────────────────────────────────────────────────────
   @Get('step-up-done')
-  stepUpDone(@Res() res: Response) {
+  stepUpDone(@Query('in') host: string | undefined, @Res() res: Response) {
     res.setHeader('Cache-Control', 'no-store');
+    if (host === 'shell') return res.redirect(`${new URL(this.options.shellOrigin).origin}/step-up-done.html`);
     return res.type('html').send(
       '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Confirmed</title></head>' +
       '<body><p>Confirmed. You can close this window; the action continues.</p></body></html>');

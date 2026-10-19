@@ -325,6 +325,8 @@ var shellCsp = ContentSecurityPolicy.Build(
     frameAncestors: ["'none'"],
     frameSources:
     [
+        // 'self': the step-up overlay ends on the Shell's own /step-up-done.html.
+        "'self'",
         ContentSecurityPolicy.Origin(EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo.CustomerOnboardingMicroservice.BFF_CLIENT_BASE_URL),
         ContentSecurityPolicy.Origin(EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo.CustomerKycMicroservice.BFF_CLIENT_BASE_URL),
         ContentSecurityPolicy.Origin(EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo.ComplianceMicroservice.BFF_CLIENT_BASE_URL),
@@ -344,13 +346,20 @@ var shellCspHeader = app.Configuration.GetValue<bool>("Security:CspReportOnly")
     ? "Content-Security-Policy-Report-Only"
     : "Content-Security-Policy";
 
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ ONE page may be framed - by the Shell itself only ('self'): the static step-up done
+// │ page (no script, no data), where the step-up overlay ends. Every other Shell page
+// │ stays never framed.
+// └──────────────────────────────────────────────────────────────────────────────────────
+var stepUpDoneCsp = shellCsp.Replace("frame-ancestors 'none'", "frame-ancestors 'self'");
 app.Use(async (context, next) =>
 {
+    var isStepUpDone = context.Request.Path.Equals("/step-up-done.html", StringComparison.OrdinalIgnoreCase);
     context.Response.OnStarting(() =>
     {
         var headers = context.Response.Headers;
-        headers.TryAdd(shellCspHeader, shellCsp);
-        headers.TryAdd("X-Frame-Options", "DENY");
+        headers.TryAdd(shellCspHeader, isStepUpDone ? stepUpDoneCsp : shellCsp);
+        headers.TryAdd("X-Frame-Options", isStepUpDone ? "SAMEORIGIN" : "DENY");
         headers.TryAdd("X-Content-Type-Options", "nosniff");
         headers.TryAdd("Referrer-Policy", "strict-origin-when-cross-origin");
         return Task.CompletedTask;

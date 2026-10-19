@@ -167,7 +167,7 @@ POST /v1/kyc/cases/{id}/identity-verification/approve
        + kyc.case.approve AND kyc.identity.verify [RBAC, stage permission]
        + department KYC + clearance ≥ 3 [ABAC]
        + (MFA on) an MFA sign-in at most 15 minutes old [step-up; else 403 mfa_required,
-         and the screen asks for a fresh code in a small window, without signing out]
+         and the Shell asks for a fresh code in an overlay on the page, without signing out]
   → controller: branch claim present [ABAC]
   → DecideVerificationStageCommandHandler (one transaction):
        SELECT … FOR UPDATE (row lock: concurrent deciders queue here)
