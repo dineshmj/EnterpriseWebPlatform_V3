@@ -5,6 +5,7 @@ import { DigitalGoldController } from './digital-gold/digital-gold.controller';
 import { DigitalGoldService } from './digital-gold/digital-gold.service';
 import { RateLimiter } from './http/rate-limit';
 import { DomainApiClient } from './services/domain-api.client';
+import { PurchaseWorkflowStarter } from './services/purchase-workflow.starter';
 import { TokenExchangeService } from './services/token-exchange.service';
 
 // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
@@ -33,6 +34,7 @@ export class HealthController {
     RateLimiter,   // the per-person limits (DelegatedTokenGuard)
     TokenExchangeService,   // the second exchange: the staff member's token for each Domain API
     DomainApiClient,
+    PurchaseWorkflowStarter,   // starts the purchase's Temporal workflow (the Partner Products Worker runs it)
     DigitalGoldService,
   ],
 })

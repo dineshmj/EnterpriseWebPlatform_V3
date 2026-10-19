@@ -114,6 +114,7 @@ public static class Config
             NotificationsSubscriberToNotificationsApiM2M.Client,
             AccountsCommandSubscriberToAccountsApiM2M.Client,
             PaymentsSagaReplySubscriberToPaymentsApiM2M.Client,
+            PartnerProductsWorkerM2M.Client,
 
             // Token exchange only (delegation): the Journey APIs act for a signed-in person.
             AuditJourneyApiTokenExchange.Client,

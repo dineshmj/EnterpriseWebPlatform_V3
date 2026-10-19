@@ -36,4 +36,21 @@ public sealed class PartnerBankOptions
     public string[] PermittedHosts { get; init; } = [];
 
     public int TimeoutSeconds { get; init; } = 15;
+
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Where the purchases' money goes: the Partner Bank's settlement account, from
+    // │ configuration only (checked at start-up) - the counter never types a payee, so a
+    // │ purchase can never pay anyone but the Partner Bank.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    /// <summary>The Partner Bank's settlement account for Digital Gold purchases.</summary>
+    public SettlementOptions Settlement { get; init; } = new();
+
+    public sealed class SettlementOptions
+    {
+        public string PayeeName { get; init; } = string.Empty;
+
+        public string Bsb { get; init; } = string.Empty;
+
+        public string AccountNumber { get; init; } = string.Empty;
+    }
 }

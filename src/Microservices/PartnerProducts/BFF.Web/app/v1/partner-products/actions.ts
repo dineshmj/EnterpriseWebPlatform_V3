@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 import { config, SESSION_COOKIE } from '@/lib/server/config';
 import { exchangeForJourneyApi, freshAccessToken } from '@/lib/server/oidc';
 import { readSession, updateSession } from '@/lib/server/session-store';
-import type { ActionResult, CustomerAtCounter, CustomerMatch, GoldApplication, GoldPurchase } from '@/lib/partner-products-types';
+import type { ActionResult, CustomerAtCounter, CustomerMatch, GoldApplication, GoldPurchase, PurchaseProgress } from '@/lib/partner-products-types';
 
 /*
  * The light BFF's server actions - the browser's ajax calls in the customer's pattern
@@ -40,6 +40,15 @@ export async function loadApplications(): Promise<ActionResult<GoldApplication[]
 export async function sendFormVii(applicationNumber: string): Promise<ActionResult<GoldApplication>> {
   if (!/^DGA-\d{6}-[A-Z0-9]{6}$/.test(applicationNumber)) return { ok: false, error: 'Unknown application.' };
   return callJourney<GoldApplication>(WRITE, 'POST', `/v1/journeys/partner-products/applications/${applicationNumber}/send`);
+}
+
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ Only an EWP purchase number goes into the path: the amount, the paying account and the
+// │ payee are never sent from the browser - they are EWP's record of the signed slip.
+// └──────────────────────────────────────────────────────────────────────────────────────
+export async function buyGold(purchaseNumber: string): Promise<ActionResult<PurchaseProgress>> {
+  if (!/^DGP-\d{6}-[A-Z0-9]{6}$/.test(purchaseNumber)) return { ok: false, error: 'Unknown purchase.' };
+  return callJourney<PurchaseProgress>(WRITE, 'POST', `/v1/journeys/partner-products/purchases/${purchaseNumber}/buy`);
 }
 
 export async function recordFormVii(customerId: number, form: FormData): Promise<ActionResult<GoldApplication>> {

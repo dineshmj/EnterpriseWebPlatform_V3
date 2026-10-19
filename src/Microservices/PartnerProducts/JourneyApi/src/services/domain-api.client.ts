@@ -41,8 +41,8 @@ export class DomainApiClient {
     return this.call<T>(subjectToken, scope, 'GET', url, what);
   }
 
-  async post<T>(subjectToken: string, scope: string, url: string, body: unknown, what: string): Promise<T> {
-    return this.call<T>(subjectToken, scope, 'POST', url, what, JSON.stringify(body), 'application/json');
+  async post<T>(subjectToken: string, scope: string, url: string, body: unknown, what: string, headers: Record<string, string> = {}): Promise<T> {
+    return this.call<T>(subjectToken, scope, 'POST', url, what, JSON.stringify(body), 'application/json', headers);
   }
 
   /**

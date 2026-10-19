@@ -1,0 +1,5 @@
+# Install scripts not run: protobufjs only prints a version notice; @swc/core (the Temporal SDK's workflow
+# bundler) only checks for its native binary, which pnpm installs as an optional package anyway.
+allowBuilds:
+  protobufjs: false
+  '@swc/core': false

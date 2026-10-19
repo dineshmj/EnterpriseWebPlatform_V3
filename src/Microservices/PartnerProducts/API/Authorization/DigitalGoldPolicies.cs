@@ -18,6 +18,7 @@ public static class DigitalGoldPolicies
 {
     public const string View = "DigitalGoldView";
     public const string Order = "DigitalGoldOrder";
+    public const string Worker = "DigitalGoldWorker";
 
     public static AuthorizationOptions AddDigitalGoldPolicies(this AuthorizationOptions options)
     {
@@ -34,6 +35,17 @@ public static class DigitalGoldPolicies
             .RequireDelegationBy(PartnerProductsMicroservice.CLIENT_ID_FOR_IDP_FOR_PARTNER_PRODUCTS_JOURNEY_API)
             .RequireClaim("permission", "partner.gold.order")
             .RequireClaim("branch"));
+
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ The purchase workflow's follow-up (payment advice, cancellation): ONLY the Partner
+        // │ Products Worker's own machine token - its client ID pinned, no person (sub) in it.
+        // │ The staff policies above never accept it (no delegation, no permission, no branch).
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        options.AddPolicy(Worker, policy => policy
+            .RequireAuthenticatedUser()
+            .RequireClaim("scope", PartnerProductsApiScopesRequired.PARTNER_PRODUCTS_WRITE)
+            .RequireClaim("client_id", PartnerProductsMicroservice.CLIENT_ID_FOR_IDP_FOR_PARTNER_PRODUCTS_WORKER_M2M)
+            .RequireAssertion(context => !context.User.HasClaim(c => c.Type is "sub" or "act")));
 
         return options;
     }

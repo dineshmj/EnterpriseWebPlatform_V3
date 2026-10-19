@@ -81,15 +81,33 @@ CREATE TABLE gold_purchases (
     recorded_by_lan_id      VARCHAR(50)   NOT NULL,
     recorded_at             TIMESTAMPTZ   NOT NULL,
     status                  VARCHAR(20)   NOT NULL,   -- RECORDED / SENT / ORDERED / PAID / ALLOCATED / REFUSED / CANCELLED
-    partner_order_number    VARCHAR(30)   NULL,
+    instruction_id          UUID          NULL,       -- the signed purchase instruction's jti: fixed at the first send
+    sent_at                 TIMESTAMPTZ   NULL,
+    sent_by_lan_id          VARCHAR(50)   NULL,
+    partner_order_number    VARCHAR(30)   NULL,       -- the Partner Bank's PB-G-..., once it placed the order
+    price_per_gram          NUMERIC(18,2) NULL,       -- the Partner Bank's quote (and its re-quote, if paid after the lock)
+    grams                   NUMERIC(18,4) NULL,
+    quote_expires_at        TIMESTAMPTZ   NULL,
+    payment_ref             UUID          NOT NULL,   -- the payment's Idempotency-Key at EWP Payments: fixed when the slip is recorded
+    payment_number          VARCHAR(40)   NULL,       -- PAY-..., once EWP Payments started it
+    payment_started_by_lan_id VARCHAR(50) NULL,
+    payment_started_at      TIMESTAMPTZ   NULL,
+    network_reference       VARCHAR(64)   NULL,       -- the payment network's reference: the payment advice carries it
+    paid_at                 TIMESTAMPTZ   NULL,
+    allocated_at            TIMESTAMPTZ   NULL,
     status_reason           VARCHAR(500)  NULL,
     updated_at              TIMESTAMPTZ   NOT NULL,
     version                 BIGINT        NOT NULL DEFAULT 0,
 
     CONSTRAINT pk_gold_purchases PRIMARY KEY (id),
     CONSTRAINT uq_gold_purchases_number UNIQUE (purchase_number),
-    -- One transfer authorization slip, one purchase.
+    -- One transfer authorization slip, one purchase; one signed instruction, one payment.
     CONSTRAINT uq_gold_purchases_slip UNIQUE (slip_number),
+    CONSTRAINT uq_gold_purchases_instruction UNIQUE (instruction_id),
+    CONSTRAINT uq_gold_purchases_payment UNIQUE (payment_ref),
+    CONSTRAINT ck_gold_purchases_sent CHECK (status = 'RECORDED' OR instruction_id IS NOT NULL),
+    CONSTRAINT ck_gold_purchases_ordered CHECK (status NOT IN ('ORDERED', 'PAID', 'ALLOCATED', 'CANCELLED') OR partner_order_number IS NOT NULL),
+    CONSTRAINT ck_gold_purchases_paid CHECK (status NOT IN ('PAID', 'ALLOCATED') OR network_reference IS NOT NULL),
     CONSTRAINT fk_gold_purchases_application FOREIGN KEY (application_id) REFERENCES gold_account_applications (id),
     CONSTRAINT ck_gold_purchases_amount CHECK (amount_aud > 0 AND amount_aud <= 50000),
     CONSTRAINT ck_gold_purchases_status CHECK (status IN ('RECORDED', 'SENT', 'ORDERED', 'PAID', 'ALLOCATED', 'REFUSED', 'CANCELLED')),
@@ -102,4 +120,4 @@ CREATE INDEX ix_gold_purchases_customer ON gold_purchases (customer_number, id D
 -- Verification queries
 -- -----------------------------------------------------------------------------
 -- SELECT application_number, customer_number, form_number, status, partner_account_number, recorded_by_lan_id FROM gold_account_applications ORDER BY id DESC;
--- SELECT purchase_number, customer_number, amount_aud, slip_number, status, partner_order_number FROM gold_purchases ORDER BY id DESC;
+-- SELECT purchase_number, customer_number, amount_aud, slip_number, status, partner_order_number, payment_number, network_reference, grams FROM gold_purchases ORDER BY id DESC;

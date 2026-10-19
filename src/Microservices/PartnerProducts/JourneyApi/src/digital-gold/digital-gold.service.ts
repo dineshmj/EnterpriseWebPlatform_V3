@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import { JOURNEY_OPTIONS, JourneyOptions } from '../configuration/journey-options';
 import { DomainApiClient, UploadedScan } from '../services/domain-api.client';
+import { PurchaseWorkflowStarter } from '../services/purchase-workflow.starter';
 
 /** The customer as EWP's Customer Onboarding API knows it (GET /v1/customers/{id}). */
 interface CustomerDetails {
@@ -59,6 +60,27 @@ const CO_READ = 'customer-onboarding.read';
 const ACCOUNTS_READ = 'accounts.read';
 const PP_READ = 'partner-products.read';
 const PP_WRITE = 'partner-products.write';
+const PAYMENTS_WRITE = 'payments.write';
+
+/** A purchase as the Partner Products Domain API shows it (the fields this journey reads). */
+export interface PurchaseView {
+  number: string;
+  status: string;
+  paymentNumber: string | null;
+}
+
+/** Exactly what EWP Payments is asked to pay for an ordered purchase (from the Partner Products API). */
+interface PurchasePayment {
+  idempotencyKey: string;
+  customerNumber: string;
+  fromBsb: string;
+  fromAccountNumber: string;
+  payeeName: string;
+  toBsb: string;
+  toAccountNumber: string;
+  amount: number;
+  reference: string;
+}
 
 /**
  * The counter's Digital Gold journeys (EWP as the Partner Bank's distributor). Each one is a single
@@ -71,6 +93,7 @@ export class DigitalGoldService {
   constructor(
     @Inject(JOURNEY_OPTIONS) private readonly options: JourneyOptions,
     private readonly api: DomainApiClient,
+    private readonly workflow: PurchaseWorkflowStarter,
   ) {}
 
   /** Customers of the staff member's branch whose name or number matches (Customer Onboarding decides the scope). */
@@ -128,6 +151,43 @@ export class DigitalGoldService {
   async sendFormVii(token: string, applicationNumber: string) {
     return this.api.post(token, PP_WRITE,
       `${this.options.partnerProductsApiBaseUrl}/v1/partner-products/gold-account-applications/${encodeURIComponent(applicationNumber)}/send`, {}, 'Partner Products');
+  }
+
+  // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+  // │ "Send and pay" for a recorded slip, each step safe to repeat ("Continue" runs it all
+  // │ again and skips what is done): (1) the Partner Products API sends the signed purchase
+  // │ instruction -> ORDERED; (2) the payment is started AT EWP PAYMENTS AS THE STAFF MEMBER
+  // │ (their payment.initiate and branch; the slip's fixed Idempotency-Key; payee, amount and
+  // │ reference from the Partner Products API, never from the screen) - the normal payment
+  // │ saga, approval tier and four eyes apply; (3) the Temporal workflow takes over the wait.
+  // └──────────────────────────────────────────────────────────────────────────────────────
+  async buy(token: string, purchaseNumber: string) {
+    const base = `${this.options.partnerProductsApiBaseUrl}/v1/partner-products/gold-purchases/${encodeURIComponent(purchaseNumber)}`;
+    let purchase = await this.api.post<PurchaseView>(token, PP_WRITE, `${base}/send`, {}, 'The Partner Bank');
+
+    if (purchase.status === 'ORDERED' && !purchase.paymentNumber) {
+      const payment = await this.api.get<PurchasePayment>(token, PP_WRITE, `${base}/payment-instruction`, 'Partner Products');
+      let started: { paymentNumber: string };
+      try {
+        started = await this.api.post<{ paymentNumber: string }>(token, PAYMENTS_WRITE, `${this.options.paymentsApiBaseUrl}/v1/payments`, {
+          customerNumber: payment.customerNumber,
+          fromBsb: payment.fromBsb,
+          fromAccountNumber: payment.fromAccountNumber,
+          payeeName: payment.payeeName,
+          toBsb: payment.toBsb,
+          toAccountNumber: payment.toAccountNumber,
+          amount: payment.amount,
+          reference: payment.reference,
+        }, 'Payments', { 'Idempotency-Key': payment.idempotencyKey });
+      } catch (error) {
+        if (error instanceof ForbiddenException) throw new ForbiddenException('The Partner Bank placed the order, but you may not start payments: a colleague who may continues it.');
+        throw error;
+      }
+      purchase = await this.api.post<PurchaseView>(token, PP_WRITE, `${base}/payment`, { paymentNumber: started.paymentNumber }, 'Partner Products');
+    }
+
+    const followUp = purchase.status === 'ORDERED' || purchase.status === 'PAID' ? await this.workflow.ensureStarted(purchaseNumber) : null;
+    return { purchase, followUp };
   }
 
   async applications(token: string) {

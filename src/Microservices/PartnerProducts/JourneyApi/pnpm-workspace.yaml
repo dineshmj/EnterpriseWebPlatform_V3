@@ -1,3 +1,6 @@
+# protobufjs (via @temporalio/client) only prints a version notice from its install script: not run.
+allowBuilds:
+  protobufjs: false
 # Fixed versions of vulnerable transitive packages (pnpm audit); only the vulnerable versions are rewritten.
 overrides:
   picomatch@>=4.0.0 <4.0.4: ^4.0.4

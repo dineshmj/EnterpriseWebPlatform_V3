@@ -80,16 +80,32 @@ public sealed class PartnerBankClient(
         }
     }
 
-    private async Task<PartnerAnswer> InstructAsync(string path, JsonObject instruction, Guid instructionId, CancellationToken cancellationToken)
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ The payment advice and the cancellation follow an order EWP itself placed: same mutual
+    // │ TLS and bound token; the Partner Bank accepts them only for ITS distributor's order,
+    // │ the advice only for the exact amount, and the same advice twice allocates once.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    public Task<PartnerAnswer> PaymentAdviceAsync(string orderNumber, string networkReference, decimal amount, CancellationToken cancellationToken) =>
+        PostAsync($"/api/gold-orders/{Uri.EscapeDataString(orderNumber)}/payment-advice",
+            new StringContent(new JsonObject { ["networkReference"] = networkReference, ["amount"] = amount }.ToJsonString(), Encoding.UTF8, "application/json"),
+            cancellationToken);
+
+    public Task<PartnerAnswer> CancelOrderAsync(string orderNumber, string reason, CancellationToken cancellationToken) =>
+        PostAsync($"/api/gold-orders/{Uri.EscapeDataString(orderNumber)}/cancel",
+            new StringContent(new JsonObject { ["reason"] = reason.Length > 200 ? reason[..200] : reason }.ToJsonString(), Encoding.UTF8, "application/json"),
+            cancellationToken);
+
+    private Task<PartnerAnswer> InstructAsync(string path, JsonObject instruction, Guid instructionId, CancellationToken cancellationToken) =>
+        PostAsync(path, new StringContent(Sign(instruction, instructionId), Encoding.ASCII, "application/jwt"), cancellationToken);
+
+    private async Task<PartnerAnswer> PostAsync(string path, HttpContent content, CancellationToken cancellationToken)
     {
+        using var ownedContent = content;
         var token = await TokenAsync(cancellationToken);
         if (token is null)
             return new PartnerAnswer(PartnerOutcome.Unavailable, null, "EWP could not get its token from the Partner Bank.");
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"{options.ApiBaseUrl.TrimEnd('/')}{path}")
-        {
-            Content = new StringContent(Sign(instruction, instructionId), Encoding.ASCII, "application/jwt")
-        };
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{options.ApiBaseUrl.TrimEnd('/')}{path}") { Content = ownedContent };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         try

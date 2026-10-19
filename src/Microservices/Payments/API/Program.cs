@@ -92,6 +92,17 @@ builder.Services.AddAuthorization(options =>
             PaymentsMicroservice.CLIENT_ID_FOR_IDP_FOR_PAYMENTS_SAGA_REPLY_SUBSCRIBER_TO_PAYMENTS_API_M2M);
     });
 
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ The Partner Products Worker's pinned machine identity: it may read ONE payment's
+    // │ outcome by its Idempotency-Key (a gold purchase's payment) - nothing else.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    options.AddPolicy("PaymentOutcomeForPartnerProducts", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireClaim("scope", PaymentsApiScopesRequired.PAYMENTS_READ);
+        policy.RequireClaim("client_id", PartnerProductsMicroservice.CLIENT_ID_FOR_IDP_FOR_PARTNER_PRODUCTS_WORKER_M2M);
+    });
+
     // Staff policies: scope for the kind of operation + any of the permissions + a branch.
     // Step-up (MFA): a payments officer's decision and operations' "Retry release", "Resend" and reconciliation need a sign-in with the authenticator code while "Mfa:Enabled"
     // is true (the token's amr contains "mfa"); with MFA off, nothing changes.

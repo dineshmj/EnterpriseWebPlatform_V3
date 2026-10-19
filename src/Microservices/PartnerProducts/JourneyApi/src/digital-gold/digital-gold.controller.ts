@@ -50,6 +50,14 @@ export class DigitalGoldController {
     return this.digitalGold.sendFormVii(request.delegation!.subjectToken, number);
   }
 
+  /** Send a recorded slip to the Partner Bank and pay for it - or continue where it stopped. */
+  @Post('purchases/:number/buy')
+  @Requires(ORDER)
+  buy(@Req() request: DelegatedRequest, @Param('number') number: string) {
+    if (!/^DGP-\d{6}-[A-Z0-9]{6}$/.test(number)) throw new BadRequestException('Unknown purchase.');
+    return this.digitalGold.buy(request.delegation!.subjectToken, number);
+  }
+
   @Post('customers/:customerId/form-vii')
   @Requires(ORDER)
   @UseInterceptors(scanUpload)

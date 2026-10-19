@@ -10,6 +10,7 @@ using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.PartnerProducts.Api.Authorization;
 using EnterpriseWebPlatform.PartnerProducts.Api.Controllers;
+using EnterpriseWebPlatform.PartnerProducts.Api.Domain;
 using EnterpriseWebPlatform.PartnerProducts.Api.Infrastructure;
 using EnterpriseWebPlatform.PartnerProducts.Api.PartnerBank;
 
@@ -54,6 +55,14 @@ foreach (var (name, url) in new[] { ("TokenEndpoint", partnerBankOptions.TokenEn
 }
 if (string.IsNullOrWhiteSpace(partnerBankOptions.ClientId))
     throw new InvalidOperationException("PartnerBank:ClientId is required.");
+var settlement = partnerBankOptions.Settlement;
+if (string.IsNullOrWhiteSpace(settlement.PayeeName) || settlement.PayeeName.Length > 70 ||
+    !System.Text.RegularExpressions.Regex.IsMatch(settlement.Bsb, @"^\d{3}-\d{3}$") ||
+    !System.Text.RegularExpressions.Regex.IsMatch(settlement.AccountNumber, @"^\d{5,9}$"))
+{
+    throw new InvalidOperationException("PartnerBank:Settlement needs PayeeName, Bsb (123-456) and AccountNumber (5-9 digits): the purchases' payee.");
+}
+builder.Services.AddSingleton(new SettlementAccount(settlement.PayeeName.Trim(), settlement.Bsb, settlement.AccountNumber));
 var partnerBankCredentials = new PartnerBankCredentials(partnerBankOptions);
 builder.Services.AddSingleton(partnerBankOptions);
 builder.Services.AddSingleton(partnerBankCredentials);
@@ -106,7 +115,7 @@ builder.Services.AddAuthorization(options =>
 
 // OWASP API4: per-caller rate limits on the API surface (429 + Retry-After); configuration "RateLimiting".
 // :: SECURITY :: Per-caller rate limits - see Common/WebUtilities/Security/RateLimiting.cs
-builder.Services.AddEwpRateLimiting(builder.Configuration, "/v1");
+builder.Services.AddEwpRateLimiting(builder.Configuration, "/v1", "/internal");
 
 // live: the process; ready: the database.
 builder.Services.AddHealthChecks()

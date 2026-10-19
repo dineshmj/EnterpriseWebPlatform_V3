@@ -14,17 +14,18 @@
         Operations web (Next.js + light BFF)  https://operations.dev.localhost:46381
         Partner Products Journey API (NestJS) https://partner-products-journey.dev.localhost:46385
         Partner Products web (Next.js + BFF)  https://ewp-partner.dev.localhost:46384
+        Partner Products Worker (Temporal)    health https://localhost:46383/health (needs Temporal on localhost:7233)
 
     Each web app is started after its Journey API is listening (it calls it).
     To DEBUG one of them: close its window (or Ctrl+C), then run it from VS Code - see ReadMe.txt
     section 6c. The others keep running.
 
 .EXAMPLE
-    .\ps\run\Start-NodeServices.ps1                    # start all seven
+    .\ps\run\Start-NodeServices.ps1                    # start all eight
     .\ps\run\Start-NodeServices.ps1 -Only Audit        # only the two Audit services
     .\ps\run\Start-NodeServices.ps1 -Only Operations   # only the two Operations services
-    .\ps\run\Start-NodeServices.ps1 -Only PartnerProducts   # only the two Partner Products services
-    .\ps\run\Start-NodeServices.ps1 -Stop              # stop all seven (the processes listening on their ports)
+    .\ps\run\Start-NodeServices.ps1 -Only PartnerProducts   # only the three Partner Products services
+    .\ps\run\Start-NodeServices.ps1 -Stop              # stop all eight (the processes listening on their ports)
 #>
 param(
     [ValidateSet('All', 'Kyc', 'Audit', 'Operations', 'PartnerProducts')]
@@ -45,6 +46,8 @@ $services = @(
     [pscustomobject]@{ Name = 'Operations web';         Group = 'Operations'; Port = 46381; Folder = 'src\Microservices\Operations\BFF.Web' }
     [pscustomobject]@{ Name = 'Partner Products Journey API'; Group = 'PartnerProducts'; Port = 46385; Folder = 'src\Microservices\PartnerProducts\JourneyApi' }
     [pscustomobject]@{ Name = 'Partner Products web';         Group = 'PartnerProducts'; Port = 46384; Folder = 'src\Microservices\PartnerProducts\BFF.Web' }
+    # The Temporal worker: its port is its health probe. Start Temporal first (temporal server start-dev).
+    [pscustomobject]@{ Name = 'Partner Products Worker';      Group = 'PartnerProducts'; Port = 46383; Folder = 'src\Microservices\PartnerProducts\Worker' }
 ) | Where-Object { $Only -eq 'All' -or $_.Group -eq $Only }
 
 function Get-Listener([int] $port) {

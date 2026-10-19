@@ -72,7 +72,10 @@ What the platform is, how it is designed and what each component must do are doc
 	   EnterpriseWebPlatform.BSS.slnLaunch) and Start. It builds and starts the IDP, every API, BFF, worker and
 	   simulator in their own console windows (list: section 6a).
 
-	8. Node.js services - when Visual Studio has started everything:
+	8. Node.js services - when Visual Studio has started everything, start Temporal (once per session, its own
+	   window; install the Temporal CLI once: winget install Temporal.TemporalCLI) - the Digital Gold purchases need it:
+			.\ps\temporal\Start-Temporal.ps1      (its own window; workflows kept in %LOCALAPPDATA%\EWP\temporal)
+	   then:
 			.\ps\run\Start-NodeServices.ps1
 	   It opens the KYC BFF, the Audit Journey API and the Audit web app in their own windows (each builds on its
 	   first run).
@@ -178,6 +181,8 @@ Operations Journey API (NestJS)	https://operations-journey.dev.localhost:46382  
 		Partner Products web (Next.js SPA + BFF)	https://ewp-partner.dev.localhost:46384   (Node.js; outside Visual Studio; menu "Digital Gold")
 		Partner Products Journey API (NestJS)	https://partner-products-journey.dev.localhost:46385   (Node.js; outside Visual Studio)
 		Partner Products API			https://partner-products-api.dev.localhost:46387   (EWP's side of the Partner Bank's Digital Gold)
+		Partner Products Worker (Temporal)	https://localhost:46383/health   (Node.js; runs the purchase workflow)
+		Temporal (development server)		localhost:7233, UI http://localhost:8233   (temporal server start-dev)
 		Kafka UI						http://localhost:8080   (optional)
 
 		Workers (health and metrics only): http://localhost:5101 ... 5109 - see section 9a.
@@ -518,6 +523,7 @@ Operations Journey API (NestJS)	https://operations-journey.dev.localhost:46382  
 			Audit Journey API (Node.js):  https://audit-journey.dev.localhost:46379/health/live | /health/ready
 Operations Journey API (Node.js):  https://operations-journey.dev.localhost:46382/health/live | /health/ready
 			Partner Products Journey API (Node.js):  https://partner-products-journey.dev.localhost:46385/health/live | /health/ready
+			Partner Products Worker (Temporal):  https://localhost:46383/health/live | /health/ready (ready = polling Temporal)
 
 		live  = the process (and its background loop) is working; 503 means "restart it".
 		ready = its dependencies are reachable (database; for a subscriber, its Kafka consumer group). "Degraded" (still 200)

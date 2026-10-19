@@ -21,7 +21,7 @@ Partner Products API  --mutual TLS (EWP's client certificate)-->  Partner Bank t
 |---|---|
 | Address | https://partner-products-api.dev.localhost:46387 |
 | Database | `EwpPartnerProductsDb` ([EwpPartnerProductsDb.sql](PartnerProductsDb/EwpPartnerProductsDb.sql)), user `ewp_partner_products_api` (SELECT, INSERT, UPDATE - no DELETE) |
-| Accepts | Delegated tokens only: audience `partner-products-api`, acting client `PartnerProducts.JourneyApi.ClientID` |
+| Accepts | Delegated tokens through `PartnerProducts.JourneyApi.ClientID` (audience `partner-products-api`); on `/internal` only the Partner Products Worker's machine token (`PartnerProducts.Worker.M2M.ClientID`) |
 
 ## Endpoints
 
@@ -32,7 +32,13 @@ Partner Products API  --mutual TLS (EWP's client certificate)-->  Partner Bank t
 | `POST /v1/partner-products/gold-account-applications` | `DigitalGoldOrder` | Record a signed Form VII |
 | `POST /v1/partner-products/gold-account-applications/{number}/send` | `DigitalGoldOrder` | Send Form VII to the Partner Bank: OPENED (its account number) or REFUSED (its reason); no answer leaves it SENT - send again |
 | `GET /v1/partner-products/gold-account-applications/{number}/holding` | `DigitalGoldView` | The open account's holding, read from the Partner Bank |
-| `POST /v1/partner-products/gold-purchases` | `DigitalGoldOrder` | Record a signed transfer authorization slip (needs an OPEN account) |
+| `POST /v1/partner-products/gold-purchases` | `DigitalGoldOrder` | Record a signed transfer authorization slip (needs an OPEN account); its payment's Idempotency-Key is fixed here |
+| `POST /v1/partner-products/gold-purchases/{number}/send` | `DigitalGoldOrder` | Send the slip to the Partner Bank as a signed `digital_gold_purchase`: ORDERED (its order number and quote) or REFUSED; no answer leaves it SENT - send again |
+| `GET /v1/partner-products/gold-purchases/{number}/payment-instruction` | `DigitalGoldOrder` | What EWP Payments is asked to pay for an ORDERED purchase: the slip's account and amount, the Partner Bank's settlement account (configuration), the order number as reference, the fixed Idempotency-Key |
+| `POST /v1/partner-products/gold-purchases/{number}/payment` | `DigitalGoldOrder` | Record the payment number EWP Payments gave the purchase's payment |
+| `GET /internal/v1/gold-purchases/{number}` | `DigitalGoldWorker` | The purchase's state for the purchase workflow (status, amount, payment key, order number) |
+| `POST /internal/v1/gold-purchases/{number}/payment-advice` | `DigitalGoldWorker` | The payment completed: PAID (checked: key, amount, payee), then the payment advice to the Partner Bank -> ALLOCATED |
+| `POST /internal/v1/gold-purchases/{number}/cancel` | `DigitalGoldWorker` | The payment was not made: cancel the Partner Bank's unpaid order -> CANCELLED |
 
 ## Security controls
 
@@ -54,7 +60,12 @@ Partner Products API  --mutual TLS (EWP's client certificate)-->  Partner Bank t
 | 14 | **Once only across a lost answer**: SENT and the instruction ID are saved BEFORE the call; the ID (the signed `jti`) never changes, so "send again" is the same instruction and the Partner Bank opens one account; answers are final only when they are answers (201/200 opened; 400/404/409 refused) - anything else leaves it SENT | A timeout could open two accounts, or record a refusal that never happened | Duplicate processing; inconsistent state | `PrepareToSend` in [GoldAccountApplication.cs](Domain/GoldAccountApplication.cs), `SendFormVii` in [DigitalGoldController.cs](Controllers/DigitalGoldController.cs) |
 | 15 | EWP's keys outside the repository (`%USERPROFILE%\.ewp-pki`), each with its own password file, loaded once at start-up (a missing file stops the API); the signing key in memory only; the instruction carries exactly the fields the Partner Bank's allow-list accepts | Keys in source control; a half-configured API calling the Partner Bank | Secret exposure (CWE-798); misconfiguration | [PartnerBankCredentials.cs](PartnerBank/PartnerBankCredentials.cs), `OpeningInstruction` in [GoldAccountApplication.cs](Domain/GoldAccountApplication.cs) |
 
+| 16 | The purchase workflow's endpoints (`/internal`) accept ONLY the Partner Products Worker's machine token: its client ID pinned, no person (`sub`, `act`) in it; the staff policies never accept it | Another client holding the write scope could allocate or cancel purchases; a person's token could reach the machine-only door | Broken function-level authorization (OWASP API5) | `Worker` in [DigitalGoldPolicies.cs](Authorization/DigitalGoldPolicies.cs) |
+| 17 | The purchase pays only the Partner Bank: the payee is the settlement account from configuration (checked at start-up), never typed; amount and paying account are the slip's; the reference is the Partner Bank's order number; the payment's Idempotency-Key is fixed when the slip is recorded (one payment per slip, unique in the database) | A tampered request could pay someone else, or another amount; a retry could pay twice | Unauthorised payment; duplicate payment | `PaymentInstruction` in [GoldPurchase.cs](Domain/GoldPurchase.cs), `PartnerBank:Settlement` in [appsettings.json](appsettings.json), [EwpPartnerProductsDb.sql](PartnerProductsDb/EwpPartnerProductsDb.sql) |
+| 18 | PAID only for THIS purchase's payment (key, amount and payee checked again), saved BEFORE the payment advice; the advice is sent again until answered and allocates once; CANCELLED only while unpaid - a paid purchase is never cancelled; a refused advice or cancellation is kept as the reason for a person | A wrong or stale payment could allocate gold; a crash could leave paid money without gold, or cancel an order that was paid | Inconsistent state; financial loss | `MarkPaid`, `EnsureCancellable` in [GoldPurchase.cs](Domain/GoldPurchase.cs), [InternalGoldPurchasesController.cs](Controllers/InternalGoldPurchasesController.cs) |
+| 19 | A slip is sent only on the day it was signed (Sydney): it buys at that day's price | A slip from last week could buy at today's price without the customer | Unauthorised purchase | `PrepareToSend` in [GoldPurchase.cs](Domain/GoldPurchase.cs) |
+
 ## Not yet (next steps)
 
-- Events through an Outbox to the audit trail (recorded, sent, opened, refused).
-- Step 8: a transfer slip sent as a purchase (ORDERED), the payment (Temporal workflow through the Payments saga), the payment advice, ALLOCATED.
+- Events through an Outbox to the audit trail (recorded, sent, opened, refused, ordered, paid, allocated, cancelled).
+- If the Partner Bank answers "already has an account" for the same customer: link it instead of REFUSED.

@@ -38,7 +38,8 @@ public sealed class DigitalGoldController(PartnerProductsDbContext db, TimeProvi
 
     public sealed record PurchaseView(
         string Number, string CustomerNumber, string PartnerAccountNumber, decimal AmountAud, string DebtorBsb, string DebtorAccountNumber,
-        string SlipNumber, DateOnly SlipSignedOn, string Status, string? PartnerOrderNumber, string? StatusReason, string RecordedByLanId, DateTimeOffset RecordedAt);
+        string SlipNumber, DateOnly SlipSignedOn, string Status, string? PartnerOrderNumber, string? StatusReason, string RecordedByLanId, DateTimeOffset RecordedAt,
+        decimal? PricePerGram, decimal? Grams, DateTimeOffset? QuoteExpiresAt, string? PaymentNumber, string? NetworkReference, DateTimeOffset? AllocatedAt);
 
     public sealed record CustomerDigitalGold(string CustomerNumber, ApplicationView? Application, IReadOnlyList<PurchaseView> Purchases);
 
@@ -177,6 +178,74 @@ public sealed class DigitalGoldController(PartnerProductsDbContext db, TimeProvi
         return Created($"/v1/partner-products/gold-purchases/{purchase.Number}", View(purchase));
     }
 
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Sending the slip to the Partner Bank: SENT is saved first (with the fixed instruction
+    // │ ID), then the signed digital_gold_purchase goes out over mutual TLS. ORDERED with the
+    // │ Partner Bank's order number and quote, or REFUSED with its reason; no answer leaves it
+    // │ SENT - sending again re-sends the SAME instruction (one order, whatever happens).
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    [HttpPost("gold-purchases/{number}/send")]
+    [Authorize(Policy = DigitalGoldPolicies.Order)]
+    public async Task<ActionResult<PurchaseView>> SendTransferSlip(string number, CancellationToken cancellationToken)
+    {
+        var actor = ActorOf(User);
+        var purchase = await db.Purchases.FirstOrDefaultAsync(p => p.Number == number && p.BranchCode == actor.BranchCode, cancellationToken);
+        if (purchase is null)
+            return NotFound();
+        if (purchase.Status != GoldPurchase.Recorded && purchase.Status != GoldPurchase.Sent)
+            return View(purchase);   // already ordered (or final): sending again is the "continue" of a purchase - nothing to send
+
+        var instructionId = purchase.PrepareToSend(actor.LanId, clock.GetUtcNow());
+        await SaveOnceAsync($"Purchase {number} is being sent by someone else right now.", cancellationToken);
+
+        var answer = await partnerBank.PlacePurchaseAsync(purchase.PurchaseInstruction(), instructionId, cancellationToken);
+        switch (answer.Outcome)
+        {
+            case PartnerOutcome.Accepted:
+                purchase.MarkOrdered((string?)answer.Body?["number"] ?? string.Empty, Decimal(answer.Body, "pricePerGram"), Decimal(answer.Body, "grams"),
+                    answer.Body?["quoteExpiresAt"]?.GetValue<DateTimeOffset>(), clock.GetUtcNow());
+                break;
+            case PartnerOutcome.Refused:
+                purchase.MarkRefused(answer.Reason!, clock.GetUtcNow());
+                break;
+            default:
+                throw new PartnerBankUnavailableException($"{answer.Reason} The purchase stays SENT: send it again later - the Partner Bank places it once only.");
+        }
+        await SaveOnceAsync($"Purchase {number} changed meanwhile - reload it.", cancellationToken);
+        return View(purchase);
+    }
+
+    /// <summary>What EWP Payments is asked to pay for an ORDERED purchase - for the Journey API, which pays as the staff member.</summary>
+    [HttpGet("gold-purchases/{number}/payment-instruction")]
+    [Authorize(Policy = DigitalGoldPolicies.Order)]
+    public async Task<ActionResult<PurchasePayment>> PaymentInstruction(string number, [FromServices] SettlementAccount settlement, CancellationToken cancellationToken)
+    {
+        var branch = ActorOf(User).BranchCode;
+        var purchase = await db.Purchases.AsNoTracking().FirstOrDefaultAsync(p => p.Number == number && p.BranchCode == branch, cancellationToken);
+        if (purchase is null)
+            return NotFound();
+        return purchase.PaymentInstruction(settlement);
+    }
+
+    public sealed record PaymentStartedRequest(string? PaymentNumber);
+
+    /// <summary>The payment EWP Payments started for the order (its number, shown on the screen).</summary>
+    [HttpPost("gold-purchases/{number}/payment")]
+    [Authorize(Policy = DigitalGoldPolicies.Order)]
+    public async Task<ActionResult<PurchaseView>> PaymentStarted(string number, PaymentStartedRequest request, CancellationToken cancellationToken)
+    {
+        var actor = ActorOf(User);
+        var purchase = await db.Purchases.FirstOrDefaultAsync(p => p.Number == number && p.BranchCode == actor.BranchCode, cancellationToken);
+        if (purchase is null)
+            return NotFound();
+        purchase.RecordPaymentStarted(request.PaymentNumber?.Trim() ?? string.Empty, actor.LanId, clock.GetUtcNow());
+        await SaveOnceAsync($"Purchase {number} changed meanwhile - reload it.", cancellationToken);
+        return View(purchase);
+    }
+
+    private static decimal? Decimal(System.Text.Json.Nodes.JsonObject? body, string name) =>
+        body?[name] is System.Text.Json.Nodes.JsonValue value && value.TryGetValue<decimal>(out var number) ? number : null;
+
     // The unique indexes are the final word on "once only": a race or a double click loses here, as a 409.
     private async Task SaveOnceAsync(string conflict, CancellationToken cancellationToken)
     {
@@ -201,5 +270,6 @@ public sealed class DigitalGoldController(PartnerProductsDbContext db, TimeProvi
 
     private static PurchaseView View(GoldPurchase p) => new(
         p.Number, p.CustomerNumber, p.PartnerAccountNumber, p.AmountAud, p.DebtorBsb, p.DebtorAccountNumber,
-        p.SlipNumber, p.SlipSignedOn, p.Status, p.PartnerOrderNumber, p.StatusReason, p.RecordedByLanId, p.RecordedAt);
+        p.SlipNumber, p.SlipSignedOn, p.Status, p.PartnerOrderNumber, p.StatusReason, p.RecordedByLanId, p.RecordedAt,
+        p.PricePerGram, p.Grams, p.QuoteExpiresAt, p.PaymentNumber, p.NetworkReference, p.AllocatedAt);
 }

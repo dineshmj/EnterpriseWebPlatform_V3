@@ -37,6 +37,13 @@ set "PARTNER_PRODUCTS_API_BASE_URL=https://partner-products-api.dev.localhost:46
 set "CUSTOMER_ONBOARDING_API_BASE_URL=https://customer-api.dev.localhost:46363"
 set "ACCOUNTS_API_BASE_URL=https://accounts-api.dev.localhost:48486"
 set "DOCUMENTS_MANAGEMENT_API_BASE_URL=https://documents-management-api.dev.localhost:49486"
+set "PAYMENTS_API_BASE_URL=https://payments-api.dev.localhost:44488"
+
+REM Temporal (development server: "temporal server start-dev"; UI http://localhost:8233). The
+REM purchase workflow is started here and run by the Partner Products Worker on this task queue.
+set "TEMPORAL_ADDRESS=localhost:7233"
+set "TEMPORAL_NAMESPACE=default"
+set "PARTNER_PRODUCTS_TEMPORAL_TASK_QUEUE=partner-products"
 
 set "PARTNER_PRODUCTS_JOURNEY_TLS_PFX_PATH=%CERT_DIR%\ewp-v3-dev.pfx"
 set "PARTNER_PRODUCTS_JOURNEY_TLS_PFX_PASSWORD=dev-password"

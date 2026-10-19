@@ -70,9 +70,23 @@ public sealed class PartnerProductsDbContext(DbContextOptions<PartnerProductsDbC
             e.Property(x => x.RecordedByLanId).HasColumnName("recorded_by_lan_id").HasMaxLength(50);
             e.Property(x => x.RecordedAt).HasColumnName("recorded_at");
             e.Property(x => x.Status).HasColumnName("status").HasMaxLength(20);
+            e.Property(x => x.InstructionId).HasColumnName("instruction_id");
+            e.Property(x => x.SentAt).HasColumnName("sent_at");
+            e.Property(x => x.SentByLanId).HasColumnName("sent_by_lan_id").HasMaxLength(50);
             e.Property(x => x.PartnerOrderNumber).HasColumnName("partner_order_number").HasMaxLength(30);
+            e.Property(x => x.PricePerGram).HasColumnName("price_per_gram").HasPrecision(18, 2);
+            e.Property(x => x.Grams).HasColumnName("grams").HasPrecision(18, 4);
+            e.Property(x => x.QuoteExpiresAt).HasColumnName("quote_expires_at");
+            e.Property(x => x.PaymentRef).HasColumnName("payment_ref");
+            e.Property(x => x.PaymentNumber).HasColumnName("payment_number").HasMaxLength(40);
+            e.Property(x => x.PaymentStartedByLanId).HasColumnName("payment_started_by_lan_id").HasMaxLength(50);
+            e.Property(x => x.PaymentStartedAt).HasColumnName("payment_started_at");
+            e.Property(x => x.NetworkReference).HasColumnName("network_reference").HasMaxLength(64);
+            e.Property(x => x.PaidAt).HasColumnName("paid_at");
+            e.Property(x => x.AllocatedAt).HasColumnName("allocated_at");
             e.Property(x => x.StatusReason).HasColumnName("status_reason").HasMaxLength(500);
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+            // Optimistic concurrency, as for applications: the counter and the workflow never overwrite each other.
             e.Property(x => x.Version).HasColumnName("version").IsConcurrencyToken();
         });
     }

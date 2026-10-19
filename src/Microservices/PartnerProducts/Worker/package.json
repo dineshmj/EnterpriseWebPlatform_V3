@@ -1,0 +1,21 @@
+{
+  "name": "partner-products-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Partner Products Worker (Temporal, TypeScript SDK): runs the Digital Gold purchase workflow - follows the purchase's payment at EWP Payments, then sends the Partner Bank's payment advice or cancels the unpaid order, with its own machine identity.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@temporalio/activity": "1.24.0",
+    "@temporalio/common": "1.24.0",
+    "@temporalio/worker": "1.24.0",
+    "@temporalio/workflow": "1.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.5.2",
+    "typescript": "5.9.2"
+  }
+}

@@ -41,11 +41,23 @@ export interface GoldPurchase {
   debtorAccountNumber: string;
   slipNumber: string;
   slipSignedOn: string;
-  status: string;
+  status: 'RECORDED' | 'SENT' | 'ORDERED' | 'PAID' | 'ALLOCATED' | 'REFUSED' | 'CANCELLED';
   partnerOrderNumber: string | null;
   statusReason: string | null;
   recordedByLanId: string;
   recordedAt: string;
+  pricePerGram: number | null;
+  grams: number | null;
+  quoteExpiresAt: string | null;
+  paymentNumber: string | null;
+  networkReference: string | null;
+  allocatedAt: string | null;
+}
+
+/** "Send & pay": the purchase as it now stands, and whether the follow-up workflow runs (null when nothing is left to follow). */
+export interface PurchaseProgress {
+  purchase: GoldPurchase;
+  followUp: 'STARTED' | 'ALREADY_RUNNING' | 'NOT_STARTED' | null;
 }
 
 /** The customer's gold as the Partner Bank keeps it (its system of record), read on every look. */

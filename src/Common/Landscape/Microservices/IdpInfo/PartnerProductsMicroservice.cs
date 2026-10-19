@@ -27,6 +27,17 @@ public static class PartnerProductsMicroservice
 	public const string CLIENT_ID_FOR_IDP_FOR_PARTNER_PRODUCTS_JOURNEY_API = "PartnerProducts.JourneyApi.ClientID";
 
 
+	// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+	// │ The Temporal worker (the purchase workflow): a MACHINE identity, client credentials,
+	// │ for the follow-up nobody waits for at the counter - reading the payment's outcome
+	// │ (Payments) and sending the payment advice or the cancellation (Partner Products).
+	// │ Both APIs pin this client ID on their internal endpoints; it reaches nothing else.
+	// └──────────────────────────────────────────────────────────────────────────────────────
+	public const string CLIENT_NAME_FOR_IDP_FOR_PARTNER_PRODUCTS_WORKER_M2M = "Partner Products Worker (Temporal) M2M Client";
+
+	public const string CLIENT_ID_FOR_IDP_FOR_PARTNER_PRODUCTS_WORKER_M2M = "PartnerProducts.Worker.M2M.ClientID";
+
+
 	public const string WEB_CLIENT_BASE_URL = "https://ewp-partner.dev.localhost:46384";
 
 	public const string JOURNEY_API_BASE_URL = "https://partner-products-journey.dev.localhost:46385";

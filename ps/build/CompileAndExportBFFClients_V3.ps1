@@ -1,4 +1,4 @@
-﻿cls
+cls
 
 $ErrorActionPreference = "Stop"
 
@@ -449,6 +449,7 @@ $auditedProjects = [ordered]@{
     "Operations Journey API (NestJS)"    = Join-Path $codeRootFolder "src\Microservices\Operations\JourneyApi"
     "Partner Products web (Next.js light BFF)" = Join-Path $codeRootFolder "src\Microservices\PartnerProducts\BFF.Web"
     "Partner Products Journey API (NestJS)"    = Join-Path $codeRootFolder "src\Microservices\PartnerProducts\JourneyApi"
+    "Partner Products Worker (Temporal)"       = Join-Path $codeRootFolder "src\Microservices\PartnerProducts\Worker"
     "Playwright tests"                   = Join-Path $codeRootFolder "tst\playwright"
 }
 

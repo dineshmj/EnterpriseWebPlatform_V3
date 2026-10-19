@@ -8,8 +8,8 @@ import { Card, CardContent, CardHeader } from '@/app/components/ui/card';
 import { DescriptionList, Table, Td, Th } from '@/app/components/ui/data';
 import { Alert, Badge, EmptyState } from '@/app/components/ui/feedback';
 import { Field, Input, Select } from '@/app/components/ui/form';
-import type { ActionResult, CustomerAtCounter, CustomerMatch, GoldApplication } from '@/lib/partner-products-types';
-import { loadApplications, loadCustomer, recordFormVii, recordTransferSlip, searchCustomers, sendFormVii } from '../../actions';
+import type { ActionResult, CustomerAtCounter, CustomerMatch, GoldApplication, GoldPurchase } from '@/lib/partner-products-types';
+import { buyGold, loadApplications, loadCustomer, recordFormVii, recordTransferSlip, searchCustomers, sendFormVii } from '../../actions';
 
 /** Today in Sydney (yyyy-mm-dd) - the date a transfer slip must carry. */
 const sydneyToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' }).format(new Date());
@@ -218,27 +218,91 @@ function CustomerPanel({ customer, onRecorded, onError }: {
 
       {active?.status === 'OPENED' && <TransferSlipCard customer={customer} onRecorded={onRecorded} onError={onError} />}
 
-      {customer.digitalGold.purchases.length > 0 && (
-        <Card>
-          <CardHeader title="Transfer authorization slips" icon={<ReceiptText />} />
-          <Table>
-            <thead><tr><Th>Purchase</Th><Th>Slip</Th><Th>Amount</Th><Th>From</Th><Th>Status</Th><Th>Recorded</Th></tr></thead>
-            <tbody>
-              {customer.digitalGold.purchases.map((p) => (
-                <tr key={p.number}>
-                  <Td className="font-mono text-xs">{p.number}</Td>
-                  <Td className="font-mono text-xs">{p.slipNumber}</Td>
-                  <Td>{formatAmount(p.amountAud, 'AUD')}</Td>
-                  <Td className="font-mono text-xs">{p.debtorBsb} {p.debtorAccountNumber}</Td>
-                  <Td><Badge tone="info" dot>{p.status}</Badge></Td>
-                  <Td className="text-xs text-ink-muted">{formatTime(p.recordedAt)} by {p.recordedByLanId}</Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </Card>
-      )}
+      {customer.digitalGold.purchases.length > 0 && <PurchasesCard purchases={customer.digitalGold.purchases} onRecorded={onRecorded} onError={onError} />}
     </>
+  );
+}
+
+const purchaseTone = (status: GoldPurchase['status']) =>
+  status === 'ALLOCATED' ? 'success' : status === 'REFUSED' || status === 'CANCELLED' ? 'danger' : status === 'RECORDED' ? 'warning' : 'info';
+
+const purchaseLabel: Record<GoldPurchase['status'], string> = {
+  RECORDED: 'Recorded - to be sent and paid',
+  SENT: 'Sent - no answer yet from the Partner Bank',
+  ORDERED: 'Ordered - waiting for the payment',
+  PAID: 'Paid - payment advice to the Partner Bank',
+  ALLOCATED: 'Gold allocated',
+  REFUSED: 'Refused by the Partner Bank',
+  CANCELLED: 'Cancelled - not paid',
+};
+
+const followUpText = {
+  STARTED: 'EWP follows the payment now and tells the Partner Bank when it is made (or cancels the order if it is not).',
+  ALREADY_RUNNING: 'EWP is already following the payment.',
+  NOT_STARTED: 'The order is placed, but EWP could not start following the payment. Press "Continue" shortly.',
+};
+
+// ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+// │ One button per slip: "Send & pay" does every step still open (send the signed
+// │ instruction, start the payment as you, hand the wait to the workflow); after a lost
+// │ answer it is "Continue" - each step is done once whatever is pressed. What happens
+// │ next (approval, payment network, payment advice) is shown on the next look.
+// └──────────────────────────────────────────────────────────────────────────────────────
+function PurchasesCard({ purchases, onRecorded, onError }: {
+  purchases: GoldPurchase[];
+  onRecorded: (message: string) => Promise<void>;
+  onError: (message: string | null) => void;
+}) {
+  const [working, setWorking] = useState<string | null>(null);
+
+  const buy = async (number: string) => {
+    onError(null);
+    setWorking(number);
+    const result = await buyGold(number);
+    setWorking(null);
+    if (result.ok) {
+      const p = result.data.purchase;
+      await onRecorded(p.status === 'REFUSED'
+        ? `The Partner Bank refused purchase ${p.number}: ${p.statusReason}`
+        : `Order ${p.partnerOrderNumber} placed at the Partner Bank${p.paymentNumber ? `; payment ${p.paymentNumber} started` : ''}. ${result.data.followUp ? followUpText[result.data.followUp] : ''}`);
+    } else if (result.signedOut) signInAgain();
+    else { await onRecorded(''); onError(result.error); }
+  };
+
+  return (
+    <Card>
+      <CardHeader title="Transfer authorization slips" description="Each slip buys once, at the day's price: send it to the Partner Bank and pay on the day it was signed." icon={<ReceiptText />} />
+      <Table>
+        <thead><tr><Th>Purchase</Th><Th>Slip</Th><Th>Amount</Th><Th>From</Th><Th>Status</Th><Th>Partner Bank / payment</Th><Th>Recorded</Th><Th /></tr></thead>
+        <tbody>
+          {purchases.map((p) => (
+            <tr key={p.number}>
+              <Td className="font-mono text-xs">{p.number}</Td>
+              <Td className="font-mono text-xs">{p.slipNumber}</Td>
+              <Td>{formatAmount(p.amountAud, 'AUD')}</Td>
+              <Td className="font-mono text-xs">{p.debtorBsb} {p.debtorAccountNumber}</Td>
+              <Td>
+                <Badge tone={purchaseTone(p.status)} dot>{purchaseLabel[p.status] ?? p.status}</Badge>
+                {p.statusReason && <div className="mt-1 max-w-72 text-xs text-danger-700">{p.statusReason}</div>}
+              </Td>
+              <Td className="text-xs">
+                {p.partnerOrderNumber && <div className="font-mono">{p.partnerOrderNumber}</div>}
+                {p.grams != null && <div className="text-ink-muted">{p.grams.toFixed(4)} g at {formatAmount(p.pricePerGram ?? 0, 'AUD')}/g</div>}
+                {p.paymentNumber && <div className="font-mono text-ink-muted">{p.paymentNumber}</div>}
+              </Td>
+              <Td className="text-xs text-ink-muted">{formatTime(p.recordedAt)} by {p.recordedByLanId}</Td>
+              <Td className="text-right">
+                {(p.status === 'RECORDED' || p.status === 'SENT' || p.status === 'ORDERED' || p.status === 'PAID') && (
+                  <Button size="sm" variant={p.status === 'RECORDED' ? 'primary' : 'secondary'} disabled={working !== null} onClick={() => buy(p.number)}>
+                    {working === p.number ? 'Working…' : p.status === 'RECORDED' ? 'Send & pay' : 'Continue'}
+                  </Button>
+                )}
+              </Td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+    </Card>
   );
 }
 

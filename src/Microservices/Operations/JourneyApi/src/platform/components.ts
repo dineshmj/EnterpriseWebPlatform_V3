@@ -44,6 +44,7 @@ export const components: PlatformComponent[] = [
   { name: 'NotificationsSubscriber', group: 'Workers', readiness: 'http://localhost:5107/health/ready' },
   { name: 'AccountsCommandSubscriber', group: 'Workers', readiness: 'http://localhost:5108/health/ready' },
   { name: 'PaymentsSagaReplySubscriber', group: 'Workers', readiness: 'http://localhost:5109/health/ready' },
+  { name: 'Partner Products Worker (Temporal)', group: 'Workers', readiness: 'https://localhost:46383/health/ready' },
 
   { name: 'Screening Provider (simulator)', group: 'Simulators', readiness: 'https://localhost:46366/health' },
   { name: 'Core Banking (simulator)', group: 'Simulators', readiness: 'https://localhost:46376/health' },

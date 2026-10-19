@@ -27,6 +27,13 @@ export interface JourneyOptions {
   customerOnboardingApiBaseUrl: string;
   accountsApiBaseUrl: string;
   documentsApiBaseUrl: string;
+  /** EWP Payments: the purchase's payment is started here, as the staff member (payment.initiate). */
+  paymentsApiBaseUrl: string;
+
+  /** Temporal: the purchase workflow's server (host:port), namespace and task queue (the Partner Products Worker polls it). */
+  temporalAddress: string;
+  temporalNamespace: string;
+  temporalTaskQueue: string;
 
   tlsPfxPath: string;
   tlsPfxPassword: string;
@@ -78,6 +85,10 @@ export function loadOptions(): JourneyOptions {
     customerOnboardingApiBaseUrl: httpsUrl('CUSTOMER_ONBOARDING_API_BASE_URL'),
     accountsApiBaseUrl: httpsUrl('ACCOUNTS_API_BASE_URL'),
     documentsApiBaseUrl: httpsUrl('DOCUMENTS_MANAGEMENT_API_BASE_URL'),
+    paymentsApiBaseUrl: httpsUrl('PAYMENTS_API_BASE_URL'),
+    temporalAddress: required('TEMPORAL_ADDRESS'),
+    temporalNamespace: required('TEMPORAL_NAMESPACE'),
+    temporalTaskQueue: required('PARTNER_PRODUCTS_TEMPORAL_TASK_QUEUE'),
     tlsPfxPath: required('PARTNER_PRODUCTS_JOURNEY_TLS_PFX_PATH'),
     tlsPfxPassword: required('PARTNER_PRODUCTS_JOURNEY_TLS_PFX_PASSWORD'),
   };
