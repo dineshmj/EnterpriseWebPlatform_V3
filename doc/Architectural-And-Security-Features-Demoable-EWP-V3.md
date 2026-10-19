@@ -364,10 +364,13 @@ Demo: Sophie's **Send & pay** on a $20 slip; the Temporal UI (http://localhost:8
 - The workflow: [workflows.ts](../src/Microservices/PartnerProducts/Worker/src/workflows.ts); the activities and their retry rules: [activities.ts](../src/Microservices/PartnerProducts/Worker/src/activities.ts)
 - Starting it once: [purchase-workflow.starter.ts](../src/Microservices/PartnerProducts/JourneyApi/src/services/purchase-workflow.starter.ts); "Send & pay": `buy` in [digital-gold.service.ts](../src/Microservices/PartnerProducts/JourneyApi/src/digital-gold/digital-gold.service.ts)
 - The purchase's states: [GoldPurchase.cs](../src/Microservices/PartnerProducts/API/Domain/GoldPurchase.cs); the worker's endpoints: [InternalGoldPurchasesController.cs](../src/Microservices/PartnerProducts/API/Controllers/InternalGoldPurchasesController.cs)
-- Business rules: [PartnerProducts-Requirements.md](Requirements/PartnerProducts-Requirements.md)
+- Business rules: [PartnerProducts-Requirements.md](Requirements/PartnerProducts-Requirements.md); step by step, including a worker crash and every other ending: [Temporal-Digital-Gold-Purchase.md](Arch-Design-Visualizations/Temporal-Digital-Gold-Purchase.md)
 
 **Not yet:** the payment is followed by polling (every 15 s), not by its events; Temporal runs as the local development server (Threat-Model R-16).
- Micro-frontends hosted by a business-neutral Shell
+
+### 1.5 Front-end composition
+
+#### 1.5.1 Micro-frontends hosted by a business-neutral Shell
 
 The Shell provides branding, sign-in, the menu and the Application Workspace, and hosts each context's micro-frontend in an iframe. It holds no business logic: the menu comes from the Shell's database, so adding a context adds menu rows, not Shell code. The iframe gives each MFE its own origin, cookies and security boundary, so one MFE cannot read another's DOM or session.
 
@@ -892,7 +895,32 @@ The addresses of the external systems (core banking, the screening provider, the
 
 **Mutual TLS:** towards the Partner Bank, another organisation ([2.4.10](#2410-integration-with-another-organisation-the-partner-bank)); the simulated core banking, screening provider and payment network still use API keys.
 
+#### 2.4.10 Integration with another organisation: the Partner Bank
 
+At EWP's counter, EWP is the **Partner Bank's distributor** of Digital Gold. The Partner Bank is a separate system - its own repository, its own machine - and the system of record of the customer's account and gold. Four controls protect every call:
+
+- **Mutual TLS.** EWP presents its client certificate; it believes the Partner Bank's server only if its certificate chains to the PoC's own root (not to anything Windows trusts) and its name matches; no redirects. The Partner Bank checks EWP's certificate the same way, and its authorization server matches the exact subject registered for EWP (RFC 8705 `tls_client_auth`).
+- **EWP's own token, bound to its certificate** (RFC 8705, `cnf.x5t#S256`): client credentials, no customer in it. A token copied from a log is useless without EWP's private key.
+- **A signed instruction for every action** (an ES256 JWT, `typ partner-instruction+jwt`, 5 minutes): Form VII opens the account, a transfer slip buys gold, a staff view opens the Partner Bank's page. The Partner Bank keeps it as evidence of exactly what EWP instructed, and accepts only the fields it knows.
+- **Once only across lost answers.** The instruction's ID (`jti`) is saved before the call and never changes; "send again" is the same instruction, and the Partner Bank does it once.
+
+**PAR - where it is used, and why not at the counter.** PAR protects a request that has to pass through a browser. For the customer's **own** device, the Partner Bank has the full set: **PAR** (the request pushed server to server over mutual TLS; the browser carries only a one-time `request_uri`), **JAR** (the request signed), **RAR** (`authorization_details`: exactly what is approved) and a consent page; the customer signs in at the Partner Bank and the code comes back to EWP. This is demonstrated by the Partner Bank's own check tool. At the counter nothing passes through a browser: the customer's signature on paper is the consent, they never sign in on the bank's computer, and EWP talks to the Partner Bank directly as an organisation - so the signed instruction replaces the authorization request.
+
+**"View at the Partner Bank"** is a **PAR-style handoff**: EWP pushes a new signed staff-view request for one account and one staff member, gets a one-time `request_uri` (60 s), and opens the Partner Bank's own read-only page in a new tab. Nothing about the account is in the address; reloading shows "no longer available". Unlike standard PAR, no authorization code comes back to EWP: the browser is meant to stay on the Partner Bank's page.
+
+Demo: Sophie records Camilla's Form VII and sends it (the PC's Partner Bank windows show the call), buys gold, then presses **View at the Partner Bank ↗**. The conversations [Partner-Bank-mTLS-PAR-And-Signed-Instructions.md](Arch-Design-Visualizations/Partner-Bank-mTLS-PAR-And-Signed-Instructions.md) (mutual TLS + PAR, the counter's signed instructions, the staff view) and [mTLS-Handshake.md](Arch-Design-Visualizations/mTLS-Handshake.md) (the handshake itself, the bound token, failure cases) walk through each step.
+
+**Where to look at:**
+
+- The adapter: [PartnerBankClient.cs](../src/Microservices/PartnerProducts/API/PartnerBank/PartnerBankClient.cs) (`Sign`, `TokenAsync`, `InstructAsync`), [PartnerBankCredentials.cs](../src/Microservices/PartnerProducts/API/PartnerBank/PartnerBankCredentials.cs), the start-up checks in [Program.cs](../src/Microservices/PartnerProducts/API/Program.cs)
+- Once only: `PrepareToSend` in [GoldAccountApplication.cs](../src/Microservices/PartnerProducts/API/Domain/GoldAccountApplication.cs) and [GoldPurchase.cs](../src/Microservices/PartnerProducts/API/Domain/GoldPurchase.cs)
+- The staff view: `PartnerView` in [DigitalGoldController.cs](../src/Microservices/PartnerProducts/API/Controllers/DigitalGoldController.cs)
+- The keys: [New-EwpLocalPki.ps1](../ps/pki/New-EwpLocalPki.ps1); the Partner Bank's side: its repository's `doc/Architecture.md` (D4, D14, D15) and `tools/JourneyCheck` (PAR: section 1; the counter: section 8; the staff view: section 9)
+- Security controls: [Partner Products API README](../src/Microservices/PartnerProducts/API/README.md) #11-#22
+
+**Not yet:** PAR for an EWP channel of the customer's own (EWP's screens are all for staff today); DPoP or mutual TLS on EWP's internal calls (Threat-Model R-9).
+
+### 2.5 Supply chain
 
 #### 2.5.1 Dependency vulnerability scanning
 

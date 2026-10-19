@@ -64,7 +64,7 @@ Each document has one purpose. A fact is written in exactly one place; other doc
 | [Claude Architect Review](doc/AI-Architect-Reviews/2026-10-02-Claude-Architect-Review.md) | The first point-in-time review (02-OCT-2026), its findings and their remediation status |
 | [AI Architect Reviews](doc/AI-Architect-Reviews) | The external reviewers' verdicts (Microsoft, Google, xAI) of 12-, 13- and 14-OCT-2026, kept as received, and the response to every finding |
 | [BSS Requirements](doc/Requirements/BSS-Requirements.md) | What the Banking Services System must do, in Gherkin: happy paths and boundary situations per business capability, tagged (@happy-path, @boundary, @security, @resilience, @sod, @compensation, @smoke); with the [smoke test cases](doc/Requirements/Smoke-Test-Cases.md) |
-| [Design conversations](doc/Arch-Design-Visualizations) | Step-by-step conversations between the parts: delegated token exchange, circuit breaker with back-off, the mutual-TLS handshake, and the Partner Bank integration (mutual TLS + PAR, signed instructions, the staff-view handoff) |
+| [Design conversations](doc/Arch-Design-Visualizations) | Step-by-step conversations between the parts: delegated token exchange, circuit breaker with back-off, the mutual-TLS handshake, the Partner Bank integration (mutual TLS + PAR, signed instructions, the staff-view handoff), and the Temporal workflow of a Digital Gold purchase (waiting, a worker crash, every ending) |
 | [Checklists](doc/Checklists/README.md) | One checklist per deployable tier (IDP, Shell, MFE SPAs and BFFs, Journey and domain APIs, Outbox publishers, subscribers, Kafka, PostgreSQL users and grants): what is true today, and what is open |
 
 ### Per component (`doc/Requirements/`)
