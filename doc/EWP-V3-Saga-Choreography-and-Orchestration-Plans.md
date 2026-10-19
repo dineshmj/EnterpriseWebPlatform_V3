@@ -193,18 +193,20 @@ Retry, timeout and circuit breaker protect **individual technical interactions**
 
 # 4. Choreography vs Orchestration in EWP V3
 
-| Concern | Customer Onboarding | Payments |
-|---|---|---|
-| Style | Choreography | Orchestration |
-| Central coordinator | No | Yes (owned by Payments) |
-| Workflow state | Distributed: each context's own state | Explicit persisted saga state, plus each context's own state |
-| Kafka, Outbox, Inbox | Yes | Yes |
-| Human approval | KYC, compliance and account review | Payment approval by tier |
-| Retry, timeout, circuit breaker | Yes | Yes |
-| Compensation | Each owner reacts to rejection events | The orchestrator issues compensating commands |
-| Cross-service database access | Never | Never |
+| Concern | Customer Onboarding | Payments | Digital Gold purchase (Partner Products) |
+|---|---|---|---|
+| Style | Choreography | Orchestration (hand-built saga) | Orchestration on a workflow engine (Temporal) |
+| Central coordinator | No | Yes (owned by Payments) | Yes (the purchase workflow, run by the Partner Products Worker) |
+| Workflow state | Distributed: each context's own state | Explicit persisted saga state, plus each context's own state | Temporal's durable history, plus the purchase's own state in Partner Products |
+| Kafka, Outbox, Inbox | Yes | Yes | No: the worker polls the payment's outcome and calls APIs directly (events: planned) |
+| Human approval | KYC, compliance and account review | Payment approval by tier | The payment's approval, inside the Payments saga |
+| Retry, timeout, circuit breaker | Yes | Yes | Temporal's activity retries with back-off; refusals final |
+| Compensation | Each owner reacts to rejection events | The orchestrator issues compensating commands | An unpaid order is cancelled at the Partner Bank; a paid one is never cancelled |
+| Cross-service database access | Never | Never | Never |
 
 > **Event-driven messaging and saga choreography are not synonyms.**
+
+**Why a workflow engine for the Digital Gold purchase, and not for Payments?** The purchase waits on two other organisations' timelines (EWP Payments with its approval, then the Partner Bank) and has few steps: Temporal's durable timers, retries and history give it exactly-one ending with little code ([Features 1.4.4](Architectural-And-Security-Features-Demoable-EWP-V3.md#144-long-running-workflow-on-temporal-the-digital-gold-purchase)). Payments stays a hand-built saga on the platform's own Outbox / Inbox / Kafka, so its state and timeline remain in its own database and the audit trail. The purchase's payment IS a Payments saga: the two styles compose, they do not compete.
 
 ---
 
@@ -257,4 +259,5 @@ These apply in addition to the platform principles in the [Blueprint §2](Enterp
 6. Never report a successful rollback when compensation failed.
 7. Every saga step preserves causality and the initiating human. The initiator is accountability, not authorization.
 8. An unknown outcome is not a failure: ask the participant before compensating, and never compensate on a time-out alone.
-8. Business-relevant documents are invalidated and retained, not deleted, as compensation.
+9. Business-relevant documents are invalidated and retained, not deleted, as compensation.
+10. A workflow engine's history holds no tokens and no personal data: the workflow's input is a business reference only.

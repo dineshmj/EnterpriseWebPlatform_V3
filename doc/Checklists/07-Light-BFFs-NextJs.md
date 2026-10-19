@@ -1,6 +1,6 @@
 # 07 — Light BFFs (Next.js SPA + server)
 
-Deployables: `src/Microservices/Audit/BFF.Web`, `src/Microservices/Operations/BFF.Web` · Database: `EwpBffStateDb` schemas `audit_bff` / `operations_bff` (logins `ewp_audit_web` / `ewp_operations_web`)
+Deployables: `src/Microservices/Audit/BFF.Web`, `src/Microservices/Operations/BFF.Web`, `src/Microservices/PartnerProducts/BFF.Web` · Database: `EwpBffStateDb` schemas `audit_bff` / `operations_bff` / `partner_products_bff` (logins `ewp_audit_web` / `ewp_operations_web` / `ewp_partner_products_web`)
 
 ## 1. Sign-in (OIDC client)
 
@@ -19,6 +19,9 @@ Deployables: `src/Microservices/Audit/BFF.Web`, `src/Microservices/Operations/BF
 - [x] **Data is loaded only by server actions,** so the browser never holds a token. Each call exchanges the person's token (RFC 8693) for a Journey API token naming this app as `act`. → `app/v1/<area>/actions.ts`
 - [x] **State changes go only through server actions,** which Next.js accepts only as same-origin POSTs (its Origin / Host check).
 - [x] **Problem Details from the Journey API** (`detail`, `code`, 429) are shown as messages, never as raw errors.
+- [x] **Calls that go on to another organisation are waited for long enough** (Partner Products: 60 s for changes, the Journey API's own answer - e.g. "the Partner Bank could not be reached, it stays SENT" - reaches the screen). → Partner Products `app/v1/partner-products/actions.ts`
+- [x] **Only EWP references go into a path** (application / purchase numbers checked against their pattern); amounts, accounts and payees never come from the browser for a Partner Products action. → Partner Products `actions.ts`
+- [x] **A link to another organisation's page opens in a new tab at the click, cut off from this page** (`opener = null`), and only with the https address EWP's server returned. → Partner Products `digital-gold/view-all/page.tsx` ("View at the Partner Bank")
 
 - [x] **Activity is reported to the Shell** (`BSS_MFE_ACTIVITY`, at most once a minute, the Shell's origin only, no data), so the Shell keeps its own session alive while the person works here. → `app/components/MfeShell.tsx`
 
@@ -32,6 +35,7 @@ Deployables: `src/Microservices/Audit/BFF.Web`, `src/Microservices/Operations/BF
   → `proxy.ts`
 - [x] **`frame-ancestors` is the Shell and the IDP only,** against clickjacking. Both origins are required settings: with one missing, the request fails rather than falling back to a development origin. `nosniff` and `Referrer-Policy: strict-origin-when-cross-origin` are also sent.
 - [x] **Fail-closed configuration:** a missing setting stops the app (`required()`). → `lib/server/config.ts`
+- [x] **Step-up ends on the Shell's own done page in the overlay** (Operations: `/api/auth/step-up?in=shell` → `/api/auth/step-up-done?in=shell` → the configured Shell origin's `/step-up-done.html`, never an address from the request). → Operations `app/api/auth/step-up*/route.ts`
 
 ## 5. Production (open)
 

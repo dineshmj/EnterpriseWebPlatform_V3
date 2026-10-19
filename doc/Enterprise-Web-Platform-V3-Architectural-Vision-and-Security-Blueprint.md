@@ -109,6 +109,9 @@ CustomerOutboxPublisher ──► Kafka ◄── KYC Outbox relay
 
 External systems (simulated): screening provider ◄── Compliance API, core banking ◄── Accounts API,
 payment network ◄── Payments API. BFF sessions and keys: EwpBffStateDb (one schema per .NET BFF).
+
+Another organisation: Partner Products API ──mutual TLS, bound token, signed instructions──► the Partner Bank
+(its own repository, on another machine). Temporal ◄── Partner Products Journey API (starts) / Partner Products Worker (runs).
 ```
 
 ---
@@ -127,6 +130,7 @@ payment network ◄── Payments API. BFF sessions and keys: EwpBffStateDb (on
 | Composition (not a business context) | — | Present | [Shell-Requirements.md](Requirements/Shell-Requirements.md) |
 | Audit | Generic / supporting | Present (tamper-evident trail from Kafka; auditor screens in the customer's pattern: Next.js light BFF → NestJS Journey API → Domain APIs, token exchange at every hop) | [Audit API README](../src/Microservices/Audit/API/README.md) |
 | Notifications | Generic / supporting | Present (including deep links from a notification) | [Notifications API README](../src/Microservices/Notifications/API/README.md), [Shell-Requirements.md §7](Requirements/Shell-Requirements.md#7-workflow-notifications) |
+| Partner Products | Supporting (distribution of another bank's product) | Present (EWP as the Partner Bank's distributor of Digital Gold at the counter: Form VII, transfer slips, payment through Payments, a Temporal workflow to the gold's allocation, the Partner Bank's own staff page by a PAR-style handoff; the customer's pattern) | [PartnerProducts-Requirements.md](Requirements/PartnerProducts-Requirements.md) |
 | Operations | Generic / supporting | Present (Platform Health for operations administrators; the simulators' behaviour switch in Development and Test; the customer's pattern: Next.js light BFF → NestJS Journey API, token exchange) | [Operations Journey API README](../src/Microservices/Operations/JourneyApi/README.md), [Operations web README](../src/Microservices/Operations/BFF.Web/README.md) |
 
 ### Context map
@@ -138,6 +142,8 @@ Customer Onboarding ──(published events)──► Customer KYC ──► Com
 
 CO BFF, KYC BFF ──(Open Host Service, token exchange for the person)──► Documents Management
 Payments orchestrator ──(commands / replies)──► Accounts
+Partner Products ──(for the person: customer, accounts, scans, the payment)──► CO, Accounts, DM, Payments
+Partner Products API ──(anti-corruption layer; signed instructions over mutual TLS)──► the Partner Bank
 Every component ──(conformist)──► IDP claims and scopes
 ```
 
@@ -147,6 +153,8 @@ Every component ──(conformist)──► IDP claims and scopes
 | Contexts → Documents Management | **Open Host Service**: a generic, business-agnostic API |
 | Payments ↔ Accounts | **Customer–supplier**, coordinated by the Payments saga orchestrator |
 | Everyone → IDP | **Conformist**: all components accept the IDP's claim and scope vocabulary |
+| Partner Products → the Partner Bank | **Anti-corruption layer + Published Language of the partner**: the Partner Products API is the only part that speaks the Partner Bank's instruction format and holds EWP's keys; the Partner Bank is the system of record of the gold, read back, never copied |
+| Partner Products → Payments | **Customer–supplier**: a purchase is an ordinary payment, started for the staff member; the Payments saga, approval tier and four eyes apply unchanged |
 
 ---
 
@@ -189,6 +197,7 @@ The domain layer has no knowledge of HTTP, EF Core, Kafka or the IDP.
 |---|---|---|
 | Customer Onboarding | Full tactical DDD: `Customer` and `OnboardingApplication` aggregates (reference by ID only), value objects (`PersonName`, `EmailAddress`, `PostalAddress`…), domain events, explicit status codes, injected clock; event translation in a dedicated mapper | Cross-context references use database IDs (Session B: GUID references) |
 | Documents Management | `Document` aggregate root with value objects (`BranchCode`, `FileName`, `ContentHash`), the content-type policy in the domain, a `DocumentUploaded` domain event | Events are not published (no consumer yet); the document is immutable by design |
+| Partner Products | `GoldAccountApplication` and `GoldPurchase` aggregates with their state machines (RECORDED → SENT → OPENED / ORDERED → PAID → ALLOCATED, REFUSED, CANCELLED), the rules the Partner Bank would apply checked first, optimistic `version`, once-only instruction IDs and payment key | No domain events or Outbox yet (audit trail) |
 | Customer KYC | Full tactical DDD: `KycCase` aggregate (`DecideStage`), `VerificationStage` value object (EF complex type), typed statuses, domain events, SoD in the aggregate (fails closed), optimistic `version` + row lock; Application layer (commands, queries) and a dedicated integration-event mapper | — |
 
 ---
@@ -230,6 +239,11 @@ The domain layer has no knowledge of HTTP, EF Core, Kafka or the IDP.
 | Audit web (light BFF + SPA) | Audit | Next.js | `EwpBffStateDb` (`audit_bff`) | Present |
 | Operations Journey API | Operations | NestJS | — | Present |
 | Operations web (light BFF + SPA) | Operations | Next.js | `EwpBffStateDb` (`operations_bff`) | Present |
+| Partner Products API (domain + Partner Bank adapter) | Partner Products | ASP.NET Core 10 | `EwpPartnerProductsDb` | Present |
+| Partner Products Journey API | Partner Products | NestJS | — | Present |
+| Partner Products web (light BFF + SPA) | Partner Products | Next.js | `EwpBffStateDb` (`partner_products_bff`) | Present |
+| Partner Products Worker | Partner Products | Node.js + Temporal TypeScript SDK | — (Temporal keeps the workflow state) | Present |
+| Temporal (development server) | (workflow runtime) | Temporal CLI | its own SQLite file | Present (PoC) |
 
 An MFE and its BFF are one deployable: the MFE is a static export served by its BFF.
 
@@ -429,12 +443,14 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Dead-letter / poison-message handling | Present (every subscriber, one shared consume loop: `AsyncWorkflows.Infrastructure.Subscribers`) |
 | Saga choreography | Present (CO ⇄ KYC ⇄ Compliance ⇄ Accounts: submission to a COMPLETED onboarding) |
 | Compensation | Present (a rejection at any stage, and a failed account opening after approval: CO COMPENSATING → REJECTED; DM invalidates and retains the evidence; the customer returns to PROSPECT) |
+| Long-running workflow engine (Temporal) | Present for Digital Gold purchases: a durable workflow (one per purchase, its ID the purchase number, no token or personal data in its history) follows the payment and ends the purchase once - payment advice or cancellation - across restarts; continue-as-new for long waits; activities retried with back-off, refusals final. Partial: Temporal as the local development server (no TLS or authorization; Threat-Model R-16), the payment followed by polling rather than its events |
+| Integration with another organisation | Present (the Partner Bank): mutual TLS with the PoC's own root only, a certificate-bound token (RFC 8705), every instruction signed (ES256 JWT, once only by its `jti`), a PAR-style handoff to the partner's own staff page; on the partner's side PAR, JAR and RAR with consent for its own customers |
 | Saga orchestration (Payments) | Present: persisted `PaymentSaga` state machine in the Payments API, commands / replies over Kafka with Outbox + Inbox, timeouts and resends, compensation (release funds), approval by a payments officer above the tier, COMPENSATION_FAILED as a recoverable state (Payment Processing Monitor, operations "Retry release"); network calls outside any transaction (claim → call → record); an unknown network outcome reconciled by status enquiry (CONFIRM_WITH_NETWORK), never released blind; unconfirmed for long → alert and four-eyes manual reconciliation; parked Outbox messages resent by operations; assisted-channel screens |
 | User-specific SignalR notifications | Present (Notifications API stores and pushes to `user:{sub}` / `staff:{role}:{branch}` audiences derived from the token; the Shell proxies REST and the hub and shows a bell and toasts; connections close at token expiry). A click opens the record through the menu-owned microservice and the normal navigation (4c). A backplane for several instances is planned |
 | Centralized audit trail | Present: the Audit Domain API records every business event from Kafka in an append-only, hash-chained trail (INSERT/SELECT-only user, trigger, scheduled chain verification on readiness and metrics; identifiers and people only, no personal data). Auditors search it, follow one record end to end (with its live status from the owning context) and verify integrity in the Audit Trail screen; every read is itself recorded. The chain is anchored outside its database: signed (ECDSA P-256) checkpoints in write-once storage, checked by every verification; readiness degrades when verification is overdue, the newest entry is not anchored or checkpoints go missing. Partial: operations' "Retry release" and "Resend" are on the payment's timeline but not events |
 | OpenTelemetry / distributed tracing | Present (.NET components: one trace across HTTP, the Outbox and Kafka via `traceparent`; OTLP export when configured); the KYC NestJS BFF propagates `traceparent` (no spans of its own); Partial (Audit Node.js tier not instrumented) |
 | Structured logs and metrics | Present (.NET components: Serilog with service name and trace ID, one line per request, JSON outside Development; Prometheus `/metrics` with HTTP, rate limiting, auth, resilience, database and runtime metrics plus Kafka publish / consume outcomes and every health check's status and numbers; logs and metrics over OTLP when configured). Dashboards and alerts belong to the deployment |
-| Security headers / CSP | Present: strict CSP on the Shell and the CO, KYC, Compliance, Accounts and Payments BFFs (hashed inline scripts, no inline styles, `frame-ancestors` / `frame-src`, `object-src 'none'`); the Audit web app by per-request nonce; IDP CSP on its pages; host filtering (`AllowedHosts`) per service; `nosniff`; Referrer-Policy |
+| Security headers / CSP | Present: strict CSP on the Shell and the CO, KYC, Compliance, Accounts and Payments BFFs (hashed inline scripts, no inline styles, `frame-ancestors` / `frame-src`, `object-src 'none'`); the Audit, Operations and Partner Products web apps by per-request nonce; IDP CSP on its pages; host filtering (`AllowedHosts`) per service; `nosniff`; Referrer-Policy |
 | Cookie hardening | Present: session and anti-forgery cookies HttpOnly (session), Secure, `SameSite=Lax`; OIDC correlation / nonce cookies `None` for the login round trip only |
 | Logout propagation | Present: front-channel and back-channel logout on the Shell and every MFE BFF |
 | Error responses without internals | Present: problem details with `traceId` only; details logged; the NestJS Journey APIs answer RFC 9457 Problem Details too |
@@ -448,7 +464,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Health checks | Present: `/health/live` and `/health/ready` on every .NET component (workers via a built-in listener); relay heartbeat and Outbox backlog (Degraded) checks |
 | Kafka authentication and authorization | Present: SCRAM-SHA-512 user per deployable, deny-by-default ACLs (own topics and consumer group only), no topic auto-creation; TLS (`SASL_SSL`) is a Production Concern |
 | IDP hardening (lockout, no enumeration, POST logout, front-channel logout, refresh-token rotation) | Present; refresh tokens, PAR requests and signing keys in Duende's operational store (PostgreSQL), so an IDP restart signs nobody out |
-| MFA and step-up | Present, off by default in Development (`Mfa:Enabled`; cannot be switched off elsewhere - the IDP and the APIs refuse to start): TOTP with Google Authenticator for every user, enrolment at sign-in with recovery codes; tokens carry `amr` and `auth_time`, and risky actions (officer decisions, operations' retry, resend, reconciliation, simulator switch) require a RECENT MFA sign-in; a stale one is renewed in a small window with the code only, without signing out (`acr_values=mfa`) |
+| MFA and step-up | Present, off by default in Development (`Mfa:Enabled`; cannot be switched off elsewhere - the IDP and the APIs refuse to start): TOTP with Google Authenticator for every user, enrolment at sign-in with recovery codes; tokens carry `amr` and `auth_time`, and risky actions (officer decisions, operations' retry, resend, reconciliation, simulator switch) require a RECENT MFA sign-in; a stale one is renewed in the Shell's in-page overlay with the code only, without a pop-up and without signing out (`acr_values=mfa`; only the IDP's step-up code page may be framed, by the Shell only) |
 | Server-side BFF sessions | Present for the .NET BFFs: Duende sessions and Data Protection keys in PostgreSQL (`EwpBffStateDb`, one schema and user per BFF), so restarts and several instances keep sessions; key rings encrypted at rest (certificate, or DPAPI in Development) or the application refuses to start. Present for the Node.js BFFs (KYC, Audit web): their own schema, hashed session key, AES-256-GCM-encrypted session. Present for the IDP: Duende server-side sessions, so sign-out revokes the sign-in cookie |
 | Automated tests | Partial: Playwright end-to-end, resilience and security suite through the real front ends (including the MFA step-up); unit tests planned |
 | Document content verification (allow-list + magic bytes) | Present |
@@ -519,7 +535,8 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [x] Document encryption at rest (envelope, AES-256-GCM)
 - [x] Audit chain anchored outside its database (signed checkpoints, write-once)
 - [x] Deny by default through one helper in every domain API; checks on external-system addresses (SSRF)
-- [ ] Sender-constrained tokens where justified
+- [x] Sender-constrained tokens where justified (certificate-bound tokens towards the Partner Bank, RFC 8705)
+- [x] Step-up in an in-page overlay (no pop-up)
 
 **Phase 6 — Secure delivery**
 - [ ] Automated tests (Partial: Playwright end-to-end, resilience and security suite; unit tests planned)
@@ -553,6 +570,17 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [ ] Customer self-service channel, beneficiaries
 
 Details: [Saga plan §2](EWP-V3-Saga-Choreography-and-Orchestration-Plans.md#2-orchestration--payments), [Payments-Requirements.md](Requirements/Payments-Requirements.md).
+
+**Phase 9 — Another organisation and long-running workflows (Partner Products)**
+- [x] The Partner Bank as a separate system (its own repository and machine): authorization server with PAR, JAR, RAR and consent; mutual TLS; bound tokens
+- [x] EWP as distributor at the counter: Form VII and transfer slips, signed instructions, once only across lost answers
+- [x] Purchase paid through the Payments saga, followed by a Temporal workflow to ALLOCATED or CANCELLED
+- [x] "View at the Partner Bank" (PAR-style handoff to the partner's own page)
+- [ ] Outbox and audit events for Partner Products
+- [ ] Temporal with mTLS and namespace authorization; the payment followed by events instead of polling
+- [ ] FAPI 2.0 profile end to end (PAR for EWP's own customer channel, DPoP or mTLS everywhere)
+
+Details: [PartnerProducts-Requirements.md](Requirements/PartnerProducts-Requirements.md).
 
 ---
 

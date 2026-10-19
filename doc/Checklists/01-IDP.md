@@ -12,7 +12,7 @@ Deployable: `src/IDP` · Database: `EwpIdentityAccessDb` (user `ewp_idp`)
 
 - [x] **One file per API resource and per API scope** (read and write per microservice). → `src/IDP/ConfigRegistration/ApiResources/`, `ConfigRegistration/MicroserviceApiScopes/`
 - [x] **One file per BFF client:** the Shell and 7 MFEs. → `ConfigRegistration/Clients/BssShell.cs`, `Clients/MFEs/`
-- [x] **One file per machine client:** the 8 Kafka subscribers and the Audit Journey API's token exchange. → `Clients/M2M/`
+- [x] **One file per machine client:** the 8 Kafka subscribers, the Partner Products Worker (Temporal), and the token-exchange-only clients of the Audit, Operations and Partner Products Journey APIs. → `Clients/M2M/`
 - [x] **The Bruno API-testing client exists in Development only.** It is a public client: no secret, PKCE, no refresh token. *Because* a client without a secret must never exist where real data is. → `Clients/Bruno.cs`, `Config.GetClients(isDevelopment)`
 
 ## 3. BFF (human) clients
@@ -31,7 +31,7 @@ Deployable: `src/IDP` · Database: `EwpIdentityAccessDb` (user `ewp_idp`)
 
 ## 4. Machine (M2M) clients
 
-- [x] **They have:** client credentials only, a secret from configuration, and exactly ONE write scope for the one API they call. → e.g. `Clients/M2M/PaymentsSagaReplySubscriberToPaymentsApiM2M.cs`
+- [x] **They have:** client credentials only, a secret from configuration, and exactly ONE write scope for the one API they call - except the Partner Products Worker, which reads one payment's outcome (`payments.read`) and writes to Partner Products (`partner-products.write`); both APIs accept it on pinned internal endpoints only. → e.g. `Clients/M2M/PaymentsSagaReplySubscriberToPaymentsApiM2M.cs`, `Clients/M2M/PartnerProductsWorkerM2M.cs`
 - [x] **They do not have:** a user-facing flow, refresh tokens, redirect URIs, or a second API's scope. The receiving API also pins the `client_id` on its internal endpoint. *Because* a stolen worker secret should open one endpoint only.
 - [x] **Secrets are read per deployable** (`ClientSecretStore`). A missing secret stops the IDP from starting (fail closed). → `src/IDP/Security/ClientSecretStore.cs`
 
@@ -66,7 +66,7 @@ Deployable: `src/IDP` · Database: `EwpIdentityAccessDb` (user `ewp_idp`)
 ## 7. Hosting and headers
 
 - [x] **The IDP runs on HTTPS only.** HSTS is on outside Development, and `AllowedHosts` limits the host names it answers.
-- [x] **Every page has security headers:** a Content-Security-Policy (against XSS), `frame-ancestors 'none'` with X-Frame-Options (against clickjacking), and `nosniff`. The sign-in pages are never framed; step-up opens a window instead. → `src/IDP/SecurityHeadersAttribute.cs`
+- [x] **Every page has security headers:** a Content-Security-Policy (against XSS), `frame-ancestors 'none'` with X-Frame-Options (against clickjacking), and `nosniff`. The sign-in pages are never framed. ONE exception: the code page of a STEP-UP (a signed-in person, no password on it) may be framed by the Shell's origin only, for its overlay; in that mode it shows no link to the sign-in page. → `src/IDP/SecurityHeadersAttribute.cs` (`ShellMayFrameKey`), `Pages/Account/Mfa`
 - [x] **IdentityServer raises its events** (success, failure, error, information) into the structured log. → `Program.cs`
 
 ## 8. Production (open)

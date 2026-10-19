@@ -28,7 +28,7 @@ It deliberately does **not** contain:
 | Persona | Role code | Primary responsibility | Works in |
 |---|---|---|---|
 | Customer | `customer` | Initiates and reviews their own banking activities | Customer Onboarding, Accounts, Payments |
-| Customer Service Agent | `customer_service_agent` | Creates and manages customers and onboarding applications on a customer's behalf; captures payments for a customer (assisted channel) | Customer Onboarding, Payments |
+| Customer Service Agent | `customer_service_agent` | Creates and manages customers and onboarding applications on a customer's behalf; captures payments for a customer (assisted channel); as the Partner Bank's distributor, records the customer's signed Digital Gold forms, sends them and pays for the purchases | Customer Onboarding, Payments, Partner Products |
 | KYC Officer | `kyc_officer` | Verifies customer identity and submitted documents | Customer KYC |
 | Compliance Officer | `compliance_officer` | Makes AML, risk and compliance decisions | Compliance |
 | Account Officer | `account_officer` | Reviews and approves account opening | Accounts |
@@ -36,6 +36,8 @@ It deliberately does **not** contain:
 | Operations Administrator | `operations_administrator` | Monitors workflows and the platform's health and handles technical exceptions: retries a failed release, resends parked messages, reconciles - always with a second operator - payments the network never confirmed; in Development and Test switches the simulated external systems | All contexts — operational views only; Operations (Platform Health) |
 | Auditor | `auditor` | Independent, read-only review of business activity and history | All contexts — read-only, through the Audit context only (the Audit Trail), where every look is itself recorded; never the operational screens |
 | Platform Administrator | `platform_administrator` | Administers the platform: users, roles, configuration, health | IDP, Shell — never business approvals |
+
+**Outside the platform:** the **Partner Bank** (another organisation) keeps the customer's Digital Gold account and gold; it knows EWP as one distributor and the staff member only by the LAN ID and branch in EWP's signed instructions. The customer has their own Partner Bank sign-in for its channel ("My Partner Bank"), never used at EWP's counter.
 
 A persona is a **business responsibility**, not a job title or a technical role. One employee may hold more than one role where organizational policy permits, but holding several roles never bypasses Separation of Duties.
 
@@ -64,6 +66,14 @@ Customer Service Agent ──captures──► (above the tier) Payments Officer
 outcome unknown for long ──► Operations Administrator A proposes ──► Operations Administrator B decides
 ```
 
+And for Digital Gold (EWP as distributor), where machines finish what the person started:
+
+```text
+Customer signs Form VII / a slip ──► Customer Service Agent records and sends it ──► the Partner Bank opens / places the order
+Customer Service Agent pays (her own payment.initiate) ──► (above the tier) Payments Officer approves ──► the saga pays the Partner Bank
+the Partner Products Worker (machine) ──► payment advice ──► the Partner Bank allocates the gold (or cancels an unpaid order)
+```
+
 How these principles are enforced is described in [Authorization-Model.md](Authorization-Model.md).
 
 ---
@@ -82,6 +92,7 @@ How these principles are enforced is described in [Authorization-Model.md](Autho
 | Identity Provider | [IDP-Requirements.md](Requirements/IDP-Requirements.md) |
 | Audit | [Audit API README](../src/Microservices/Audit/API/README.md) |
 | Operations | [Operations Journey API README](../src/Microservices/Operations/JourneyApi/README.md) |
+| Partner Products | [PartnerProducts-Requirements.md](Requirements/PartnerProducts-Requirements.md) |
 
 ---
 

@@ -35,7 +35,7 @@ The Shell is **deliberately business-neutral**:
 - MFE base URLs come from the Menu DB, never from Shell code. Adding a bounded context adds menu rows, not Shell code.
 - The Shell shows only the items mapped to the user's role claims. **This is a convenience, not security.** Every MFE, BFF and API authorizes independently.
 - Role codes in `menu_items_and_roles` must match the IDP role codes exactly.
-- The menu must not promise more than the APIs allow: an item lists exactly the roles its API admits, so no item ends in "You are not permitted …". Today: Customer Onboarding - agents, plus operations and platform administrators (read, all branches); KYC, Compliance and Accounts - their own officers only; Payments - agents and payments officers, plus operations (read, all branches); Audit - auditors, who see every context's activity there only (every look recorded), never through the operational screens.
+- The menu must not promise more than the APIs allow: an item lists exactly the roles its API admits, so no item ends in "You are not permitted …". Today: Customer Onboarding - agents, plus operations and platform administrators (read, all branches); KYC, Compliance and Accounts - their own officers only; Payments - agents and payments officers, plus operations (read, all branches); Partner Products (Digital Gold) - agents; Operations - operations administrators; Audit - auditors, who see every context's activity there only (every look recorded), never through the operational screens.
 
 ### Welcome screen
 
@@ -90,6 +90,8 @@ Each item is a `{ title, value }` pair. The context is **opaque** to the Shell: 
 | `BSS_NAVIGATION_REQUEST` | Shell → MFE | The Shell asks whether it may navigate away (with a `requestId`) |
 | `BSS_NAVIGATION_RESPONSE` | MFE → Shell | `allowed: true / false`. A dirty form asks the user first. |
 | `BSS_MFE_ACTIVITY` | MFE → Shell | The person is active in the MFE (a click or key; at most once a minute; no data). The Shell renews its own session, at most every 5 minutes. |
+| `BSS_STEP_UP_REQUEST` | MFE → Shell | An API answered 403 `mfa_required`: the MFE asks for a fresh authenticator code (a `requestId` only). The Shell shows its in-page overlay framing that MFE's own `/api/auth/step-up?in=shell` (built from the origin it accepted, never from the message). |
+| `BSS_STEP_UP_RESULT` | Shell → MFE | `confirmed: true / false` for that `requestId`: the code was confirmed (the step-up ended on the Shell's own `/step-up-done.html`), or the person cancelled (Cancel, Escape, 5 minutes). The MFE retries the action once; the API checks the fresh MFA itself. |
 
 Rules:
 
@@ -138,7 +140,8 @@ Cookies stay isolated per host name (`*.dev.localhost` locally), and a logout mu
 | Tokens never reach browser JavaScript (BFF pattern) | Present |
 | `postMessage` origin and source validation in the Shell | Present |
 | MFEs use a static parent-origin allow-list | Present (`NEXT_PUBLIC_SHELL_ORIGIN`, built into each MFE; no `document.referrer`, no `'*'`) |
-| CSP `frame-ancestors` on the Shell and every MFE | Present: the Shell cannot be framed (`frame-ancestors 'none'`, `X-Frame-Options: DENY`); MFE BFFs may be framed only by the Shell (and by the IDP, for front-channel logout); `nosniff` and a referrer policy everywhere |
+| Step-up without a pop-up | Present: the in-page overlay (`BSS_STEP_UP_REQUEST` / `_RESULT`); only for the MFE in the frame; it frames the MFE's own fixed step-up address; the IDP lets the Shell frame its step-up code page only; "Nothing shown? Use a separate window" as the fallback |
+| CSP `frame-ancestors` on the Shell and every MFE | Present: the Shell cannot be framed (`frame-ancestors 'none'`, `X-Frame-Options: DENY`) - except its static `/step-up-done.html`, which only the Shell itself may frame (`'self'`); MFE BFFs may be framed only by the Shell (and by the IDP, for front-channel logout); `nosniff` and a referrer policy everywhere |
 | Shell session lifetime aligned with the MFE BFFs | Present (30 minutes, sliding) |
 | Middleware order `UseBff()` before `UseAuthorization()` | Present |
 | Server-side sessions (tokens not carried in the cookie) | Present in the Shell, every .NET MFE BFF and the Audit web app (Next.js; its own session table in `EwpBffStateDb`, schema `audit_bff`, tokens encrypted): Duende sessions and the Data Protection keys (which encrypt the cookies) are stored in PostgreSQL `EwpBffStateDb`, one schema and database user per BFF; a restart or a second instance keeps everybody signed in, and expired sessions are cleaned up. The key ring is encrypted at rest (certificate in `DataProtection:CertificatePath`; DPAPI only in Development on Windows); without either the BFF refuses to start. The NestJS KYC BFF stores its `express-session` sessions there too (schema `kyc_bff`, user `ewp_kyc_bff`; hashed session key, session encrypted with AES-256-GCM). |

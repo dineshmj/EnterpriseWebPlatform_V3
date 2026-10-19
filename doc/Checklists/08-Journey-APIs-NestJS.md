@@ -1,6 +1,6 @@
 # 08 — Journey APIs (NestJS)
 
-Deployables: `src/Microservices/Audit/JourneyApi`, `src/Microservices/Operations/JourneyApi`
+Deployables: `src/Microservices/Audit/JourneyApi`, `src/Microservices/Operations/JourneyApi`, `src/Microservices/PartnerProducts/JourneyApi`
 
 ## 1. Who may call
 
@@ -19,6 +19,10 @@ Deployables: `src/Microservices/Audit/JourneyApi`, `src/Microservices/Operations
 
 - [x] **The second token exchange:** one token per downstream scope, with this API added to the `act` chain. An IDP refusal becomes 403, an IDP outage 503. → Audit `src/services/token-exchange.service.ts`
 - [x] **Downstream answers are translated** (401 / 403 → 403, 404 → 404, anything else → 503), with timeouts on every call. *Because* raw downstream errors would leak internals. → Audit `src/services/domain-api.client.ts`
+- [x] **Customer facts are read again, never taken from the screen** (Partner Products: name, mobile and KYC status from Customer Onboarding for every Form VII; the paying account from Accounts). → Partner Products `src/digital-gold/digital-gold.service.ts`
+- [x] **A payment is started AS THE PERSON** (Partner Products: `payments.write` exchanged for the staff member, Payments then requires her own `payment.initiate`; payee, amount and Idempotency-Key from the Partner Products API, never the screen). → Partner Products `buy` in `digital-gold.service.ts`
+- [x] **A long-running follow-up is handed to a workflow engine with a business reference only** (Partner Products: Temporal workflow `gold-purchase-<number>`; no token or account number in its history; a second start is "already running"). → Partner Products `src/services/purchase-workflow.starter.ts`
+- [x] **Calls that go on to another organisation wait longer (40 s) than plain domain calls (15 s)**, so the domain API's own "not reachable, stays SENT" answer is passed on. → Partner Products `postViaPartnerBank` in `src/services/domain-api.client.ts`
 - [x] **The simulator switch exists only when `OPERATIONS_SIMULATOR_CONTROLS_ENABLED` (Development or Test);** otherwise it answers 404. It calls loopback-only endpoints, logs the LAN ID and reverts automatically. → Operations `src/platform/platform.services.ts`
 
 ## 3. Abuse and errors

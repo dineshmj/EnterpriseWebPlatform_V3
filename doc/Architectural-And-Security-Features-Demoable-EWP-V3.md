@@ -25,6 +25,9 @@ The document answers *how the platform is built and protected*, not *which busin
 | The network cannot say for hours what happened to a payment. Who decides, and can one person do it alone? | [1.4.3](#143-orchestration-the-payments-saga), [2.2.6](#226-separation-of-duties-makerchecker) |
 | Kafka was down for long and messages were parked. How are they sent again without doing anything twice? | [1.6.2](#162-dead-letter-handling) |
 | How do operations see the whole platform's health, and show what happens when a provider is down? | [1.7.4](#174-operations-platform-health-and-the-simulator-switch) |
+| A purchase waits hours for an approval and the worker restarts. Is the gold still allocated - once? | [1.4.4](#144-long-running-workflow-on-temporal-the-digital-gold-purchase) |
+| How does EWP talk to another bank? Could someone pose as EWP, or replay its token or an instruction? | [2.4.10](#2410-integration-with-another-organisation-the-partner-bank) |
+| Is PAR used? Why not at the counter? | [2.4.10](#2410-integration-with-another-organisation-the-partner-bank) |
 | Are events processed in order? | [1.3.5](#135-ordering-guarantees) |
 | How do you trace one business transaction across services? | [1.3.4](#134-workflow-correlation-and-causation-identity), [1.7.1](#171-distributed-tracing-across-http-and-kafka) |
 | What can Prometheus / Grafana see? Are the logs structured? | [1.7.3](#173-structured-logs-and-metrics) |
@@ -79,6 +82,7 @@ The document answers *how the platform is built and protected*, not *which busin
     - [1.4.1 Choreography across Customer Onboarding, KYC, Compliance and Accounts](#141-choreography-across-customer-onboarding-kyc-compliance-and-accounts)
     - [1.4.2 Compensation on rejection: retain, don't delete](#142-compensation-on-rejection-retain-dont-delete)
     - [1.4.3 Orchestration: the Payments saga](#143-orchestration-the-payments-saga)
+    - [1.4.4 Long-running workflow on Temporal: the Digital Gold purchase](#144-long-running-workflow-on-temporal-the-digital-gold-purchase)
   - [1.5 Front-end composition](#15-front-end-composition)
     - [1.5.1 Micro-frontends hosted by a business-neutral Shell](#151-micro-frontends-hosted-by-a-business-neutral-shell)
     - [1.5.2 Shell–MFE protocol and the Application Workspace](#152-shellmfe-protocol-and-the-application-workspace)
@@ -125,6 +129,7 @@ The document answers *how the platform is built and protected*, not *which busin
     - [2.4.7 Rate limiting](#247-rate-limiting)
     - [2.4.8 Tamper-evident audit trail](#248-tamper-evident-audit-trail)
     - [2.4.9 Calls to external systems](#249-calls-to-external-systems)
+    - [2.4.10 Integration with another organisation: the Partner Bank](#2410-integration-with-another-organisation-the-partner-bank)
   - [2.5 Supply chain](#25-supply-chain)
     - [2.5.1 Dependency vulnerability scanning](#251-dependency-vulnerability-scanning)
 - [3. Anti-patterns avoided](#3-anti-patterns-avoided)
@@ -146,11 +151,11 @@ The document answers *how the platform is built and protected*, not *which busin
 
 #### 1.1.1 Bounded contexts, each with its own database
 
-Each business capability (Customer Onboarding, Customer KYC, Compliance, Accounts, Payments, Notifications, Documents Management) is a bounded context with its own model, language and PostgreSQL database. No context reads or writes another context's tables, and there are no cross-database foreign keys. Contexts refer to each other's records by business identifier only, for example an application's never-repeating `ApplicationRef` (UUID v7) and its `ApplicationNumber`, never by another context's database ID. Collaboration happens only through published events or explicit APIs, so each context can change its schema without coordinating with the others.
+Each business capability (Customer Onboarding, Customer KYC, Compliance, Accounts, Payments, Notifications, Documents Management, Audit, Partner Products) is a bounded context with its own model, language and PostgreSQL database. No context reads or writes another context's tables, and there are no cross-database foreign keys. Contexts refer to each other's records by business identifier only, for example an application's never-repeating `ApplicationRef` (UUID v7) and its `ApplicationNumber`, never by another context's database ID. Collaboration happens only through published events or explicit APIs, so each context can change its schema without coordinating with the others.
 
 **Where to look at:**
 
-- Database scripts, one per context: [EwpCustomerDb.sql](../src/Microservices/CustomerOnboarding/API/CustomerDB/EwpCustomerDb.sql), [EwpKycDb.sql](../src/Microservices/CustomerKyc/API/KycDb/EwpKycDb.sql), [EwpComplianceDb.sql](../src/Microservices/Compliance/API/ComplianceDb/EwpComplianceDb.sql), [EwpAccountsDb.sql](../src/Microservices/Accounts/API/AccountsDb/EwpAccountsDb.sql), [EwpPaymentsDb.sql](../src/Microservices/Payments/API/PaymentsDb/EwpPaymentsDb.sql), [EwpNotificationsDb.sql](../src/Microservices/Notifications/API/NotificationsDb/EwpNotificationsDb.sql), [EwpDocumentsManagementDb.sql](../src/Microservices/DocumentsManagement/API/DocumentMgmtDB/EwpDocumentsManagementDb.sql)
+- Database scripts, one per context: [EwpCustomerDb.sql](../src/Microservices/CustomerOnboarding/API/CustomerDB/EwpCustomerDb.sql), [EwpKycDb.sql](../src/Microservices/CustomerKyc/API/KycDb/EwpKycDb.sql), [EwpComplianceDb.sql](../src/Microservices/Compliance/API/ComplianceDb/EwpComplianceDb.sql), [EwpAccountsDb.sql](../src/Microservices/Accounts/API/AccountsDb/EwpAccountsDb.sql), [EwpPaymentsDb.sql](../src/Microservices/Payments/API/PaymentsDb/EwpPaymentsDb.sql), [EwpNotificationsDb.sql](../src/Microservices/Notifications/API/NotificationsDb/EwpNotificationsDb.sql), [EwpDocumentsManagementDb.sql](../src/Microservices/DocumentsManagement/API/DocumentMgmtDB/EwpDocumentsManagementDb.sql), [EwpPartnerProductsDb.sql](../src/Microservices/PartnerProducts/API/PartnerProductsDb/EwpPartnerProductsDb.sql)
 - Cross-context reference by business identifier: `ApplicationRef` in the [`KycCase`](../src/Microservices/CustomerKyc/API/Domain/Aggregates/KycCase.cs) aggregate
 - Context map: [Blueprint §5](Enterprise-Web-Platform-V3-Architectural-Vision-and-Security-Blueprint.md#5-bounded-contexts-and-context-map)
 
@@ -344,9 +349,25 @@ Demo: switch the Payment Network simulator to **LosingAnswers** (sends, every an
 - Live evidence: the payment's status page shows the saga timeline (`payment_saga_history`)
 - Design, diagram and failure table: [Saga plan §2](EWP-V3-Saga-Choreography-and-Orchestration-Plans.md#2-orchestration--payments); business rules: [Payments-Requirements.md](Requirements/Payments-Requirements.md)
 
-### 1.5 Front-end composition
+#### 1.4.4 Long-running workflow on Temporal: the Digital Gold purchase
 
-#### 1.5.1 Micro-frontends hosted by a business-neutral Shell
+A Digital Gold purchase crosses three systems that each answer in their own time: EWP Payments (with an approval above the tier), the payment network, and the Partner Bank. The counter places the order and starts the payment; then nobody waits. A **Temporal workflow** - one per purchase, its ID `gold-purchase-<number>` - follows the payment and ends the purchase in exactly one way: when the payment is COMPLETED it sends the payment advice and the gold is **ALLOCATED**; when the payment is REJECTED or FAILED, or none was started within 30 minutes, it cancels the Partner Bank's unpaid order (**CANCELLED**).
+
+**Durable, not in memory.** Temporal keeps the workflow's state; the worker may stop and start, and the workflow continues where it was. A payment waiting days for approval does not grow the history for ever (continue-as-new after 240 checks). Each call to another system is an **activity** that Temporal retries with back-off until it is answered; a refusal (409, 400) is final and stops the workflow visibly. The Partner Products API saves PAID before sending the advice, never cancels a paid purchase, and the Partner Bank allocates once per advice - so a retry after a lost answer is always safe.
+
+**Nothing sensitive in the workflow.** Its input is the purchase number only: no token, no account number, no amount. The worker reads what it needs through the APIs with its **own machine identity**, which only two internal endpoints accept ([2.1.2](#212-separate-human-and-machine-identities)). Starting the workflow twice is "already running", never a second one.
+
+Demo: Sophie's **Send & pay** on a $20 slip; the Temporal UI (http://localhost:8233) shows `gold-purchase-DGP-…` checking the payment, then the advice, then **Completed** with the result `ALLOCATED`. Stop the worker's window in between and start it again: the purchase still ends once.
+
+**Where to look at:**
+
+- The workflow: [workflows.ts](../src/Microservices/PartnerProducts/Worker/src/workflows.ts); the activities and their retry rules: [activities.ts](../src/Microservices/PartnerProducts/Worker/src/activities.ts)
+- Starting it once: [purchase-workflow.starter.ts](../src/Microservices/PartnerProducts/JourneyApi/src/services/purchase-workflow.starter.ts); "Send & pay": `buy` in [digital-gold.service.ts](../src/Microservices/PartnerProducts/JourneyApi/src/digital-gold/digital-gold.service.ts)
+- The purchase's states: [GoldPurchase.cs](../src/Microservices/PartnerProducts/API/Domain/GoldPurchase.cs); the worker's endpoints: [InternalGoldPurchasesController.cs](../src/Microservices/PartnerProducts/API/Controllers/InternalGoldPurchasesController.cs)
+- Business rules: [PartnerProducts-Requirements.md](Requirements/PartnerProducts-Requirements.md)
+
+**Not yet:** the payment is followed by polling (every 15 s), not by its events; Temporal runs as the local development server (Threat-Model R-16).
+ Micro-frontends hosted by a business-neutral Shell
 
 The Shell provides branding, sign-in, the menu and the Application Workspace, and hosts each context's micro-frontend in an iframe. It holds no business logic: the menu comes from the Shell's database, so adding a context adds menu rows, not Shell code. The iframe gives each MFE its own origin, cookies and security boundary, so one MFE cannot read another's DOM or session.
 
@@ -578,6 +599,10 @@ Humans and services authenticate differently. Workers and BFFs use OAuth 2.0 Cli
 - Branch from the token, acting client checked: [DocumentResourceAuthorization.cs](../src/Microservices/DocumentsManagement/API/Authorization/DocumentResourceAuthorization.cs)
 - The exchanges: [DocumentsManagementTokenService.cs](../src/Microservices/CustomerOnboarding/BFF.Web/Services/DocumentsManagementTokenService.cs) (CO BFF), [documents-management-token.service.ts](../src/Microservices/CustomerKyc/BFF.Web/src/services/documents-management-token.service.ts) (KYC BFF)
 
+**Partner Products** composes five APIs for the staff member, each with its own exchanged token: Partner Products, Customer Onboarding, Accounts, Documents Management - and **Payments**, so a Digital Gold purchase is paid by the staff member herself (her `payment.initiate`), never by a service. The purchase's later steps run in a **Temporal worker** that is a machine: its own client (`PartnerProducts.Worker.M2M.ClientID`), accepted only by two internal endpoints that pin it, one of which also refuses any token with a person in it ([1.4.4](#144-long-running-workflow-on-temporal-the-digital-gold-purchase)).
+
+- The Journey API's exchanges: [domain-api.client.ts](../src/Microservices/PartnerProducts/JourneyApi/src/services/domain-api.client.ts); the worker's token: [machine-token.ts](../src/Microservices/PartnerProducts/Worker/src/machine-token.ts); its pinned policies: `Worker` in [DigitalGoldPolicies.cs](../src/Microservices/PartnerProducts/API/Authorization/DigitalGoldPolicies.cs), `PaymentOutcomeForPartnerProducts` in [Payments API Program.cs](../src/Microservices/Payments/API/Program.cs)
+
 #### 2.1.3 Identity provider hardening
 
 The IDP (Duende IdentityServer 8) applies the standard defences of a sign-in service:
@@ -586,7 +611,7 @@ The IDP (Duende IdentityServer 8) applies the standard defences of a sign-in ser
 - **Username enumeration:** an unknown username costs the same time as a wrong password (a dummy hash is verified), and both produce the same message.
 - **Grants:** no implicit and no password (ROPC) grant.
 - **Logout:** POST only, so it cannot be triggered cross-site.
-- **Pages:** framing is forbidden (`frame-ancestors 'none'`); the pages use no CDN and no inline script or style, so their CSP has no `'unsafe-inline'`.
+- **Pages:** framing is forbidden (`frame-ancestors 'none'`) - except the step-up code page, which only the Shell's origin may frame for its overlay ([2.1.5](#215-step-up-mfa-for-risky-actions)); the pages use no CDN and no inline script or style, so their CSP has no `'unsafe-inline'`.
 - **Passwords:** password managers are supported (`autocomplete="current-password"`).
 - **State that survives:** refresh tokens (only a hash of each is stored, the details encrypted), pushed authorization requests and signing keys are kept in PostgreSQL by Duende's operational store, with hourly clean-up. An IDP restart signs nobody out, and several IDP instances share them.
 - **Sign-in sessions on the server:** each IDP sign-in session is a row in PostgreSQL (Duende's server-side sessions); the browser's cookie only refers to it. Signing out deletes the row, so a copy of the cookie taken before sign-out (malware, a shared machine) is refused afterwards instead of working for up to ten hours; an IDP session that expires also ends the clients' sessions through back-channel logout.
@@ -725,12 +750,12 @@ The Shell, every MFE BFF and the IDP send a strict Content-Security-Policy. Scri
 
 #### 2.3.2 Clickjacking and iframe boundaries
 
-Every page states who may frame it. The Shell and the IDP's sign-in pages cannot be framed at all; an MFE may be framed only by the Shell (and by the IDP during its silent sign-in). A KYC evidence PDF may be framed only by its own MFE. Combined with the `postMessage` origin checks ([1.5.2](#152-shellmfe-protocol-and-the-application-workspace)), a hostile page can neither overlay a real screen to trick a click nor pose as the Shell to receive workspace context.
+Every page states who may frame it. The Shell and the IDP's sign-in pages cannot be framed at all (two narrow exceptions for the step-up overlay: the IDP's step-up code page, by the Shell only, and the Shell's own static done page, by the Shell itself); an MFE may be framed only by the Shell (and by the IDP during its silent sign-in). A KYC evidence PDF may be framed only by its own MFE. Combined with the `postMessage` origin checks ([1.5.2](#152-shellmfe-protocol-and-the-application-workspace)), a hostile page can neither overlay a real screen to trick a click nor pose as the Shell to receive workspace context.
 
 **Where to look at:**
 
 - `frameAncestors` / `frameSources` in [Shell Program.cs](../src/Shell/Program.cs), [CO BFF Program.cs](../src/Microservices/CustomerOnboarding/BFF.Web/Program.cs) and [main.ts](../src/Microservices/CustomerKyc/BFF.Web/src/main.ts)
-- `X-Frame-Options: DENY` and `frame-ancestors 'none'`: [SecurityHeadersAttribute.cs](../src/IDP/SecurityHeadersAttribute.cs)
+- `X-Frame-Options: DENY` and `frame-ancestors 'none'` (and the step-up exception, `ShellMayFrameKey`): [SecurityHeadersAttribute.cs](../src/IDP/SecurityHeadersAttribute.cs); the overlay: [StepUpOverlay.tsx](../src/Shell/client-app/app/components/StepUpOverlay.tsx)
 
 #### 2.3.3 Cookies and CSRF
 
@@ -865,9 +890,9 @@ The addresses of the external systems (core banking, the screening provider, the
 
 - [ExternalEndpoint.cs](../src/Common/WebUtilities/Security/ExternalEndpoint.cs) (`Problem`, `WithoutRedirects`), used in the Accounts, Compliance and Payments APIs' `Program.cs`; `PermittedHosts` in their `appsettings.json`
 
-**Not yet:** mutual TLS to the external systems.
+**Mutual TLS:** towards the Partner Bank, another organisation ([2.4.10](#2410-integration-with-another-organisation-the-partner-bank)); the simulated core banking, screening provider and payment network still use API keys.
 
-### 2.5 Supply chain
+
 
 #### 2.5.1 Dependency vulnerability scanning
 

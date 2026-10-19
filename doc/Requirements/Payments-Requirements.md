@@ -118,12 +118,15 @@ Approve / reject from PENDING_APPROVAL: present (5b-2). Planned: hold and releas
 | Funds | Accounts reserves only on an ACTIVE account of the customer named in the payment, in AUD, within the available balance |
 | Approve | `payments_officer` + `payment.approve` + PENDING_APPROVAL + amount within the user's limit + branch / organizational scope + SoD |
 | Customer view | `customer.payment.view_own` + `owns` the payment |
+| A Digital Gold purchase's outcome (internal) | `GET /internal/v1/payments/by-idempotency-key/{key}`: only the Partner Products Worker's machine token (`payments.read` + its client ID pinned); one payment by its random key, no lists; the outcome, payee and network reference, not the paying account |
 
 ---
 
 ## 7. Integration
 
 Commands to Accounts (`accounts.commands`), Accounts' replies (`accounts.funds.replies`) and the payments' outcomes (`payments.payment.events`): [Integration-Event-Catalogue.md §4.5](../Integration-Event-Catalogue.md). The payment network is called directly over HTTP with the PaymentRef as Idempotency-Key.
+
+**Digital Gold purchases** ([Partner Products](PartnerProducts-Requirements.md)) are ordinary payments: the Partner Products Journey API starts them for the agent (her `payment.initiate`, the slip's fixed Idempotency-Key, payee = the Partner Bank's settlement account from configuration, reference = the Partner Bank's order number). The same saga, approval tier and four eyes apply. The Partner Products Worker (Temporal) then reads the outcome through the internal endpoint above.
 
 ---
 

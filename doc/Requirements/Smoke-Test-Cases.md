@@ -2,7 +2,7 @@
 
 1.  Sign in to the Shell in each window.
 2.  Each person should see only their own menu entries:
-    -   Sophie: Customers / Onboarding / New Payment;
+    -   Sophie: Customers / Onboarding / New Payment / Partner Products (Digital Gold);
     -   Ethan: KYC;
     -   Olivia: Compliance Monitor;
     -   Jack: Account Applications / Accounts;
@@ -110,6 +110,24 @@
 2.  **Verify integrity** should report the chain **intact and anchored**.
 3.  Search again for **Sarah's own** searches: they should be recorded as access entries.
 
+### ST-12 — Digital Gold at the counter (Sophie; the Partner Bank on the home PC)
+
+Needs the Partner Bank running on the PC (`.\ps\Start-PartnerBank.ps1 -Lan`), Temporal (`.\ps\temporal\Start-Temporal.ps1`) and `.\ps\run\Start-NodeServices.ps1` (it starts the Partner Products Worker).
+
+1.  **Sophie → Partner Products → Digital Gold:** find **Camilla**; record **Form VII** (a new form number, signed today, her date of birth, photo ID and signature checked, a PDF scan) and **Send to the Partner Bank**. Expected: **Account open** with a `PB-DGA-…` number (or "Linked to account …" if the Partner Bank already holds hers).
+2.  **Transfer slip:** **$20** from Camilla's account, signed today, her mobile, a scan. Then **Send & pay**. Expected: **Ordered** with the Partner Bank's order number and grams, and a payment number; within about 30 seconds **Gold allocated** (select Camilla again to refresh); the holding shows the grams; the Temporal UI (http://localhost:8233) shows `gold-purchase-DGP-…` **Completed**.
+3.  **View at the Partner Bank ↗:** a new tab shows the Partner Bank's read-only page for Camilla's account, naming **somit (SYD001)**. Reloading it shows "This view is no longer available".
+4.  **Daniel → Payments → Payment Processing Monitor** (optional): the $20 payment to "Partner Bank Gold Settlement" is **COMPLETED**.
+
+### ST-13 — Step-up in the overlay (Daniel; MFA on)
+
+Needs `.\ps\Toggle-MFA.ps1 -On` and the restarts it lists (switch it off again afterwards).
+
+1.  Daniel signs in with his authenticator code, opens **Platform Health**, and waits until the code is older than the step-up limit (15 minutes by default).
+2.  He switches the Payment Network to **Slow**. Expected: no new window; the page darkens and **"Confirm it's you"** asks only for the code.
+3.  He enters the code. Expected: the overlay closes and the switch shows **Slow**; he is still signed in.
+4.  He switches it back to **Healthy** at once: no code is asked.
+5.  **Cancel** (optional): repeat after the limit and press **Cancel**: the change is not made.
 ---
 
 **Running balance of Camilla's account:**
@@ -123,8 +141,9 @@
 | ST-6 | $3,250 |
 | ST-8 | $2,950 |
 | ST-9 | $2,950 |
+| ST-12 | $2,930 |
 
 **Not covered on purpose:**
 
--   **MFA step-up:** MFA is off since the revert.
+-   **MFA step-up** in the main run: MFA is normally off; ST-13 covers it with MFA switched on.
 -   **The onboarding age alert:** in Development it needs a machine hand-off stuck for 5 minutes, which means stopping a subscriber.

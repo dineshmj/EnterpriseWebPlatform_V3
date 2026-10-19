@@ -1,6 +1,6 @@
 # 09 — Domain APIs (.NET)
 
-Deployables: `src/Microservices/<Context>/API` for Customer Onboarding, KYC, Documents Management, Compliance, Accounts, Payments, Notifications and Audit
+Deployables: `src/Microservices/<Context>/API` for Customer Onboarding, KYC, Documents Management, Compliance, Accounts, Payments, Notifications, Audit and Partner Products
 
 ## 1. Tokens
 
@@ -24,7 +24,8 @@ Deployables: `src/Microservices/<Context>/API` for Customer Onboarding, KYC, Doc
   - four eyes on reconciliation;
   - an unknown initiator is denied (fail closed).
 - [x] **Step-up MFA** (Payments, Accounts, Compliance, KYC): `amr` mfa plus a recent `auth_time`. Start-up is refused outside Development with MFA off. → `src/Common/WebUtilities/Security/MfaStepUp.cs`
-- [x] **Internal endpoints pin the caller's `client_id`** (one subscriber each), not just the scope.
+- [x] **Internal endpoints pin the caller's `client_id`** (one subscriber, or the Partner Products Worker), not just the scope; the Partner Products one also refuses any token with a person in it (`sub` / `act`).
+- [x] **Delegation only through the expected client** (Partner Products: the Journey API as `act`; Audit: the Audit Journey API; Documents Management: the CO and KYC BFFs and the Partner Products Journey API).
 - [x] **Branch and identity always come from the token, never from a header or the request body.**
 
 ## 3. Data and messaging
@@ -32,6 +33,9 @@ Deployables: `src/Microservices/<Context>/API` for Customer Onboarding, KYC, Doc
 - [x] **State and the events it produces are saved in one transaction (Transactional Outbox);** consumed message IDs go to the Inbox in the same transaction. A copy delivered at the same moment is answered as "already processed", never failed: the unique key violation is caught, and Payments checks its Inbox again under the saga row lock. *Because* this avoids dual writes and makes redelivery harmless.
 - [x] **Concurrency:** a `Version` on every aggregate, plus `SELECT … FOR UPDATE` where two people can act at once.
 - [x] **Calls to external systems** (core banking, screening provider, payment network) are checked at start-up: outside Development they must be HTTPS, to a permitted host, and never to an internal address. No redirects are followed; each call has a timeout, retry and circuit breaker. *Because* this prevents SSRF. → `src/Common/WebUtilities/Security/ExternalEndpoint.cs`
+- [x] **Another organisation (the Partner Bank, Partner Products API):** mutual TLS with EWP's client certificate, the server trusted only through the PoC's own root; EWP's own token bound to its certificate (RFC 8705); every instruction signed (ES256, 5 minutes, `jti`); its addresses checked at start-up (https, permitted hosts); a 5-second connect timeout so an unreachable partner is reported, not waited for; EWP's keys only as file paths in configuration, loaded once (a missing file stops the API). → `src/Microservices/PartnerProducts/API/PartnerBank/`
+- [x] **Once only across a lost answer:** the state (SENT / PAID) and a fixed ID (instruction `jti`, payment key) are saved BEFORE the call; a resend repeats the same instruction; unique indexes are the final word. → Partner Products `GoldAccountApplication`, `GoldPurchase`, `EwpPartnerProductsDb.sql`
+- [x] **A payee never comes from a request** (Partner Products: the Partner Bank's settlement account from configuration, checked at start-up). → Partner Products `PartnerBank:Settlement`
 - [x] **Uploads are checked by magic bytes** against an allow-list, and evidence is encrypted at rest (AES-256-GCM envelope; Documents Management).
 - [x] **The audit trail is append-only** (a trigger and the grants), hash-chained, and anchored outside its database (Audit).
 
@@ -59,7 +63,8 @@ Deployables: `src/Microservices/<Context>/API` for Customer Onboarding, KYC, Doc
 
 ## 6. Production (open)
 
-- [ ] **mTLS** between services (R-9).
+- [ ] **mTLS** between EWP's own services (R-9); towards the Partner Bank it is present.
+- [ ] **Partner Products audit events** (an Outbox to the audit trail; R-15).
 - [ ] **Network controls** for `/metrics` and the health endpoints (R-8).
 - [ ] **A secret store and key vault** (R-2, R-10).
 - [ ] **Deployment-wide rate limits** at a gateway or with a shared store (R-14).

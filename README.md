@@ -2,14 +2,15 @@
 
 Enterprise Web Platform V3 (EWP V3) is a demonstration banking-services platform. It is built as an **architectural reference**: a working example of how enterprise concerns compose without sliding into a distributed monolith.
 
-- **Bounded contexts.** Customer Onboarding, Customer KYC, Compliance, Accounts, Payments, Notifications, Documents Management, Audit and Operations are implemented. Each is governed by **Domain-Driven Design**, owns its own database, and is independently deployable.
+- **Bounded contexts.** Customer Onboarding, Customer KYC, Compliance, Accounts, Payments, Notifications, Documents Management, Audit, Operations and Partner Products are implemented. Each is governed by **Domain-Driven Design**, owns its own database, and is independently deployable.
 - **Micro-frontends.** Each business context has its own MFE, hosted in iframes by a business-neutral **Shell** that provides branding, navigation and the Application Workspace.
-- **Security boundaries.** Each MFE sits behind its own **BFF**. A BFF calls its own domain API with the **user's access token**, and other contexts' APIs with **M2M tokens**, keeping human identity and service identity separate.
-- **Identity.** **Duende IdentityServer 8** provides OpenID Connect and OAuth 2.1 (Authorization Code + PKCE, Client Credentials, Token Exchange), with two-step sign-in (TOTP) and a **step-up** for risky actions that needs a recent code - renewed in a small window, without signing out.
+- **Security boundaries.** Each MFE sits behind its own **BFF**. A BFF calls its own domain API with the **user's access token**, and other contexts' APIs with a token **exchanged for the same person** (RFC 8693, the calling service in `act`); only machines - subscribers and the workflow worker - use **M2M tokens**, each pinned to its endpoints. Human identity and service identity stay separate.
+- **Identity.** **Duende IdentityServer 8** provides OpenID Connect and OAuth 2.1 (Authorization Code + PKCE, Client Credentials, Token Exchange), with two-step sign-in (TOTP) and a **step-up** for risky actions that needs a recent code - renewed in an in-page overlay of the Shell, without a pop-up and without signing out.
 - **Authorization** goes beyond RBAC: **ABAC, ReBAC, workflow-state authorization and Separation of Duties**.
 - **Asynchronous workflows** use **CQRS, Transactional Outbox, Kafka**, idempotent consumers and **sagas** (choreography for onboarding, orchestration for payments - including reconciliation when the payment network's answer is lost, four-eyes manual resolution, and the resend of parked messages).
 - **Traceability.** Workflow, correlation and causation IDs and the accountable human initiator are carried end to end. Human approvals (e.g. KYC review) are accountable steps.
 - **Operations.** Resilience, rate limiting, observability, auditability and **SignalR** user notifications are covered at different stages of maturity (see the capability matrix).
+- **Another organisation.** In **Partner Products**, EWP is the **Partner Bank's distributor** of Digital Gold at the counter: the Partner Bank is a separate system (its own repository, on another machine) reached over **mutual TLS** with a **certificate-bound token** (RFC 8705) and **signed instructions** (ES256 JWTs, once only by their ID); a purchase is paid through EWP Payments and followed to the end by a **Temporal** workflow; staff open the Partner Bank's own page through a **PAR-style handoff**.
 - **New contexts** follow the customer's pattern: Next.js SPA with a light BFF → NestJS Journey API → ASP.NET Core Domain APIs. Existing contexts keep their current stack.
 
 > EWP V3 is an architectural PoC, not a production banking system and not a claim of regulatory compliance.
@@ -34,6 +35,9 @@ Enterprise Web Platform V3 (EWP V3) is a demonstration banking-services platform
 | Audit (Next.js SPA + light BFF; NestJS Journey API; Domain API with the trail's Kafka consumer inside - the customer's pattern, token exchange at every hop) | `src/Microservices/Audit` | Next.js, NestJS, ASP.NET Core 10 | Present |
 | Operations (Next.js SPA + light BFF; NestJS Journey API: Platform Health and, in Development / Test, the simulators' behaviour switch) | `src/Microservices/Operations` | Next.js, NestJS | Present |
 | Payment Network Simulator (stand-in for the payment network: BSB directory, Confirmation of Payee) | `src/Simulators/PaymentNetworkSimulator` | ASP.NET Core 10 | Present |
+| Partner Products (Next.js SPA + light BFF; NestJS Journey API; Domain API that is also EWP's adapter to the Partner Bank; Temporal worker for the purchase workflow) | `src/Microservices/PartnerProducts` | Next.js, NestJS, ASP.NET Core 10, Node.js + Temporal TypeScript SDK | Present |
+| Temporal (development server: the purchase workflows) | `ps\temporal\Start-Temporal.ps1` | Temporal CLI | Present (PoC) |
+| The Partner Bank (another organisation: authorization server with PAR / JAR / RAR and mutual TLS, API, web) | separate repository `EnterpriseWebPlatform_V3_PartnerBank`, on the home PC | ASP.NET Core 10, Duende IdentityServer 8, SQLite | Present |
 | BFF state (sessions and Data Protection keys of the .NET BFFs) | `db/EwpBffStateDb.sql` | PostgreSQL, one schema per BFF | Present |
 | Infrastructure | PostgreSQL 18 and Kafka 4 (KRaft) installed natively; Kafka secured with [ps/kafka/Setup-KafkaSecurity.ps1](kafka/README.md) | SCRAM-SHA-512 users, per-topic ACLs, Kafka UI (read-only) | Present |
 | Observability | `src/Common/Observability` | OpenTelemetry traces across HTTP and Kafka; Serilog structured logs with the trace ID; Prometheus `/metrics`; all three over OTLP when configured; `/health/live` and `/health/ready` on every component | Present |
@@ -60,6 +64,7 @@ Each document has one purpose. A fact is written in exactly one place; other doc
 | [Claude Architect Review](doc/AI-Architect-Reviews/2026-10-02-Claude-Architect-Review.md) | The first point-in-time review (02-OCT-2026), its findings and their remediation status |
 | [AI Architect Reviews](doc/AI-Architect-Reviews) | The external reviewers' verdicts (Microsoft, Google, xAI) of 12-, 13- and 14-OCT-2026, kept as received, and the response to every finding |
 | [BSS Requirements](doc/Requirements/BSS-Requirements.md) | What the Banking Services System must do, in Gherkin: happy paths and boundary situations per business capability, tagged (@happy-path, @boundary, @security, @resilience, @sod, @compensation, @smoke); with the [smoke test cases](doc/Requirements/Smoke-Test-Cases.md) |
+| [Design conversations](doc/Arch-Design-Visualizations) | Step-by-step conversations between the parts: delegated token exchange, circuit breaker with back-off, the mutual-TLS handshake, and the Partner Bank integration (mutual TLS + PAR, signed instructions, the staff-view handoff) |
 | [Checklists](doc/Checklists/README.md) | One checklist per deployable tier (IDP, Shell, MFE SPAs and BFFs, Journey and domain APIs, Outbox publishers, subscribers, Kafka, PostgreSQL users and grants): what is true today, and what is open |
 
 ### Per component (`doc/Requirements/`)
@@ -74,6 +79,7 @@ Business requirements of one component: boundary, persona rules within it, permi
 | Compliance | [Compliance-Requirements.md](doc/Requirements/Compliance-Requirements.md) |
 | Accounts | [Accounts-Requirements.md](doc/Requirements/Accounts-Requirements.md) |
 | Payments | [Payments-Requirements.md](doc/Requirements/Payments-Requirements.md) |
+| Partner Products (Digital Gold, the Partner Bank) | [PartnerProducts-Requirements.md](doc/Requirements/PartnerProducts-Requirements.md) |
 | Local Kafka (security set-up, users and ACLs, Kafka UI) | [kafka/README.md](kafka/README.md) |
 | Identity Provider (clients, scopes, claims, **demo users**) | [IDP-Requirements.md](doc/Requirements/IDP-Requirements.md) |
 | Shell (menu, workspace, MFE protocol, logout, notifications) | [Shell-Requirements.md](doc/Requirements/Shell-Requirements.md) |
@@ -82,8 +88,9 @@ Business requirements of one component: boundary, persona rules within it, permi
 
 How to build, configure and run one deployable:
 
-- BFFs: [CO](src/Microservices/CustomerOnboarding/BFF.Web/README.md), [KYC](src/Microservices/CustomerKyc/BFF.Web/README.md), [Compliance](src/Microservices/Compliance/BFF.Web/README.md), [Accounts](src/Microservices/Accounts/BFF.Web/README.md), [Payments](src/Microservices/Payments/BFF.Web/README.md), [Audit (Next.js SPA + light BFF)](src/Microservices/Audit/BFF.Web/README.md), [Operations (Next.js SPA + light BFF)](src/Microservices/Operations/BFF.Web/README.md)
-- APIs: [DM API](src/Microservices/DocumentsManagement/API/README.md), [Notifications API](src/Microservices/Notifications/API/README.md), [Payments API](src/Microservices/Payments/API/README.md), [Audit API](src/Microservices/Audit/API/README.md), [Audit Journey API](src/Microservices/Audit/JourneyApi/README.md), [Operations Journey API](src/Microservices/Operations/JourneyApi/README.md)
+- BFFs: [CO](src/Microservices/CustomerOnboarding/BFF.Web/README.md), [KYC](src/Microservices/CustomerKyc/BFF.Web/README.md), [Compliance](src/Microservices/Compliance/BFF.Web/README.md), [Accounts](src/Microservices/Accounts/BFF.Web/README.md), [Payments](src/Microservices/Payments/BFF.Web/README.md), [Audit (Next.js SPA + light BFF)](src/Microservices/Audit/BFF.Web/README.md), [Operations (Next.js SPA + light BFF)](src/Microservices/Operations/BFF.Web/README.md), [Partner Products (Next.js SPA + light BFF)](src/Microservices/PartnerProducts/BFF.Web/README.md)
+- APIs: [DM API](src/Microservices/DocumentsManagement/API/README.md), [Notifications API](src/Microservices/Notifications/API/README.md), [Payments API](src/Microservices/Payments/API/README.md), [Audit API](src/Microservices/Audit/API/README.md), [Audit Journey API](src/Microservices/Audit/JourneyApi/README.md), [Operations Journey API](src/Microservices/Operations/JourneyApi/README.md), [Partner Products API](src/Microservices/PartnerProducts/API/README.md), [Partner Products Journey API](src/Microservices/PartnerProducts/JourneyApi/README.md)
+- Workflow worker: [Partner Products Worker (Temporal)](src/Microservices/PartnerProducts/Worker/README.md)
 - Subscribers: [KYC Case Opening](src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/README.md), [Compliance Case Opening](src/AsyncWorkflows/Subscribers/Compliance/ComplianceCaseOpeningSubscriber/README.md), [Account Application Opening](src/AsyncWorkflows/Subscribers/Accounts/AccountApplicationOpeningSubscriber/README.md), [Onboarding Outcome](src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/README.md), [Document Invalidation](src/AsyncWorkflows/Subscribers/DocumentsManagement/DocumentInvalidationSubscriber/README.md), [Accounts Command](src/AsyncWorkflows/Subscribers/Accounts/AccountsCommandSubscriber/README.md), [Payments Saga Reply](src/AsyncWorkflows/Subscribers/Payments/PaymentsSagaReplySubscriber/README.md), [Notifications](src/AsyncWorkflows/Subscribers/Notifications/NotificationsSubscriber/README.md)
 - Simulators: [Screening Provider](src/Simulators/ScreeningProviderSimulator/README.md), [Core Banking](src/Simulators/CoreBankingSimulator/README.md), [Payment Network](src/Simulators/PaymentNetworkSimulator/README.md)
 - [Design system](src/Common/DesignSystem/README.md)
@@ -100,6 +107,8 @@ How to build, configure and run one deployable:
 - Node.js 18+ and pnpm
 - PostgreSQL 18
 - Apache Kafka 4.x (KRaft) at `C:\Kafka` and a Java runtime 21+ (see [kafka/README.md](kafka/README.md))
+- Temporal CLI (`winget install Temporal.TemporalCLI`) for the Digital Gold purchase workflows
+- For Partner Products: the Partner Bank (its own repository) on a second machine, and the local PKI from `ps\pki\New-EwpLocalPki.ps1`
 - Optional: Jaeger for viewing traces; Kafka UI for browsing topics
 - Visual Studio 2026 and / or VS Code
 

@@ -43,7 +43,7 @@ Deployable: `src/Shell` (ASP.NET Core + Duende BFF) · Databases: `EwpBssShellDb
   - `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, `connect-src 'self'`.
 
   → `ContentSecurityPolicy.cs`
-- [x] **`frame-src` is an allow-list:** the MFE origins and the IDP only. `frame-ancestors 'none'` and `X-Frame-Options: DENY` mean the Shell is never framed (against clickjacking).
+- [x] **`frame-src` is an allow-list:** the MFE origins, the IDP and `'self'` (the step-up done page) only. `frame-ancestors 'none'` and `X-Frame-Options: DENY` mean the Shell is never framed (against clickjacking) - except its static `/step-up-done.html` (no script, no data), which only the Shell itself may frame (`'self'`, `SAMEORIGIN`). → `Program.cs`
 - [x] **Also sent:** `X-Content-Type-Options: nosniff` and `Referrer-Policy: strict-origin-when-cross-origin`.
 - [x] **HTTPS only** (HSTS outside Development), and `AllowedHosts` set.
 

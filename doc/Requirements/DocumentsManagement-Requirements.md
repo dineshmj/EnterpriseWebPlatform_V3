@@ -39,6 +39,7 @@ DM is called only by services, never directly by browsers:
 |---|---|---|---|
 | Customer Onboarding BFF | The signed-in agent, by token exchange (`act` = `CustomerOnboarding.Microservice.BFF.ClientID`) | `documents-management.write` | Upload onboarding evidence; remove documents of a failed submission |
 | Customer KYC BFF | The signed-in officer, by token exchange (`act` = `CustomerKYC.Microservice.BFF.ClientID`) | `documents-management.read` | Read evidence for KYC review |
+| Partner Products Journey API | The signed-in agent, by token exchange (`act` = `PartnerProducts.JourneyApi.ClientID`) | `documents-management.write` | Upload the scan of a signed Form VII or transfer slip (types `PARTNER_FORM_VII`, `PARTNER_TRANSFER_SLIP`); remove a scan the Partner Products API then refused |
 | DocumentInvalidationSubscriber | M2M `DocumentsManagement.InvalidationSubscriber.To.DocumentsManagementApi.M2M.ClientID` | `documents-management.write` | Invalidate the evidence of a rejected onboarding application (internal endpoint, pinned to this client) |
 
 No human persona works in DM directly: a person reaches it only through the CO or KYC BFF, which exchanges their token (RFC 8693). The calling context decides what the person may do there, and DM re-checks the person's branch from the exchanged token (§5).
@@ -63,7 +64,7 @@ ATTACHED / INVALIDATED ──retention period ends──► DISPOSED
 
 | Term | Meaning |
 |---|---|
-| Document Type | A free-form classification supplied by the caller, e.g. `KYCProof`, `TaxProof` |
+| Document Type | A free-form classification supplied by the caller, e.g. `KYCProof`, `TaxProof`, `PARTNER_FORM_VII`, `PARTNER_TRANSFER_SLIP` |
 | Business Reference | An opaque string the caller uses to find its documents again, e.g. a customer number. DM never interprets it. |
 | Resource Branch | The organizational scope of a document: the branch of the actor who uploaded it. Only actors of the same branch may access it. |
 | Storage Reference | DM's internal pointer to the content; never exposed as a path |
@@ -88,9 +89,9 @@ ATTACHED / INVALIDATED ──retention period ends──► DISPOSED
 | List | `documents-management.read` + always confined to the actor's branch; filtered and paged (max 100) in the database | — |
 | Get metadata / content | `documents-management.read` + actor branch = document's resource branch (otherwise 404) | Also: the human is entitled to that business reference |
 | Upload | `documents-management.write` + an actor branch is required (it becomes the document's resource branch) | A narrowly scoped upload grant (document type + business reference) |
-| Delete | `documents-management.write` + only the Customer Onboarding BFF client + same branch + the document is AVAILABLE (attached and invalidated documents are retained) | Restricted to documents not yet part of a submitted application |
+| Delete | `documents-management.write` + only the Customer Onboarding BFF or the Partner Products Journey API as the acting client + same branch + the document is AVAILABLE (attached and invalidated documents are retained) | Restricted to documents not yet part of a submitted application |
 | Invalidate (internal) | `documents-management.write` + only the DocumentInvalidationSubscriber client; only documents of the event's branch | — |
-| Actor branch | The `branch` claim of a delegated token: a person (`sub`) with the CO or KYC BFF as the acting client (`act`). A person's own token, a machine token or any other acting client has no branch and is denied (fail closed). See [Authorization-Model §9.3](../Authorization-Model.md#93-delegated-user-context). | — |
+| Actor branch | The `branch` claim of a delegated token: a person (`sub`) with the CO or KYC BFF or the Partner Products Journey API as the acting client (`act`). A person's own token, a machine token or any other acting client has no branch and is denied (fail closed). See [Authorization-Model §9.3](../Authorization-Model.md#93-delegated-user-context). | — |
 
 Upload path: currently the BFF uploads on the user's behalf with a token exchanged for the user. The target is a direct, narrowly authorized upload (for example a pre-signed object-storage URL issued by DM), so that large files bypass the BFF and the user's context is preserved.
 
@@ -104,13 +105,14 @@ Upload path: currently the BFF uploads on the user's behalf with a token exchang
 | Read and write scopes enforced per operation | Present |
 | Branch-scoped object-level authorization (`DocumentResourceAuthorization`) | Present |
 | List filtered and paged in the database | Present |
-| Delete restricted to the CO BFF client | Present |
+| Delete restricted to the CO BFF and the Partner Products Journey API | Present |
 | Content-type allow-list, magic-byte check, `nosniff` / attachment delivery | Present |
 | Malware scanning | Planned |
 | Delegated user context (token exchange) instead of `X-Actor-Branch` | Present |
 | Lifecycle: AVAILABLE / ATTACHED (evidence, retained) / INVALIDATED (compensation, retained), Inbox | Present |
 | Quarantine, disposal after a retention period | Planned |
-| Encryption at rest, read audit | Planned |
+| Encryption at rest | Present: envelope encryption (AES-256-GCM, a data key per document wrapped by a key-encryption key from the key ring `DocumentStorage:Encryption`); old plaintext files are refused. Production: the key-encryption keys in a key vault / HSM (Threat-Model R-2) |
+| Read audit | Planned |
 | Documents without a resource branch (`resource_branch` NULL) | Inaccessible by design (fail closed) |
 
 ---

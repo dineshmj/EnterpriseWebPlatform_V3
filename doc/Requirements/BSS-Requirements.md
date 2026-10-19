@@ -6,7 +6,7 @@ It covers the **happy paths** (things going right) and the **boundary situations
 
 | If you want… | Read… |
 | --- | --- |
-| The detailed rules of one bounded context | That context's requirements document (`src/Microservices/<Context>/doc/`) |
+| The detailed rules of one bounded context | That context's requirements document (`doc/Requirements/<Context>-Requirements.md`) |
 | How authorization decisions are made | [Authorization-Model.md](../Authorization-Model.md) |
 | The saga designs behind onboarding and payments | [EWP-V3-Saga-Choreography-and-Orchestration-Plans.md](../EWP-V3-Saga-Choreography-and-Orchestration-Plans.md) |
 | Manual smoke tests that walk through many of these scenarios | [Smoke-Test-Cases.md](Smoke-Test-Cases.md) |
@@ -137,8 +137,16 @@ Feature: Signing in to the Banking Services System
     And Emily signed in with her authenticator code more than 15 minutes ago
     When she approves a payment
     Then an overlay on the page asks only for a fresh authenticator code, not her password
+    And no separate window opens
     And after a valid code the approval is carried out once
-    And she stays signed in
+    And she stays signed in, and her page stays as it was
+
+  @boundary @security
+  Scenario: The code is not given
+    Given the overlay asks Emily for a fresh authenticator code
+    When she cancels it, or enters no code within 5 minutes
+    Then the approval is not carried out
+    And she is told that the action needs a recent confirmation
 ```
 
 ---
@@ -1011,7 +1019,86 @@ Feature: Platform health and the simulator switch
 
 ---
 
-## 15. Rules that apply everywhere
+## 15. Partner Products: Digital Gold at the counter
+
+```gherkin
+Feature: Digital Gold for the Partner Bank, at the branch counter
+  EWP distributes the Partner Bank's Digital Gold. The customer signs paper forms at the
+  counter and never signs in at the Partner Bank there; Sophie records them. The Partner
+  Bank keeps the account and the gold; EWP pays from the customer's EWP account.
+
+  Background:
+    Given Sophie is a Customer Service Agent in Sydney
+    And Camilla is a customer of Sophie's branch whose onboarding is complete
+
+  @happy-path @smoke
+  Scenario: Camilla opens a Digital Gold account with Form VII
+    Given Camilla signed Form VII today and Sophie checked her photo ID and signature
+    When Sophie records Form VII with its scan and sends it to the Partner Bank
+    Then the Partner Bank opens a Digital Gold account for Camilla
+    And Camilla's name, mobile and onboarding status come from EWP's record, not from Sophie's typing
+    And the Partner Bank tells Camilla by SMS itself
+
+  @happy-path @smoke
+  Scenario: Camilla buys AUD 20 of gold with a transfer slip
+    Given Camilla's Digital Gold account is open
+    And she signed a transfer authorization slip for AUD 20 today, with her own mobile number on it
+    When Sophie records the slip with its scan and presses "Send & pay"
+    Then the Partner Bank places an order at today's price
+    And a payment of AUD 20 from Camilla's account to the Partner Bank is started in Sophie's name
+    And once the payment is completed, the Partner Bank allocates the gold
+    And Camilla's holding, read from the Partner Bank, shows the grams
+
+  @resilience
+  Scenario: The Partner Bank does not answer
+    Given the Partner Bank cannot be reached
+    When Sophie sends Form VII or a slip
+    Then she is told within seconds that the Partner Bank could not be reached
+    And the form stays SENT, so she can send it again later
+    And sending it again never opens a second account or places a second order
+
+  @compensation @resilience
+  Scenario: The purchase is not paid
+    Given the Partner Bank placed the order for Camilla's slip
+    When the payment is rejected or fails, or no payment is started within 30 minutes
+    Then the Partner Bank's order is cancelled
+    And a paid purchase is never cancelled
+
+  @boundary
+  Scenario Outline: Slips the Partner Bank would refuse are refused at the counter
+    When Sophie records a slip <problem>
+    Then it is refused with a reason she can tell Camilla
+
+    Examples:
+      | problem                                              |
+      | signed on another day than today                     |
+      | with a mobile number that is not Camilla's           |
+      | paid from an account that is not Camilla's           |
+      | for more than the paying account has available       |
+      | with a slip number already used                      |
+
+  @boundary
+  Scenario: The Partner Bank already holds Camilla's account
+    Given the Partner Bank already holds a Digital Gold account that EWP opened for Camilla
+    When Sophie sends a new Form VII for Camilla
+    Then EWP links Camilla to that account instead of reporting a refusal
+
+  @happy-path @security
+  Scenario: Sophie looks at the Partner Bank's own record
+    Given Camilla's Digital Gold account is open
+    When Sophie presses "View at the Partner Bank"
+    Then the Partner Bank's own read-only page for Camilla's account opens in a new tab
+    And it names Sophie and her branch as the one looking
+    And the same address cannot be opened again
+
+  @security
+  Scenario: Only the counter's own branch
+    When Mia, in Melbourne, looks for Camilla's Digital Gold
+    Then Camilla looks like a customer without Digital Gold
+```
+
+---
+## 16. Rules that apply everywhere
 
 ```gherkin
 Feature: Platform-wide rules
@@ -1071,11 +1158,11 @@ Feature: Platform-wide rules
 
 ---
 
-## 16. Traceability
+## 17. Traceability
 
 | Section | Main source | Smoke tests |
 | --- | --- | --- |
-| 2. Signing in | [IDP-Requirements.md](IDP-Requirements.md) | ST-1 |
+| 2. Signing in | [IDP-Requirements.md](IDP-Requirements.md) | ST-1, ST-13 |
 | 3. The Shell | [Shell-Requirements.md](Shell-Requirements.md) | ST-1, ST-2 |
 | 4. Customers and onboarding | [CustomerOnboarding-Requirements.md](CustomerOnboarding-Requirements.md) | ST-2 |
 | 5. Evidence documents | [DocumentsManagement-Requirements.md](DocumentsManagement-Requirements.md) | ST-2, ST-10 |
@@ -1086,4 +1173,5 @@ Feature: Platform-wide rules
 | 10–12. Payments | [Payments-Requirements.md](Payments-Requirements.md) | ST-3 to ST-9 |
 | 13. Audit trail | [Audit API README](../../src/Microservices/Audit/API/README.md) | ST-11 |
 | 14. Operations | [Operations Journey API README](../../src/Microservices/Operations/JourneyApi/README.md) | ST-1, ST-8 to ST-10 |
-| 15. Platform-wide rules | [Authorization-Model.md](../Authorization-Model.md), [Threat-Model.md](../Threat-Model.md) | all |
+| 15. Digital Gold | [PartnerProducts-Requirements.md](PartnerProducts-Requirements.md) | ST-12 |
+| 16. Platform-wide rules | [Authorization-Model.md](../Authorization-Model.md), [Threat-Model.md](../Threat-Model.md) | all |

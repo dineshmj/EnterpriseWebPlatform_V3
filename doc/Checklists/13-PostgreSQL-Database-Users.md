@@ -27,7 +27,8 @@ Scripts:
   | `EwpNotificationsDb` | `ewp_notifications_api` |
   | `EwpPaymentsDb` | `ewp_payments_api` |
   | `EwpAuditDb` | `ewp_audit_api` |
-  | `EwpBffStateDb` | one login per BFF: `ewp_shell`, `ewp_co_bff`, `ewp_compliance_bff`, `ewp_accounts_bff`, `ewp_payments_bff`, `ewp_kyc_bff`, `ewp_audit_web`, `ewp_operations_web` |
+  | `EwpPartnerProductsDb` | `ewp_partner_products_api` |
+  | `EwpBffStateDb` | one login per BFF: `ewp_shell`, `ewp_co_bff`, `ewp_compliance_bff`, `ewp_accounts_bff`, `ewp_payments_bff`, `ewp_kyc_bff`, `ewp_audit_web`, `ewp_operations_web`, `ewp_partner_products_web` |
 
   *Because* database-per-context is enforced by the server, not by convention.
 - [x] **No DDL for application logins:** `CREATE` on `public` is revoked from `PUBLIC`, and the objects are owned by `postgres`.

@@ -12,12 +12,13 @@ Deployables: `src/Microservices/<Context>/BFF.Web/client-app` for Customer Onboa
 
 - [x] **Every POST, PUT or DELETE carries the anti-forgery token** in `X-CSRF-TOKEN`. The SPA reads the token from its BFF's `/api/auth/csrf`. *Because* a cross-site page can neither read nor send it. → `app/lib/api.ts`
 - [x] **A change is never retried automatically, except once after a step-up.** → `app/lib/api.ts`
-- [x] **Step-up opens a small window, not an iframe** (KYC, Compliance, Accounts, Payments):
-  - on 403 `mfa_required`, the window opens `/api/auth/step-up`;
-  - the IDP asks only for a fresh code;
-  - when the window is back on `/api/auth/step-up-done`, the SPA closes it and retries the action once.
+- [x] **Step-up asks the Shell, not a pop-up window** (KYC, Compliance, Accounts, Payments, and the Operations web):
+  - on 403 `mfa_required`, the SPA posts `BSS_STEP_UP_REQUEST` (a request ID only) to the Shell's origin;
+  - the Shell shows its in-page overlay with the IDP's code page and answers `BSS_STEP_UP_RESULT`, accepted only from the parent window and the Shell's origin, for that request ID;
+  - the action is retried once, whatever the answer; the API checks the fresh MFA itself.
+  - Outside the Shell (the page opened on its own) a small window is used, as before.
 
-  *Because* the IDP's pages may never be framed. → `app/lib/step-up.ts`
+  *Because* pop-up windows are blocked by many company browsers, and only the IDP's step-up code page may be framed - by the Shell. → `app/lib/step-up.ts`
 
 ## 3. Inside the Shell's frame
 

@@ -290,4 +290,12 @@ kyc.case.approved|rejected, compliance.case.*, accounts.application.rejected, ac
 - **Every subscriber shares one reliable consume loop** (`AsyncWorkflows.Infrastructure.Subscribers`): transient failures are retried in place, permanent ones go to the worker's own dead-letter topic, and each receiving API records each message in its Inbox.
 - **The KYC MFE has no claim / release buttons;** the first decision assigns the case.
 
+## After onboarding: Camilla buys Digital Gold
+
+Once Camilla's onboarding is COMPLETED, Sophie can also sell her the Partner Bank's Digital Gold at the counter. That path is not traced here hop by hop; it is described in:
+
+- [PartnerProducts-Requirements.md](Requirements/PartnerProducts-Requirements.md) - the states, rules and authorization;
+- [Partner-Bank-mTLS-PAR-And-Signed-Instructions.md](Arch-Design-Visualizations/Partner-Bank-mTLS-PAR-And-Signed-Instructions.md) - Form VII sent as a signed instruction over mutual TLS, and the staff view (PAR-style handoff), step by step;
+- [Features 1.4.4](Architectural-And-Security-Features-Demoable-EWP-V3.md#144-long-running-workflow-on-temporal-the-digital-gold-purchase) - the purchase: the payment through the Payments saga, then the Temporal workflow to ALLOCATED or CANCELLED.
+
 *Keep this walkthrough in step with the code: update it when a step, policy or rule on this path changes.*
