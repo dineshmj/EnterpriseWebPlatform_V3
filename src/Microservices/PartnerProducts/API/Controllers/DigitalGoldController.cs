@@ -130,6 +130,9 @@ public sealed class DigitalGoldController(PartnerProductsDbContext db, TimeProvi
             case PartnerOutcome.Accepted:
                 application.MarkOpened((string?)answer.Body?["number"] ?? string.Empty, clock.GetUtcNow());
                 break;
+            case PartnerOutcome.Refused when await ExistingAccountAsync(application, cancellationToken) is { } existing:
+                application.LinkExisting(existing, clock.GetUtcNow());
+                break;
             case PartnerOutcome.Refused:
                 application.MarkRefused(answer.Reason!, clock.GetUtcNow());
                 break;
@@ -138,6 +141,56 @@ public sealed class DigitalGoldController(PartnerProductsDbContext db, TimeProvi
         }
         await SaveOnceAsync($"Application {number} changed meanwhile - reload it.", cancellationToken);
         return View(application);
+    }
+
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ A refusal because the customer ALREADY has an account (e.g. EWP's own record was
+    // │ lost or re-created): EWP asks the Partner Bank which account it holds for this
+    // │ customer - it answers only for customers EWP itself introduced - and links it only
+    // │ when the customer number AND the holder's name match EWP's record. Anything else
+    // │ stays a refusal: EWP never takes over an account it cannot tie to this customer.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    private async Task<string?> ExistingAccountAsync(GoldAccountApplication application, CancellationToken cancellationToken)
+    {
+        var account = await partnerBank.AccountOfCustomerAsync(application.CustomerNumber, cancellationToken);
+        var number = (string?)account?["number"];
+        return number is not null &&
+               (string?)account!["ewpCustomerNumber"] == application.CustomerNumber &&
+               string.Equals(((string?)account["holderName"])?.Trim(), application.CustomerName, StringComparison.OrdinalIgnoreCase) &&
+               !await db.Applications.AnyAsync(a => a.PartnerAccountNumber == number && a.Id != application.Id, cancellationToken)
+            ? number
+            : null;
+    }
+
+    public sealed record PartnerViewLink(string Url, int ExpiresInSeconds);
+
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ "View at the Partner Bank" (PAR-style handoff): a NEW signed staff_account_view for
+    // │ every click, pushed over mutual TLS; the Partner Bank answers with a one-time
+    // │ request_uri (60 s). The address handed to the browser is the CONFIGURED staff-view
+    // │ page plus that request_uri only - its format checked, nothing else from the answer.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    [HttpPost("gold-account-applications/{number}/partner-view")]
+    [Authorize(Policy = DigitalGoldPolicies.View)]
+    public async Task<ActionResult<PartnerViewLink>> PartnerView(
+        string number, [FromServices] PartnerBankOptions options, CancellationToken cancellationToken)
+    {
+        var actor = ActorOf(User);
+        var application = await db.Applications.AsNoTracking().FirstOrDefaultAsync(a => a.Number == number && a.BranchCode == actor.BranchCode, cancellationToken);
+        if (application is null)
+            return NotFound();
+
+        var answer = await partnerBank.PushStaffViewAsync(application.StaffViewInstruction(actor), Guid.NewGuid(), cancellationToken);
+        if (answer.Outcome == PartnerOutcome.Unavailable)
+            throw new PartnerBankUnavailableException($"{answer.Reason} Try again shortly.");
+        if (answer.Outcome == PartnerOutcome.Refused)
+            throw new DigitalGoldConflictException($"The Partner Bank will not show this account: {answer.Reason}");
+
+        var requestUri = (string?)answer.Body?["request_uri"];
+        if (requestUri is null || !System.Text.RegularExpressions.Regex.IsMatch(requestUri, "^urn:partner-bank:staff-view:[A-Za-z0-9_-]{43}$"))
+            throw new PartnerBankUnavailableException("The Partner Bank's answer carried no usable request_uri.");
+        var expiresIn = answer.Body?["expires_in"]?.GetValue<int>() ?? 60;
+        return new PartnerViewLink($"{options.StaffViewUrl}?request_uri={Uri.EscapeDataString(requestUri)}", expiresIn);
     }
 
     // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────

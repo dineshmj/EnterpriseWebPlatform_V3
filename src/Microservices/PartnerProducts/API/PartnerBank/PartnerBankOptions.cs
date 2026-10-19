@@ -11,6 +11,9 @@ public sealed class PartnerBankOptions
     /// <summary>The Partner Bank's API for distributors (mutual TLS), e.g. https://partner-api.ewp.home.arpa:47403.</summary>
     public string ApiBaseUrl { get; init; } = string.Empty;
 
+    /// <summary>The Partner Bank web's staff-view page, e.g. https://partner-products.ewp.home.arpa:47402/StaffView - opened with the pushed request_uri only.</summary>
+    public string StaffViewUrl { get; init; } = string.Empty;
+
     /// <summary>EWP's client ID at the Partner Bank's authorization server.</summary>
     public string ClientId { get; init; } = string.Empty;
 

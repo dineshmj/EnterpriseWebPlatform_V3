@@ -147,6 +147,16 @@ public sealed class GoldAccountApplication
         Touch(now);
     }
 
+    /// <summary>
+    /// The Partner Bank already held an account for this customer (introduced by EWP, same
+    /// customer number and name): this application is linked to it instead of being refused.
+    /// </summary>
+    public void LinkExisting(string partnerAccountNumber, DateTimeOffset now)
+    {
+        MarkOpened(partnerAccountNumber, now);
+        StatusReason = $"Linked to account {partnerAccountNumber}, which the Partner Bank already held for this customer.";
+    }
+
     public void MarkRefused(string reason, DateTimeOffset now)
     {
         StatusReason = reason.Length > 500 ? reason[..500] : reason;
@@ -177,6 +187,23 @@ public sealed class GoldAccountApplication
         },
         ["actor"] = new JsonObject { ["lanId"] = RecordedByLanId, ["branch"] = BranchCode }
     };
+
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ A staff view names exactly one open account, its customer and the staff member who
+    // │ LOOKS (from their token, not the one who recorded Form VII) - read-only by its type.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    public JsonObject StaffViewInstruction(Actor viewer)
+    {
+        if (!IsOpen)
+            throw new DigitalGoldConflictException($"Application {Number} is {Status}: the Partner Bank has no account to show yet.");
+        return new JsonObject
+        {
+            ["type"] = "staff_account_view",
+            ["goldAccountNumber"] = PartnerAccountNumber,
+            ["customer"] = new JsonObject { ["ewpCustomerNumber"] = CustomerNumber },
+            ["actor"] = new JsonObject { ["lanId"] = viewer.LanId, ["branch"] = viewer.BranchCode }
+        };
+    }
 
     private void Touch(DateTimeOffset now)
     {

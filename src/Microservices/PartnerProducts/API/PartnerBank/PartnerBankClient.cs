@@ -52,30 +52,44 @@ public sealed class PartnerBankClient(
     public Task<PartnerAnswer> OpenAccountAsync(JsonObject instruction, Guid instructionId, CancellationToken cancellationToken) =>
         InstructAsync("/api/distribution/gold-accounts", instruction, instructionId, cancellationToken);
 
+    /// <summary>Pushes a signed staff_account_view (PAR-style): the answer carries a one-time request_uri.</summary>
+    public Task<PartnerAnswer> PushStaffViewAsync(JsonObject instruction, Guid instructionId, CancellationToken cancellationToken) =>
+        InstructAsync("/api/distribution/staff-views", instruction, instructionId, cancellationToken);
+
     public Task<PartnerAnswer> PlacePurchaseAsync(JsonObject instruction, Guid instructionId, CancellationToken cancellationToken) =>
         InstructAsync("/api/distribution/gold-orders", instruction, instructionId, cancellationToken);
 
     /// <summary>The account's holding as the Partner Bank keeps it (grams, today's value, activity) - null when unavailable.</summary>
-    public async Task<JsonObject?> HoldingAsync(string accountNumber, CancellationToken cancellationToken)
+    public Task<JsonObject?> HoldingAsync(string accountNumber, CancellationToken cancellationToken) =>
+        GetAsync($"/api/distribution/gold-accounts/{Uri.EscapeDataString(accountNumber)}", cancellationToken);
+
+    /// <summary>
+    /// The Digital Gold account the Partner Bank holds for an EWP customer that EWP itself introduced
+    /// (number, holder's name) - null when there is none, or the Partner Bank cannot be reached.
+    /// </summary>
+    public Task<JsonObject?> AccountOfCustomerAsync(string ewpCustomerNumber, CancellationToken cancellationToken) =>
+        GetAsync($"/api/distribution/gold-accounts?ewpCustomerNumber={Uri.EscapeDataString(ewpCustomerNumber)}", cancellationToken);
+
+    private async Task<JsonObject?> GetAsync(string path, CancellationToken cancellationToken)
     {
         var token = await TokenAsync(cancellationToken);
         if (token is null)
             return null;
-        using var request = new HttpRequestMessage(HttpMethod.Get, $"{options.ApiBaseUrl.TrimEnd('/')}/api/distribution/gold-accounts/{Uri.EscapeDataString(accountNumber)}");
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{options.ApiBaseUrl.TrimEnd('/')}{path}");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         try
         {
             using var response = await http.SendAsync(request, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
-                logger.LogWarning("Partner Bank holding of {Account} answered HTTP {Status}.", accountNumber, (int)response.StatusCode);
+                logger.LogWarning("Partner Bank GET {Path} answered HTTP {Status}.", path, (int)response.StatusCode);
                 return null;
             }
             return JsonNode.Parse(await response.Content.ReadAsStringAsync(cancellationToken)) as JsonObject;
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException)
         {
-            logger.LogWarning("Partner Bank holding of {Account} unavailable: {Reason}", accountNumber, e.Message);
+            logger.LogWarning("Partner Bank GET {Path} unavailable: {Reason}", path, e.Message);
             return null;
         }
     }

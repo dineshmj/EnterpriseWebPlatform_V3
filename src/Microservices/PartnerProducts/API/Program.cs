@@ -46,7 +46,10 @@ builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 // └──────────────────────────────────────────────────────────────────────────────────────
 var partnerBankOptions = builder.Configuration.GetSection(PartnerBankOptions.SectionName).Get<PartnerBankOptions>()
     ?? throw new InvalidOperationException($"The '{PartnerBankOptions.SectionName}' section is missing.");
-foreach (var (name, url) in new[] { ("TokenEndpoint", partnerBankOptions.TokenEndpoint), ("ApiBaseUrl", partnerBankOptions.ApiBaseUrl) })
+foreach (var (name, url) in new[]
+{
+    ("TokenEndpoint", partnerBankOptions.TokenEndpoint), ("ApiBaseUrl", partnerBankOptions.ApiBaseUrl), ("StaffViewUrl", partnerBankOptions.StaffViewUrl)
+})
 {
     if (ExternalEndpoint.Problem(url, partnerBankOptions.PermittedHosts, builder.Environment.IsDevelopment()) is { } problem)
         throw new InvalidOperationException($"PartnerBank:{name} {problem}.");
@@ -70,6 +73,12 @@ builder.Services.AddHttpClient<PartnerBankClient>(client => client.Timeout = Tim
     .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
     {
         AllowAutoRedirect = false,
+        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // │ An unreachable Partner Bank (PC off, started without -Lan) fails in 5 s, not after
+        // │ the whole timeout: the counter hears "not reachable, send again" while the callers
+        // │ (Journey API, web BFF) are still waiting - not their own generic time-out.
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        ConnectTimeout = TimeSpan.FromSeconds(5),
         SslOptions =
         {
             ClientCertificates = [partnerBankCredentials.ClientCertificate],

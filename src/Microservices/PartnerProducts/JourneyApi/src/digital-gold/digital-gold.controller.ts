@@ -50,6 +50,14 @@ export class DigitalGoldController {
     return this.digitalGold.sendFormVii(request.delegation!.subjectToken, number);
   }
 
+  /** "View at the Partner Bank": a one-time address of the Partner Bank's read-only page for the open account. */
+  @Post('applications/:number/partner-view')
+  @Requires(VIEW)
+  partnerView(@Req() request: DelegatedRequest, @Param('number') number: string) {
+    if (!/^DGA-\d{6}-[A-Z0-9]{6}$/.test(number)) throw new BadRequestException('Unknown application.');
+    return this.digitalGold.partnerView(request.delegation!.subjectToken, number);
+  }
+
   /** Send a recorded slip to the Partner Bank and pay for it - or continue where it stopped. */
   @Post('purchases/:number/buy')
   @Requires(ORDER)

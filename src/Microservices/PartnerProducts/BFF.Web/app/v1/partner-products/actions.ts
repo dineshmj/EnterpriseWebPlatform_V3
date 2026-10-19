@@ -51,6 +51,18 @@ export async function buyGold(purchaseNumber: string): Promise<ActionResult<Purc
   return callJourney<PurchaseProgress>(WRITE, 'POST', `/v1/journeys/partner-products/purchases/${purchaseNumber}/buy`);
 }
 
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ The address comes back from EWP's own servers (the configured Partner Bank page + a
+// │ one-time request_uri); it is opened only if it is https - never an address from the
+// │ browser.
+// └──────────────────────────────────────────────────────────────────────────────────────
+export async function openPartnerView(applicationNumber: string): Promise<ActionResult<{ url: string; expiresInSeconds: number }>> {
+  if (!/^DGA-\d{6}-[A-Z0-9]{6}$/.test(applicationNumber)) return { ok: false, error: 'Unknown application.' };
+  const result = await callJourney<{ url: string; expiresInSeconds: number }>(READ, 'POST', `/v1/journeys/partner-products/applications/${applicationNumber}/partner-view`);
+  if (result.ok && !result.data.url.startsWith('https://')) return { ok: false, error: 'The Partner Bank\'s address is not usable.' };
+  return result;
+}
+
 export async function recordFormVii(customerId: number, form: FormData): Promise<ActionResult<GoldApplication>> {
   return recordSigned<GoldApplication>(customerId, 'form-vii', form, ['formNumber', 'formSignedOn', 'dateOfBirth', 'identityChecked', 'signatureChecked']);
 }
@@ -112,7 +124,8 @@ async function callJourney<T>(
       headers: { Authorization: `Bearer ${journeyToken}`, Accept: 'application/json' },
       body,
       cache: 'no-store',
-      signal: AbortSignal.timeout(30_000),
+      // Calls on to the Partner Bank (sending, paying, a staff view) may take the Journey API up to 40 s: wait for its own answer.
+      signal: AbortSignal.timeout(scope === WRITE || method === 'POST' ? 60_000 : 30_000),
     });
     if (response.ok) return { ok: true, data: (await response.json()) as T };
     if (response.status === 401) return { ok: false, signedOut: true, error: 'Your session has ended.' };

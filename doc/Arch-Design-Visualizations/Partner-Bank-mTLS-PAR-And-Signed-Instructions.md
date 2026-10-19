@@ -108,6 +108,32 @@ Camilla walks into the branch. She doesn't want to type her password on Sophie's
 
 ---
 
+## Part 3 - At the counter, looking at the Partner Bank's own page: a PAR-style handoff
+
+Camilla asks a question about her gold. Sophie wants to see what the Partner Bank itself shows, not EWP's summary. Sophie has no Partner Bank sign-in, and Camilla isn't signing in either.
+
+**Sophie's screen:** Sophie clicks **View at the Partner Bank ↗**. A new browser tab opens at once, still empty.
+*The tab is opened at the click, so no pop-up blocker stops it, and it's cut off from EWP's page (`opener = null`).*
+
+**EWP:** Partner API, a new signed instruction: **staff view**, account PB-DGA-CCRNCU of customer CUST-100001, for Sophie (LAN ID `somit`, branch SYD001). Read-only by its type.
+*`POST /api/distribution/staff-views`, mutual TLS, EWP's own bound token, `application/jwt`: `{ "type": "staff_account_view", "goldAccountNumber": "PB-DGA-CCRNCU", "customer": { "ewpCustomerNumber": "CUST-100001" }, "actor": { "lanId": "somit", "branch": "SYD001" } }`. A new `jti` for every click.*
+
+**Partner API:** Your certificate, your bound token, your signature. You introduced this account, and it is this customer's. Here's a **`request_uri`**: `urn:partner-bank:staff-view:…`. It's random, it's good for **60 seconds** and **one** opening, and I only keep its fingerprint. I'm telling you nothing else about the account.
+*Like PAR (RFC 9126): the request is pushed and signed server to server; the browser only ever carries an opaque reference.*
+
+**EWP:** Browser, go to the Partner Bank's staff page with this reference.
+*The address is EWP's CONFIGURED staff-view page plus the `request_uri`, its format checked. Nothing else from the Partner Bank's answer goes into the address.*
+
+**Partner web:** Someone brings me a `request_uri`. API, is it real?
+*Redeemed on the localhost-only internal port. That works once; a second try, an expired one or a made-up one is "no longer available".*
+
+**Partner web:** It is. Here's my own page: Digital Gold account PB-DGA-CCRNCU, Camilla Parker, 0.1213 g, today's value, and everything that happened, with the SMS notices I sent her. On top: *"Read-only view for somit (branch SYD001) of Four Walls, opened 3:42 pm."*
+*No cookie, no form, `no-store`, `no-referrer`. Reloading shows "no longer available": Sophie clicks the button again for a fresh look. Every push and opening is in the Partner Bank's log.*
+
+**Why not "real" PAR here?** Standard PAR ends with an authorization **code sent back to EWP**, which EWP exchanges for a token. Here nothing comes back to EWP: the browser is meant to stay on the Partner Bank's page. The handoff keeps what makes PAR safe (pushed, signed, one-time, short-lived, nothing readable in the address) and ends where it should. The Partner Bank trusts EWP's signed request for who is looking. A stronger alternative is single sign-on of EWP's staff through EWP's IDP, at the cost of more set-up.
+
+---
+
 ## When something goes wrong
 
 **Partner AS:** No certificate, or one that doesn't chain to the trust root: I end the TLS handshake. There's no HTTP request to answer.
@@ -148,3 +174,4 @@ PAR protects a request that has to **pass through a browser**. At the counter, n
 - *Partner Bank repo: `src/PartnerBank.Api/Security/BoundTokens.cs`; `Distribution/SignedInstructions.cs`, `Distribution/Instructions.cs`; `Api/DistributionApi.cs`*
 - *EWP: `src/Microservices/PartnerProducts/API/PartnerBank/PartnerBankClient.cs`, `PartnerBankCredentials.cs`; `Domain/GoldAccountApplication.cs` (`PrepareToSend`, `OpeningInstruction`)*
 - *EWP: `ps/pki/New-EwpLocalPki.ps1` (the trust root, the mutual-TLS certificate, the request-signing key)*
+- *Part 3: Partner Bank repo `Distribution/StaffViews.cs`, `Api/DistributionApi.cs` (`/staff-views`), `Api/InternalApi.cs` (redeem), `PartnerBank.Web/Pages/StaffView.cshtml`; EWP `Controllers/DigitalGoldController.cs` (`PartnerView`) and the Digital Gold page's "View at the Partner Bank"*

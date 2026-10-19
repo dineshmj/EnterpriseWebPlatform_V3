@@ -149,8 +149,8 @@ export class DigitalGoldService {
 
   /** Sends a recorded (or sent, unanswered) Form VII to the Partner Bank; the Partner Products API holds the keys and records the answer. */
   async sendFormVii(token: string, applicationNumber: string) {
-    return this.api.post(token, PP_WRITE,
-      `${this.options.partnerProductsApiBaseUrl}/v1/partner-products/gold-account-applications/${encodeURIComponent(applicationNumber)}/send`, {}, 'Partner Products');
+    return this.api.postViaPartnerBank(token, PP_WRITE,
+      `${this.options.partnerProductsApiBaseUrl}/v1/partner-products/gold-account-applications/${encodeURIComponent(applicationNumber)}/send`, 'The Partner Bank');
   }
 
   // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
@@ -163,7 +163,7 @@ export class DigitalGoldService {
   // └──────────────────────────────────────────────────────────────────────────────────────
   async buy(token: string, purchaseNumber: string) {
     const base = `${this.options.partnerProductsApiBaseUrl}/v1/partner-products/gold-purchases/${encodeURIComponent(purchaseNumber)}`;
-    let purchase = await this.api.post<PurchaseView>(token, PP_WRITE, `${base}/send`, {}, 'The Partner Bank');
+    let purchase = await this.api.postViaPartnerBank<PurchaseView>(token, PP_WRITE, `${base}/send`, 'The Partner Bank');
 
     if (purchase.status === 'ORDERED' && !purchase.paymentNumber) {
       const payment = await this.api.get<PurchasePayment>(token, PP_WRITE, `${base}/payment-instruction`, 'Partner Products');
@@ -188,6 +188,12 @@ export class DigitalGoldService {
 
     const followUp = purchase.status === 'ORDERED' || purchase.status === 'PAID' ? await this.workflow.ensureStarted(purchaseNumber) : null;
     return { purchase, followUp };
+  }
+
+  /** A one-time address of the Partner Bank's own read-only page for the account (the Partner Products API pushes the signed request). */
+  async partnerView(token: string, applicationNumber: string) {
+    return this.api.postViaPartnerBank<{ url: string; expiresInSeconds: number }>(token, PP_READ,
+      `${this.options.partnerProductsApiBaseUrl}/v1/partner-products/gold-account-applications/${encodeURIComponent(applicationNumber)}/partner-view`, 'The Partner Bank');
   }
 
   async applications(token: string) {

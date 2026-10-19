@@ -9,7 +9,7 @@ import { DescriptionList, Table, Td, Th } from '@/app/components/ui/data';
 import { Alert, Badge, EmptyState } from '@/app/components/ui/feedback';
 import { Field, Input, Select } from '@/app/components/ui/form';
 import type { ActionResult, CustomerAtCounter, CustomerMatch, GoldApplication, GoldPurchase } from '@/lib/partner-products-types';
-import { buyGold, loadApplications, loadCustomer, recordFormVii, recordTransferSlip, searchCustomers, sendFormVii } from '../../actions';
+import { buyGold, loadApplications, loadCustomer, openPartnerView, recordFormVii, recordTransferSlip, searchCustomers, sendFormVii } from '../../actions';
 
 /** Today in Sydney (yyyy-mm-dd) - the date a transfer slip must carry. */
 const sydneyToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' }).format(new Date());
@@ -157,6 +157,27 @@ function CustomerPanel({ customer, onRecorded, onError }: {
   const application = customer.digitalGold.application;
   const active = application && application.status !== 'REFUSED' ? application : null;
   const [sending, setSending] = useState(false);
+  const [opening, setOpening] = useState(false);
+
+  // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+  // │ "View at the Partner Bank": the tab is opened AT THE CLICK (so no pop-up blocker
+  // │ stops it), cut off from this page (opener = null), and only then sent to the
+  // │ one-time address EWP's server got from the Partner Bank. On a refusal it is closed.
+  // └──────────────────────────────────────────────────────────────────────────────────────
+  const viewAtPartner = async (number: string) => {
+    onError(null);
+    const tab = window.open('', '_blank');
+    if (tab) tab.opener = null;
+    setOpening(true);
+    const result = await openPartnerView(number);
+    setOpening(false);
+    if (result.ok && tab) tab.location.replace(result.data.url);
+    else {
+      tab?.close();
+      if (!result.ok && result.signedOut) signInAgain();
+      else onError(result.ok ? 'Your browser did not open a new tab: allow it for this site, then try again.' : result.error);
+    }
+  };
 
   const send = async (number: string) => {
     onError(null);
@@ -165,7 +186,7 @@ function CustomerPanel({ customer, onRecorded, onError }: {
     setSending(false);
     if (result.ok) {
       await onRecorded(result.data.status === 'OPENED'
-        ? `The Partner Bank opened Digital Gold account ${result.data.partnerAccountNumber}.`
+        ? result.data.statusReason ?? `The Partner Bank opened Digital Gold account ${result.data.partnerAccountNumber}.`
         : `The Partner Bank refused the application: ${result.data.statusReason}`);
     } else if (result.signedOut) signInAgain();
     // Reload first (the status may now be SENT), then show why: the reload clears old messages.
@@ -209,6 +230,14 @@ function CustomerPanel({ customer, onRecorded, onError }: {
                     ? 'No answer came last time. Sending again sends the same signed instruction: the Partner Bank opens one account only.'
                     : 'EWP sends a signed instruction over mutual TLS; the Partner Bank opens the account and tells the customer by SMS.'}
                 </span>
+              </div>
+            )}
+            {active.status === 'OPENED' && (
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <Button variant="secondary" onClick={() => viewAtPartner(active.number)} disabled={opening}>
+                  {opening ? 'Opening…' : 'View at the Partner Bank ↗'}
+                </Button>
+                <span className="text-[13px] text-ink-muted">Opens the Partner Bank&apos;s own read-only page for this account in a new tab - once, for you.</span>
               </div>
             )}
             {active.status === 'OPENED' && <HoldingView holding={customer.holding} />}

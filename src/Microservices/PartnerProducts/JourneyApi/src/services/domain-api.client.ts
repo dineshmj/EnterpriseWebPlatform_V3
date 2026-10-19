@@ -17,6 +17,9 @@ export interface UploadedScan {
   buffer: Buffer;
 }
 
+/** How long a call that goes on to the Partner Bank may take (the Partner Products API's token + call, 15 s each). */
+const PARTNER_BANK_TIMEOUT_MS = 40_000;
+
 /** What Documents Management answers for an upload: the document and the SHA-256 of its content. */
 export interface StoredDocument {
   documentId: string;
@@ -45,6 +48,16 @@ export class DomainApiClient {
     return this.call<T>(subjectToken, scope, 'POST', url, what, JSON.stringify(body), 'application/json', headers);
   }
 
+  // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+  // │ A call the Partner Products API forwards to the Partner Bank (token + instruction,
+  // │ up to 15 s each): waited for longer than a plain Domain API call, so the Partner
+  // │ Products API's own answer ("not reachable - it stays SENT, send again") reaches the
+  // │ counter instead of this API's generic time-out.
+  // └──────────────────────────────────────────────────────────────────────────────────────
+  async postViaPartnerBank<T>(subjectToken: string, scope: string, url: string, what: string): Promise<T> {
+    return this.call<T>(subjectToken, scope, 'POST', url, what, '{}', 'application/json', {}, PARTNER_BANK_TIMEOUT_MS);
+  }
+
   /**
    * Stores a scan in Documents Management FOR the person (their branch): the type and business
    * reference go in DM's headers; DM checks the content against the declared type itself.
@@ -69,11 +82,11 @@ export class DomainApiClient {
 
   private async call<T>(
     subjectToken: string, scope: string, method: 'GET' | 'POST' | 'DELETE', url: string, what: string,
-    body?: string | FormData, contentType?: string, extraHeaders: Record<string, string> = {},
+    body?: string | FormData, contentType?: string, extraHeaders: Record<string, string> = {}, timeoutMs = 15_000,
   ): Promise<T> {
     const token = await this.exchange.exchange(subjectToken, scope);
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15_000);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     let response: Response;
     try {
       response = await fetch(url, {
@@ -84,6 +97,9 @@ export class DomainApiClient {
       });
     } catch (error) {
       this.logger.warn(`${method} ${url} failed: ${(error as Error).message}`);
+      if (timeoutMs === PARTNER_BANK_TIMEOUT_MS) {
+        throw new ServiceUnavailableException(`${what} did not answer in time. Nothing is lost: what was sent stays SENT - send it again shortly (it is done once only).`);
+      }
       throw new ServiceUnavailableException(`${what} is unavailable. Try again shortly.`);
     } finally {
       clearTimeout(timer);
