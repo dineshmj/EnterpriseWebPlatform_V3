@@ -44,6 +44,10 @@ function askTheShell(): Promise<boolean> {
       resolve(confirmed);
     };
     function onMessage(event: MessageEvent) {
+      // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+      // │ If the answer is not from the parent window AND the Shell's origin, or not for this
+      // │ request, ignore it: a page that frames this app must not answer for the Shell.
+      // └──────────────────────────────────────────────────────────────────────────────────────
       if (event.source !== window.parent || event.origin !== SHELL_ORIGIN) return;
       if (event.data?.type !== 'BSS_STEP_UP_RESULT' || event.data.requestId !== requestId) return;
       finish(event.data.confirmed === true);

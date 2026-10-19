@@ -37,6 +37,10 @@ export function StepUpOverlay({ origin, onFinish }: { origin: string; onFinish: 
     return () => { window.removeEventListener('keydown', onKey); window.clearTimeout(timer); };
   }, []);
 
+  // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+  // │ If the frame (or window) is on the Shell's OWN origin and its fixed done page, the
+  // │ code was confirmed; anything else - another origin's page throws when read - is not.
+  // └──────────────────────────────────────────────────────────────────────────────────────
   /** True when the window is on the Shell's own done page (another origin's address cannot be read). */
   const isDone = (target: Window | null | undefined) => {
     try {

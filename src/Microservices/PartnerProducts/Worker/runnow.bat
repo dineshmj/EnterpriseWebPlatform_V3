@@ -26,7 +26,11 @@ set "TEMPORAL_ADDRESS=localhost:7233"
 set "TEMPORAL_NAMESPACE=default"
 set "PARTNER_PRODUCTS_TEMPORAL_TASK_QUEUE=partner-products"
 
-REM This worker's own MACHINE client (client credentials): only the internal endpoints that pin it.
+REM ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+REM │ This worker's own MACHINE client (client credentials): only the internal endpoints that
+REM │ pin its client ID accept it. The secret below is a DEVELOPMENT value; elsewhere it
+REM │ comes from the environment or a secret store (Threat-Model R-10).
+REM └──────────────────────────────────────────────────────────────────────────────────────
 set "PARTNER_PRODUCTS_WORKER_IDP_AUTHORITY=https://idp.dev.localhost:46392"
 set "PARTNER_PRODUCTS_WORKER_CLIENT_ID=PartnerProducts.Worker.M2M.ClientID"
 set "PARTNER_PRODUCTS_WORKER_CLIENT_SECRET=e6b2c9d4-3f71-4a85-9c0e-81d5a7f3b246"

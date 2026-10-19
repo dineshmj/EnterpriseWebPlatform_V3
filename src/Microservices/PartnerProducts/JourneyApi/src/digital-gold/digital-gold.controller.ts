@@ -50,6 +50,11 @@ export class DigitalGoldController {
     return this.digitalGold.sendFormVii(request.delegation!.subjectToken, number);
   }
 
+  // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+  // │ If the path is not an EWP application / purchase number (DGA-… / DGP-…), refuse it:
+  // │ only EWP's own references reach the Domain API - amounts, accounts and payees never
+  // │ come from the screen.
+  // └──────────────────────────────────────────────────────────────────────────────────────
   /** "View at the Partner Bank": a one-time address of the Partner Bank's read-only page for the open account. */
   @Post('applications/:number/partner-view')
   @Requires(VIEW)

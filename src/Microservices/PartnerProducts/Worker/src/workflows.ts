@@ -48,6 +48,11 @@ export async function goldPurchaseWorkflow(input: GoldPurchaseInput): Promise<Go
   for (let poll = 0; poll < POLLS_PER_RUN; poll++) {
     const payment = await paymentOutcome(purchase.paymentRef);
 
+    // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+    // │ If the payment COMPLETED, send the payment advice (gold allocated). If it was not
+    // │ made (REJECTED, FAILED, COMPENSATION_FAILED) or none was started in 30 minutes,
+    // │ cancel the unpaid order. Anything else (approval, network) - wait and check again.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     if (payment?.status === 'COMPLETED') {
       const done = await sendPaymentAdvice(purchase.number, purchase.paymentRef, payment);
       log.info('Gold allocated', { purchase: purchase.number, payment: payment.paymentNumber });

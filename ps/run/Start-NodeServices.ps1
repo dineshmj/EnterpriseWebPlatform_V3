@@ -46,7 +46,10 @@ $services = @(
     [pscustomobject]@{ Name = 'Operations web';         Group = 'Operations'; Port = 46381; Folder = 'src\Microservices\Operations\BFF.Web' }
     [pscustomobject]@{ Name = 'Partner Products Journey API'; Group = 'PartnerProducts'; Port = 46385; Folder = 'src\Microservices\PartnerProducts\JourneyApi' }
     [pscustomobject]@{ Name = 'Partner Products web';         Group = 'PartnerProducts'; Port = 46384; Folder = 'src\Microservices\PartnerProducts\BFF.Web' }
-    # The Temporal worker: its port is its health probe. Start Temporal first (temporal server start-dev).
+    # ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+    # │ The Temporal worker: its port is its health probe (it serves nothing else). Start
+    # │ Temporal first (ps\temporal\Start-Temporal.ps1); -Stop stops it by this port.
+    # └──────────────────────────────────────────────────────────────────────────────────────
     [pscustomobject]@{ Name = 'Partner Products Worker';      Group = 'PartnerProducts'; Port = 46383; Folder = 'src\Microservices\PartnerProducts\Worker' }
 ) | Where-Object { $Only -eq 'All' -or $_.Group -eq $Only }
 

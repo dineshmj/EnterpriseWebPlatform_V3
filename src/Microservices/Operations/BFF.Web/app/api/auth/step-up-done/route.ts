@@ -9,6 +9,11 @@ export const dynamic = 'force-dynamic';
  * page that opened it sees this address and closes it.
  */
 export function GET(request: NextRequest) {
+  // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+  // │ If the step-up ran in the Shell's overlay, go on to the Shell's own FIXED done page
+  // │ (configured origin - never an address from the request: no open redirect). A forged
+  // │ "done" gains nothing: the change is retried once and the API checks the fresh MFA.
+  // └──────────────────────────────────────────────────────────────────────────────────────
   if (request.nextUrl.searchParams.get('in') === 'shell') {
     return NextResponse.redirect(`${new URL(config.shellOrigin).origin}/step-up-done.html`, { headers: { 'Cache-Control': 'no-store' } });
   }

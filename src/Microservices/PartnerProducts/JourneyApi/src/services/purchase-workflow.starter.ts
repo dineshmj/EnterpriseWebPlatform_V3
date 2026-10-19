@@ -34,6 +34,11 @@ export class PurchaseWorkflowStarter implements OnModuleDestroy {
       this.logger.log(`Purchase workflow started for ${purchaseNumber}.`);
       return 'STARTED';
     } catch (error) {
+      // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+      // │ If the workflow already runs, that is the answer (one per purchase, never two). If
+      // │ Temporal cannot be reached, nothing is lost: the purchase stays as it is and the
+      // │ screen offers "Continue", which starts it again.
+      // └──────────────────────────────────────────────────────────────────────────────────────
       if (error instanceof WorkflowExecutionAlreadyStartedError) return 'ALREADY_RUNNING';
       this.logger.warn(`Purchase workflow for ${purchaseNumber} not started: ${(error as Error).message}`);
       this.connection = undefined;   // connect afresh next time (Temporal may have been down)

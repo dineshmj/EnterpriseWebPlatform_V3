@@ -22,9 +22,13 @@
 
     <partial name="_ValidationSummary" />
 
+    @* ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+       │ If this is a step-up (the only IDP page the Shell may frame), show no link to the
+       │ sign-in page: a password form must never open inside a frame. The overlay's own
+       │ Cancel ends it.
+       └────────────────────────────────────────────────────────────────────────────────────── *@
     @if (Model.Locked)
     {
-        @* In a step-up overlay the sign-in page cannot be shown (never framed): the overlay's own Close ends it. *@
         @if (!Model.StepUp)
         {
             <div class="actions">

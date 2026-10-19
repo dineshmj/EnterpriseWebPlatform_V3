@@ -55,6 +55,11 @@ public sealed class InternalGoldPurchasesController(
         await SaveAsync(cancellationToken);
 
         var answer = await partnerBank.PaymentAdviceAsync(purchase.PartnerOrderNumber!, purchase.NetworkReference!, purchase.AmountAud, cancellationToken);
+        // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+        // │ If the Partner Bank allocates, ALLOCATED. If it refuses the advice, the money has
+        // │ left the customer's account: stay PAID, keep the reason for a person (409, the
+        // │ workflow stops). If it does not answer, stay PAID (503: the workflow sends again).
+        // └──────────────────────────────────────────────────────────────────────────────────────
         switch (answer.Outcome)
         {
             case PartnerOutcome.Accepted:
@@ -87,6 +92,11 @@ public sealed class InternalGoldPurchasesController(
             return StateOf(purchase);
 
         var answer = await partnerBank.CancelOrderAsync(purchase.PartnerOrderNumber!, reason, cancellationToken);
+        // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+        // │ Only an unpaid order gets here (EnsureCancellable). If the Partner Bank cancels it,
+        // │ CANCELLED; if it refuses (e.g. already allocated), keep the reason for a person;
+        // │ if it does not answer, the order stays open and the workflow cancels again.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         switch (answer.Outcome)
         {
             case PartnerOutcome.Accepted:

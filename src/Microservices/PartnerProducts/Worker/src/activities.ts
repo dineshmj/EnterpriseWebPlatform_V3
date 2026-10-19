@@ -55,6 +55,11 @@ export function createActivities(options: WorkerOptions) {
     if (response.status === 404) return null;
 
     const problem = (await response.json().catch(() => ({}))) as { detail?: string };
+    // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+    // │ If the API refuses (400 / 403 / 409), retrying cannot help: fail for good, so the
+    // │ workflow stops and shows why. Anything else (401 after dropping the token, 5xx, a
+    // │ time-out) is retried by Temporal - the endpoints act once, so a retry is safe.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     if (response.status === 401) tokens.forget(scope);
     if (response.status === 400 || response.status === 403 || response.status === 409) {
       throw ApplicationFailure.nonRetryable(problem.detail ?? `HTTP ${response.status} from ${method} ${url}`, `Refused${response.status}`);
