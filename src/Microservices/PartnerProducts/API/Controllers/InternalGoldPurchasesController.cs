@@ -41,6 +41,20 @@ public sealed class InternalGoldPurchasesController(
         return StateOf(purchase);
     }
 
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ For the worker's payment-event listener: which purchase started this payment (its
+    // │ Idempotency-Key, a random GUID). Answers the number and state only - the same as the
+    // │ endpoint above - and only to the worker's pinned machine client.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    [HttpGet("by-payment-ref/{paymentRef:guid}")]
+    public async Task<ActionResult<PurchaseState>> ByPaymentRef(Guid paymentRef, CancellationToken cancellationToken)
+    {
+        var purchase = await db.Purchases.AsNoTracking().FirstOrDefaultAsync(p => p.PaymentRef == paymentRef, cancellationToken);
+        if (purchase is null)
+            return NotFound();
+        return StateOf(purchase);
+    }
+
     [HttpPost("{number}/payment-advice")]
     public async Task<ActionResult<PurchaseState>> PaymentAdvice(string number, PaymentAdviceRequest request, CancellationToken cancellationToken)
     {

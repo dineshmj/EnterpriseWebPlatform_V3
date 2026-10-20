@@ -366,7 +366,9 @@ Demo: Sophie's **Send & pay** on a $20 slip; the Temporal UI (http://localhost:8
 - The purchase's states: [GoldPurchase.cs](../src/Microservices/PartnerProducts/API/Domain/GoldPurchase.cs); the worker's endpoints: [InternalGoldPurchasesController.cs](../src/Microservices/PartnerProducts/API/Controllers/InternalGoldPurchasesController.cs)
 - Business rules: [PartnerProducts-Requirements.md](Requirements/PartnerProducts-Requirements.md); step by step, including a worker crash and every other ending: [Temporal-Digital-Gold-Purchase.md](Arch-Design-Visualizations/Temporal-Digital-Gold-Purchase.md)
 
-**Not yet:** the payment is followed by polling (every 15 s), not by its events; Temporal runs as the local development server (Threat-Model R-16).
+The payment's outcome reaches the workflow as an **event**: the worker listens to `payments.payment.events` and signals the purchase's workflow, which then reads the payment from the Payments API itself (the event is a hint, not the truth); without a signal it looks again every 5 minutes.
+
+**Not yet:** Temporal runs as the local development server (Threat-Model R-16).
 
 ### 1.5 Front-end composition
 

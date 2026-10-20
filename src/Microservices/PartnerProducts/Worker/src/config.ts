@@ -17,6 +17,18 @@ export interface WorkerOptions {
   partnerProductsApiBaseUrl: string;
   paymentsApiBaseUrl: string;
 
+  /**
+   * Kafka (SASL/SCRAM-SHA-512 as the worker's own user): the listener for payments.payment.events.
+   * Read rights on that topic and the group partner-products.worker only (Setup-KafkaSecurity.ps1).
+   */
+  kafkaBootstrapServers: string;
+  kafkaUsername: string;
+  kafkaPassword: string;
+
+  /** The Partner Bank's settlement account (the payee of every purchase): only its payments are looked up. */
+  settlementBsb: string;
+  settlementAccountNumber: string;
+
   /** The health probe (Operations -> Platform Health): https, the development certificate. */
   healthPort: number;
   tlsPfxPath: string;
@@ -52,6 +64,11 @@ export function loadOptions(): WorkerOptions {
     clientSecret: required('PARTNER_PRODUCTS_WORKER_CLIENT_SECRET'),
     partnerProductsApiBaseUrl: httpsUrl('PARTNER_PRODUCTS_API_BASE_URL'),
     paymentsApiBaseUrl: httpsUrl('PAYMENTS_API_BASE_URL'),
+    kafkaBootstrapServers: required('KAFKA_BOOTSTRAP_SERVERS'),
+    kafkaUsername: required('PARTNER_PRODUCTS_WORKER_KAFKA_USERNAME'),
+    kafkaPassword: required('PARTNER_PRODUCTS_WORKER_KAFKA_PASSWORD'),
+    settlementBsb: required('PARTNER_PRODUCTS_SETTLEMENT_BSB'),
+    settlementAccountNumber: required('PARTNER_PRODUCTS_SETTLEMENT_ACCOUNT_NUMBER'),
     healthPort: Number(required('PARTNER_PRODUCTS_WORKER_HEALTH_PORT')),
     tlsPfxPath: required('PARTNER_PRODUCTS_WORKER_TLS_PFX_PATH'),
     tlsPfxPassword: required('PARTNER_PRODUCTS_WORKER_TLS_PFX_PASSWORD'),

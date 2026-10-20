@@ -38,6 +38,7 @@ Partner Products API  --mutual TLS (EWP's client certificate)-->  Partner Bank t
 | `GET /v1/partner-products/gold-purchases/{number}/payment-instruction` | `DigitalGoldOrder` | What EWP Payments is asked to pay for an ORDERED purchase: the slip's account and amount, the Partner Bank's settlement account (configuration), the order number as reference, the fixed Idempotency-Key |
 | `POST /v1/partner-products/gold-purchases/{number}/payment` | `DigitalGoldOrder` | Record the payment number EWP Payments gave the purchase's payment |
 | `GET /internal/v1/gold-purchases/{number}` | `DigitalGoldWorker` | The purchase's state for the purchase workflow (status, amount, payment key, order number) |
+| `GET /internal/v1/gold-purchases/by-payment-ref/{key}` | `DigitalGoldWorker` | The same, found by the payment's Idempotency-Key - for the worker's payment-event listener |
 | `POST /internal/v1/gold-purchases/{number}/payment-advice` | `DigitalGoldWorker` | The payment completed: PAID (checked: key, amount, payee), then the payment advice to the Partner Bank -> ALLOCATED |
 | `POST /internal/v1/gold-purchases/{number}/cancel` | `DigitalGoldWorker` | The payment was not made: cancel the Partner Bank's unpaid order -> CANCELLED |
 
@@ -76,4 +77,3 @@ Partner Products API  --mutual TLS (EWP's client certificate)-->  Partner Bank t
 ## Not yet (next steps)
 
 - Resending a PARKED Outbox message from Operations (Accounts, Compliance and Payments have it; here a parked row is visible in the health check only).
-- The purchase workflow follows `payments.payment.events` instead of polling the payment (Threat-Model R-16).

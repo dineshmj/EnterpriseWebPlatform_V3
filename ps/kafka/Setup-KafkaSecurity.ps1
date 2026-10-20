@@ -62,6 +62,7 @@ $Users = [ordered]@{
     'ewp-payments-saga-reply-subscriber' = 'ewp-payments-saga-reply-subscriber-kafka-dev' # PaymentsSagaReplySubscriber
     'ewp-audit-api'                     = 'ewp-audit-api-kafka-dev'          # Audit API (in-process trail subscriber; read-only)
     'ewp-partner-products-api'          = 'ewp-partner-products-api-kafka-dev' # Partner Products API (in-process relay: Digital Gold events)
+    'ewp-partner-products-worker'       = 'ewp-partner-products-worker-kafka-dev' # Partner Products Worker (payment-event listener; read-only)
     'ewp-kafka-ui'                      = 'ewp-kafka-ui-dev'                 # Kafka UI (read-only)
 }
 
@@ -116,6 +117,8 @@ $NewGroups = [ordered]@{
     # Payments saga (orchestration): commands to Accounts, and Accounts' replies to the orchestrator.
     'accounts.command-subscriber'             = @('accounts.commands')
     'payments.saga-reply-subscriber'          = @('accounts.funds.replies')
+    # Starts at "latest": a payment outcome from before needs no signal (each workflow checks on start).
+    'partner-products.worker'                 = @('payments.payment.events')
     # NOT listed on purpose: 'audit.trail-subscriber' starts at the EARLIEST offset, so the
     # audit trail first records the history Kafka still holds.
 }
@@ -351,6 +354,10 @@ switch ($Phase) {
 
     Write-Host 'Partner Products API (in-process relay): write partner-products.digital-gold.events only' -ForegroundColor Cyan
     Grant 'ewp-partner-products-api' '--operation Write --operation Describe --topic partner-products.digital-gold.events'
+
+    Write-Host 'Partner Products Worker (payment-event listener): read payments.payment.events and its group; nothing else' -ForegroundColor Cyan
+    Grant 'ewp-partner-products-worker' '--operation Read --operation Describe --topic payments.payment.events'
+    Grant 'ewp-partner-products-worker' '--operation Read --group partner-products.worker'
 
     Write-Host 'PaymentsSagaReplySubscriber: read accounts.funds.replies and its group; write its dead-letter topic' -ForegroundColor Cyan
     Grant 'ewp-payments-saga-reply-subscriber' '--operation Read --operation Describe --topic accounts.funds.replies'

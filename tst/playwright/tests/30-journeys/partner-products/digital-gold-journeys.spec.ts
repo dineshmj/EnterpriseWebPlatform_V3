@@ -35,7 +35,7 @@ test.describe('Digital Gold journeys', () => {
     await digitalGold.open();
     await digitalGold.selectCustomer(customerNumber);
     await expect(digitalGold.viewAtPartnerBankButton()).toBeVisible();
-    await expect(digitalGold.goldHeld()).toHaveText('0.0000 g');
+    await digitalGold.expectGoldHeld(customerNumber, '0.0000 g');
   });
 
   test('View at the Partner Bank: its own read-only page in a new tab, cut off from EWP, one use only', async ({ signedInAs }) => {
@@ -78,7 +78,7 @@ test.describe('Digital Gold journeys', () => {
       await expect(digitalGold.purchaseRow(slipNumber)).toContainText(/\d+\.\d{4} g at /);
     });
     await test.step('The Partner Bank now reports gold held', async () => {
-      await expect(digitalGold.goldHeld()).not.toHaveText('0.0000 g');
+      await digitalGold.expectGoldHeld(customerNumber, /^(?!0\.0000 g$)\d+\.\d{4} g$/);
     });
   });
 

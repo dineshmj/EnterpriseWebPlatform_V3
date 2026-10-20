@@ -26,11 +26,11 @@ Deployables: `src/Microservices/PartnerProducts/Worker` (the Digital Gold purcha
 
 - [x] **Fail closed:** every address must be https, every setting is required, no secret has a default. → `src/config.ts`
 - [x] **Health probe:** `https://localhost:46383/health/live` (the process) and `/health/ready` (polling Temporal); listed on Platform Health. → `src/main.ts`
-- [x] **Install scripts not run** for the SDK's dependencies (`protobufjs`, `@swc/core`: notices and a binary check only); `pnpm audit` clean. → `pnpm-workspace.yaml`
+- [x] **Install scripts not run** for the SDK's dependencies (`protobufjs`, `@swc/core`: notices and a binary check only); the ONE allowed is `@confluentinc/kafka-javascript` (fetches its prebuilt librdkafka binding); `pnpm audit` clean. → `pnpm-workspace.yaml`
 
 ## 5. Production (open)
 
 - [ ] **Temporal secured:** mTLS to the frontend and namespace authorization (today the local development server, localhost only; production: mTLS from the service mesh or Temporal Cloud, not built in the app; R-16).
-- [ ] **Events instead of polling:** follow the payment through `payments.payment.events` (or a signal) rather than every 15 s (R-16).
+- [x] **Events instead of polling:** the worker listens to `payments.payment.events` (its own Kafka user, read-only) and signals the purchase's workflow; the signal carries nothing - the workflow reads the payment itself; fallback look every 5 minutes. → `src/payment-events.ts`, `src/workflows.ts`
 - [ ] **Secret store** for the client secret (R-10).
 - [ ] **Workflow metrics and alerts** (failed or long-running workflows) in the deployment's monitoring.

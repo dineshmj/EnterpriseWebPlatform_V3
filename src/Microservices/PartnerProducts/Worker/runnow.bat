@@ -38,6 +38,18 @@ set "PARTNER_PRODUCTS_WORKER_CLIENT_SECRET=e6b2c9d4-3f71-4a85-9c0e-81d5a7f3b246"
 set "PARTNER_PRODUCTS_API_BASE_URL=https://partner-products-api.dev.localhost:46387"
 set "PAYMENTS_API_BASE_URL=https://payments-api.dev.localhost:44488"
 
+REM +- SEC --------------------------------------------------------------------------------
+REM | The payment-event listener reads payments.payment.events as the worker's OWN Kafka
+REM | user (read on that topic and group partner-products.worker only). DEVELOPMENT password;
+REM | elsewhere from the environment or a secret store. The settlement account must match the
+REM | Partner Products API's PartnerBank:Settlement - only its payments are looked up.
+REM +--------------------------------------------------------------------------------------
+set "KAFKA_BOOTSTRAP_SERVERS=localhost:9092"
+set "PARTNER_PRODUCTS_WORKER_KAFKA_USERNAME=ewp-partner-products-worker"
+set "PARTNER_PRODUCTS_WORKER_KAFKA_PASSWORD=ewp-partner-products-worker-kafka-dev"
+set "PARTNER_PRODUCTS_SETTLEMENT_BSB=182-512"
+set "PARTNER_PRODUCTS_SETTLEMENT_ACCOUNT_NUMBER=961234567"
+
 set "PARTNER_PRODUCTS_WORKER_HEALTH_PORT=46383"
 set "PARTNER_PRODUCTS_WORKER_TLS_PFX_PATH=%CERT_DIR%\ewp-v3-dev.pfx"
 set "PARTNER_PRODUCTS_WORKER_TLS_PFX_PASSWORD=dev-password"

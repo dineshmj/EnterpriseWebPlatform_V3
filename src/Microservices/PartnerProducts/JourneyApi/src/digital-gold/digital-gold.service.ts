@@ -129,7 +129,7 @@ export class DigitalGoldService {
     // └──────────────────────────────────────────────────────────────────────────────────────
     const application = digitalGold.application;
     const holding = application?.status === 'OPENED'
-      ? await this.api.get<unknown>(token, PP_READ,
+      ? await this.api.getViaPartnerBank<unknown>(token, PP_READ,
         `${this.options.partnerProductsApiBaseUrl}/v1/partner-products/gold-account-applications/${encodeURIComponent(application.number)}/holding`, 'The Partner Bank')
         .catch(() => null)
       : null;

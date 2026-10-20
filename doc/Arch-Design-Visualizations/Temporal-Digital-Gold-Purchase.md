@@ -77,8 +77,8 @@ That something is a **Temporal workflow**. The parts involved talk to each other
 
 **Payments API:** PAY-261019-UXCDPL is SENDING_TO_NETWORK.
 
-**Workflow:** Not finished. I'll look again in 15 seconds.
-*`sleep('15 seconds')` is a **durable timer**: Temporal keeps it, not the worker's memory.*
+**Workflow:** Not finished. I'll wait until someone tells me the payment has an outcome - or 5 minutes at the latest.
+*`condition(() => nudged, '5 minutes')` waits for the `paymentSettled` **signal** with a **durable timer** as the limit: Temporal keeps both, not the worker's memory. The signal comes from the worker's listener on `payments.payment.events`; it carries nothing - the workflow always asks the Payments API itself.*
 
 **Temporal:** Timer started. Worker, you may forget this workflow until it fires.
 
@@ -132,7 +132,7 @@ Rewind to Part 3. The advice has gone to the Partner Bank - and the worker's pro
 **Worker:** Temporal already has that answer in the history: ORDERED. I won't call the API again.
 *This is **replay**: the workflow runs from the start, but every activity that already completed returns its recorded result. That's why the workflow code must be deterministic - it has to take the same path again.*
 
-**Workflow:** Payment? *(Recorded: SENDING_TO_NETWORK.)* Sleep 15 s. *(Recorded: fired.)* Payment? *(Recorded: COMPLETED.)* Send the advice.
+**Workflow:** Payment? *(Recorded: SENDING_TO_NETWORK.)* Wait. *(Recorded: signal paymentSettled.)* Payment? *(Recorded: COMPLETED.)* Send the advice.
 
 **Worker:** That one has no recorded result. Calling it - again.
 
@@ -200,9 +200,9 @@ Rewind to Part 3. The advice has gone to the Partner Bank - and the worker's pro
 
 ## Part 6 - A payment that waits for days
 
-**Workflow:** The payment is PENDING_APPROVAL, and Emily is on leave. I check every 15 seconds - that's 5,760 checks a day. My history would grow and grow.
+**Workflow:** The payment is PENDING_APPROVAL, and Emily is on leave. No signal comes, so I look every 5 minutes - 288 looks a day, each one recorded. My history would grow and grow.
 
-**Temporal:** So after 240 checks (an hour), **continue as new**: close this run, start a fresh one with the same workflow ID and a clean history.
+**Temporal:** So after 240 looks (20 hours), **continue as new**: close this run, start a fresh one with the same workflow ID and a clean history.
 
 **Workflow:** And I carry over the one thing I need: how long I've waited without a payment.
 *`continueAsNew({ purchaseNumber, waitedWithoutPaymentSeconds })`.*
@@ -227,7 +227,7 @@ Rewind to Part 3. The advice has gone to the Partner Bank - and the worker's pro
 - **Nothing secret in the history.** The input is the purchase number; tokens are fetched by the worker for each call, with its own machine identity, and never recorded.
 - **Its own, narrow identity.** The worker's token opens only two internal endpoints that pin its client ID - never a staff screen.
 
-*Not yet (Threat-Model R-16): the worker polls the payment every 15 seconds instead of reacting to `payments.payment.events`; Temporal runs as the local development server (no TLS, no namespace authorization).*
+*Not yet (Threat-Model R-16): Temporal runs as the local development server (no TLS, no namespace authorization).*
 
 *Code:*
 - *EWP: `src/Microservices/PartnerProducts/Worker/src/workflows.ts` (the workflow), `activities.ts` (the calls and the retry rule), `machine-token.ts` (the worker's identity), `main.ts` (the worker and its health probe)*

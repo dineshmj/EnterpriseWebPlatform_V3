@@ -469,4 +469,16 @@ export class DigitalGoldMfe {
   goldHeld(): Locator {
     return this.shell.workspace().getByText(/^\d+\.\d{4} g$/).first();
   }
+
+  /**
+   * The holding shows `held`. The screen reads it from the Partner Bank on every look; when that
+   * answer was too slow (e.g. its first after a restart) the screen says it could not be reached -
+   * then the customer is selected again, as a person would, for up to a minute.
+   */
+  async expectGoldHeld(customerNumber: string, held: string | RegExp, timeout = 60_000): Promise<void> {
+    await expect(async () => {
+      if (!(await this.goldHeld().isVisible())) await this.selectCustomer(customerNumber);
+      await expect(this.goldHeld()).toHaveText(held, { timeout: 5_000 });
+    }).toPass({ ...WORKFLOW_WAIT, timeout });
+  }
 }

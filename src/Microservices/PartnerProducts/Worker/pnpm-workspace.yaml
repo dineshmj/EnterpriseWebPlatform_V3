@@ -1,5 +1,8 @@
 # Install scripts not run: protobufjs only prints a version notice; @swc/core (the Temporal SDK's workflow
 # bundler) only checks for its native binary, which pnpm installs as an optional package anyway.
+# Run: @confluentinc/kafka-javascript - its install script fetches the prebuilt librdkafka binding for this
+# platform (Confluent's official client; the consumer of payments.payment.events).
 allowBuilds:
   protobufjs: false
   '@swc/core': false
+  '@confluentinc/kafka-javascript': true

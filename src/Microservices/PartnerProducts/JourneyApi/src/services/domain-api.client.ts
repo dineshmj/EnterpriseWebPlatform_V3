@@ -19,6 +19,8 @@ export interface UploadedScan {
 
 /** How long a call that goes on to the Partner Bank may take (the Partner Products API's token + call, 15 s each). */
 const PARTNER_BANK_TIMEOUT_MS = 40_000;
+/** A READ that goes on to the Partner Bank (the holding): longer than a plain call, but inside the web BFF's 30 s for reads. */
+const PARTNER_BANK_READ_TIMEOUT_MS = 25_000;
 
 /** What Documents Management answers for an upload: the document and the SHA-256 of its content. */
 export interface StoredDocument {
@@ -54,6 +56,16 @@ export class DomainApiClient {
   // │ Products API's own answer ("not reachable - it stays SENT, send again") reaches the
   // │ counter instead of this API's generic time-out.
   // └──────────────────────────────────────────────────────────────────────────────────────
+  // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+  // │ A read the Partner Products API answers FROM the Partner Bank (token + GET, each up
+  // │ to 15 s there): a slow first answer after a restart must not be cut off at 15 s and
+  // │ shown as "not reachable" - but the whole screen load must still end within the web
+  // │ BFF's 30 s for reads, so 25 s.
+  // └──────────────────────────────────────────────────────────────────────────────────────
+  async getViaPartnerBank<T>(subjectToken: string, scope: string, url: string, what: string): Promise<T> {
+    return this.call<T>(subjectToken, scope, 'GET', url, what, undefined, undefined, {}, PARTNER_BANK_READ_TIMEOUT_MS);
+  }
+
   async postViaPartnerBank<T>(subjectToken: string, scope: string, url: string, what: string): Promise<T> {
     return this.call<T>(subjectToken, scope, 'POST', url, what, '{}', 'application/json', {}, PARTNER_BANK_TIMEOUT_MS);
   }
