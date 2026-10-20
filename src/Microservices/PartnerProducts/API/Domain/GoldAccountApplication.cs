@@ -8,16 +8,23 @@ namespace EnterpriseWebPlatform.PartnerProducts.Api.Domain;
 /// Partner Bank as a signed instruction; the Partner Bank opens the account and is its system of
 /// record. RECORDED -> SENT -> OPENED, or REFUSED.
 /// </summary>
-public sealed class GoldAccountApplication
+public sealed class GoldAccountApplication : IRaisesDigitalGoldEvents
 {
     public const string Recorded = "RECORDED";
     public const string Sent = "SENT";
     public const string Opened = "OPENED";
     public const string Refused = "REFUSED";
 
+    private readonly List<DigitalGoldEvent> _events = [];
+
     private GoldAccountApplication()
     {
     }
+
+    /// <summary>Raised since the last save; the DbContext writes them to the Outbox with the change.</summary>
+    public IReadOnlyList<DigitalGoldEvent> Events => _events;
+
+    public void ClearEvents() => _events.Clear();
 
     public long Id { get; private set; }
 
@@ -98,7 +105,7 @@ public sealed class GoldAccountApplication
         if (formDocumentId == Guid.Empty)
             throw new DigitalGoldRuleViolationException("The scan of the signed Form VII is required.");
 
-        return new GoldAccountApplication
+        var application = new GoldAccountApplication
         {
             Number = DigitalGoldRules.NewNumber("DGA", now),
             CustomerNumber = DigitalGoldRules.CustomerNumber(customerNumber),
@@ -116,6 +123,8 @@ public sealed class GoldAccountApplication
             UpdatedAt = now,
             Status = Recorded
         };
+        application._events.Add(new DigitalGoldEvent(DigitalGoldEventTypes.ApplicationRecorded, now));
+        return application;
     }
 
     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
@@ -129,15 +138,23 @@ public sealed class GoldAccountApplication
     {
         if (Status is not (Recorded or Sent))
             throw new DigitalGoldConflictException($"Application {Number} is {Status}: there is nothing to send.");
+        var resend = Status == Sent;
         InstructionId ??= Guid.NewGuid();
         SentAt ??= now;
         SentByLanId = lanId;
         Status = Sent;
         Touch(now);
+        _events.Add(new DigitalGoldEvent(DigitalGoldEventTypes.ApplicationSent, now, Resend: resend));
         return InstructionId.Value;
     }
 
     public void MarkOpened(string partnerAccountNumber, DateTimeOffset now)
+    {
+        Open(partnerAccountNumber, now);
+        _events.Add(new DigitalGoldEvent(DigitalGoldEventTypes.AccountOpened, now));
+    }
+
+    private void Open(string partnerAccountNumber, DateTimeOffset now)
     {
         if (string.IsNullOrWhiteSpace(partnerAccountNumber) || partnerAccountNumber.Length > 20)
             throw new DigitalGoldConflictException("The Partner Bank's answer carried no account number.");
@@ -153,8 +170,9 @@ public sealed class GoldAccountApplication
     /// </summary>
     public void LinkExisting(string partnerAccountNumber, DateTimeOffset now)
     {
-        MarkOpened(partnerAccountNumber, now);
+        Open(partnerAccountNumber, now);
         StatusReason = $"Linked to account {partnerAccountNumber}, which the Partner Bank already held for this customer.";
+        _events.Add(new DigitalGoldEvent(DigitalGoldEventTypes.AccountLinked, now, StatusReason));
     }
 
     public void MarkRefused(string reason, DateTimeOffset now)
@@ -162,6 +180,7 @@ public sealed class GoldAccountApplication
         StatusReason = reason.Length > 500 ? reason[..500] : reason;
         Status = Refused;
         Touch(now);
+        _events.Add(new DigitalGoldEvent(DigitalGoldEventTypes.ApplicationRefused, now, StatusReason));
     }
 
     /// <summary>

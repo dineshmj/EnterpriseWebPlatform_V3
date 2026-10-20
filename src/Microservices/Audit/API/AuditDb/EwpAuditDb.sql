@@ -39,7 +39,7 @@ CREATE TABLE audit_entries (
     initiated_by_lan_id  VARCHAR(50)   NULL,
     actor_user_id        VARCHAR(200)  NULL,       -- who made THIS decision (officer, approver)
     actor_lan_id         VARCHAR(50)   NULL,
-    record_type          VARCHAR(20)   NULL,       -- PAYMENT / APPLICATION / CUSTOMER
+    record_type          VARCHAR(20)   NULL,       -- PURCHASE / PAYMENT / APPLICATION / CUSTOMER
     record_ref           VARCHAR(100)  NULL,       -- e.g. PAY-..., APP-..., CUST-...
     customer_number      VARCHAR(50)   NULL,
     branch_code          VARCHAR(20)   NULL,

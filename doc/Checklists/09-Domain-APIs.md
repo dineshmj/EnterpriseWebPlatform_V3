@@ -64,7 +64,7 @@ Deployables: `src/Microservices/<Context>/API` for Customer Onboarding, KYC, Doc
 ## 6. Production (open)
 
 - [ ] **mTLS** between EWP's own services (R-9); towards the Partner Bank it is present.
-- [ ] **Partner Products audit events** (an Outbox to the audit trail; R-15).
+- [x] **Partner Products audit events:** every Form VII and purchase change goes through the Outbox to `partner-products.digital-gold.events` and the audit trail (identifiers only, no name / date of birth / mobile).
 - [ ] **Network controls** for `/metrics` and the health endpoints (R-8).
 - [ ] **A secret store and key vault** (R-2, R-10).
 - [ ] **Deployment-wide rate limits** at a gateway or with a shared store (R-14).

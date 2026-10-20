@@ -15,6 +15,7 @@
 -- the instruction and every slip is checked against it.
 -- =============================================================================
 
+DROP TABLE IF EXISTS outbox_messages CASCADE;
 DROP TABLE IF EXISTS gold_purchases CASCADE;
 DROP TABLE IF EXISTS gold_account_applications CASCADE;
 
@@ -116,8 +117,39 @@ CREATE TABLE gold_purchases (
 
 CREATE INDEX ix_gold_purchases_customer ON gold_purchases (customer_number, id DESC);
 
+-- ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+-- │ Transactional Outbox: each change's events, written in the change's own transaction
+-- │ and relayed to Kafka (partner-products.digital-gold.events) by the API's in-process
+-- │ relay - the same table as Accounts and Payments. Kept after publishing (no DELETE for
+-- │ the API's user): what EWP told the platform stays next to what it recorded.
+-- └──────────────────────────────────────────────────────────────────────────────────────
+CREATE TABLE outbox_messages (
+    id UUID PRIMARY KEY,
+    sequence BIGINT GENERATED ALWAYS AS IDENTITY,
+    aggregate_type VARCHAR(100) NOT NULL,
+    aggregate_id VARCHAR(100) NOT NULL,
+    event_type VARCHAR(200) NOT NULL,
+    payload JSONB NOT NULL,
+    occurred_at TIMESTAMPTZ NOT NULL,
+    workflow_id UUID NULL,
+    correlation_id UUID NULL,
+    causation_id UUID NULL,
+    initiated_by_user_id VARCHAR(200) NULL,
+    acted_by_user_id VARCHAR(200) NULL,
+    trace_parent VARCHAR(55) NULL,
+    published_at TIMESTAMPTZ NULL,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    last_attempt_at TIMESTAMPTZ NULL,
+    last_error TEXT NULL
+);
+
+CREATE UNIQUE INDEX ux_partner_products_outbox_sequence ON outbox_messages (sequence);
+CREATE INDEX ix_partner_products_outbox_unpublished ON outbox_messages (sequence) WHERE published_at IS NULL;
+CREATE INDEX ix_partner_products_outbox_aggregate ON outbox_messages (aggregate_type, aggregate_id, sequence);
+
 -- -----------------------------------------------------------------------------
 -- Verification queries
 -- -----------------------------------------------------------------------------
 -- SELECT application_number, customer_number, form_number, status, partner_account_number, recorded_by_lan_id FROM gold_account_applications ORDER BY id DESC;
 -- SELECT purchase_number, customer_number, amount_aud, slip_number, status, partner_order_number, payment_number, network_reference, grams FROM gold_purchases ORDER BY id DESC;
+-- SELECT sequence, aggregate_id, event_type, published_at, attempt_count, last_error FROM outbox_messages ORDER BY sequence DESC;

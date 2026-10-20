@@ -1,15 +1,82 @@
+using System.Security.Claims;
+
 using Microsoft.EntityFrameworkCore;
 
 using EnterpriseWebPlatform.PartnerProducts.Api.Domain;
+using EnterpriseWebPlatform.PartnerProducts.Api.Infrastructure.Messaging;
 
 namespace EnterpriseWebPlatform.PartnerProducts.Api.Infrastructure;
 
 /// <summary>EwpPartnerProductsDb: EWP's side of the Partner Bank's Digital Gold (see PartnerProductsDb/EwpPartnerProductsDb.sql).</summary>
-public sealed class PartnerProductsDbContext(DbContextOptions<PartnerProductsDbContext> options) : DbContext(options)
+public sealed class PartnerProductsDbContext(
+    DbContextOptions<PartnerProductsDbContext> options,
+    IHttpContextAccessor httpContext) : DbContext(options)
 {
     public DbSet<GoldAccountApplication> Applications => Set<GoldAccountApplication>();
 
     public DbSet<GoldPurchase> Purchases => Set<GoldPurchase>();
+
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+
+    // ┌─ :: ARCHITECTURE :: Transactional Outbox (write side) ─────────────────────────────────────────
+    // │ Why : An event must exist exactly when its change does: the relay publishes only what committed.
+    // │ How : The changed aggregates are saved first, then their raised events as Outbox rows - one
+    // │       row per save, so the database-assigned sequence keeps the order they were raised in - all
+    // │       inside ONE transaction (the caller's, if it has one). A failed save leaves no event.
+    // │ Ref : Features 1.3.1 | Transactional Outbox pattern | PartnerProductsOutboxPublisher
+    // └────────────────────────────────────────────────────────────────────────────────────────────────
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        var raising = ChangeTracker.Entries()
+            .Select(e => e.Entity)
+            .OfType<IRaisesDigitalGoldEvents>()
+            .Where(a => a.Events.Count > 0)
+            .ToList();
+        if (raising.Count == 0)
+            return await base.SaveChangesAsync(cancellationToken);
+
+        var actor = CurrentActor();
+        var transaction = Database.CurrentTransaction is null ? await Database.BeginTransactionAsync(cancellationToken) : null;
+        try
+        {
+            var changed = await base.SaveChangesAsync(cancellationToken);
+            foreach (var aggregate in raising)
+            {
+                foreach (var raised in aggregate.Events)
+                {
+                    OutboxMessages.Add(aggregate switch
+                    {
+                        GoldAccountApplication application => DigitalGoldIntegrationEventMapper.ToOutboxMessage(application, raised, actor),
+                        GoldPurchase purchase => DigitalGoldIntegrationEventMapper.ToOutboxMessage(purchase, raised, actor),
+                        _ => throw new InvalidOperationException($"No published contract for {aggregate.GetType().Name}.")
+                    });
+                    changed += await base.SaveChangesAsync(cancellationToken);
+                }
+            }
+            if (transaction is not null)
+                await transaction.CommitAsync(cancellationToken);
+            raising.ForEach(a => a.ClearEvents());
+            return changed;
+        }
+        finally
+        {
+            if (transaction is not null)
+                await transaction.DisposeAsync();
+        }
+    }
+
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Who acted comes from the validated access token of THIS request - the staff member
+    // │ (sub, lan_id) or, for the workflow's internal calls, the worker's machine client
+    // │ (client_id) - never from a request body.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    private EventActor CurrentActor()
+    {
+        var user = httpContext.HttpContext?.User;
+        return new EventActor(
+            user?.FindFirstValue("sub") ?? user?.FindFirstValue("client_id"),
+            user?.FindFirstValue("lan_id"));
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -46,6 +113,7 @@ public sealed class PartnerProductsDbContext(DbContextOptions<PartnerProductsDbC
             e.Property(x => x.Version).HasColumnName("version").IsConcurrencyToken();
             e.Ignore(x => x.IsOpen);
             e.Ignore(x => x.IsActive);
+            e.Ignore(x => x.Events);
         });
 
         modelBuilder.Entity<GoldPurchase>(e =>
@@ -88,6 +156,29 @@ public sealed class PartnerProductsDbContext(DbContextOptions<PartnerProductsDbC
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
             // Optimistic concurrency, as for applications: the counter and the workflow never overwrite each other.
             e.Property(x => x.Version).HasColumnName("version").IsConcurrencyToken();
+            e.Ignore(x => x.Events);
+        });
+
+        modelBuilder.Entity<OutboxMessage>(e =>
+        {
+            e.ToTable("outbox_messages");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasColumnName("id").ValueGeneratedNever();
+            e.Property(x => x.AggregateType).HasColumnName("aggregate_type").HasMaxLength(100).IsRequired();
+            e.Property(x => x.AggregateId).HasColumnName("aggregate_id").HasMaxLength(100).IsRequired();
+            e.Property(x => x.EventType).HasColumnName("event_type").HasMaxLength(200).IsRequired();
+            e.Property(x => x.Payload).HasColumnName("payload").HasColumnType("jsonb").IsRequired();
+            e.Property(x => x.OccurredAt).HasColumnName("occurred_at").IsRequired();
+            e.Property(x => x.WorkflowId).HasColumnName("workflow_id");
+            e.Property(x => x.CorrelationId).HasColumnName("correlation_id");
+            e.Property(x => x.CausationId).HasColumnName("causation_id");
+            e.Property(x => x.InitiatedByUserId).HasColumnName("initiated_by_user_id").HasMaxLength(200);
+            e.Property(x => x.ActedByUserId).HasColumnName("acted_by_user_id").HasMaxLength(200);
+            e.Property(x => x.TraceParent).HasColumnName("trace_parent").HasMaxLength(55);
+            e.Property(x => x.PublishedAt).HasColumnName("published_at");
+            e.Property(x => x.AttemptCount).HasColumnName("attempt_count").IsRequired();
+            e.Property(x => x.LastAttemptAt).HasColumnName("last_attempt_at");
+            e.Property(x => x.LastError).HasColumnName("last_error");
         });
     }
 }

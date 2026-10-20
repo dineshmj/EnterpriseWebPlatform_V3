@@ -83,9 +83,14 @@ public static class AuditEventMapper
         return entry;
     }
 
-    /// <summary>The record an auditor searches by: the payment, else the onboarding application, else the customer.</summary>
+    /// <summary>
+    /// The record an auditor searches by: a Digital Gold purchase (it names its payment too, but
+    /// is its own record), else the payment, else the application (onboarding or Form VII), else
+    /// the customer.
+    /// </summary>
     private static (string? Type, string? Ref) RecordOf(JsonElement payload) =>
-        Text(payload, "PaymentNumber") is { } payment ? ("PAYMENT", Limit(payment, 100))
+        Text(payload, "PurchaseNumber") is { } purchase ? ("PURCHASE", Limit(purchase, 100))
+        : Text(payload, "PaymentNumber") is { } payment ? ("PAYMENT", Limit(payment, 100))
         : Text(payload, "ApplicationNumber") is { } application ? ("APPLICATION", Limit(application, 100))
         : Text(payload, "CustomerNumber") is { } customer ? ("CUSTOMER", Limit(customer, 100))
         : (null, null);

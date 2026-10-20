@@ -79,7 +79,7 @@ export default function AuditTrailPage() {
           />
           <CardContent>
             <form onSubmit={submit} className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
-              <Field label="Record or customer" htmlFor="record" hint="PAY-…, APP-…, CUST-…">
+              <Field label="Record or customer" htmlFor="record" hint="PAY-…, APP-…, DGA-…, DGP-…, CUST-…">
                 <Input id="record" value={form.record ?? ''} onChange={update('record')} maxLength={100} />
               </Field>
               <Field label="Person" htmlFor="person" hint="LAN ID, e.g. somit">

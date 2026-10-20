@@ -11,7 +11,7 @@ namespace EnterpriseWebPlatform.PartnerProducts.Api.Domain;
 /// RECORDED -> SENT -> ORDERED -> PAID -> ALLOCATED, or REFUSED (the Partner Bank said no) /
 /// CANCELLED (the payment was not made, so the Partner Bank's order was cancelled).
 /// </summary>
-public sealed class GoldPurchase
+public sealed class GoldPurchase : IRaisesDigitalGoldEvents
 {
     public const string Recorded = "RECORDED";
     public const string Sent = "SENT";
@@ -21,9 +21,16 @@ public sealed class GoldPurchase
     public const string Refused = "REFUSED";
     public const string Cancelled = "CANCELLED";
 
+    private readonly List<DigitalGoldEvent> _events = [];
+
     private GoldPurchase()
     {
     }
+
+    /// <summary>Raised since the last save; the DbContext writes them to the Outbox with the change.</summary>
+    public IReadOnlyList<DigitalGoldEvent> Events => _events;
+
+    public void ClearEvents() => _events.Clear();
 
     public long Id { get; private set; }
 
@@ -124,7 +131,7 @@ public sealed class GoldPurchase
         if (slipDocumentId == Guid.Empty)
             throw new DigitalGoldRuleViolationException("The scan of the signed transfer slip is required.");
 
-        return new GoldPurchase
+        var purchase = new GoldPurchase
         {
             Number = DigitalGoldRules.NewNumber("DGP", now),
             ApplicationId = account.Id,
@@ -146,6 +153,8 @@ public sealed class GoldPurchase
             PaymentRef = Guid.NewGuid(),
             Status = Recorded
         };
+        purchase.Raise(DigitalGoldEventTypes.PurchaseRecorded, now);
+        return purchase;
     }
 
     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
@@ -159,11 +168,13 @@ public sealed class GoldPurchase
             throw new DigitalGoldConflictException($"Purchase {Number} is {Status}: there is nothing to send.");
         if (SlipSignedOn != DigitalGoldRules.SydneyToday(now))
             throw new DigitalGoldConflictException($"Transfer slip {SlipNumber} was signed on {SlipSignedOn:yyyy-MM-dd}: it buys at that day's price only. The customer signs a new slip.");
+        var resend = Status == Sent;
         InstructionId ??= Guid.NewGuid();
         SentAt ??= now;
         SentByLanId = lanId;
         Status = Sent;
         Touch(now);
+        _events.Add(new DigitalGoldEvent(DigitalGoldEventTypes.PurchaseSent, now, Resend: resend));
         return InstructionId.Value;
     }
 
@@ -178,6 +189,7 @@ public sealed class GoldPurchase
         StatusReason = null;
         Status = Ordered;
         Touch(now);
+        Raise(DigitalGoldEventTypes.PurchaseOrdered, now);
     }
 
     public void MarkRefused(string reason, DateTimeOffset now)
@@ -185,6 +197,7 @@ public sealed class GoldPurchase
         StatusReason = Shorten(reason);
         Status = Refused;
         Touch(now);
+        Raise(DigitalGoldEventTypes.PurchaseRefused, now, StatusReason);
     }
 
     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
@@ -214,6 +227,7 @@ public sealed class GoldPurchase
         PaymentStartedByLanId = lanId;
         PaymentStartedAt = now;
         Touch(now);
+        Raise(DigitalGoldEventTypes.PurchasePaymentStarted, now);
     }
 
     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
@@ -238,6 +252,7 @@ public sealed class GoldPurchase
         StatusReason = null;
         Status = Paid;
         Touch(now);
+        Raise(DigitalGoldEventTypes.PurchasePaid, now);
     }
 
     public void MarkAllocated(decimal? pricePerGram, decimal? grams, DateTimeOffset now)
@@ -252,6 +267,7 @@ public sealed class GoldPurchase
         StatusReason = null;
         Status = Allocated;
         Touch(now);
+        Raise(DigitalGoldEventTypes.PurchaseAllocated, now);
     }
 
     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
@@ -272,13 +288,19 @@ public sealed class GoldPurchase
         StatusReason = Shorten(reason);
         Status = Cancelled;
         Touch(now);
+        Raise(DigitalGoldEventTypes.PurchaseCancelled, now, StatusReason);
     }
 
     /// <summary>Something needs a person (e.g. the Partner Bank refused a payment advice): the reason is kept, the status stays.</summary>
+    // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+    // │ A problem only a person can settle (paid but the advice refused; the cancellation
+    // │ refused) is an event of its own: it reaches the audit trail, not just this row.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     public void NoteProblem(string reason, DateTimeOffset now)
     {
         StatusReason = Shorten(reason);
         Touch(now);
+        Raise(DigitalGoldEventTypes.PurchaseNeedsAttention, now, StatusReason);
     }
 
     /// <summary>
@@ -301,6 +323,9 @@ public sealed class GoldPurchase
         },
         ["actor"] = new JsonObject { ["lanId"] = RecordedByLanId, ["branch"] = BranchCode }
     };
+
+    private void Raise(string eventType, DateTimeOffset now, string? reason = null) =>
+        _events.Add(new DigitalGoldEvent(eventType, now, reason));
 
     private static string Shorten(string reason) => reason.Length > 500 ? reason[..500] : reason;
 

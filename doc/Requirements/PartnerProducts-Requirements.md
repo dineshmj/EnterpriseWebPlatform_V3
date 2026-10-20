@@ -105,7 +105,7 @@ Purchase:  RECORDED → SENT → ORDERED → PAID → ALLOCATED
 - **Synchronous, for the staff member** (token exchange): Customer Onboarding (the customer), Accounts (paying accounts), Documents Management (the scans, document types `PARTNER_FORM_VII` and `PARTNER_TRANSFER_SLIP`), Payments (the purchase's payment).
 - **The Partner Bank** (another organisation): `POST /api/distribution/gold-accounts`, `/gold-orders`, `/staff-views` (signed instructions), `GET /api/distribution/gold-accounts[?ewpCustomerNumber=|/{number}]`, `POST /api/gold-orders/{n}/payment-advice` and `/cancel` - all over mutual TLS with EWP's bound token.
 - **Temporal**: the Journey API starts `goldPurchaseWorkflow` (ID `gold-purchase-<number>`, task queue `partner-products`, input = the purchase number only); the Worker runs it.
-- **No Kafka events yet** (planned: an Outbox with recorded / sent / opened / refused / ordered / allocated / cancelled, to the audit trail).
+- **Kafka events** through the Transactional Outbox, topic `partner-products.digital-gold.events` (Integration-Event-Catalogue §4.8): Form VII recorded / sent / opened / linked / refused; purchase recorded / sent / ordered / refused / payment started / paid / allocated / cancelled / needs attention. Identifiers, status and amount only - no name, date of birth or mobile. Read by the audit trail (a purchase is its own record, `PURCHASE`).
 
 ---
 

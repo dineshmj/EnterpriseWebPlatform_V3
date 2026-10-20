@@ -197,7 +197,7 @@ The domain layer has no knowledge of HTTP, EF Core, Kafka or the IDP.
 |---|---|---|
 | Customer Onboarding | Full tactical DDD: `Customer` and `OnboardingApplication` aggregates (reference by ID only), value objects (`PersonName`, `EmailAddress`, `PostalAddress`…), domain events, explicit status codes, injected clock; event translation in a dedicated mapper | Cross-context references use database IDs (Session B: GUID references) |
 | Documents Management | `Document` aggregate root with value objects (`BranchCode`, `FileName`, `ContentHash`), the content-type policy in the domain, a `DocumentUploaded` domain event | Events are not published (no consumer yet); the document is immutable by design |
-| Partner Products | `GoldAccountApplication` and `GoldPurchase` aggregates with their state machines (RECORDED → SENT → OPENED / ORDERED → PAID → ALLOCATED, REFUSED, CANCELLED), the rules the Partner Bank would apply checked first, optimistic `version`, once-only instruction IDs and payment key | No domain events or Outbox yet (audit trail) |
+| Partner Products | `GoldAccountApplication` and `GoldPurchase` aggregates with their state machines (RECORDED → SENT → OPENED / ORDERED → PAID → ALLOCATED, REFUSED, CANCELLED), the rules the Partner Bank would apply checked first, optimistic `version`, once-only instruction IDs and payment key | Domain events written through the Transactional Outbox to `partner-products.digital-gold.events` (audit trail); the purchase workflow still polls the payment (R-16) |
 | Customer KYC | Full tactical DDD: `KycCase` aggregate (`DecideStage`), `VerificationStage` value object (EF complex type), typed statuses, domain events, SoD in the aggregate (fails closed), optimistic `version` + row lock; Application layer (commands, queries) and a dedicated integration-event mapper | — |
 
 ---
@@ -576,7 +576,7 @@ Details: [Saga plan §2](EWP-V3-Saga-Choreography-and-Orchestration-Plans.md#2-o
 - [x] EWP as distributor at the counter: Form VII and transfer slips, signed instructions, once only across lost answers
 - [x] Purchase paid through the Payments saga, followed by a Temporal workflow to ALLOCATED or CANCELLED
 - [x] "View at the Partner Bank" (PAR-style handoff to the partner's own page)
-- [ ] Outbox and audit events for Partner Products
+- [x] Outbox and audit events for Partner Products (2026-10-20: `partner-products.digital-gold.events`, read by the audit trail)
 - [ ] Temporal with mTLS and namespace authorization; the payment followed by events instead of polling
 - [ ] FAPI 2.0 profile end to end (PAR for EWP's own customer channel, DPoP or mTLS everywhere)
 

@@ -181,8 +181,24 @@ The Audit API's in-process subscriber (`audit.trail-subscriber`, Kafka user `ewp
 
 ---
 
+### 4.8 Partner Products (producer: Partner Products API, in-process Outbox relay)
+
+EWP as the Partner Bank's distributor at the counter: Form VII (`GoldAccountApplication`, DGA-…) and each transfer authorization slip (`GoldPurchase`, DGP-…). One topic, keyed by the record's number, so each record's events stay in order.
+
+| Event type | Topic | Key | Raised when | Status |
+|---|---|---|---|---|
+| `GoldAccountApplicationRecorded` / `GoldAccountApplicationSent` | `partner-products.digital-gold.events` | Form VII application number | Sophie records Form VII; sends it (again after a lost answer: `Resend` true - the same signed instruction) | Present |
+| `GoldAccountOpened` / `GoldAccountLinked` / `GoldAccountApplicationRefused` | as above | as above | The Partner Bank opens the account; or EWP links the account it already held for this customer; or refuses (its `Reason`) | Present |
+| `GoldPurchaseRecorded` / `GoldPurchaseSent` / `GoldPurchaseOrdered` / `GoldPurchaseRefused` | as above | Purchase number | The slip is recorded; sent; the Partner Bank places the order (grams, price) or refuses it | Present |
+| `GoldPurchasePaymentStarted` | as above | as above | The payment started at Payments, as the staff member (`PaymentNumber`) | Present |
+| `GoldPurchasePaid` / `GoldPurchaseAllocated` / `GoldPurchaseCancelled` / `GoldPurchaseNeedsAttention` | as above | as above | The workflow saw the payment completed (PAID), the Partner Bank allocated the gold; or the order was cancelled unpaid; or a person must settle it (advice or cancellation refused) | Present |
+
+Payloads: Form VII - `ApplicationNumber`, `CustomerNumber`, `BranchCode`, `FormNumber`, `NewStatus`, `PartnerAccountNumber`, `Resend`, `Reason`; purchase - `PurchaseNumber`, `CustomerNumber`, `BranchCode`, `SlipNumber`, `NewStatus`, `PartnerAccountNumber`, `PartnerOrderNumber`, `Amount`, `Currency` (AUD), `Grams`, `PricePerGram`, `PaymentNumber`, `Resend`, `Reason`. A purchase's events share its payment key as `CorrelationId`. **No name, date of birth or mobile**: those stay in EWP's record and at the Partner Bank. The actor is in the envelope (`InitiatedByUserId` / `InitiatedByLanId`, from the token): the staff member, or the Partner Products Worker's machine client for PAID, ALLOCATED, CANCELLED and NEEDS ATTENTION. Consumers today: the audit trail only.
+
+---
+
 ## 5. Known Deviations from the Target
 
 1. **Every consumer has an Inbox and a dead-letter topic.** The KYC API additionally keeps one case per `ApplicationRef`, so even a re-published submission (new `MessageId`) returns the existing case.
 2. **The KYC BFF (NestJS) propagates the trace context but exports no spans of its own**, so a KYC officer's decision is one trace that starts, in Jaeger / Tempo, at the KYC API; the workflow is also linked through `WorkflowId` / `CausationId`.
-3. **Partner Products publishes no events yet.** Its records (Form VII, slips, the Partner Bank's answers) are not in the audit trail; the purchase's follow-up runs as a Temporal workflow that polls the payment's outcome instead of consuming `payments.payment.events`. Planned: an Outbox with recorded / sent / opened / refused / ordered / allocated / cancelled events ([PartnerProducts-Requirements.md](Requirements/PartnerProducts-Requirements.md), Threat-Model R-15, R-16).
+3. **The Digital Gold purchase workflow polls the payment** (every 15 s) instead of consuming `payments.payment.events`; Partner Products' own events are published (§4.8) ([PartnerProducts-Requirements.md](Requirements/PartnerProducts-Requirements.md), Threat-Model R-15, R-16).

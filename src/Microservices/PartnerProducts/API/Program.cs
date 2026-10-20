@@ -6,12 +6,14 @@ using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using OpenTelemetry.Trace;
 
+using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.PartnerProducts.Api.Authorization;
 using EnterpriseWebPlatform.PartnerProducts.Api.Controllers;
 using EnterpriseWebPlatform.PartnerProducts.Api.Domain;
 using EnterpriseWebPlatform.PartnerProducts.Api.Infrastructure;
+using EnterpriseWebPlatform.PartnerProducts.Api.Infrastructure.Messaging;
 using EnterpriseWebPlatform.PartnerProducts.Api.PartnerBank;
 
 // ┌─ :: ARCHITECTURE + SECURITY :: Partner Products API: a resource server ────────────────────────
@@ -31,6 +33,8 @@ builder.AddEwpObservability("partner-products-api", tracing => tracing.AddAspNet
 
 var connectionString = builder.Configuration.GetConnectionString("PartnerProductsDbConnection")
     ?? throw new InvalidOperationException("Connection string 'PartnerProductsDbConnection' was not configured.");
+// The DbContext writes each change's events to the Outbox; who acted comes from the request's token.
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddDbContext<PartnerProductsDbContext>(o => o.UseNpgsql(connectionString));
 
 builder.Services.AddSingleton(TimeProvider.System);
@@ -126,10 +130,27 @@ builder.Services.AddAuthorization(options =>
 // :: SECURITY :: Per-caller rate limits - see Common/WebUtilities/Security/RateLimiting.cs
 builder.Services.AddEwpRateLimiting(builder.Configuration, "/v1", "/internal");
 
-// live: the process; ready: the database.
+// ---------------------------------------------------------------- Outbox relay (in-process)
+// :: SECURITY :: Kafka authentication, fail closed - see AsyncWorkflows/Infrastructure/Kafka/KafkaClientSecurity.cs
+builder.Services.AddKafkaOptions(builder.Configuration);   // validated at start-up
+builder.Services.AddSingleton<PartnerProductsKafkaProducer>();
+builder.Services.AddScoped<PartnerProductsOutboxPublisher>();
+builder.Services.AddKeyedSingleton<LoopHeartbeat>(PartnerProductsOutboxPublisherHostedService.HeartbeatKey);
+builder.Services.AddHostedService<PartnerProductsOutboxPublisherHostedService>();
+
+// live: the process and its Outbox relay are cycling; ready: the database answers - Degraded
+// when Outbox rows wait too long or are parked.
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), tags: [HealthEndpoints.LiveTag])
-    .AddDbContextCheck<PartnerProductsDbContext>("database", tags: [HealthEndpoints.ReadyTag]);
+    .Add(new HealthCheckRegistration("outbox-relay",
+        sp => new LoopHeartbeatHealthCheck(sp.GetRequiredKeyedService<LoopHeartbeat>(PartnerProductsOutboxPublisherHostedService.HeartbeatKey),
+            "Partner Products Outbox relay", TimeSpan.FromMinutes(3)),
+        HealthStatus.Unhealthy, [HealthEndpoints.LiveTag]))
+    .AddDbContextCheck<PartnerProductsDbContext>("database", tags: [HealthEndpoints.ReadyTag])
+    .Add(new HealthCheckRegistration("outbox-backlog",
+        sp => new OutboxBacklogHealthCheck(ct => PartnerProductsOutboxPublisher.GetBacklogAsync(sp.GetRequiredService<PartnerProductsDbContext>(), ct),
+            TimeSpan.FromMinutes(2)),
+        HealthStatus.Degraded, [HealthEndpoints.ReadyTag]));
 
 var app = builder.Build();
 

@@ -77,6 +77,14 @@ public static class KafkaTopicNames
     public const string PaymentEvents = "payments.payment.events";
 
     /// <summary>
+    /// Public facts about Digital Gold at the counter (EWP as the Partner Bank's distributor):
+    /// Form VII recorded / sent / opened / linked / refused, and each purchase recorded / sent /
+    /// ordered / refused / payment started / paid / allocated / cancelled / needs attention.
+    /// Owned and written by the Partner Products API; key: the Form VII or purchase number.
+    /// </summary>
+    public const string PartnerProductsDigitalGoldEvents = "partner-products.digital-gold.events";
+
+    /// <summary>
     /// Dead-letter topic of the Account Application Opening Subscriber (Accounts):
     /// compliance.case.approved messages that can never open an account application.
     /// </summary>

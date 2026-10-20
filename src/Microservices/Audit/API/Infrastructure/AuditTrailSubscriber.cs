@@ -38,7 +38,8 @@ public sealed class AuditTrailSubscriberOptions : ISubscriberSettings
         KafkaTopicNames.AccountOpened,
         KafkaTopicNames.AccountOpeningFailed,
         KafkaTopicNames.AccountsFundsReplies,
-        KafkaTopicNames.PaymentEvents
+        KafkaTopicNames.PaymentEvents,
+        KafkaTopicNames.PartnerProductsDigitalGoldEvents
     ];
 
     /// <summary>The Kafka ACLs grant the Audit API's user READ on this group only.</summary>

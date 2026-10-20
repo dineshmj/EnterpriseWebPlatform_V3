@@ -11,7 +11,7 @@ every business event topic ──Kafka (read-only user)──► trail subscribe
 ```
 
 - The Kafka consumer runs inside the API (the shared consume loop: in-place retry while the database is down, a dead-letter topic only for messages that are not JSON at all). **There is no HTTP endpoint that writes an entry**, so nobody can post a fake one.
-- Topics: `customer.created`, `onboarding.application.*`, `kyc.case.*`, the four `kyc.*.verification.*` stage decisions, `compliance.case.*`, `accounts.application.*`, `accounts.account.*`, `accounts.funds.replies` and `payments.payment.events`. Commands (`accounts.commands`) and dead-letter topics are not facts and are not read.
+- Topics: `customer.created`, `onboarding.application.*`, `kyc.case.*`, the four `kyc.*.verification.*` stage decisions, `compliance.case.*`, `accounts.application.*`, `accounts.account.*`, `accounts.funds.replies`, `payments.payment.events` and `partner-products.digital-gold.events` (Digital Gold: a purchase is its own record, `PURCHASE`, e.g. DGP-…; Form VII is an `APPLICATION`, DGA-…). Commands (`accounts.commands`) and dead-letter topics are not facts and are not read.
 - The consumer group (`audit.trail-subscriber`) starts at the **earliest** offset: a new trail first records the history Kafka still holds.
 - A redelivered message is recognised by its `MessageId` and recorded once.
 

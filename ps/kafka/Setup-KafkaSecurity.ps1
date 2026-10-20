@@ -61,6 +61,7 @@ $Users = [ordered]@{
     'ewp-payments-api'                  = 'ewp-payments-api-kafka-dev'       # Payments API (in-process relay: saga commands + payment events)
     'ewp-payments-saga-reply-subscriber' = 'ewp-payments-saga-reply-subscriber-kafka-dev' # PaymentsSagaReplySubscriber
     'ewp-audit-api'                     = 'ewp-audit-api-kafka-dev'          # Audit API (in-process trail subscriber; read-only)
+    'ewp-partner-products-api'          = 'ewp-partner-products-api-kafka-dev' # Partner Products API (in-process relay: Digital Gold events)
     'ewp-kafka-ui'                      = 'ewp-kafka-ui-dev'                 # Kafka UI (read-only)
 }
 
@@ -93,6 +94,7 @@ $Topics = @(
     'accounts.commands',
     'accounts.funds.replies',
     'payments.payment.events',
+    'partner-products.digital-gold.events',
     'accounts.command-subscriber.dlq',
     'payments.saga-reply-subscriber.dlq',
     'audit.trail-subscriber.dlq'
@@ -347,6 +349,9 @@ switch ($Phase) {
     Grant 'ewp-payments-api' '--operation Write --operation Describe --topic accounts.commands'
     Grant 'ewp-payments-api' '--operation Write --operation Describe --topic payments.payment.events'
 
+    Write-Host 'Partner Products API (in-process relay): write partner-products.digital-gold.events only' -ForegroundColor Cyan
+    Grant 'ewp-partner-products-api' '--operation Write --operation Describe --topic partner-products.digital-gold.events'
+
     Write-Host 'PaymentsSagaReplySubscriber: read accounts.funds.replies and its group; write its dead-letter topic' -ForegroundColor Cyan
     Grant 'ewp-payments-saga-reply-subscriber' '--operation Read --operation Describe --topic accounts.funds.replies'
     Grant 'ewp-payments-saga-reply-subscriber' '--operation Read --group payments.saga-reply-subscriber'
@@ -369,7 +374,7 @@ switch ($Phase) {
                    'kyc.document.verification.approved', 'kyc.document.verification.rejected', 'kyc.case.approved', 'kyc.case.rejected',
                    'compliance.case.created', 'compliance.case.screened', 'compliance.case.approved', 'compliance.case.rejected',
                    'accounts.application.created', 'accounts.application.rejected', 'accounts.account.opened', 'accounts.account.opening.failed',
-                   'accounts.funds.replies', 'payments.payment.events') {
+                   'accounts.funds.replies', 'payments.payment.events', 'partner-products.digital-gold.events') {
         Grant 'ewp-audit-api' "--operation Read --operation Describe --topic $t"
     }
     Grant 'ewp-audit-api' '--operation Read --group audit.trail-subscriber'
