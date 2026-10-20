@@ -39,11 +39,11 @@ set "ACCOUNTS_API_BASE_URL=https://accounts-api.dev.localhost:48486"
 set "DOCUMENTS_MANAGEMENT_API_BASE_URL=https://documents-management-api.dev.localhost:49486"
 set "PAYMENTS_API_BASE_URL=https://payments-api.dev.localhost:44488"
 
-REM ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
-REM │ Temporal (development server: ps\temporal\Start-Temporal.ps1; UI http://localhost:8233):
-REM │ this API only STARTS the purchase workflow; the Partner Products Worker runs it on this
-REM │ task queue. If Temporal is down, the screen offers "Continue" - nothing is lost.
-REM └──────────────────────────────────────────────────────────────────────────────────────
+REM +- ARCH -------------------------------------------------------------------------------
+REM | Temporal (development server: ps\temporal\Start-Temporal.ps1; UI http://localhost:8233):
+REM | this API only STARTS the purchase workflow; the Partner Products Worker runs it on this
+REM | task queue. If Temporal is down, the screen offers "Continue" - nothing is lost.
+REM +--------------------------------------------------------------------------------------
 set "TEMPORAL_ADDRESS=localhost:7233"
 set "TEMPORAL_NAMESPACE=default"
 set "PARTNER_PRODUCTS_TEMPORAL_TASK_QUEUE=partner-products"

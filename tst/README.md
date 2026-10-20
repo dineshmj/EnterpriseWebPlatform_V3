@@ -85,6 +85,7 @@ With MFA on, the other tests stop at the code page - switch it off again for the
 - The simulators are switched through their loopback-only `PUT /admin/behaviour` (Down, Refusing, LosingAnswers, a forced screening outcome); every resilience spec sets them back to Healthy afterwards. No console window is ever closed.
 - `35-resilience` is slow on purpose: retries back off for real, and the four-eyes reconciliation tests wait out the "unconfirmed by the network" alert (2 minutes in Development) - allow about an hour for the project.
 - The reconciliation tests need a second operator: `platform.admin` (signs in with `EWP_PASSWORD_DEFAULT` unless `.env` names its own password).
+- `30-journeys/partner-products` (Digital Gold) needs the Partner Bank (`Start-PartnerBank.ps1 -Lan` on the PC, hosts entries for `*.ewp.home.arpa`), Temporal (`ps\temporal\Start-Temporal.ps1`) and the Partner Products Worker. Without the Partner Bank the file is skipped, not failed. Each run onboards a NEW customer: the Partner Bank opens one account per customer and keeps it across EWP database re-creates. The payment-refused test switches the payment network simulator to Refusing and back.
 - `40-security/api/token-parity` asks the IDP for a client-credentials token of the KYC case-opening subscriber (a token for ANOTHER API); its development-only secret is read from that subscriber's `appsettings.Development.json` at run time.
 
 ### Conventions

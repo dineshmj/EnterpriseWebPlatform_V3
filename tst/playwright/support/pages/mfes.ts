@@ -1,4 +1,4 @@
-import { expect, type Locator } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import { samplePdf, type Evidence, type NewCustomer } from '../data';
 import type { ShellPage } from './ShellPage';
 
@@ -363,5 +363,110 @@ export class PaymentApprovalsMfe {
     await mfe.locator('#decision-remarks').fill(remarks);
     await mfe.getByRole('button', { name: 'Reject', exact: true }).first().click();
     await mfe.getByRole('alertdialog').getByRole('button', { name: 'Reject', exact: true }).click();
+  }
+}
+
+// ---------------------------------------------------------------- Partner Products
+
+/** What a purchase's row says (the screen's label for each status). */
+export type PurchaseLabel = 'Ordered - waiting for the payment' | 'Gold allocated' | 'Cancelled - not paid' | 'Refused by the Partner Bank';
+
+/** The Partner Bank's Digital Gold account number, as it shows on the screen. */
+const PARTNER_ACCOUNT = /^PB-DGA-[A-Z0-9]{6}$/;
+
+/**
+ * Partner Products: "Digital Gold" - EWP as the Partner Bank's distributor. Sophie finds the
+ * customer, records Form VII (opens the account) or a transfer authorization slip (buys gold),
+ * and sends it; the Partner Bank answers over mutual TLS. The screen does not refresh by itself:
+ * selecting the customer again reads the latest from the Partner Products API.
+ */
+export class DigitalGoldMfe {
+  static readonly title = 'Digital Gold';
+
+  constructor(private readonly shell: ShellPage) {}
+
+  async open(): Promise<void> {
+    await this.shell.openMenuItem('Partner Products', 'Digital Gold');
+    await this.shell.waitForScreen(DigitalGoldMfe.title);
+  }
+
+  /** Searches the customer by number and selects them; their panel shows EWP's record. */
+  async selectCustomer(customerNumber: string): Promise<void> {
+    const mfe = this.shell.workspace();
+    await mfe.locator('#search').fill(customerNumber);
+    await mfe.getByRole('button', { name: 'Search', exact: true }).click();
+    await mfe.locator('tbody tr').filter({ hasText: customerNumber }).getByRole('button', { name: 'Select', exact: true }).click();
+    await expect(mfe.getByText(`Customer ${customerNumber} - EWP's record`, { exact: true })).toBeVisible();
+  }
+
+  /** Records the customer's signed Form VII with its scan (both checks ticked). */
+  async recordFormVii(formNumber: string, dateOfBirth: string): Promise<void> {
+    const mfe = this.shell.workspace();
+    await mfe.locator('#formNumber').fill(formNumber);
+    await mfe.locator('#dateOfBirth').fill(dateOfBirth);
+    await mfe.locator('#scan').setInputFiles(samplePdf(`Form VII ${formNumber}`));
+    await mfe.getByLabel(/against the customer's photo ID/).check();
+    await mfe.getByLabel(/signature on Form VII/).check();
+    await mfe.getByRole('button', { name: 'Record Form VII', exact: true }).click();
+    await expect(mfe.getByText(new RegExp(`^Form VII ${formNumber} recorded`))).toBeVisible({ timeout: 30_000 });
+  }
+
+  /** Sends Form VII; once the Partner Bank opens the account, returns its number (PB-DGA-…). */
+  async sendFormVii(): Promise<string> {
+    const mfe = this.shell.workspace();
+    await mfe.getByRole('button', { name: 'Send to the Partner Bank', exact: true }).click();
+    // The Partner Products API waits up to 40 s for the Partner Bank; the BFF up to 60 s.
+    await expect(this.viewAtPartnerBankButton()).toBeVisible({ timeout: 60_000 });
+    return (await mfe.getByText(PARTNER_ACCOUNT).first().textContent())?.trim() ?? '';
+  }
+
+  viewAtPartnerBankButton(): Locator {
+    return this.shell.workspace().getByRole('button', { name: 'View at the Partner Bank ↗', exact: true });
+  }
+
+  /** "View at the Partner Bank": the new tab the screen opens, once it shows the Partner Bank's page. */
+  async viewAtPartnerBank(): Promise<Page> {
+    const [tab] = await Promise.all([
+      this.shell.page.context().waitForEvent('page'),
+      this.viewAtPartnerBankButton().click(),
+    ]);
+    await tab.waitForURL(/\/StaffView\?request_uri=/, { timeout: 60_000 });
+    return tab;
+  }
+
+  /** Records a transfer authorization slip for `amount` from the first paying account. */
+  async recordTransferSlip(slipNumber: string, amount: string, mobileOnSlip: string): Promise<void> {
+    const mfe = this.shell.workspace();
+    await mfe.locator('#slipNumber').fill(slipNumber);
+    await mfe.locator('#amount').fill(amount);
+    await mfe.locator('#mobileOnSlip').fill(mobileOnSlip);
+    await mfe.locator('#slipScan').setInputFiles(samplePdf(`Slip ${slipNumber}`));
+    await mfe.getByLabel(/signature on the slip/).check();
+    await mfe.getByRole('button', { name: 'Record transfer slip', exact: true }).click();
+    await expect(mfe.getByText(new RegExp(`^Transfer slip ${slipNumber} recorded`))).toBeVisible({ timeout: 30_000 });
+  }
+
+  /** The purchase's row in "Transfer authorization slips". */
+  purchaseRow(slipNumber: string): Locator {
+    return this.shell.workspace().locator('tbody tr').filter({ hasText: slipNumber });
+  }
+
+  /** "Send & pay": the signed order goes to the Partner Bank, the payment starts as Sophie, the workflow follows it. */
+  async sendAndPay(slipNumber: string): Promise<void> {
+    await this.purchaseRow(slipNumber).getByRole('button', { name: 'Send & pay', exact: true }).click();
+    await expect(this.shell.workspace().getByText(/^Order \S+ placed at the Partner Bank; payment PAY-/)).toBeVisible({ timeout: 60_000 });
+  }
+
+  /** Selects the customer again until the purchase shows `label` (the workflow moves it on). */
+  async expectPurchase(customerNumber: string, slipNumber: string, label: PurchaseLabel, timeout = 180_000): Promise<void> {
+    await expect(async () => {
+      await this.selectCustomer(customerNumber);
+      await expect(this.purchaseRow(slipNumber)).toContainText(label, { timeout: 3_000 });
+    }).toPass({ ...WORKFLOW_WAIT, timeout });
+  }
+
+  /** "Gold held" in the holding the Partner Bank reports, e.g. "0.1213 g". */
+  goldHeld(): Locator {
+    return this.shell.workspace().getByText(/^\d+\.\d{4} g$/).first();
   }
 }

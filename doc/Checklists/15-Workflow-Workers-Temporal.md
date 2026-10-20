@@ -30,7 +30,7 @@ Deployables: `src/Microservices/PartnerProducts/Worker` (the Digital Gold purcha
 
 ## 5. Production (open)
 
-- [ ] **Temporal secured:** mTLS to the frontend and namespace authorization (today the local development server, localhost only; R-16).
+- [ ] **Temporal secured:** mTLS to the frontend and namespace authorization (today the local development server, localhost only; production: mTLS from the service mesh or Temporal Cloud, not built in the app; R-16).
 - [ ] **Events instead of polling:** follow the payment through `payments.payment.events` (or a signal) rather than every 15 s (R-16).
 - [ ] **Secret store** for the client secret (R-10).
 - [ ] **Workflow metrics and alerts** (failed or long-running workflows) in the deployment's monitoring.

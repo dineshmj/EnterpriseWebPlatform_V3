@@ -11,6 +11,7 @@ export const urls = {
   accountsMfe: 'https://accounts.dev.localhost:45456',
   paymentsMfe: 'https://payments.dev.localhost:46388',
   auditMfe: 'https://audit.dev.localhost:46380',
+  partnerProductsMfe: 'https://ewp-partner.dev.localhost:46384',
 } as const;
 
 export interface Service {
@@ -42,6 +43,11 @@ export const services: Service[] = [
   { name: 'Audit API', readiness: 'https://audit-api.dev.localhost:46378/health/ready', startedBy: vs },
   { name: 'Audit Journey API', readiness: 'https://audit-journey.dev.localhost:46379/health/ready', startedBy: node },
   { name: 'Audit web', readiness: `${urls.auditMfe}/`, startedBy: node },
+  { name: 'Partner Products API', readiness: 'https://partner-products-api.dev.localhost:46387/health/ready', startedBy: vs },
+  { name: 'Partner Products Journey API', readiness: 'https://partner-products-journey.dev.localhost:46385/health/ready', startedBy: node },
+  { name: 'Partner Products web', readiness: `${urls.partnerProductsMfe}/`, startedBy: node },
+  // Ready only while it is connected to Temporal (ps\temporal\Start-Temporal.ps1).
+  { name: 'Partner Products Worker', readiness: 'https://localhost:46383/health/ready', startedBy: node },
   { name: 'CustomerOutboxPublisher', readiness: 'http://localhost:5101/health/ready', startedBy: vs },
   { name: 'KycCaseOpeningSubscriber', readiness: 'http://localhost:5102/health/ready', startedBy: vs },
   { name: 'OnboardingOutcomeSubscriber', readiness: 'http://localhost:5103/health/ready', startedBy: vs },
