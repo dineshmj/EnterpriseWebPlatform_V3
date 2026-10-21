@@ -99,6 +99,9 @@ The document answers *how the platform is built and protected*, not *which busin
     - [1.7.2 Health endpoints for liveness and readiness](#172-health-endpoints-for-liveness-and-readiness)
     - [1.7.3 Structured logs and metrics](#173-structured-logs-and-metrics)
     - [1.7.4 Operations: Platform Health and the simulator switch](#174-operations-platform-health-and-the-simulator-switch)
+  - [1.8 Testing](#18-testing)
+    - [1.8.1 Test layers, from one decision to the whole platform](#181-test-layers-from-one-decision-to-the-whole-platform)
+    - [1.8.2 Neighbours played by WireMock (C# and TypeScript)](#182-neighbours-played-by-wiremock-c-and-typescript)
 - [2. Security features](#2-security-features)
   - [2.1 Identity](#21-identity)
     - [2.1.1 OIDC Authorization Code + PKCE through a BFF](#211-oidc-authorization-code--pkce-through-a-bff)
@@ -572,6 +575,37 @@ The same page **turns off the platform's own APIs** for their callers (Developme
 - The probes and the switch: [platform.services.ts](../src/Microservices/Operations/JourneyApi/src/platform/platform.services.ts), [Operations Journey API README](../src/Microservices/Operations/JourneyApi/README.md); the screen: [Operations web README](../src/Microservices/Operations/BFF.Web/README.md)
 - The simulators' behaviour endpoints: [Payment Network Simulator](../src/Simulators/PaymentNetworkSimulator/README.md) (and the other two simulators' READMEs)
 
+### 1.8 Testing
+
+#### 1.8.1 Test layers, from one decision to the whole platform
+
+Each layer proves what the one below cannot, and none needs more of the platform than it must:
+
+| Layer | Where | Needs running | Proves |
+|---|---|---|---|
+| Unit (NUnit) | [tst/dotnet](../tst/dotnet) - `Payments.Api.Tests`, `Accounts.Api.Tests` | nothing | the decisions: aggregates, policies, saga steps, authorization handlers, idempotency |
+| Adapter, with the neighbour played by WireMock | `PartnerProducts.Api.Tests` (C#); the Partner Products Journey API's `test/` (TypeScript) - see [1.8.2](#182-neighbours-played-by-wiremock-c-and-typescript) | nothing (WireMock starts and stops with the test) | our side of a contract: what we send, and how every answer - refusal, failure, late or lost answer - is translated |
+| End to end (Playwright, Edge) | [tst/playwright](../tst/playwright): `30-journeys`, `35-resilience`, `40-security` | the whole platform | several people through real screens; resilience with the simulators and the fault proxy ([1.7.4](#174-operations-platform-health-and-the-simulator-switch)); headers, sessions, MFA |
+
+How to run each: [tst/README.md](../tst/README.md).
+
+#### 1.8.2 Neighbours played by WireMock (C# and TypeScript)
+
+A test of one service must not depend on its neighbours being up, or on them misbehaving on cue. WireMock stands in for the neighbour: a real HTTP server the test starts, tells what to answer (a status, a body, a delay), and then asks what it received. The code under test is the real one - only the neighbour is played.
+
+- **C#, WireMock.Net - the Partner Bank** (the external organisation). The real `PartnerBankClient` against a WireMock Partner Bank inside the NUnit test: the instruction is a JWT that a verifier holding only EWP's public key accepts; a late answer is "unavailable" and the resend carries the same `jti`; 400 / 404 / 409 are final refusals with the Partner Bank's reason; 5xx, unreachable and a rejected token are "unavailable" - never a refusal. Not covered there: mutual TLS on the wire (the Partner Bank's own check, proven in its repository).
+- **TypeScript, Jest + WireMock standalone - the customer's NestJS pattern.** The Partner Products Journey API's real `DomainApiClient` and `TokenExchangeService` against WireMock (the Java server, set up over its admin API) playing BOTH the IDP's token endpoint and the Partner Products Domain API: the person's token exchanged for exactly one scope (RFC 8693), the Domain API's own refusals passed to the counter, its internal errors never (CWE-209). Jest starts WireMock for the run (127.0.0.1, a free port, at most 128 MB) and stops it at the end.
+
+Demo: `dotnet test tst\dotnet\EwpTests.slnx --artifacts-path $env:TEMP\ewp-tests` (about 4 s for the Partner Bank tests), and `pnpm test` in `src\Microservices\PartnerProducts\JourneyApi` (under a second) - neither needs the platform running.
+
+**Where to look at:**
+
+- C#: [PartnerBankStub.cs](../tst/dotnet/PartnerProducts.Api.Tests/Support/PartnerBankStub.cs) (the WireMock Partner Bank), [PartnerBankClient_PlacePurchaseAsync_Happy_SignedInstruction.cs](../tst/dotnet/PartnerProducts.Api.Tests/PartnerBank/PartnerBankClient_PlacePurchaseAsync_Happy_SignedInstruction.cs), [PartnerBankClient_PlacePurchaseAsync_Edge_LostAndRefusedAnswers.cs](../tst/dotnet/PartnerProducts.Api.Tests/PartnerBank/PartnerBankClient_PlacePurchaseAsync_Edge_LostAndRefusedAnswers.cs)
+- TypeScript: [domain-api.client.spec.ts](../src/Microservices/PartnerProducts/JourneyApi/test/domain-api.client.spec.ts), [wiremock.ts](../src/Microservices/PartnerProducts/JourneyApi/test/support/wiremock.ts) (the admin API calls), [wiremock-start.ts](../src/Microservices/PartnerProducts/JourneyApi/test/support/wiremock-start.ts) / [wiremock-stop.ts](../src/Microservices/PartnerProducts/JourneyApi/test/support/wiremock-stop.ts) (Jest's global set-up and tear-down)
+- Installing WireMock standalone once: [Install-WireMock.ps1](../ps/wiremock/Install-WireMock.ps1) (pinned 3.13.2, SHA-256 checked)
+
+**Not yet:** the Payment Network and Core Banking adapters with WireMock (the simulators and the Playwright resilience tests cover them today); component tests of a whole API with a test database (controller → domain → Outbox) and WireMock behind it.
+
 ---
 
 ## 2. Security features
@@ -923,6 +957,7 @@ Demo: Sophie records Camilla's Form VII and sends it (the PC's Partner Bank wind
 - The staff view: `PartnerView` in [DigitalGoldController.cs](../src/Microservices/PartnerProducts/API/Controllers/DigitalGoldController.cs)
 - The keys: [New-EwpLocalPki.ps1](../ps/pki/New-EwpLocalPki.ps1); the Partner Bank's side: its repository's `doc/Architecture.md` (D4, D14, D15) and `tools/JourneyCheck` (PAR: section 1; the counter: section 8; the staff view: section 9)
 - Security controls: [Partner Products API README](../src/Microservices/PartnerProducts/API/README.md) #11-#22
+- Automated proof of the adapter (signed instruction, refusals, lost answer and resend with the same `jti`), with the Partner Bank played by WireMock: [1.8.2](#182-neighbours-played-by-wiremock-c-and-typescript)
 
 **Not yet:** PAR for an EWP channel of the customer's own (EWP's screens are all for staff today); DPoP or mutual TLS on EWP's internal calls (Threat-Model R-9).
 

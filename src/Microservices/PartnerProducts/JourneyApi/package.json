@@ -7,7 +7,8 @@
     "build": "nest build",
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "jest --runInBand"
   },
   "dependencies": {
     "@nestjs/common": "11.2.7",
@@ -23,7 +24,26 @@
     "@nestjs/cli": "11.0.24",
     "@nestjs/schematics": "11.0.7",
     "@types/express": "5.0.3",
+    "@types/jest": "30.0.0",
     "@types/node": "24.5.2",
+    "jest": "30.5.2",
+    "ts-jest": "29.4.14",
     "typescript": "5.9.2"
+  },
+  "jest": {
+    "rootDir": "test",
+    "testEnvironment": "node",
+    "testRegex": "\\.spec\\.ts$",
+    "transform": {
+      "^.+\\.ts$": [
+        "ts-jest",
+        {
+          "tsconfig": "<rootDir>/tsconfig.json"
+        }
+      ]
+    },
+    "globalSetup": "<rootDir>/support/wiremock-start.ts",
+    "globalTeardown": "<rootDir>/support/wiremock-stop.ts",
+    "testTimeout": 20000
   }
 }

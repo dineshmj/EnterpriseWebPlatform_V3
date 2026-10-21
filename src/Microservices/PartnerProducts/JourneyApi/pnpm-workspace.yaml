@@ -1,6 +1,9 @@
 # protobufjs (via @temporalio/client) only prints a version notice from its install script: not run.
 allowBuilds:
   protobufjs: false
+  # Jest (tests only): both ship prebuilt binaries for Windows; their install scripts are not needed.
+  "@parcel/watcher": false
+  unrs-resolver: false
 # Fixed versions of vulnerable transitive packages (pnpm audit); only the vulnerable versions are rewritten.
 overrides:
   picomatch@>=4.0.0 <4.0.4: ^4.0.4

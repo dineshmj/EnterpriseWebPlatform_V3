@@ -105,6 +105,7 @@ With MFA on, the other tests stop at the code page - switch it off again for the
 |---|---|
 | `Payments.Api.Tests` | the payment's rules and approval tier; the saga - reserve first, replies matched to the current command (CausationId), approval limits and maker-checker, network retries with doubling waits, the unknown outcome confirmed with the network (never released blind), four-eyes reconciliation, reply timeouts, stuck compensation; one payment per Idempotency-Key; staff authorization (branch, audit permission only through the Audit Journey API) |
 | `Accounts.Api.Tests` | when funds may be held (branch first, owner, currency, available funds); idempotent reserve / settle / release, a release that overtakes its reservation; separation of duties on account opening; bounded core-banking retries; the account officer policy |
+| `PartnerProducts.Api.Tests` | the Partner Bank adapter (`PartnerBankClient`) against a **WireMock.Net** Partner Bank inside the test: EWP's token (client credentials) on every instruction; the instruction a JWT signed with EWP's key that a verifier holding only the public key accepts (ES256, typ, issuer, audience, 5 minutes, jti); a lost (late) answer and the resend carry the SAME jti; 400 / 404 / 409 are final refusals with the Partner Bank's own reason, 5xx / unreachable / our token refused are "unavailable" (never a refusal, no internal text passed on); a rejected token is fetched anew; no token, no instruction. Not covered: mutual TLS on the wire (the Partner Bank's own check) |
 
 ### Running
 
@@ -123,3 +124,14 @@ In Visual Studio: open `EwpTests.slnx` in a second instance and use Test Explore
 - File and class: `<Class>_<Method>_<Happy|Edge>_<Case>`; several inputs through `[TestCase]`.
 - Decisions, not coverage: aggregates, value objects, policies, authorization handlers and the decision branches of command handlers. `Program.cs`, DTOs, EF mappings, thin controllers and hosted-service plumbing are not unit-tested.
 - Test data comes from small helpers (`Support\*TestData.cs`) that build aggregates through their own public factories and methods - the domain has no public setters, so NBuilder is not used.
+- An external system is played by **WireMock.Net** (`Support\PartnerBankStub.cs`): a real HTTP server inside the test, started and stopped per test; the REAL adapter talks to it, each test stages answers (status, body, delay) and reads what arrived. Throw-away keys per run, never `.ewp-pki`.
+
+## Node.js tests (Jest + WireMock standalone)
+
+The customer's NestJS pattern: a Journey API tested against **WireMock standalone** (the Java server) playing its neighbours, set up over WireMock's admin API from TypeScript.
+
+| Project | What it checks |
+|---|---|
+| `src\Microservices\PartnerProducts\JourneyApi` (`test\`) | `DomainApiClient` + `TokenExchangeService` with WireMock as the IDP's token endpoint AND the Partner Products Domain API: the person's token exchanged (RFC 8693) for exactly one scope, one exchange per scope, the exchanged token sent (never the person's); IDP refusal = 403 and no Domain API call; the domain's own 400 / 409 / 503 reasons reach the counter; 500 and 403 become plain messages (no internal text, CWE-209); unreachable = "unavailable" |
+
+Once: `.\ps\wiremock\Install-WireMock.ps1` (WireMock 3.13.2 into `%LOCALAPPDATA%\EWP\wiremock`, SHA-256 checked; needs Java - Kafka's is enough). Then, in the project folder: `pnpm test`. Jest starts WireMock on 127.0.0.1 and a free port (at most 128 MB) for the run and stops it at the end - nothing keeps running, the platform need not be up.
