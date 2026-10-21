@@ -1,6 +1,113 @@
-# EWP V3 — Response to the AI architect reviews (rounds 1, 2 and 3)
+# EWP V3 — Response to the AI architect reviews (rounds 1, 2 and 3; round 4 requested)
 
-Response date: 14-OCT-2026
+Response date: 14-OCT-2026 (rounds 1–3). Round 4 requested: 21-OCT-2026.
+
+## Round 4 — start here (for the reviewers)
+
+Round 4 covers **two repositories**:
+
+- **EWP V3** (this repository): the bank's staff platform.
+- **EWP V3 Partner Bank** (`EnterpriseWebPlatform_V3_PartnerBank`): a second, independent bank whose Digital Gold product EWP distributes at its branch counters.
+
+The rest of this document answers rounds 1–3. Please do not raise those findings again unless the code now contradicts the answer given.
+
+### Read these first
+
+1. This section.
+2. [Checklists](../Checklists/README.md), especially [15 — Workflow workers (Temporal)](../Checklists/15-Workflow-Workers-Temporal.md) and [12 — Kafka broker and ACLs](../Checklists/12-Kafka-Broker-and-ACLs.md).
+3. [Threat-Model.md](../Threat-Model.md): §7 residual risks, especially R-10 and R-14 to R-16.
+4. Partner Bank repository: `doc/Architecture.md` (decisions D1–D15) and `doc/Threat-Model.md` (T1–T28, residual risks R1–R10).
+5. [Partner Products requirements](../Requirements/PartnerProducts-Requirements.md), and the design conversations [Partner-Bank-mTLS-PAR-And-Signed-Instructions.md](../Arch-Design-Visualizations/Partner-Bank-mTLS-PAR-And-Signed-Instructions.md) and [Temporal-Digital-Gold-Purchase.md](../Arch-Design-Visualizations/Temporal-Digital-Gold-Purchase.md).
+
+### What changed since round 3 (14-OCT-2026)
+
+| Area | Change | Commits |
+| --- | --- | --- |
+| Partner Products context (new) | Digital Gold at the counter. The stack is a Next.js SPA with a light BFF, a NestJS Journey API, and a .NET Domain API with PostgreSQL. The Domain API is also EWP's **adapter** to the Partner Bank: mutual TLS, a certificate-bound token, signed instructions. | `2c6d1136`, `bbaa5177`, `403403d6` |
+| Digital Gold purchase | A signed purchase instruction, then a payment through the Payments saga, made as the staff member. A Temporal workflow takes the purchase to ALLOCATED or CANCELLED, run by a new worker with its own machine identity. | `dccf4aa6` |
+| Purchase events (A1, A2) | Form VII and purchase changes go through a Transactional Outbox to `partner-products.digital-gold.events`, and from there into the audit trail. Payment outcomes wake the workflow with a data-less signal; polling every 5 minutes remains as the safety net. | `ff2f4b03`, `e3f6afb3` |
+| "View at the Partner Bank" | A read-only staff page at the Partner Bank, opened in a new tab through a one-time handoff (see pattern C below). | `1bb69891` |
+| Step-up without a pop-up | The authenticator code appears in an in-page overlay in the Shell. The IDP lets **only** the Shell frame **only** the step-up code page. | `1f6b3bf5` |
+| Kafka over TLS (B8) | SASL_SSL. Every client checks the broker's certificate and host name before it signs in with SCRAM. | `8a6271e1` |
+| Configuration per deployable (A4) | The shared `Common.Landscape` library is gone. Service URLs and client IDs come from each deployable's configuration and are checked at start-up. The IDP's `ClientIds` / `ClientBaseUrls` are the reference values. | `2344b75a` |
+| Also | Resend of parked Outbox messages for Accounts and Compliance; Shell session fixes; Node dependency audit clean; Playwright journeys (including Digital Gold). | `1319c490`, `497b10af`, `1ab6a596`, `a4d6a06b` |
+
+### Three ways EWP deals with the Partner Bank
+
+Please check each against its own purpose. Measuring all three against FAPI 2.0 for a customer-facing channel would produce false findings.
+
+**A. The customer's own sign-in at the Partner Bank: full PAR + JAR + RAR.**
+
+- The Partner Bank's authorization server (Duende 8) requires the following:
+  - **PAR (RFC 9126)**, on a separate mutual-TLS port;
+  - a **signed request object (JAR, RFC 9101)**, ES256, with EWP's request-signing key;
+  - **RAR (RFC 9396)** `authorization_details` with three types;
+  - **PKCE** and `prompt=login`;
+  - a consent page that shows the signed details;
+  - access tokens bound to EWP's certificate (**RFC 8705**, `cnf`).
+- The Partner Bank repository's `tools/HandshakeCheck` and `tools/JourneyCheck` exercise this end to end.
+- **EWP has no customer-facing channel that uses it yet.** That is the planned A7 + B1 (customer self-service, FAPI 2.0, including DPoP or certificate-bound tokens throughout). Its absence in EWP is known, not an oversight.
+
+**B. The counter (the distributor model): mutual TLS + EWP's own bound token + a signed instruction. No PAR.**
+
+- The customer is in the branch and signs a paper Form VII (account opening) or a transfer slip (purchase). They do not sign in anywhere.
+- The Partner Products API authenticates **EWP as an organisation**:
+  - mutual TLS with EWP's client certificate;
+  - a `client_credentials` token with scope `partner.distribution`, bound to that certificate;
+  - each instruction as an EWP-signed JWT (`typ partner-instruction+jwt`, ES256, `aud partner-api`, 5 minutes, unique `jti`, which the Partner Bank accepts once).
+- The staff member is the **actor** recorded on EWP's side (delegated token, branch, permission), not a party the Partner Bank authenticates.
+- The Partner Bank relies on EWP to have checked the customer and their signature (Partner Bank R9). That reliance is the distribution agreement, not a missing control.
+
+**C. "View at the Partner Bank": a PAR-style handoff, not RFC 9126 at the authorization server.**
+
+1. EWP pushes a signed `staff_account_view` instruction over mutual TLS.
+2. The Partner Bank returns a one-time `request_uri`, valid for 60 seconds.
+3. The staff member's browser opens the Partner Bank's read-only page in a new tab with no opener. The request is redeemed once, and only its SHA-256 is kept.
+
+There is no SSO federation between the banks: the Partner Bank trusts EWP's signed statement of who is looking (Partner Bank R10). Federation is described in the design conversation as the alternative.
+
+### Known and out of scope for this round
+
+- **Planned:**
+  - A7 + B1: the customer channel and FAPI 2.0;
+  - the D-series: containers, Terraform, GitHub Actions, CI gates, dashboards, gateway rate limits.
+- **Accepted for the PoC, recorded with their production answer:**
+  - R-10: development secrets in configuration;
+  - R-14: rate limits counted per instance;
+  - R-15: date of birth typed from Form VII;
+  - R-16: Temporal development server without TLS or an authorizer (production: service mesh or Temporal Cloud mTLS, plus an authorizer);
+  - the Kafka controller listener: PLAINTEXT, bound to localhost;
+  - Partner Bank R1–R10: no certificate revocation, keys in files, and others.
+- **Unit tests** cover Payments and Accounts only. The other contexts are covered by Playwright journeys.
+
+### Where findings are most useful
+
+- **Partner Products authorization:**
+  - delegation pins (only the Journey API, for a person with the permission and branch);
+  - the worker's pinned machine identity on internal endpoints;
+  - branch scoping of every list and record.
+- **Signed instructions:** replay (`jti`, instruction id fixed at the first send), what happens when an answer is lost (the record stays SENT; resending uses the same id), and signing-key separation (TLS key ≠ signing key).
+- **The purchase workflow:**
+  - exactly one ending per purchase;
+  - idempotent activities;
+  - a forged or repeated `paymentSettled` signal (it carries no data; the workflow re-reads the payment);
+  - a worker restart mid-workflow.
+- **The step-up overlay:** the single framing exception on the IDP (`SecurityHeadersAttribute`), and what a forged "done" message could gain.
+- **A4:**
+  - any remaining compiled-in address or client ID;
+  - any start-up path that would still run with a missing pin.
+- **B8:** any Kafka client that still connects without TLS or without checking the host name.
+
+### How to file round 4
+
+Please add one file per reviewer as `2026-10-2x-<Reviewer>-Architect-Verdict.md` in this folder. Give every finding:
+
+- an ID;
+- file and line evidence;
+- a severity;
+- whether it is a defect, a production requirement or a suggestion.
+
+The answers will follow in this document under "Round 4".
 
 ## In short
 
