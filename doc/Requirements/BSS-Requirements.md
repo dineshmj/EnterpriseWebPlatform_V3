@@ -36,7 +36,7 @@ The scenarios use the demo users. Their role, department, branch and clearance l
 
 - **Statuses** are written in capitals, as the system records them (`SUBMITTED`, `PENDING_APPROVAL`).
 - **Numbers that are configuration** (thresholds, limits, ages) are given with their production value, and the Development value where it differs. Changing configuration must not need a change to these requirements.
-- **Simulated external systems.** The screening provider, the core-banking system and the payment network are simulators. In Development and Test, an operations administrator switches their behaviour on the **Platform Health** page: `Healthy`, `Slow`, `Failing`, `Down`, `Refusing`, and for the payment network also `LosingAnswers`. A switched simulator returns to `Healthy` by itself after 15 minutes.
+- **Simulated external systems.** The screening provider, the core-banking system and the payment network are simulators. In Development and Test, an operations administrator switches their behaviour on the **Simulator & Fault Controls** page (Platform Health shows it, read-only): `Healthy`, `Slow`, `Failing`, `Down`, `Refusing`, and for the payment network also `LosingAnswers`. A switched simulator returns to `Healthy` by itself after 15 minutes.
 - **Tags** classify each scenario:
 
 | Tag | Meaning |
@@ -170,7 +170,7 @@ Feature: Working in the Shell
       | olivia.compliance | Compliance Monitor                                                      |
       | jack.accounts     | View Account Applications, View Accounts                               |
       | emily.payments    | Payment Approvals                                                       |
-      | daniel.ops        | Platform Health, Payment Processing Monitor                            |
+      | daniel.ops        | Platform Health, Simulator & Fault Controls, Payment Processing Monitor |
       | sarah.audit       | Audit Trail                                                             |
 
   @security
@@ -771,7 +771,7 @@ Feature: Sending a payment through the payment network
 
   Background:
     Given Camilla's account has enough money available
-    And Daniel can switch the payment network simulator on Platform Health
+    And Daniel can switch the payment network simulator on Simulator & Fault Controls
 
   @compensation @smoke
   Scenario: The payee's bank is closed
@@ -1013,8 +1013,15 @@ Feature: Platform health and the simulator switch
 
   @security
   Scenario: Platform Health is for operations
-    When Sophie, Ethan or Sarah tries to open Platform Health
+    When Sophie, Ethan or Sarah tries to open Platform Health or Simulator & Fault Controls
     Then they are refused
+
+  @security
+  Scenario: The switches do not exist outside Development and Test
+    Given the platform runs in an environment other than Development or Test
+    When Daniel opens Simulator & Fault Controls
+    Then the page says the controls do not exist in this environment
+    And Platform Health shows no simulators
 ```
 
 ---

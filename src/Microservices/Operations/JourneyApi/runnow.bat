@@ -23,8 +23,9 @@ echo.
 
 echo [2/3] Configuring (DEVELOPMENT values only)...
 
-REM Development | Test | Production. Outside Development the API refuses to start with MFA off,
-REM and outside Development and Test with the simulators' switch on.
+REM Development | Test | UAT | Production. Outside Development the API refuses to start with MFA off,
+REM outside Development and Test with the simulators' switch on, and outside Development, Test
+REM and UAT with the fault controls on.
 set "OPERATIONS_JOURNEY_ENVIRONMENT=Development"
 set "OPERATIONS_JOURNEY_PORT=46382"
 set "OPERATIONS_JOURNEY_PUBLIC_ORIGIN=https://operations-journey.dev.localhost:46382"
@@ -36,13 +37,20 @@ REM This API's own client: token exchange only (parked Outbox messages of Accoun
 REM Must equal ClientIds:OperationsJourneyApi in src\IDP\appsettings.json (where the IDP registers that client).
 set "OPERATIONS_JOURNEY_CLIENT_ID=Operations.JourneyApi.ClientID"
 set "OPERATIONS_JOURNEY_CLIENT_SECRET=5594deaa-c45c-4299-b628-f877ef42d405"
-set "OPERATIONS_JOURNEY_ACCOUNTS_API=https://accounts-api.dev.localhost:48486"
-set "OPERATIONS_JOURNEY_COMPLIANCE_API=https://compliance-api.dev.localhost:46306"
-set "OPERATIONS_JOURNEY_PARTNER_PRODUCTS_API=https://partner-products-api.dev.localhost:46387"
+REM Development: the API addresses below go through the fault proxy (ps\toxiproxy\toxiproxy.json,
+REM ports 47101-47111) so operations can cut them; elsewhere use each API's own address.
+set "OPERATIONS_JOURNEY_ACCOUNTS_API=https://accounts-api.dev.localhost:47105"
+set "OPERATIONS_JOURNEY_COMPLIANCE_API=https://compliance-api.dev.localhost:47104"
+set "OPERATIONS_JOURNEY_PARTNER_PRODUCTS_API=https://partner-products-api.dev.localhost:47109"
 
 REM DEVELOPMENT ONLY: the simulators' behaviour switch (never set outside Development / test).
 set "OPERATIONS_SIMULATOR_CONTROLS_ENABLED=true"
 set "OPERATIONS_SIMULATOR_AUTO_REVERT_MINUTES=15"
+REM DEVELOPMENT / TEST / UAT ONLY: the fault proxy's routes (cut, slow or hang an API for its
+REM server-side callers). The proxy: ps\toxiproxy\Start-Toxiproxy.ps1 (admin API on this machine only).
+set "OPERATIONS_FAULT_CONTROLS_ENABLED=true"
+set "OPERATIONS_FAULT_PROXY_ADMIN_URL=http://127.0.0.1:8474"
+set "OPERATIONS_FAULT_AUTO_REVERT_MINUTES=15"
 REM Keep equal to the IDP's Mfa:Enabled: a simulator change then needs a recent MFA sign-in.
 set "OPERATIONS_MFA_ENABLED=false"
 set "OPERATIONS_MFA_MAX_AGE_MINUTES=15"
@@ -54,7 +62,7 @@ REM explicitly for the calls to the IDP and the components' probes.
 set "NODE_EXTRA_CA_CERTS=%CERT_DIR%\ewp-v3-dev.pem"
 
 echo       %OPERATIONS_JOURNEY_PUBLIC_ORIGIN%  (IDP %OPERATIONS_JOURNEY_IDP_AUTHORITY%)
-echo       Simulator controls: %OPERATIONS_SIMULATOR_CONTROLS_ENABLED%
+echo       Simulator controls: %OPERATIONS_SIMULATOR_CONTROLS_ENABLED%   Fault controls: %OPERATIONS_FAULT_CONTROLS_ENABLED%
 echo.
 
 echo [3/3] Building and starting...

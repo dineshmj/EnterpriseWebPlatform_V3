@@ -32,7 +32,7 @@ The same `Idempotency-Key` always returns the **same** answer (the payment's net
 
 Whatever the behaviour, a **payee BSB starting with 999** is refused ("the payee's account is closed"), so one payment can show the compensation path without changing anything. A BSB that is not in the directory is refused too.
 
-The same switch is on the Operations **Platform Health** screen (`daniel.ops`, Development and Test only; it goes back to Healthy by itself after 15 minutes).
+The same switch is on the Operations **Simulator & Fault Controls** screen (`daniel.ops`, Development and Test only; it goes back to Healthy by itself after 15 minutes).
 
 ## BSB directory and Confirmation of Payee (demo rules)
 

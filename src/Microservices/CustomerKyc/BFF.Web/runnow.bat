@@ -53,7 +53,9 @@ set "KYC_BFF_CLIENT_SECRET=3ac91ab3-7ba0-4727-b4f7-36120bec10c5"
 set "KYC_BFF_CALLBACK_URL=https://kyc.dev.localhost:33800/api/auth/callback"
 set "KYC_BFF_POST_LOGOUT_REDIRECT_URI=https://kyc.dev.localhost:33800/signout-callback-oidc"
 
-set "KYC_API_BASE_URL=https://kyc-api.dev.localhost:46305"
+REM Development: the API addresses below go through the fault proxy (ps\toxiproxy\toxiproxy.json,
+REM ports 47101-47111) so operations can cut them; elsewhere use each API's own address.
+set "KYC_API_BASE_URL=https://kyc-api.dev.localhost:47102"
 
 set "KYC_BFF_SESSION_SECRET=8091a396-fdf8-4a2c-8535-18d8b3483fba"
 
@@ -66,7 +68,7 @@ REM ============================================================
 REM Documents Management (called for the officer by token exchange; no secret of its own)
 REM ============================================================
 
-set "KYC_DOCUMENTS_MANAGEMENT_API_BASE_URL=https://documents-management-api.dev.localhost:49486"
+set "KYC_DOCUMENTS_MANAGEMENT_API_BASE_URL=https://documents-management-api.dev.localhost:47103"
 
 REM ============================================================
 REM KYC BFF HTTPS / Node TLS

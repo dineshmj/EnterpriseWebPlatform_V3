@@ -8,9 +8,9 @@
     -   Jack: Account Applications / Accounts;
     -   Emily: Payment Approvals;
     -   Sarah: Audit Trail only;
-    -   Daniel: Platform Health and the Payment Processing Monitor;
-    -   platform.admin: Platform Health, with no business approval screens.
-3.  **Daniel → Platform Health: **every component should be**Healthy**. The page refreshes every 10 seconds.
+    -   Daniel: Platform Health, Simulator & Fault Controls and the Payment Processing Monitor;
+    -   platform.admin: Platform Health and Simulator & Fault Controls, with no business approval screens.
+3.  **Daniel → Platform Health: **every component should be**Healthy**. The page refreshes every 10 seconds and has no switch (read-only); the simulators show as Healthy.
 
 ### ST-2 — Onboarding happy path (Sophie → Ethan → Olivia → Jack)
 
@@ -123,7 +123,7 @@ Needs the Partner Bank running on the PC (`.\ps\Start-PartnerBank.ps1 -Lan`), Te
 
 Needs `.\ps\Toggle-MFA.ps1 -On` and the restarts it lists (switch it off again afterwards).
 
-1.  Daniel signs in with his authenticator code, opens **Platform Health**, and waits until the code is older than the step-up limit (15 minutes by default).
+1.  Daniel signs in with his authenticator code, opens **Simulator & Fault Controls**, and waits until the code is older than the step-up limit (15 minutes by default).
 2.  He switches the Payment Network to **Slow**. Expected: no new window; the page darkens and **"Confirm it's you"** asks only for the code.
 3.  He enters the code. Expected: the overlay closes and the switch shows **Slow**; he is still signed in.
 4.  He switches it back to **Healthy** at once: no code is asked.

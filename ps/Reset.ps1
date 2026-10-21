@@ -72,11 +72,14 @@ $databases = @(
 )
 
 # Every port a platform process listens on (ReadMe.txt section 3): IDP, Shell, BFFs, APIs,
-# Node.js services, simulators and the workers' health ports. Not Kafka (9092/9093) or PostgreSQL.
+# Node.js services, simulators, the workers' health ports and the fault proxy (Toxiproxy: admin
+# 8474, routes 47101-47111 - stopping it is what opens every route again). Not Kafka
+# (9092/9093) or PostgreSQL.
 $platformPorts = @(
     46392, 46367, 46311, 46363, 33800, 46305, 49486, 46399, 46306, 45456, 48486,
     46377, 44488, 46388, 46378, 46379, 46380, 46381, 46382, 46383, 46384, 46385, 46387, 46366, 46376, 46386,
-    5101, 5102, 5103, 5104, 5105, 5106, 5107, 5108, 5109
+    5101, 5102, 5103, 5104, 5105, 5106, 5107, 5108, 5109,
+    8474, 47101, 47102, 47103, 47104, 47105, 47106, 47107, 47108, 47109, 47110, 47111
 )
 
 $kafkaWindowTitle = 'Kafka - started by Reset.ps1, keep open'
@@ -292,6 +295,7 @@ foreach ($p in $processes) {
                                 }
         '^node\.exe$'           { if ($commandLine -match $rootPattern) { Add-Console $p.ProcessId 'Node.js service' } }
         '^EnterpriseWebPlatform' { Add-Console $p.ProcessId '.NET service' }
+        '^toxiproxy-server'     { Add-Console $p.ProcessId 'Fault proxy (Toxiproxy)' }
         '^VsDebugConsole\.exe$' { if ($commandLine -match 'EnterpriseWebPlatform') { Add-Console $p.ProcessId 'Visual Studio debug console' } }
     }
 }
@@ -307,7 +311,7 @@ if ($consoles.Count -gt 0) {
         Write-Host ("  - {0,-28} {1} (PID {2}){3}" -f $console.What, $name, $console.Id, $title)
     }
     Write-Host ''
-    Write-Host 'Tip: stop debugging in Visual Studio (Shift+F5), run .\ps\run\Start-NodeServices.ps1 -Stop,'
+    Write-Host 'Tip: stop debugging in Visual Studio (Shift+F5), run .\ps\run\Start-NodeServices.ps1 -Stop (it stops the fault proxy too),'
     Write-Host '     and close the Kafka window (Ctrl+C, then Y). Options 2 and 4 to 7 start Kafka again themselves.'
     Write-Host 'Nothing changed.'
     exit 1

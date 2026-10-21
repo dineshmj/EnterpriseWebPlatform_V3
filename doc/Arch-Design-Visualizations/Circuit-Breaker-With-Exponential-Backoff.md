@@ -154,4 +154,4 @@ There are two layers of "try again": a quick one inside a single send (Retry, wi
 - *`Domain/Aggregates/PaymentSaga.cs`*: the attempts, backoff and CONFIRM_WITH_NETWORK.
 - *`Application/Commands/RunDueSagaStep.cs`*
 
-*To see it live:* switch the Payment Network on the Operations → Platform Health page to Down, Slow or LosingAnswers, and watch the payment's Timeline.
+*To see it live:* switch the Payment Network on the Operations → Simulator & Fault Controls page to Down, Slow or LosingAnswers, and watch the payment's Timeline.

@@ -28,6 +28,8 @@ $ErrorActionPreference = 'Stop'
 
 $windowTitle = 'Kafka - started by Start-Kafka.ps1, keep open'
 
+cls;
+
 function Test-KafkaPort {
     $client = New-Object System.Net.Sockets.TcpClient
     try { $client.Connect('localhost', $Port); return $true } catch { return $false } finally { $client.Dispose() }

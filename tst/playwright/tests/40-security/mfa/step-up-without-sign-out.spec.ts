@@ -36,15 +36,15 @@ test.describe('MFA step-up without signing out', () => {
   test('ShouldAskOnlyForAFreshCode_AndCompleteTheChange_WhenTheMfaSignInIsTooOld', async ({ browser }) => {
     test.setTimeout((maxAgeMinutes * 60 + 240) * 1_000);
 
-    // Arrange: Daniel signs in with his code and opens Platform Health.
+    // Arrange: Daniel signs in with his code and opens the simulator and fault controls.
     const context = await browser.newContext();
     const page = await context.newPage();
     const authenticator = await signInWithMfa(page, 'daniel.ops');
     const signedInAt = Date.now();
 
     const shell = new ShellPage(page);
-    await shell.openMenuItem('Operations', 'Platform Health');
-    await shell.waitForScreen('Platform health');
+    await shell.openMenuItem('Operations', 'Simulator & Fault Controls');
+    await shell.waitForScreen('Simulator & fault controls');
     const paymentNetwork = shell.workspace().getByLabel('Behaviour of Payment Network', { exact: true });
     await expect(paymentNetwork, 'the simulator switch is shown (Development only)').toBeEnabled({ timeout: 30_000 });
 

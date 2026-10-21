@@ -33,8 +33,10 @@ REM Must equal ClientIds:AuditJourneyApi in src\IDP\appsettings.json (where the 
 set "AUDIT_JOURNEY_CLIENT_ID=Audit.JourneyApi.ClientID"
 set "AUDIT_JOURNEY_CLIENT_SECRET=b749efd3-1000-477e-93df-0fa1fd8eb189"
 
-set "AUDIT_API_BASE_URL=https://audit-api.dev.localhost:46378"
-set "PAYMENTS_API_BASE_URL=https://payments-api.dev.localhost:44488"
+REM Development: the API addresses below go through the fault proxy (ps\toxiproxy\toxiproxy.json,
+REM ports 47101-47111) so operations can cut them; elsewhere use each API's own address.
+set "AUDIT_API_BASE_URL=https://audit-api.dev.localhost:47108"
+set "PAYMENTS_API_BASE_URL=https://payments-api.dev.localhost:47106"
 
 set "AUDIT_JOURNEY_TLS_PFX_PATH=%CERT_DIR%\ewp-v3-dev.pfx"
 set "AUDIT_JOURNEY_TLS_PFX_PASSWORD=dev-password"

@@ -2,7 +2,7 @@ import { headers } from 'next/headers';
 import './globals.css';
 
 export const metadata = {
-  title: 'Platform Health',
+  title: 'Operations',
   description: 'Operations MFE',
 };
 

@@ -1,6 +1,6 @@
 import { Inject, Injectable, NotFoundException, OnModuleDestroy, ServiceUnavailableException } from '@nestjs/common';
 import { JOURNEY_OPTIONS, JourneyOptions } from '../configuration/journey-options';
-import { Behaviour, components, SimulatorKey, simulators } from './components';
+import { Behaviour, components, PlatformComponent, SimulatorKey, simulators } from './components';
 
 export type HealthStatus = 'Healthy' | 'Degraded' | 'Unhealthy' | 'Unreachable';
 
@@ -18,8 +18,8 @@ export interface ComponentHealth {
  */
 @Injectable()
 export class HealthProbeService {
-  async probeAll(): Promise<{ checkedAt: string; components: ComponentHealth[] }> {
-    const results = await Promise.all(components.map(async (component) => {
+  async probeAll(extra: PlatformComponent[] = []): Promise<{ checkedAt: string; components: ComponentHealth[] }> {
+    const results = await Promise.all([...components, ...extra].map(async (component) => {
       const started = Date.now();
       try {
         const response = await fetch(component.readiness, { signal: AbortSignal.timeout(3000), redirect: 'manual' });

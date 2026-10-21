@@ -33,7 +33,7 @@ It deliberately does **not** contain:
 | Compliance Officer | `compliance_officer` | Makes AML, risk and compliance decisions | Compliance |
 | Account Officer | `account_officer` | Reviews and approves account opening | Accounts |
 | Payments Officer | `payments_officer` | Reviews and processes payment instructions | Payments |
-| Operations Administrator | `operations_administrator` | Monitors workflows and the platform's health and handles technical exceptions: retries a failed release, resends parked messages, reconciles - always with a second operator - payments the network never confirmed; in Development and Test switches the simulated external systems | All contexts — operational views only; Operations (Platform Health) |
+| Operations Administrator | `operations_administrator` | Monitors workflows and the platform's health and handles technical exceptions: retries a failed release, resends parked messages, reconciles - always with a second operator - payments the network never confirmed; in Development and Test switches the simulated external systems | All contexts — operational views only; Operations (Platform Health; Simulator & Fault Controls in Development and Test) |
 | Auditor | `auditor` | Independent, read-only review of business activity and history | All contexts — read-only, through the Audit context only (the Audit Trail), where every look is itself recorded; never the operational screens |
 | Platform Administrator | `platform_administrator` | Administers the platform: users, roles, configuration, health | IDP, Shell — never business approvals |
 

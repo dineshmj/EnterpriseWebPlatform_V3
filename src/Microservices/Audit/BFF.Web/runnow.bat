@@ -32,7 +32,9 @@ set "AUDIT_WEB_CLIENT_SECRET=7af784d2-4d35-45e2-b4f7-b56f674d6ead"
 REM Encrypts the tokens in the session table (32 random bytes, base64). Changing it signs everybody out.
 set "AUDIT_WEB_SESSION_KEY=EFcTrhisRyGX2E59EalTqI7nvdoxKIPU735WRg8aWEI="
 set "AUDIT_WEB_DATABASE_URL=postgres://ewp_audit_web:ewp-audit-web-dev@localhost:5432/EwpBffStateDb"
-set "AUDIT_JOURNEY_API_BASE_URL=https://audit-journey.dev.localhost:46379"
+REM Development: the API addresses below go through the fault proxy (ps\toxiproxy\toxiproxy.json,
+REM ports 47101-47111) so operations can cut them; elsewhere use each API's own address.
+set "AUDIT_JOURNEY_API_BASE_URL=https://audit-journey.dev.localhost:47110"
 
 set "AUDIT_WEB_TLS_PFX_PATH=%CERT_DIR%\ewp-v3-dev.pfx"
 set "AUDIT_WEB_TLS_PFX_PASSWORD=dev-password"

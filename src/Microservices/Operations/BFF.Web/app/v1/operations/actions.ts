@@ -4,14 +4,16 @@ import { cookies } from 'next/headers';
 import { config, SESSION_COOKIE } from '@/lib/server/config';
 import { exchangeForJourneyApi, freshAccessToken } from '@/lib/server/oidc';
 import { readSession, updateSession } from '@/lib/server/session-store';
-import { BEHAVIOURS, type ActionResult, type Behaviour, type ContextParkedMessages, type PlatformHealth, type SimulatorState } from '@/lib/operations-types';
+import {
+  BEHAVIOURS, ROUTE_STATES, type ActionResult, type Behaviour, type ContextParkedMessages, type FaultRoute, type PlatformHealth, type RouteState, type SimulatorState,
+} from '@/lib/operations-types';
 
 /*
  * The light BFF's server actions - the browser's ajax calls in the customer's pattern
  * ("Next.js SPA --ajax--> server action --token exchange--> Journey API"). They run only on the
  * server: the browser never sees a token. Next.js accepts a server action only from this app's
  * own origin (its built-in CSRF check), and every action re-reads the session. Each exchange asks
- * for the narrowest scope: read, or write for a simulator change.
+ * for the narrowest scope: read, or write for a simulator or fault-route change.
  */
 
 export async function loadPlatformHealth(): Promise<ActionResult<PlatformHealth>> {
@@ -25,6 +27,16 @@ export async function loadSimulators(): Promise<ActionResult<SimulatorState[]>> 
 export async function changeSimulator(key: string, behaviour: Behaviour): Promise<ActionResult<SimulatorState[]>> {
   if (!/^[a-z-]{1,40}$/.test(key) || !BEHAVIOURS.includes(behaviour)) return { ok: false, error: 'Unknown simulator or behaviour.' };
   return callJourney<SimulatorState[]>('operations-journey.write', 'PUT', `/v1/journeys/operations/simulators/${key}/behaviour`, { behaviour });
+}
+
+export async function loadFaultRoutes(): Promise<ActionResult<FaultRoute[]>> {
+  return callJourney<FaultRoute[]>('operations-journey.read', 'GET', '/v1/journeys/operations/fault-routes');
+}
+
+export async function changeFaultRoute(key: string, state: RouteState): Promise<ActionResult<FaultRoute[]>> {
+  // SEC: only a route-shaped key and a known state go into the path and the body.
+  if (!/^[a-z-]{1,40}$/.test(key) || !ROUTE_STATES.includes(state)) return { ok: false, error: 'Unknown route or state.' };
+  return callJourney<FaultRoute[]>('operations-journey.write', 'PUT', `/v1/journeys/operations/fault-routes/${key}/state`, { state });
 }
 
 // ┌─ :: ARCHITECTURE + SECURITY :: Server actions: two hops, no token in the browser ──────────────
@@ -90,7 +102,7 @@ async function callJourney<T>(
       const problem = (await response.json().catch(() => null)) as { detail?: string } | null;
       return { ok: false, error: problem?.detail ?? 'The request was refused.' };
     }
-    if (response.status === 404) return { ok: false, error: 'Not available in this environment.' };
+    if (response.status === 404) return { ok: false, notAvailable: true, error: 'Not available in this environment.' };
     if (response.status === 429) return { ok: false, error: 'Too many requests. Wait a minute, then try again.' };
     if (response.status === 503) {
       const problem = (await response.json().catch(() => null)) as { detail?: string } | null;

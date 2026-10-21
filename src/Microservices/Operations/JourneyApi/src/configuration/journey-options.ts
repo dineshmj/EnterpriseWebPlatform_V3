@@ -3,7 +3,7 @@
  * development values). Fail closed: a missing or misspelt value stops the start-up, and outside
  * Development the security settings must be explicitly safe (see assertSafeOutsideDevelopment).
  */
-export type DeploymentEnvironment = 'Development' | 'Test' | 'Production';
+export type DeploymentEnvironment = 'Development' | 'Test' | 'UAT' | 'Production';
 
 export interface JourneyOptions {
   /** Where this instance runs; no default - an unset environment is never taken for Development. */
@@ -25,6 +25,17 @@ export interface JourneyOptions {
   simulatorControlsEnabled: boolean;
   /** A changed behaviour goes back to Healthy by itself after this many minutes. */
   simulatorAutoRevertMinutes: number;
+
+  /**
+   * The fault proxy's routes (cut / slow / hang an API for its server-side callers). ON only in
+   * Development, Test and UAT: elsewhere the API refuses to start with it on (and production has
+   * no proxy at all - its callers use direct addresses).
+   */
+  faultControlsEnabled: boolean;
+  /** The fault proxy's admin API: plain http on this machine only (it has no authentication). */
+  faultProxyAdminUrl: string;
+  /** A cut, slow or hanging route opens again by itself after this many minutes. */
+  faultAutoRevertMinutes: number;
 
   /** Step-up for a simulator change: a recent MFA sign-in (keep equal to the IDP's Mfa:Enabled); required outside Development. */
   mfaEnabled: boolean;
@@ -70,6 +81,24 @@ function flag(name: string): boolean {
   return oneOf(name, ['true', 'false'] as const) === 'true';
 }
 
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ The fault proxy's admin API is unauthenticated: only a loopback address is accepted,
+// │ so a setting can never point this API at a proxy on another machine.
+// └──────────────────────────────────────────────────────────────────────────────────────
+function loopbackUrl(name: string): string {
+  const value = required(name).replace(/\/$/, '');
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`Configuration ${name} is not a URL; the Operations Journey API refuses to start.`);
+  }
+  if (url.protocol !== 'http:' || !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) || url.pathname !== '/') {
+    throw new Error(`Configuration ${name} must be http://127.0.0.1:<port> (this machine only); the Operations Journey API refuses to start.`);
+  }
+  return value;
+}
+
 function minutes(name: string): number {
   const value = Number(required(name));
   if (!Number.isInteger(value) || value < 1 || value > 60) {
@@ -80,14 +109,17 @@ function minutes(name: string): number {
 
 /**
  * Outside Development the privileged actions keep their protections whatever the deployment
- * forgot: MFA step-up must be on (keep the IDP's Mfa:Enabled on too), and the simulators' switch
- * exists only in Development and Test.
+ * forgot: MFA step-up must be on (keep the IDP's Mfa:Enabled on too), the simulators' switch
+ * exists only in Development and Test, and the fault controls only in Development, Test and UAT.
  */
 export function assertSafeOutsideDevelopment(options: JourneyOptions): void {
   // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
-  // │ Outside Development, MFA must be on and the simulator switch off (Test may keep it) -
-  // │ otherwise refuse to start.
+  // │ Outside Development, MFA must be on and the simulator switch off (Test may keep it);
+  // │ the fault controls exist only in Development, Test and UAT - otherwise refuse to start.
   // └──────────────────────────────────────────────────────────────────────────────────────
+  if (options.faultControlsEnabled && !['Development', 'Test', 'UAT'].includes(options.environment)) {
+    throw new Error(`OPERATIONS_FAULT_CONTROLS_ENABLED must be false in ${options.environment}; the Operations Journey API refuses to start.`);
+  }
   if (options.environment === 'Development') return;
   if (!options.mfaEnabled) {
     throw new Error(`OPERATIONS_MFA_ENABLED must be true in ${options.environment}; the Operations Journey API refuses to start.`);
@@ -99,7 +131,7 @@ export function assertSafeOutsideDevelopment(options: JourneyOptions): void {
 
 export function loadOptions(): JourneyOptions {
   const options: JourneyOptions = {
-    environment: oneOf('OPERATIONS_JOURNEY_ENVIRONMENT', ['Development', 'Test', 'Production'] as const),
+    environment: oneOf('OPERATIONS_JOURNEY_ENVIRONMENT', ['Development', 'Test', 'UAT', 'Production'] as const),
     port: Number(process.env.OPERATIONS_JOURNEY_PORT ?? '46382'),
     publicOrigin: required('OPERATIONS_JOURNEY_PUBLIC_ORIGIN'),
     authority: required('OPERATIONS_JOURNEY_IDP_AUTHORITY').replace(/\/$/, ''),
@@ -107,6 +139,10 @@ export function loadOptions(): JourneyOptions {
     callerClientId: required('OPERATIONS_JOURNEY_CALLER_CLIENT_ID'),
     simulatorControlsEnabled: flag('OPERATIONS_SIMULATOR_CONTROLS_ENABLED'),
     simulatorAutoRevertMinutes: minutes('OPERATIONS_SIMULATOR_AUTO_REVERT_MINUTES'),
+    faultControlsEnabled: flag('OPERATIONS_FAULT_CONTROLS_ENABLED'),
+    // Read only when the controls are on: an environment without the proxy needs no address.
+    faultProxyAdminUrl: '',
+    faultAutoRevertMinutes: 15,
     mfaEnabled: flag('OPERATIONS_MFA_ENABLED'),
     mfaMaxAgeMinutes: minutes('OPERATIONS_MFA_MAX_AGE_MINUTES'),
     clientId: required('OPERATIONS_JOURNEY_CLIENT_ID'),
@@ -117,6 +153,10 @@ export function loadOptions(): JourneyOptions {
     tlsPfxPath: required('OPERATIONS_JOURNEY_TLS_PFX_PATH'),
     tlsPfxPassword: required('OPERATIONS_JOURNEY_TLS_PFX_PASSWORD'),
   };
+  if (options.faultControlsEnabled) {
+    options.faultProxyAdminUrl = loopbackUrl('OPERATIONS_FAULT_PROXY_ADMIN_URL');
+    options.faultAutoRevertMinutes = minutes('OPERATIONS_FAULT_AUTO_REVERT_MINUTES');
+  }
   assertSafeOutsideDevelopment(options);
   return options;
 }

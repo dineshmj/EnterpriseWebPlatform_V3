@@ -77,8 +77,11 @@ What the platform is, how it is designed and what each component must do are doc
 			.\ps\temporal\Start-Temporal.ps1      (its own window; workflows kept in %LOCALAPPDATA%\EWP\temporal)
 	   then:
 			.\ps\run\Start-NodeServices.ps1
-	   It opens the KYC BFF, the Audit Journey API and the Audit web app in their own windows (each builds on its
-	   first run).
+	   It first starts the fault proxy (Toxiproxy, its own window): in Development every server-to-server call to an
+	   API goes through it, so without it the BFFs, Journey APIs and subscribers cannot reach their APIs. Install it
+	   once: .\ps\toxiproxy\Start-Toxiproxy.ps1 -Install (v2.12.0, SHA-256 checked). Then it opens the
+	   Node.js services in their own windows (each builds on its first run). daniel.ops can cut an API's route on
+	   Operations -> Simulator & Fault Controls.
 
 	9. Browse to https://shell.dev.localhost:46367 and sign in. The demo users, their roles and the password convention
 	   are in src\IDP\doc\IDP-Requirements.md (section 6). A quick smoke test:
@@ -183,6 +186,7 @@ Operations Journey API (NestJS)	https://operations-journey.dev.localhost:46382  
 		Partner Products API			https://partner-products-api.dev.localhost:46387   (EWP's side of the Partner Bank's Digital Gold)
 		Partner Products Worker (Temporal)	https://localhost:46383/health   (Node.js; runs the purchase workflow)
 		Temporal (development server)		localhost:7233, UI http://localhost:8233   (temporal server start-dev)
+		Fault proxy (Toxiproxy)			admin http://127.0.0.1:8474, routes 127.0.0.1:47101 ... 47111   (ps\toxiproxy\toxiproxy.json)
 		Kafka UI						http://localhost:8080   (optional)
 
 		Workers (health and metrics only): http://localhost:5101 ... 5109 - see section 9a.
@@ -400,7 +404,7 @@ Operations Journey API (NestJS)	https://operations-journey.dev.localhost:46382  
 			$pns = 'https://localhost:46386/admin/behaviour'
 			Invoke-RestMethod $pns -Method Put -ContentType 'application/json' -Body '{"behaviour":"Refusing"}'   # or Down / Failing / Slow / LosingAnswers / Healthy
 
-		daniel.ops can switch the simulators on Operations -> Platform Health instead (Development / Test only; a change goes
+		daniel.ops can switch the simulators on Operations -> Simulator & Fault Controls instead (Development / Test only; a change goes
 		back to Healthy by itself after 15 minutes).
 
 		An UNKNOWN outcome (reconciliation): switch the Payment Network to LosingAnswers and pay $100. The network sends the

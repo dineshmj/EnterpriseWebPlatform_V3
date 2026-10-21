@@ -35,11 +35,13 @@ REM Must equal ClientIds:PartnerProductsJourneyApi in src\IDP\appsettings.json (
 set "PARTNER_PRODUCTS_JOURNEY_CLIENT_ID=PartnerProducts.JourneyApi.ClientID"
 set "PARTNER_PRODUCTS_JOURNEY_CLIENT_SECRET=c13649b2-6a6e-41a3-b7f7-6cd20e5e0dec"
 
-set "PARTNER_PRODUCTS_API_BASE_URL=https://partner-products-api.dev.localhost:46387"
-set "CUSTOMER_ONBOARDING_API_BASE_URL=https://customer-api.dev.localhost:46363"
-set "ACCOUNTS_API_BASE_URL=https://accounts-api.dev.localhost:48486"
-set "DOCUMENTS_MANAGEMENT_API_BASE_URL=https://documents-management-api.dev.localhost:49486"
-set "PAYMENTS_API_BASE_URL=https://payments-api.dev.localhost:44488"
+REM Development: the API addresses below go through the fault proxy (ps\toxiproxy\toxiproxy.json,
+REM ports 47101-47111) so operations can cut them; elsewhere use each API's own address.
+set "PARTNER_PRODUCTS_API_BASE_URL=https://partner-products-api.dev.localhost:47109"
+set "CUSTOMER_ONBOARDING_API_BASE_URL=https://customer-api.dev.localhost:47101"
+set "ACCOUNTS_API_BASE_URL=https://accounts-api.dev.localhost:47105"
+set "DOCUMENTS_MANAGEMENT_API_BASE_URL=https://documents-management-api.dev.localhost:47103"
+set "PAYMENTS_API_BASE_URL=https://payments-api.dev.localhost:47106"
 
 REM +- ARCH -------------------------------------------------------------------------------
 REM | Temporal (development server: ps\temporal\Start-Temporal.ps1; UI http://localhost:8233):

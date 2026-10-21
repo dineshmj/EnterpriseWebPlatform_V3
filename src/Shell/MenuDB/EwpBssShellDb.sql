@@ -467,6 +467,16 @@ VALUES
                 WHERE name = 'Operations'))
     ),
     (
+        'Simulator & Fault Controls',
+        '/v1/operations/platform/fault-controls',
+        'fa-flask',
+        (SELECT id FROM management_areas
+         WHERE name = 'Platform'
+           AND microservice_id =
+               (SELECT id FROM microservices
+                WHERE name = 'Operations'))
+    ),
+    (
         'Digital Gold',
         '/v1/partner-products/digital-gold/view-all',
         'fa-coins',
@@ -683,8 +693,7 @@ CROSS JOIN
 ) AS r(role_short_name)
 WHERE mi.task_name = 'Audit Trail';
 
--- Platform Health: the operations administrator (service.health.view; the simulators' switch,
--- Development only, also needs simulator.behaviour.manage).
+-- Platform Health: the operations administrator (service.health.view; read-only, every environment).
 INSERT INTO menu_items_and_roles (menu_item_id, role_short_name)
 SELECT mi.id, r.role_short_name
 FROM menu_items mi
@@ -694,6 +703,22 @@ CROSS JOIN
         ('operations_administrator')
 ) AS r(role_short_name)
 WHERE mi.task_name = 'Platform Health';
+
+-- ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+-- │ Simulator & Fault Controls: the operations administrator. A menu entry is shown by role,
+-- │ not by environment: outside Development and test the Operations Journey API answers 404
+-- │ and the page says the controls do not exist there. A change also needs
+-- │ simulator.behaviour.manage and, with MFA on, a recent authenticator code.
+-- └──────────────────────────────────────────────────────────────────────────────────────
+INSERT INTO menu_items_and_roles (menu_item_id, role_short_name)
+SELECT mi.id, r.role_short_name
+FROM menu_items mi
+CROSS JOIN
+(
+    VALUES
+        ('operations_administrator')
+) AS r(role_short_name)
+WHERE mi.task_name = 'Simulator & Fault Controls';
 
 -- Digital Gold: customer service agents at the counter (partner.gold.view / partner.gold.order).
 INSERT INTO menu_items_and_roles (menu_item_id, role_short_name)

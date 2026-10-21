@@ -41,7 +41,8 @@ playwright\
     10-seed\           demo records after a database re-create (Camilla Parker, Jason Millers, payments)
     20-functional\     one screen or feature at a time (authentication, onboarding, kyc, ...)
     30-journeys\       several people end to end (agent → KYC → Compliance → Accounts; maker → checker)
-    35-resilience\     the journeys while a simulated external system refuses, is down or is slow
+    35-resilience\     the journeys while a simulated external system refuses, is down or is slow,
+                       or one of the platform's own APIs is cut / hung at the fault proxy
     40-security\       headers, session, csrf, authorization, browser, input, rate-limiting, mfa
   support\
     personas.ts        the demo users, their roles and the menu each role must see
@@ -83,6 +84,7 @@ With MFA on, the other tests stop at the code page - switch it off again for the
 ### Journeys, resilience and security - what they need
 
 - The simulators are switched through their loopback-only `PUT /admin/behaviour` (Down, Refusing, LosingAnswers, a forced screening outcome); every resilience spec sets them back to Healthy afterwards. No console window is ever closed.
+- The platform's own APIs are cut or hung at the fault proxy (Toxiproxy, started by `Start-NodeServices.ps1`) as `daniel.ops` on **Simulator & Fault Controls** - the real page, Journey API and permission. `withRoute()` (`support/fault-routes.ts`) always opens the route again, and `35-resilience/platform` opens every route before and after the file (Toxiproxy's own reset, loopback only). Restart Visual Studio after pulling: the timing relies on the Development settings (the saga's 10-second reply timer, the subscribers' 10-second retry ceiling).
 - `35-resilience` is slow on purpose: retries back off for real, and the four-eyes reconciliation tests wait out the "unconfirmed by the network" alert (2 minutes in Development) - allow about an hour for the project.
 - The reconciliation tests need a second operator: `platform.admin` (signs in with `EWP_PASSWORD_DEFAULT` unless `.env` names its own password).
 - `30-journeys/partner-products` (Digital Gold) needs the Partner Bank (`Start-PartnerBank.ps1 -Lan` on the PC, hosts entries for `*.ewp.home.arpa`), Temporal (`ps\temporal\Start-Temporal.ps1`) and the Partner Products Worker. Without the Partner Bank the file is skipped, not failed. Each run onboards a NEW customer: the Partner Bank opens one account per customer and keeps it across EWP database re-creates. The payment-refused test switches the payment network simulator to Refusing and back.

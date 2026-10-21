@@ -36,8 +36,10 @@ REM Must equal ClientIds:PartnerProductsWorker in src\IDP\appsettings.json (wher
 set "PARTNER_PRODUCTS_WORKER_CLIENT_ID=PartnerProducts.Worker.M2M.ClientID"
 set "PARTNER_PRODUCTS_WORKER_CLIENT_SECRET=e6b2c9d4-3f71-4a85-9c0e-81d5a7f3b246"
 
-set "PARTNER_PRODUCTS_API_BASE_URL=https://partner-products-api.dev.localhost:46387"
-set "PAYMENTS_API_BASE_URL=https://payments-api.dev.localhost:44488"
+REM Development: the API addresses below go through the fault proxy (ps\toxiproxy\toxiproxy.json,
+REM ports 47101-47111) so operations can cut them; elsewhere use each API's own address.
+set "PARTNER_PRODUCTS_API_BASE_URL=https://partner-products-api.dev.localhost:47109"
+set "PAYMENTS_API_BASE_URL=https://payments-api.dev.localhost:47106"
 
 REM +- SEC --------------------------------------------------------------------------------
 REM | The payment-event listener reads payments.payment.events over TLS (SASL_SSL; the

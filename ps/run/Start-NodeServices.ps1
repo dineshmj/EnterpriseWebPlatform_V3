@@ -16,6 +16,9 @@
         Partner Products web (Next.js + BFF)  https://ewp-partner.dev.localhost:46384
         Partner Products Worker (Temporal)    health https://localhost:46383/health (needs Temporal on localhost:7233)
 
+    Before them (all services only) it starts the fault proxy, Toxiproxy (ps\toxiproxy\Start-Toxiproxy.ps1):
+    in Development every server-to-server call to an EWP API goes through it, every route open.
+
     Each web app is started after its Journey API is listening (it calls it).
     To DEBUG one of them: close its window (or Ctrl+C), then run it from VS Code - see ReadMe.txt
     section 6c. The others keep running.
@@ -25,7 +28,7 @@
     .\ps\run\Start-NodeServices.ps1 -Only Audit        # only the two Audit services
     .\ps\run\Start-NodeServices.ps1 -Only Operations   # only the two Operations services
     .\ps\run\Start-NodeServices.ps1 -Only PartnerProducts   # only the three Partner Products services
-    .\ps\run\Start-NodeServices.ps1 -Stop              # stop all eight (the processes listening on their ports)
+    .\ps\run\Start-NodeServices.ps1 -Stop              # stop all eight and the fault proxy (the processes listening on their ports)
 #>
 param(
     [ValidateSet('All', 'Kyc', 'Audit', 'Operations', 'PartnerProducts')]
@@ -57,7 +60,17 @@ function Get-Listener([int] $port) {
     Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
 }
 
+# The fault proxy's admin port (ps\toxiproxy\toxiproxy.json holds its routes, 47101-47111).
+$faultProxyPort = 8474
+
 if ($Stop) {
+    if ($Only -eq 'All') {
+        $listener = Get-Listener $faultProxyPort
+        if ($listener) {
+            Stop-Process -Id $listener.OwningProcess -Force
+            Write-Host "Stopped the fault proxy (port $faultProxyPort)." -ForegroundColor Yellow
+        }
+    }
     foreach ($s in $services) {
         $listener = Get-Listener $s.Port
         if ($listener) {
@@ -76,6 +89,15 @@ if (($services.Group -contains 'Audit' -or $services.Group -contains 'Operations
     Write-Host '  dotnet dev-certs https -ep "$env:USERPROFILE\.aspnet\https\ewp-v3-dev.pfx" -p "dev-password"'
     Write-Host '  dotnet dev-certs https -ep "$env:USERPROFILE\.aspnet\https\ewp-v3-dev.pem" --format Pem --no-password'
     exit 1
+}
+
+# ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+# │ The fault proxy first: in Development the callers' settings point at its routes, so
+# │ without it every server-to-server call fails. It only passes bytes on until
+# │ daniel.ops cuts a route (Operations > Simulator & Fault Controls).
+# └──────────────────────────────────────────────────────────────────────────────────────
+if ($Only -eq 'All') {
+    & (Join-Path $root 'ps\toxiproxy\Start-Toxiproxy.ps1')
 }
 
 foreach ($s in $services) {

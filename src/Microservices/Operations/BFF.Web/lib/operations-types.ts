@@ -7,6 +7,8 @@ export interface ComponentHealth {
   group: string;
   status: HealthStatus;
   responseMs: number | null;
+  /** Its callers' route at the fault proxy, when it is not Open (the probe itself goes direct). */
+  atProxy: RouteState | null;
 }
 
 export interface PlatformHealth {
@@ -14,6 +16,22 @@ export interface PlatformHealth {
   components: ComponentHealth[];
   /** The simulators' switch exists here (Development and test only). */
   simulatorControls: boolean;
+  /** The fault proxy's routes exist here (Development, test and UAT only). */
+  faultControls: boolean;
+}
+
+export const ROUTE_STATES = ['Open', 'Slow', 'Hanging', 'Cut'] as const;
+export type RouteState = (typeof ROUTE_STATES)[number];
+
+/** One API's route at the fault proxy: every server-side caller of that API goes through it. */
+export interface FaultRoute {
+  key: string;
+  name: string;
+  usedBy: string;
+  state: RouteState | 'Unknown';
+  states: RouteState[];
+  revertsAt: string | null;
+  changedBy: string | null;
 }
 
 export const BEHAVIOURS = ['Healthy', 'Slow', 'Failing', 'Down', 'Refusing', 'LosingAnswers'] as const;
@@ -55,4 +73,4 @@ export interface ContextParkedMessages {
 
 export type ActionResult<T> =
   | { ok: true; data: T }
-  | { ok: false; error: string; signedOut?: boolean; stepUp?: boolean };
+  | { ok: false; error: string; signedOut?: boolean; stepUp?: boolean; notAvailable?: boolean };

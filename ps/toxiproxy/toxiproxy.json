@@ -1,0 +1,13 @@
+[
+  { "name": "customer-onboarding-api",  "listen": "127.0.0.1:47101", "upstream": "127.0.0.1:46363", "enabled": true },
+  { "name": "customer-kyc-api",         "listen": "127.0.0.1:47102", "upstream": "127.0.0.1:46305", "enabled": true },
+  { "name": "documents-management-api", "listen": "127.0.0.1:47103", "upstream": "127.0.0.1:49486", "enabled": true },
+  { "name": "compliance-api",           "listen": "127.0.0.1:47104", "upstream": "127.0.0.1:46306", "enabled": true },
+  { "name": "accounts-api",             "listen": "127.0.0.1:47105", "upstream": "127.0.0.1:48486", "enabled": true },
+  { "name": "payments-api",             "listen": "127.0.0.1:47106", "upstream": "127.0.0.1:44488", "enabled": true },
+  { "name": "notifications-api",        "listen": "127.0.0.1:47107", "upstream": "127.0.0.1:46377", "enabled": true },
+  { "name": "audit-api",                "listen": "127.0.0.1:47108", "upstream": "127.0.0.1:46378", "enabled": true },
+  { "name": "partner-products-api",     "listen": "127.0.0.1:47109", "upstream": "127.0.0.1:46387", "enabled": true },
+  { "name": "audit-journey-api",        "listen": "127.0.0.1:47110", "upstream": "127.0.0.1:46379", "enabled": true },
+  { "name": "partner-products-journey-api", "listen": "127.0.0.1:47111", "upstream": "127.0.0.1:46385", "enabled": true }
+]

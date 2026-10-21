@@ -48,6 +48,8 @@ export const services: Service[] = [
   { name: 'Partner Products web', readiness: `${urls.partnerProductsMfe}/`, startedBy: node },
   // Ready only while it is connected to Temporal (ps\temporal\Start-Temporal.ps1).
   { name: 'Partner Products Worker', readiness: 'https://localhost:46383/health/ready', startedBy: node },
+  // In Development every server-to-server call to an API goes through it (ps\toxiproxy\Start-Toxiproxy.ps1).
+  { name: 'Fault proxy (Toxiproxy)', readiness: 'http://127.0.0.1:8474/version', startedBy: node },
   { name: 'CustomerOutboxPublisher', readiness: 'http://localhost:5101/health/ready', startedBy: vs },
   { name: 'KycCaseOpeningSubscriber', readiness: 'http://localhost:5102/health/ready', startedBy: vs },
   { name: 'OnboardingOutcomeSubscriber', readiness: 'http://localhost:5103/health/ready', startedBy: vs },

@@ -7,40 +7,36 @@ import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/app/components/ui/card';
 import { Table, Td, Th } from '@/app/components/ui/data';
 import { Alert, Badge } from '@/app/components/ui/feedback';
-import { Select } from '@/app/components/ui/form';
-import {
-  type Behaviour, type ComponentHealth, type HealthStatus, type PlatformHealth, type SimulatorState,
-} from '@/lib/operations-types';
-import { confirmWithAuthenticator, NOT_CONFIRMED } from '@/lib/step-up';
-import { changeSimulator, loadPlatformHealth, loadSimulators } from '../../actions';
+import { type ComponentHealth, type HealthStatus, type PlatformHealth, type RouteState, type SimulatorState } from '@/lib/operations-types';
+import { BEHAVIOUR_TONE } from '@/lib/simulator-display';
+import { loadPlatformHealth, loadSimulators } from '../../actions';
 import { ParkedMessagesCard } from './ParkedMessagesCard';
 
 const REFRESH_MS = 10_000;
+
+const AT_PROXY: Record<RouteState, string> = {
+  Open: '', Slow: 'Slowed at the proxy', Hanging: 'Hanging at the proxy', Cut: 'Cut at the proxy',
+};
 
 const TONE: Record<HealthStatus, 'success' | 'warning' | 'danger' | 'neutral'> = {
   Healthy: 'success', Degraded: 'warning', Unhealthy: 'danger', Unreachable: 'neutral',
 };
 
-const BEHAVIOUR_TONE: Record<Behaviour | 'Unknown', 'success' | 'warning' | 'danger' | 'neutral'> = {
-  Healthy: 'success', Slow: 'warning', Failing: 'danger', Down: 'danger', Refusing: 'warning', LosingAnswers: 'danger', Unknown: 'neutral',
-};
-
-const BEHAVIOUR_LABEL: Record<Behaviour, string> = {
-  Healthy: 'Healthy', Slow: 'Slow', Failing: 'Failing', Down: 'Down', Refusing: 'Refusing',
-  LosingAnswers: 'Losing answers (sends, never replies)',
-};
-
+// ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+// │ Read-only for the platform's behaviour: nothing on this page changes how a component or
+// │ dependency behaves (the switches are on Simulator & fault controls, Development and test
+// │ only). The one action kept here is the parked-message resend - recovery work that
+// │ production needs too, with its own reason, permission and step-up.
+// └──────────────────────────────────────────────────────────────────────────────────────
 /**
  * The operations administrator's view of the platform: every component's readiness (refreshed
- * every 10 seconds) and - in Development and test only - the simulators' behaviour switch, for
- * demonstrating how the platform copes when an external system misbehaves.
+ * every 10 seconds), in Development and test what the simulators are doing now (read-only), and
+ * the parked Outbox messages.
  */
 export default function PlatformHealthPage() {
   const [health, setHealth] = useState<PlatformHealth | null>(null);
   const [simulators, setSimulators] = useState<SimulatorState[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [simulatorError, setSimulatorError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const result = await loadPlatformHealth();
@@ -62,26 +58,6 @@ export default function PlatformHealthPage() {
     const timer = window.setInterval(() => void refresh(), REFRESH_MS);
     return () => window.clearInterval(timer);
   }, [refresh]);
-
-  const change = async (simulator: SimulatorState, behaviour: Behaviour) => {
-    setBusy(simulator.key);
-    setSimulatorError(null);
-    let result = await changeSimulator(simulator.key, behaviour);
-    // A change needs a recent authenticator code: confirm it in a small window, then once more.
-    if (!result.ok && result.stepUp) {
-      try {
-        result = await confirmWithAuthenticator()
-          ? await changeSimulator(simulator.key, behaviour)
-          : { ok: false, error: NOT_CONFIRMED };
-      } catch (e) {
-        result = { ok: false, error: e instanceof Error ? e.message : NOT_CONFIRMED };
-      }
-    }
-    setBusy(null);
-    if (result.ok) { setSimulators(result.data); void refresh(); return; }
-    if (result.signedOut) { signInAgain(); return; }
-    setSimulatorError(result.error);
-  };
 
   const groups = health ? [...new Set(health.components.map((c) => c.group))] : [];
   const counts = health ? countBy(health.components) : null;
@@ -122,7 +98,13 @@ export default function PlatformHealthPage() {
                     {health.components.filter((c) => c.group === group).map((component) => (
                       <tr key={component.name}>
                         <Td className="font-medium">{component.name}</Td>
-                        <Td><Badge tone={TONE[component.status]} dot>{component.status}</Badge></Td>
+                        <Td>
+                          <span className="flex flex-wrap items-center gap-2">
+                            <Badge tone={TONE[component.status]} dot>{component.status}</Badge>
+                            {/* The probe goes direct; this says its callers cannot reach it (Simulator & Fault Controls). */}
+                            {component.atProxy && <Badge tone={component.atProxy === 'Slow' ? 'warning' : 'danger'}>{AT_PROXY[component.atProxy]}</Badge>}
+                          </span>
+                        </Td>
                         <Td className="text-right font-mono text-[13px] text-ink-muted">
                           {component.responseMs === null ? '—' : `${component.responseMs} ms`}
                         </Td>
@@ -140,15 +122,14 @@ export default function PlatformHealthPage() {
             <CardHeader
               icon={<FlaskConical />}
               title="Simulated external systems"
-              description="Development and test only. Switch a simulator to see how the platform copes; every change is recorded with your LAN ID and goes back to Healthy by itself after 15 minutes."
+              description="Development and test only. What each simulator is doing now; switch them on Simulator & fault controls."
             />
-            <CardContent className="space-y-4">
-              {simulatorError && <Alert tone="danger">{simulatorError}</Alert>}
+            <CardContent>
               {!simulators && <p className="text-sm text-ink-muted">Reading the simulators…</p>}
               {simulators && (
                 <Table aria-label="Simulators">
                   <thead>
-                    <tr><Th>Simulator</Th><Th>Used for</Th><Th>Now</Th><Th>Switch to</Th><Th>Back to Healthy</Th></tr>
+                    <tr><Th>Simulator</Th><Th>Used for</Th><Th>Now</Th><Th>Back to Healthy</Th></tr>
                   </thead>
                   <tbody>
                     {simulators.map((simulator) => (
@@ -156,17 +137,6 @@ export default function PlatformHealthPage() {
                         <Td className="font-medium">{simulator.name}</Td>
                         <Td className="text-ink-muted">{simulator.affects}</Td>
                         <Td><Badge tone={BEHAVIOUR_TONE[simulator.behaviour]} dot>{simulator.behaviour}</Badge></Td>
-                        <Td>
-                          <Select
-                            aria-label={`Behaviour of ${simulator.name}`}
-                            value={simulator.behaviour === 'Unknown' ? '' : simulator.behaviour}
-                            disabled={busy !== null || simulator.behaviour === 'Unknown'}
-                            onChange={(event) => void change(simulator, event.target.value as Behaviour)}
-                          >
-                            {simulator.behaviour === 'Unknown' && <option value="">Not answering</option>}
-                            {simulator.behaviours.map((b) => <option key={b} value={b}>{BEHAVIOUR_LABEL[b]}</option>)}
-                          </Select>
-                        </Td>
                         <Td className="text-ink-muted">
                           {simulator.revertsAt ? `${formatTime(simulator.revertsAt)} (set by ${simulator.changedBy})` : '—'}
                         </Td>
