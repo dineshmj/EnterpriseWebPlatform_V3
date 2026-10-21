@@ -1,8 +1,10 @@
-# EWP V3 — Response to the AI architect reviews (rounds 1, 2 and 3; round 4 requested)
+# EWP V3 — Response to the AI architect reviews (rounds 1 to 4)
 
-Response date: 14-OCT-2026 (rounds 1–3). Round 4 requested: 21-OCT-2026.
+Response dates: 14-OCT-2026 (rounds 1–3) and 21-OCT-2026 (round 4).
 
-## Round 4 — start here (for the reviewers)
+## Round 4 — the brief given to the reviewers
+
+The answers to round 4 are in the section [Round 4 — 21-OCT-2026](#round-4--21-oct-2026) below.
 
 Round 4 covers **two repositories**:
 
@@ -111,7 +113,7 @@ The answers will follow in this document under "Round 4".
 
 ## In short
 
-Three AI architects (Microsoft, Google and xAI) reviewed EWP V3 three times. This document answers every finding of all three rounds, with the outcome and the commit or code that backs it.
+Three AI architects (Microsoft, Google and xAI) reviewed EWP V3 four times. This document answers every finding of all four rounds, with the outcome and the commit or code that backs it.
 
 - **Round 1 (received 12-OCT-2026).**
   - The Microsoft and xAI findings were concrete. Microsoft's included real defects: a stale saga reply could be accepted, and payment initiation trusted the screen's branch filter.
@@ -124,39 +126,43 @@ Three AI architects (Microsoft, Google and xAI) reviewed EWP V3 three times. Thi
   - All three confirmed the earlier fixes in code; none found a checklist `[x]` item that is false.
   - Microsoft and xAI found the same one new issue: rate limits are counted per instance. That is now a recorded production requirement (R-14).
   - Google's code claims were checked one by one. One was right: the subscribers' internal endpoints were exempt from rate limiting. That is fixed. Another was partly right (two simultaneous deliveries of one Payments reply); that is fixed too. The rest are rejected with evidence.
+- **Round 4 (21-OCT-2026), across both repositories (EWP V3 and the Partner Bank).**
+  - None of the three reviewers raised a finding. Each confirmed that the three Partner Bank interaction patterns match their stated purposes, and that the residual risks are as documented.
+  - Their claims were checked against the code; the files and lines they cite exist and say what they report.
+  - Microsoft added advice on what would take the scores to 9 or above: proving that the controls hold when things fail. Its suggestions are mapped below to the planned work.
 
 ### The review files
 
-| Reviewer | Round 1 — 12-OCT-2026 | Round 2 — 13-OCT-2026 | Round 3 — 14-OCT-2026 |
-| --- | --- | --- | --- |
-| Microsoft | `2026-10-12-One-Microsoft-Way-Architect-Verdict.md` | `2026-10-13-One-Microsoft-Way-Architect-Verdict.md` | `2026-10-14-One-Microsoft-Way-Architect-Verdict.md` |
-| Google | `2026-10-12-1600-Amphitheater-Architect-Verdict.md` | `2026-10-13-1600-Amphitheater-Architect-Verdict.md` | `2026-10-14-1600-Amphitheater-Architect-Verdict.md` |
-| xAI | `2026-10-12-Bastrop-Texas-Architect-Verdict.md` | `2026-10-13-Bastrop-Texas-Architect-Verdict.md` | `2026-10-14-Bastrop-Texas-Architect-Verdict.md` |
+| Reviewer | Round 1 — 12-OCT-2026 | Round 2 — 13-OCT-2026 | Round 3 — 14-OCT-2026 | Round 4 — 21-OCT-2026 |
+| --- | --- | --- | --- | --- |
+| Microsoft | `2026-10-12-One-Microsoft-Way-Architect-Verdict.md` | `2026-10-13-One-Microsoft-Way-Architect-Verdict.md` | `2026-10-14-One-Microsoft-Way-Architect-Verdict.md` | `2026-10-21-One-Microsoft-Way-Architect-Verdict.md` |
+| Google | `2026-10-12-1600-Amphitheater-Architect-Verdict.md` | `2026-10-13-1600-Amphitheater-Architect-Verdict.md` | `2026-10-14-1600-Amphitheater-Architect-Verdict.md` | `2026-10-21-1600-Amphitheater-Architect-Verdict.md` |
+| xAI | `2026-10-12-Bastrop-Texas-Architect-Verdict.md` | `2026-10-13-Bastrop-Texas-Architect-Verdict.md` | `2026-10-14-Bastrop-Texas-Architect-Verdict.md` | `2026-10-21-Bastrop-Texas-Architect-Verdict.md` |
 
-All nine files are kept exactly as received; only their names carry the date. Round 1 is dated by the day it was received and added to the repository (`bf49510`); Microsoft's own text dates its review 10-OCT-2026.
+All twelve files are kept exactly as received; only their names carry the date. Round 1 is dated by the day it was received and added to the repository (`bf49510`); Microsoft's own text dates its review 10-OCT-2026.
 
 The earliest review, `2026-10-02-Claude-Architect-Review.md` (Claude, 02-OCT-2026, on the code before `7a4e4b8`), is the "previous review" that xAI's round 1 refers to. It is not answered again here: it carries its own remediation table, and xAI's round 1 confirmed its fixes (Outbox relay, Documents Management authorization, stored XSS, secrets in shared libraries, refresh-token reuse, `at+jwt`).
 
-### Ratings over the three rounds
+### Ratings over the four rounds
 
-| Reviewer | Round 1: Architecture | Round 1: Security | Round 2: Architecture | Round 2: Security | Round 3: Architecture | Round 3: Security |
-| --- | --- | --- | --- | --- | --- | --- |
-| Microsoft | 8 | 6.5 (production readiness 5.5) | 8.5 | 7.5 | 8.5 | **8** |
-| xAI | not scored ("one of the stronger architectural PoCs") | not scored | 8.5 | 8.5 | **8.7** | 8.5 |
-| Google | not scored | not scored | 7 | 7 | **8.5** | **8** |
+| Reviewer | Round 1: Arch. | Round 1: Sec. | Round 2: Arch. | Round 2: Sec. | Round 3: Arch. | Round 3: Sec. | Round 4: Arch. | Round 4: Sec. |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Microsoft | 8 | 6.5 (production readiness 5.5) | 8.5 | 7.5 | 8.5 | 8 | **8.7** | **8.5** |
+| xAI | not scored ("one of the stronger architectural PoCs") | not scored | 8.5 | 8.5 | 8.7 | 8.5 | **9.0** | **8.8** |
+| Google | not scored | not scored | 7 | 7 | 8.5 | 8 | **9** | **9** |
 
 ### Outcomes
 
-| Outcome | Round 1 | Round 2 | Round 3 | Total |
-| --- | --- | --- | --- | --- |
-| Fixed after the review | 19 | 9 | 2 | 30 |
-| Already in place at the review (shown with evidence) | 3 | 1 | — | 4 |
-| Production requirement (cannot be closed in a PoC; recorded in `doc/Threat-Model.md` §7) | 8 | 3 | 4 | 15 |
-| Partly accepted | 3 | 2 | 1 | 6 |
-| Accepted as a deliberate design or PoC choice | 3 | — | — | 3 |
-| Clarified (the control existed; the review could not see its settings) | 1 | — | — | 1 |
-| Rejected with evidence | 7 | 5 | 4 | 16 |
-| **Findings answered** | **44** | **20** | **11** | **75** |
+| Outcome | Round 1 | Round 2 | Round 3 | Round 4 | Total |
+| --- | --- | --- | --- | --- | --- |
+| Fixed after the review | 19 | 9 | 2 | — | 30 |
+| Already in place at the review (shown with evidence) | 3 | 1 | — | — | 4 |
+| Production requirement (cannot be closed in a PoC; recorded in `doc/Threat-Model.md` §7) | 8 | 3 | 4 | — | 15 |
+| Partly accepted | 3 | 2 | 1 | — | 6 |
+| Accepted as a deliberate design or PoC choice | 3 | — | — | — | 3 |
+| Clarified (the control existed; the review could not see its settings) | 1 | — | — | — | 1 |
+| Rejected with evidence | 7 | 5 | 4 | — | 16 |
+| **Findings answered** | **44** | **20** | **11** | **0** | **75** |
 
 None of the findings needs further work in the PoC. The open items are the production requirements collected at the end of this document.
 
@@ -511,9 +517,62 @@ Google's second, "nice-to-have" list is not counted as findings. Most of it desc
 
 ---
 
+## Round 4 — 21-OCT-2026
+
+Review baseline: EWP V3 at `749b4ddf` (after B8 and A4) and the Partner Bank repository, both as of 21-OCT-2026. The reviewers were given the brief at the top of this document. In particular, they were asked not to raise items already recorded as known, accepted, planned or production requirements unless the code contradicts the documents.
+
+**No reviewer raised a finding.** What each one reported as sound was checked against the code:
+
+### Microsoft (round 4)
+
+No new Critical, High or Medium defect. Microsoft calls this "a qualified result": it is a source-level review, with no protocol journeys run and no penetration test.
+
+| Reported as sound | Checked |
+| --- | --- |
+| Pattern B: the signed-instruction validator pins the signing key, algorithm, `typ`, issuer, audience, lifetime and instruction ID | Partner Bank `src/PartnerBank.Api/Distribution/SignedInstructions.cs`. Each instruction is done once (`GoldDesk.cs`). An account opening is keyed on `InstructionId`, with a unique index in `PartnerDbContext.cs`. A purchase is keyed on `AuthorizationRef` (the instruction ID). The same instruction again returns the same account or order. |
+| Pattern C: the one-time staff-view handoff | `StaffViews.cs`: a replayed instruction is refused (`usedInstructions.TryAdd`), the reference is random with a 60-second life, and redemption removes it atomically. |
+| The workflow trusts the Payments API, not the signal | `workflows.ts`: the signal handler only sets a flag. Each pass re-reads the payment by its Idempotency-Key and allocates only on `COMPLETED`. |
+| Worker Kafka client: SASL_SSL, SCRAM-SHA-512, host-name check; only payments to the settlement account wake a workflow | `payment-events.ts`. |
+
+### xAI (round 4)
+
+No finding that meets the bar. The 9.0 / 8.8 scores lose points only for items already accepted (R-16 Temporal hardening; Partner Bank R1–R10).
+
+| Reported as sound | Checked |
+| --- | --- |
+| Pattern B end to end: ES256 `partner-instruction+jwt`, `aud partner-api`, 5 minutes, stable `jti`; server certificate checked against the PoC root only | `PartnerBankClient.cs` (signing, cached bound token); Partner Bank `SignedInstructions.cs`, `GoldDesk.cs`. |
+| One ending per purchase; the signal carries no authority; 400 / 403 / 409 are not retried; the worker identity is pinned on internal endpoints | `workflows.ts`, `activities.ts` (`ApplicationFailure.nonRetryable`), `GoldPurchase.cs` (`MarkPaid`, `EnsureCancellable`), `DigitalGoldPolicies.cs`. |
+| B8: every .NET Kafka client goes through `KafkaClientSecurity.Apply` (fails closed, host-name check); the Node worker does the same | `KafkaClientSecurity.cs`, `payment-events.ts`. |
+
+One wording correction: xAI writes "jti once-only on both sides". It is once-only on the **Partner Bank's** side. EWP keeps the `jti` stable, so that a resend is recognised there as the same instruction.
+
+### Google (round 4)
+
+No finding; 9 / 9. The files it names exist (`TrustedBackchannel.cs`, `ClientCertificates.cs`, `PortGuard.cs`, `SecurityHeaders.cs`, `DistributionApi.cs`, `ExternalApi.cs`, `GoldApi.cs`). However, it gives no line-level evidence. "Patterns A, B and C cleanly implemented" also overstates EWP's side: EWP does not use pattern A yet (A7 + B1). This verdict therefore carries less weight than the other two.
+
+### What it takes to reach 9 or above (Microsoft's advice)
+
+Microsoft recommends no new patterns. Instead, it asks for **evidence that the controls hold when things fail**: an assurance suite of negative and failure-injection tests across service boundaries. Most of it maps onto work that was already planned:
+
+| Microsoft's suggestion | Response | Planned as |
+| --- | --- | --- |
+| Temporal worker stops mid-activity; duplicate or late events; Kafka down | Agreed. The controls exist (data-less signal, 5-minute fallback, idempotent activities); the failure runs have not been done. | Deviation runs: Kafka down, worker restart while ORDERED, a repeated `paymentSettled`, GoldAccountLinked, a parked Partner Products Outbox. Scripted into Playwright `35-resilience` where the UI can reach them. |
+| The same payment command delivered repeatedly; a stale saga reply | Agreed. Fixed in round 1 (R5, R8); the API-level tests are still to be written. | Playwright `40-security`: same Idempotency-Key with other details → 409; out-of-branch account → refused. |
+| Token exchange by an unregistered client; staff member reaching another branch's customer | Agreed. | `40-security`: exchange by a client not on the allow-list; worker endpoints with a user token or another client; out-of-branch records. |
+| Partner Bank patterns B and C tested separately | Agreed. | WireMock adapter tests (C1): refusal, time-out, lost answer and resend with the same `jti`. Partner Bank repository: replayed instruction, staff-view reference redeemed twice. |
+| An altered audit entry or checkpoint is detected | Agreed. The control exists (R-3); the tamper test was deferred. | Tamper test: change an entry and delete a checkpoint, then expect Audit health Unhealthy. |
+| Payment outcome unknown → funds not released without authoritative evidence | **Already in place:** the network status enquiry and the four-eyes reconciliation (`9b6efbf`, `276ce97`). The workflow re-reads the payment instead of trusting the event. | Covered by the deviation runs; no new control. |
+| Every non-final state has a detection mechanism and an owner | Agreed for Partner Products. Onboarding (age alerts) and Payments (unconfirmed-saga alert) already have one. | A health check for purchases left ORDERED too long, and a resend tool for parked Partner Products Outbox messages. |
+| Threat-model-to-test traceability | Agreed: cheap, and it makes the evidence visible. | A "Verified by" column in Threat-Model §7 and the abuse cases. |
+| Prove the EWP → Partner Bank PAR / JAR / PKCE flow and the resulting customer identity | **Aimed at the wrong pattern for today.** EWP has no customer channel yet. Pattern A is exercised on the Partner Bank side by `tools/HandshakeCheck` and `tools/JourneyCheck`. | Definition of done for A7 + B1, not a gap in the current PoC. |
+| Deployment-wide rate limits | Already a production requirement (R-14, item 10 below). Rate limits per instance backed by a shared store would be throwaway work in a PoC. | D-series gateway. |
+| Production keys and immutable checkpoints under independent control; production-like configuration check; independent penetration test | Correct for production, and not something a PoC can close. | Items 1, 2 and 17 below; the D-series cloud demo is the production-like environment. |
+
+---
+
 ## What remains for a production go-ahead
 
-These are the production requirements from all three rounds. Each is recorded in `doc/Threat-Model.md` §7 or in the component READMEs.
+These are the production requirements from all four rounds. Each is recorded in `doc/Threat-Model.md` §7 or in the component READMEs.
 
 **Keys, secrets and evidence**
 
@@ -549,3 +608,4 @@ These are the production requirements from all three rounds. Each is recorded in
     - authorization-matrix tests;
     - CSRF and token-exchange abuse tests;
     - .NET unit tests for the payment and saga invariants.
+17. An independent penetration test of the trust boundaries and the financial workflows, and a check of the production configuration in a production-like environment (Microsoft, round 4).
