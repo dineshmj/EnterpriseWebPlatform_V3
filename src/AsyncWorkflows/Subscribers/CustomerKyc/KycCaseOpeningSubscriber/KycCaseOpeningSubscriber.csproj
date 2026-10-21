@@ -18,6 +18,5 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\Infrastructure\Kafka\EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka.csproj" />
     <ProjectReference Include="..\..\..\Infrastructure\Subscribers\EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Subscribers.csproj" />
-    <ProjectReference Include="..\..\..\..\Common\Landscape\EnterpriseWebPlatform.Common.Landscape.csproj" />
   </ItemGroup>
 </Project>

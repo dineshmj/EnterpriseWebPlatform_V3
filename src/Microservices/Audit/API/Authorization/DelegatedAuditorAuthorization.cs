@@ -3,8 +3,8 @@ using System.Text.Json;
 
 using Microsoft.AspNetCore.Authorization;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
+
 
 namespace EnterpriseWebPlatform.Audit.Api.Authorization;
 
@@ -27,14 +27,14 @@ public sealed record DelegatedAuditorRequirement(string Permission) : IAuthoriza
 // │       acting client (act) and the permission of the action.
 // │ Ref : Features 2.1.2, 2.2.2 | RFC 8693 (act) | OWASP API5 BFLA
 // └────────────────────────────────────────────────────────────────────────────────────────────────
-public sealed class DelegatedAuditorAuthorizationHandler : AuthorizationHandler<DelegatedAuditorRequirement>
+public sealed class DelegatedAuditorAuthorizationHandler(ClientIds clientIds) : AuthorizationHandler<DelegatedAuditorRequirement>
 {
     protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, DelegatedAuditorRequirement requirement)
     {
         var user = context.User;
         if (user.FindFirstValue("sub") is not null &&
-            HasScope(user, AuditApiScopesRequired.AUDIT_READ) &&
-            ActingClientOf(user) == AuditMicroservice.CLIENT_ID_FOR_IDP_FOR_AUDIT_JOURNEY_API &&
+            HasScope(user, "audit.read") &&
+            ActingClientOf(user) == clientIds.AuditJourneyApi &&
             user.HasClaim("permission", requirement.Permission))
         {
             context.Succeed(requirement);

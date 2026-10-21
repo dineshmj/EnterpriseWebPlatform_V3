@@ -1,8 +1,7 @@
 using Duende.IdentityServer;
 using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.IdentityServer.Security;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.MFEs;
@@ -18,9 +17,9 @@ public sealed class MfeAccounts
                 // Accounts Microservice Client (BFF using ASP.NET Core 10)
                 new()
                 {
-                    ClientId = AccountsMicroservice.CLIENT_ID_FOR_IDP,
-                    ClientName = AccountsMicroservice.CLIENT_NAME_FOR_IDP,
-                    ClientSecrets = { ClientSecretStore.For(AccountsMicroservice.CLIENT_ID_FOR_IDP) },
+                    ClientId = ClientSettings.Ids.AccountsWeb,
+                    ClientName = "Accounts Microservice BFF Client",
+                    ClientSecrets = { ClientSecretStore.For(ClientSettings.Ids.AccountsWeb) },
 
                     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
                     // │ Authorization Code (+ PKCE) for a confidential BFF: tokens are issued to the server,
@@ -30,12 +29,12 @@ public sealed class MfeAccounts
 
                     RequirePkce = true,
 
-                    RedirectUris = { $"{AccountsMicroservice.BFF_CLIENT_BASE_URL}/signin-oidc" },
-                    PostLogoutRedirectUris = { $"{AccountsMicroservice.BFF_CLIENT_BASE_URL}/signout-callback-oidc" },
-                    FrontChannelLogoutUri = $"{AccountsMicroservice.BFF_CLIENT_BASE_URL}/signout-oidc",
+                    RedirectUris = { $"{ClientSettings.BaseUrlOf(nameof(ClientIds.AccountsWeb))}/signin-oidc" },
+                    PostLogoutRedirectUris = { $"{ClientSettings.BaseUrlOf(nameof(ClientIds.AccountsWeb))}/signout-callback-oidc" },
+                    FrontChannelLogoutUri = $"{ClientSettings.BaseUrlOf(nameof(ClientIds.AccountsWeb))}/signout-oidc",
                     // Back-channel logout (server-to-server; Duende BFF endpoint): ends the
                     // server-side session even when the browser blocks the front-channel iframe.
-                    BackChannelLogoutUri = $"{AccountsMicroservice.BFF_CLIENT_BASE_URL}/bff/backchannel",
+                    BackChannelLogoutUri = $"{ClientSettings.BaseUrlOf(nameof(ClientIds.AccountsWeb))}/bff/backchannel",
                     BackChannelLogoutSessionRequired = true,
 
                     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
@@ -51,8 +50,8 @@ public sealed class MfeAccounts
                         IdentityServerConstants.StandardScopes.Email,
                         "roles",
                         "organization",
-                        AccountsApiScopesRequired.ACCOUNTS_READ,
-                        AccountsApiScopesRequired.ACCOUNTS_WRITE
+                        "accounts.read",
+                        "accounts.write"
                     },
 
                     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────

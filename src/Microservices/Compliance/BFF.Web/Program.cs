@@ -12,10 +12,8 @@ using Duende.Bff.EntityFramework;
 using Duende.Bff;
 using OpenTelemetry.Trace;
 
-using EnterpriseWebPlatform.Common.Landscape;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 using EnterpriseWebPlatform.Common.Observability;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.Compliance.Bff.Web.Configuration;
 
@@ -42,11 +40,22 @@ JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 var builder = WebApplication.CreateBuilder(args);
 
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ The IDP, this BFF's client ID and the Shell's origin (the only page that may frame it)
+// │ come from configuration only - nothing compiled in; missing or not https = no start-up.
+// └──────────────────────────────────────────────────────────────────────────────────────
+var oidcAuthority = RequiredSetting.HttpsUrl(builder.Configuration["Oidc:Authority"], "Oidc:Authority");
+var oidcClientId = RequiredSetting.Text(builder.Configuration["Oidc:ClientId"], "Oidc:ClientId");
+var shellOrigin = RequiredSetting.HttpsUrl(builder.Configuration["ShellOrigin"], "ShellOrigin");
+
 // Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
 // over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
 builder.AddEwpObservability("compliance-bff", tracing => tracing.AddAspNetCoreInstrumentation());
 
-builder.Services.Configure<ComplianceBffOptions>(builder.Configuration.GetSection(ComplianceBffOptions.SectionName));
+builder.Services.AddOptions<ComplianceBffOptions>()
+    .Bind(builder.Configuration.GetSection(ComplianceBffOptions.SectionName))
+    .Validate(o => RequiredSetting.IsHttpsUrl(o.ComplianceApiBaseUrl), $"{ComplianceBffOptions.SectionName}:ComplianceApiBaseUrl must be an absolute https address.")
+    .ValidateOnStart();
 
 builder.Services.AddHttpContextAccessor();
 // With views: [ValidateAntiForgeryToken] needs the MVC view-features services.
@@ -100,7 +109,7 @@ builder.Services
     })
     .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
     {
-        options.Cookie.Name = CookieNames.MICROSERVICE_COMPLIANCE_HOST_BFF;
+        options.Cookie.Name = "__Host-Microservice-Compliance-bff";
         options.Cookie.Path = "/";
         // Lax: never sent on cross-site sub-requests (second CSRF defence besides the
         // anti-forgery header). The Shell, this MFE and the IDP are one site, so the
@@ -120,8 +129,8 @@ builder.Services
     })
     .AddOpenIdConnect("oidc", options =>
     {
-        options.Authority = IDP.AUTHORITY;
-        options.ClientId = ComplianceMicroservice.CLIENT_ID_FOR_IDP;
+        options.Authority = oidcAuthority;
+        options.ClientId = oidcClientId;
 
         // Front-channel logout (/signout-oidc) must clear THIS BFF's session cookie.
         options.SignOutScheme = CookieAuthenticationDefaults.AuthenticationScheme;
@@ -157,8 +166,8 @@ builder.Services
         options.Scope.Add("roles");
         options.Scope.Add("organization");
         options.Scope.Add("offline_access");
-        options.Scope.Add(ComplianceApiScopesRequired.COMPLIANCE_READ);
-        options.Scope.Add(ComplianceApiScopesRequired.COMPLIANCE_WRITE);
+        options.Scope.Add("compliance.read");
+        options.Scope.Add("compliance.write");
         options.ClaimActions.MapJsonKey("role", "role", "role");
         // Display hints for the MFE (the API decides from the access token).
         options.ClaimActions.MapJsonKey("branch", "branch");
@@ -258,8 +267,7 @@ app.UseHttpsRedirection();
 // IDP (which loads /signout-oidc in a hidden iframe for front-channel logout).
 // Full CSP: scripts limited to 'self' + the hashed inline scripts of the export
 // (computed at start-up: restart this BFF after re-exporting the MFE).
-var shellOrigin = builder.Configuration["ShellOrigin"] ?? BSSShellBFF.SHELL_BFF_CLIENT_BASE_URL;
-var idpOrigin = ContentSecurityPolicy.Origin(IDP.AUTHORITY);
+var idpOrigin = ContentSecurityPolicy.Origin(oidcAuthority);
 var csp = ContentSecurityPolicy.Build(
     app.Environment.WebRootPath,
     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────

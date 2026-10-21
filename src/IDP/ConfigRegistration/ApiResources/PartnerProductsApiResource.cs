@@ -1,7 +1,5 @@
 using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.ApiResources;
 
@@ -14,10 +12,10 @@ public sealed class PartnerProductsApiResource : IDuendeApiResource
 {
     public static ApiResource ApiResource =>
         new(
-                MicroserviceApiResourceNames.PARTNER_PRODUCTS_API,
+                "partner-products-api",
                 "Partner Products API")
         {
-            Scopes = { PartnerProductsApiScopesRequired.PARTNER_PRODUCTS_READ, PartnerProductsApiScopesRequired.PARTNER_PRODUCTS_WRITE },
+            Scopes = { "partner-products.read", "partner-products.write" },
             // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
             // │ Exactly what the Domain API decides on: the permission (view / order), the branch
             // │ (every record and list is branch-scoped) and the LAN ID it records as the actor.
@@ -27,10 +25,10 @@ public sealed class PartnerProductsApiResource : IDuendeApiResource
 
     public static ApiResource JourneyApiResource =>
         new(
-                MicroserviceApiResourceNames.PARTNER_PRODUCTS_JOURNEY_API,
+                "partner-products-journey-api",
                 "Partner Products Journey API")
         {
-            Scopes = { PartnerProductsApiScopesRequired.PARTNER_PRODUCTS_JOURNEY_READ, PartnerProductsApiScopesRequired.PARTNER_PRODUCTS_JOURNEY_WRITE },
+            Scopes = { "partner-products-journey.read", "partner-products-journey.write" },
             UserClaims = { "role", "permission", "lan_id", "branch" }
         };
 }

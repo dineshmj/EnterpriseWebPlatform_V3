@@ -23,8 +23,10 @@ echo [2/3] Configuring (DEVELOPMENT values only)...
 
 set "PARTNER_PRODUCTS_WEB_PORT=46384"
 set "PARTNER_PRODUCTS_WEB_PUBLIC_ORIGIN=https://ewp-partner.dev.localhost:46384"
+REM Must equal ClientBaseUrls:Shell in src\IDP\appsettings.json and ShellOrigin in the Shell.
 set "PARTNER_PRODUCTS_WEB_SHELL_ORIGIN=https://shell.dev.localhost:46367"
 set "PARTNER_PRODUCTS_WEB_IDP_AUTHORITY=https://idp.dev.localhost:46392"
+REM Must equal ClientIds:PartnerProductsWeb in src\IDP\appsettings.json (where the IDP registers that client).
 set "PARTNER_PRODUCTS_WEB_CLIENT_ID=PartnerProducts.Microservice.Web.ClientID"
 set "PARTNER_PRODUCTS_WEB_CLIENT_SECRET=b98a234e-733a-4b09-a379-932af220853e"
 REM Encrypts the tokens in the session table (32 random bytes, base64). Changing it signs everybody out.

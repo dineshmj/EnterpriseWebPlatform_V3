@@ -85,6 +85,8 @@ try
     // │ of failing at the first sign-in.
     // └──────────────────────────────────────────────────────────────────────────────────────
     ClientSecretStore.Initialize(builder.Configuration);
+    // Client IDs and the web clients' addresses (redirect URIs) - configuration, not code.
+    ClientSettings.Initialize(builder.Configuration);
     var clients = Config.GetClients(builder.Environment.IsDevelopment()).ToList();
 
     builder.Services

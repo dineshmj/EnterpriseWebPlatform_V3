@@ -1,6 +1,5 @@
 ﻿using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.MicroserviceApiScopes;
 
@@ -8,7 +7,7 @@ public sealed class PaymentsApiScope : IDuendeMicroserviceApiScope
 {
     public static ApiScope Read =>
         new(
-                PaymentsApiScopesRequired.PAYMENTS_READ,
+                "payments.read",
                 "Payments API - Read")
         {
             UserClaims = { "role", "name", "email" }
@@ -16,7 +15,7 @@ public sealed class PaymentsApiScope : IDuendeMicroserviceApiScope
 
     public static ApiScope Write =>
         new(
-                PaymentsApiScopesRequired.PAYMENTS_WRITE,
+                "payments.write",
                 "Payments API - Write")
         {
             UserClaims = { "role", "name", "email" }

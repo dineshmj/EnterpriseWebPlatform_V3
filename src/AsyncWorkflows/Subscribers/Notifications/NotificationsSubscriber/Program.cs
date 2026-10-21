@@ -23,7 +23,8 @@ builder.AddEwpObservability("notifications-subscriber");
 
 // The shared reliable consume loop (commit after processing, retry in place, dead-letter).
 builder.Services.AddKafkaSubscriber<NotificationsProcessor, NotificationsSubscriberOptions>(
-    builder.Configuration, NotificationsSubscriberOptions.SectionName);
+    builder.Configuration, NotificationsSubscriberOptions.SectionName)
+    .Validate(s => ServiceAddress.IsHttps(s.NotificationsApiBaseUrl), $"{NotificationsSubscriberOptions.SectionName}:NotificationsApiBaseUrl must be an absolute https address.");
 
 // The worker's own machine identity; the token is cached until shortly before expiry.
 builder.Services

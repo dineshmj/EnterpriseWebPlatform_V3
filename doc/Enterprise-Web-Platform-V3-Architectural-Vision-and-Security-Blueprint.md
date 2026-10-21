@@ -252,8 +252,8 @@ An MFE and its BFF are one deployable: the MFE is a static export served by its 
 1. **Workers belong to a context.** A relay or subscriber is deployed and versioned with the context whose database or API it uses. `src/AsyncWorkflows` is a folder, not a shared layer. EWP V3 deliberately shows two relay styles: a separate worker (Customer Onboarding) and an in-process hosted service (KYC).
 2. **Shared code is technical only.** Allowed: technical libraries (`AsyncWorkflows.Infrastructure.Kafka`, `Common.WebUtilities`) and versioned integration contracts. Forbidden: domain types, DbContexts, business rules. Consumers may keep their own tolerant-reader models instead of a shared contract package (as the KYC Case Opening Subscriber does).
 3. **Configuration and secrets are per deployable.** A deployable receives only its own URLs, client IDs and secrets, from its environment or a secret store.
-   - **Done:** client secrets were removed from `Common.Landscape`; each deployable reads its own from configuration and refuses to start without them.
-   - **Gap:** `Common.Landscape` still compiles every component's URLs and client IDs into every component, so changing one forces a rebuild of the others.
+   - **Done:** client secrets, service URLs and client IDs come from each deployable's own configuration, checked at start-up; the shared `Common.Landscape` library was removed (A4). The IDP is the source of truth: its `ClientIds` and `ClientBaseUrls` settings, and its scope and resource registrations. Each component repeats the values it uses, and each setting says which IDP entry it must equal.
+   - **Trade-off:** scope, audience and cookie names are now literals in each component instead of shared constants. A rename at the IDP must be repeated where the name is used (search the repository), the price of not rebuilding every component for one change.
 4. **Contracts evolve compatibly.** Event changes are additive within a version, and consumers tolerate unknown fields and older shapes (see the [Event Catalogue §2](Integration-Event-Catalogue.md#2-conventions)).
 5. **Release checklist** for any component:
    - It builds and its tests pass in isolation.
@@ -422,7 +422,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 |---|---|
 | Bounded contexts, database per context | Present |
 | DDD tactical model | Present (aggregates, value objects, domain events and invariants in CO, KYC, Compliance, Accounts, Payments, Notifications and DM) |
-| Independent deployability | Partial (secrets now per deployable; service URLs still compiled into `Common.Landscape`) |
+| Independent deployability | Present (secrets, service URLs and client IDs per deployable; no shared constants library) |
 | Next.js MFEs, Shell composition, Shell BFF, MFE BFFs (.NET and NestJS) | Present |
 | Application Workspace, opaque context exchange, navigation protocol | Present |
 | Duende IdentityServer 8, OIDC, Authorization Code + PKCE | Present |

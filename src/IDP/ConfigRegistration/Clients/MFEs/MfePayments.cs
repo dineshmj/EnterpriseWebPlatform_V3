@@ -1,8 +1,7 @@
 using Duende.IdentityServer;
 using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.IdentityServer.Security;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.MFEs;
@@ -18,9 +17,9 @@ public sealed class MfePayments
                 // Payments Microservice Client (BFF using ASP.NET Core 10)
                 new()
                 {
-                    ClientId = PaymentsMicroservice.CLIENT_ID_FOR_IDP,
-                    ClientName = PaymentsMicroservice.CLIENT_NAME_FOR_IDP,
-                    ClientSecrets = { ClientSecretStore.For(PaymentsMicroservice.CLIENT_ID_FOR_IDP) },
+                    ClientId = ClientSettings.Ids.PaymentsWeb,
+                    ClientName = "Payments Microservice BFF Client",
+                    ClientSecrets = { ClientSecretStore.For(ClientSettings.Ids.PaymentsWeb) },
 
                     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
                     // │ Authorization Code (+ PKCE) for a confidential BFF: tokens are issued to the server,
@@ -30,12 +29,12 @@ public sealed class MfePayments
 
                     RequirePkce = true,
 
-                    RedirectUris = { $"{PaymentsMicroservice.BFF_CLIENT_BASE_URL}/signin-oidc" },
-                    PostLogoutRedirectUris = { $"{PaymentsMicroservice.BFF_CLIENT_BASE_URL}/signout-callback-oidc" },
-                    FrontChannelLogoutUri = $"{PaymentsMicroservice.BFF_CLIENT_BASE_URL}/signout-oidc",
+                    RedirectUris = { $"{ClientSettings.BaseUrlOf(nameof(ClientIds.PaymentsWeb))}/signin-oidc" },
+                    PostLogoutRedirectUris = { $"{ClientSettings.BaseUrlOf(nameof(ClientIds.PaymentsWeb))}/signout-callback-oidc" },
+                    FrontChannelLogoutUri = $"{ClientSettings.BaseUrlOf(nameof(ClientIds.PaymentsWeb))}/signout-oidc",
                     // Back-channel logout (server-to-server; Duende BFF endpoint): ends the
                     // server-side session even when the browser blocks the front-channel iframe.
-                    BackChannelLogoutUri = $"{PaymentsMicroservice.BFF_CLIENT_BASE_URL}/bff/backchannel",
+                    BackChannelLogoutUri = $"{ClientSettings.BaseUrlOf(nameof(ClientIds.PaymentsWeb))}/bff/backchannel",
                     BackChannelLogoutSessionRequired = true,
 
                     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
@@ -51,12 +50,12 @@ public sealed class MfePayments
                         IdentityServerConstants.StandardScopes.Email,
                         "roles",
                         "organization",
-                        PaymentsApiScopesRequired.PAYMENTS_READ,
-                        PaymentsApiScopesRequired.PAYMENTS_WRITE,
+                        "payments.read",
+                        "payments.write",
 
                         // The payment screen finds the customer's paying accounts (and what is
                         // available) in Accounts, with the staff member's own token - read only.
-                        AccountsApiScopesRequired.ACCOUNTS_READ
+                        "accounts.read"
                     },
 
                     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────

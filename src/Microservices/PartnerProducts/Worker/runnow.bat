@@ -32,6 +32,7 @@ REM | pin its client ID accept it. The secret below is a DEVELOPMENT value; else
 REM | comes from the environment or a secret store (Threat-Model R-10).
 REM +--------------------------------------------------------------------------------------
 set "PARTNER_PRODUCTS_WORKER_IDP_AUTHORITY=https://idp.dev.localhost:46392"
+REM Must equal ClientIds:PartnerProductsWorker in src\IDP\appsettings.json (where the IDP registers that client).
 set "PARTNER_PRODUCTS_WORKER_CLIENT_ID=PartnerProducts.Worker.M2M.ClientID"
 set "PARTNER_PRODUCTS_WORKER_CLIENT_SECRET=e6b2c9d4-3f71-4a85-9c0e-81d5a7f3b246"
 

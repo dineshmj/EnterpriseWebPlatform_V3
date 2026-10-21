@@ -16,9 +16,8 @@ using EnterpriseWebPlatform.Accounts.Api.Infrastructure.CoreBanking;
 using EnterpriseWebPlatform.Accounts.Api.Infrastructure.Messaging;
 using EnterpriseWebPlatform.Accounts.Api.Infrastructure.Persistence;
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 using EnterpriseWebPlatform.Common.Observability;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 
 // ┌─ :: ARCHITECTURE + SECURITY :: Accounts API: a resource server ────────────────────────────────
@@ -31,6 +30,14 @@ using EnterpriseWebPlatform.Common.WebUtilities.Security;
 // │       OWASP API1 / API5 | Authorization-Model 4
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 var builder = WebApplication.CreateBuilder(args);
+
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ The client IDs this API pins in its authorization rules, from its own configuration
+// │ (section ClientIds; each must equal the IDP's ClientIds entry). Read now: a missing one
+// │ stops the start-up - a pin is never empty.
+// └──────────────────────────────────────────────────────────────────────────────────────
+var clientIds = ClientIds.From(builder.Configuration).Require(nameof(ClientIds.AccountApplicationOpeningSubscriber), nameof(ClientIds.AccountsCommandSubscriber), nameof(ClientIds.OperationsJourneyApi));
+builder.Services.AddSingleton(clientIds);
 
 // Distributed tracing: W3C trace context across HTTP and Kafka (OTLP export when configured).
 builder.AddEwpObservability("accounts-api", tracing => tracing.AddAspNetCoreInstrumentation().AddNpgsql());
@@ -84,9 +91,9 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("AccountApplicationOpeningSubscriberWrite", policy =>
     {
         policy.RequireAuthenticatedUser();
-        policy.RequireClaim("scope", AccountsApiScopesRequired.ACCOUNTS_WRITE);
+        policy.RequireClaim("scope", "accounts.write");
         policy.RequireClaim("client_id",
-            AccountsMicroservice.CLIENT_ID_FOR_IDP_FOR_ACCOUNT_APPLICATION_OPENING_SUBSCRIBER_TO_ACCOUNTS_API_M2M);
+            clientIds.AccountApplicationOpeningSubscriber);
     });
 
     // The command courier's pinned machine identity: only it may apply funds commands
@@ -94,9 +101,9 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("AccountsCommandSubscriberWrite", policy =>
     {
         policy.RequireAuthenticatedUser();
-        policy.RequireClaim("scope", AccountsApiScopesRequired.ACCOUNTS_WRITE);
+        policy.RequireClaim("scope", "accounts.write");
         policy.RequireClaim("client_id",
-            AccountsMicroservice.CLIENT_ID_FOR_IDP_FOR_ACCOUNTS_COMMAND_SUBSCRIBER_TO_ACCOUNTS_API_M2M);
+            clientIds.AccountsCommandSubscriber);
     });
 
     // Officer policies: scope for the kind of operation + role, department, clearance
@@ -111,16 +118,16 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("AccountsOutboxView", policy =>
     {
         policy.RequireAuthenticatedUser();
-        policy.RequireClaim("scope", AccountsApiScopesRequired.ACCOUNTS_READ);
+        policy.RequireClaim("scope", "accounts.read");
         policy.RequireClaim("permission", "outbox.view");
-        policy.RequireDelegationBy(OperationsMicroservice.CLIENT_ID_FOR_IDP_FOR_OPERATIONS_JOURNEY_API);
+        policy.RequireDelegationBy(clientIds.OperationsJourneyApi);
     });
     options.AddPolicy("AccountsOutboxResend", policy =>
     {
         policy.RequireAuthenticatedUser();
-        policy.RequireClaim("scope", AccountsApiScopesRequired.ACCOUNTS_WRITE);
+        policy.RequireClaim("scope", "accounts.write");
         policy.RequireClaim("permission", "workflow.reprocess");
-        policy.RequireDelegationBy(OperationsMicroservice.CLIENT_ID_FOR_IDP_FOR_OPERATIONS_JOURNEY_API);
+        policy.RequireDelegationBy(clientIds.OperationsJourneyApi);
         policy.RequireMfa();
     });
 
@@ -136,19 +143,19 @@ builder.Services.AddAuthorization(options =>
                 policy.RequireMfa();
         });
 
-    AddOfficerPolicy("AccountApplicationView", AccountsApiScopesRequired.ACCOUNTS_READ, "account.application.view");
-    AddOfficerPolicy("AccountApplicationReview", AccountsApiScopesRequired.ACCOUNTS_WRITE, "account.application.review");
-    AddOfficerPolicy("AccountApplicationApprove", AccountsApiScopesRequired.ACCOUNTS_WRITE, "account.application.approve");
-    AddOfficerPolicy("AccountApplicationReject", AccountsApiScopesRequired.ACCOUNTS_WRITE, "account.application.reject");
-    AddOfficerPolicy("AccountApplicationHold", AccountsApiScopesRequired.ACCOUNTS_WRITE, "account.application.hold");
-    AddOfficerPolicy("AccountView", AccountsApiScopesRequired.ACCOUNTS_READ, "account.lifecycle.view");
+    AddOfficerPolicy("AccountApplicationView", "accounts.read", "account.application.view");
+    AddOfficerPolicy("AccountApplicationReview", "accounts.write", "account.application.review");
+    AddOfficerPolicy("AccountApplicationApprove", "accounts.write", "account.application.approve");
+    AddOfficerPolicy("AccountApplicationReject", "accounts.write", "account.application.reject");
+    AddOfficerPolicy("AccountApplicationHold", "accounts.write", "account.application.hold");
+    AddOfficerPolicy("AccountView", "accounts.read", "account.lifecycle.view");
 
     // Assisted payment screen (Payments BFF, staff member's own token): find a customer's
     // accounts in the staff member's branch. The branch itself is checked by the endpoint.
     options.AddPolicy("PaymentAccountLookup", policy =>
     {
         policy.RequireAuthenticatedUser();
-        policy.RequireClaim("scope", AccountsApiScopesRequired.ACCOUNTS_READ);
+        policy.RequireClaim("scope", "accounts.read");
         policy.RequireClaim("permission", "payment.initiate");
         policy.RequireClaim("branch");
     });

@@ -1,4 +1,4 @@
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Messaging;
 
@@ -19,14 +19,13 @@ public sealed record WorkflowRequestContext(
 /// Reads the workflow metadata and the accountable human initiator of the current
 /// request. Kept out of the DbContext and the domain: it is transport (HTTP) detail.
 /// </summary>
-public sealed class WorkflowContextAccessor(IHttpContextAccessor httpContextAccessor)
+public sealed class WorkflowContextAccessor(IHttpContextAccessor httpContextAccessor, ClientIds clientIds)
 {
     /// <summary>
     /// The only M2M client that may state a human initiator (X-Initiated-By-User-Id):
-    /// the Onboarding Outcome Subscriber, which copies it from the KYC event.
+    /// the Onboarding Outcome Subscriber, which copies it from the KYC event (ClientIds configuration).
     /// </summary>
-    private static readonly string TrustedInitiatorAssertingClient =
-        CustomerOnboardingMicroservice.CLIENT_ID_FOR_IDP_FOR_ONBOARDING_OUTCOME_SUBSCRIBER_TO_CUST_ONBOARDING_API_M2M;
+    private readonly string TrustedInitiatorAssertingClient = clientIds.OnboardingOutcomeSubscriber;
 
     public WorkflowRequestContext GetRequestContext()
     {

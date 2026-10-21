@@ -10,8 +10,8 @@ namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Subscribers;
 // ┌─ :: ARCHITECTURE + SECURITY :: Fail-closed worker configuration ───────────────────────────────
 // │ Why : A worker that starts without its topics, dead-letter topic or client secret would run
 // │       "half working" and fail silently later - or worse, call an API unauthenticated.
-// │ How : Settings are validated at start-up (ValidateOnStart); a missing client secret, topic or
-// │       dead-letter topic stops the worker at once.
+// │ How : Settings are validated at start-up (ValidateOnStart); a missing client secret, client ID,
+// │       IDP or API address (https only), topic or dead-letter topic stops the worker at once.
 // │ Ref : Features 1.6.5 | OWASP A05 Security Misconfiguration | ASVS V14.1
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 public static class SubscriberServiceCollectionExtensions
@@ -63,6 +63,12 @@ public static class SubscriberServiceCollectionExtensions
         services
             .AddOptions<TSettings>()
             .Validate(s => !string.IsNullOrWhiteSpace(s.ClientSecret), $"{sectionName}:ClientSecret is not configured.")
+            // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+            // │ The IDP's address and the worker's client ID come from configuration only (no
+            // │ compiled-in default): missing, or an IDP address that is not https = no start-up.
+            // └──────────────────────────────────────────────────────────────────────────────────────
+            .Validate(s => !string.IsNullOrWhiteSpace(s.ClientId), $"{sectionName}:ClientId is not configured.")
+            .Validate(s => ServiceAddress.IsHttps(s.IdentityServerAuthority), $"{sectionName}:IdentityServerAuthority must be an absolute https address.")
             .ValidateOnStart();
 
         services.AddSingleton(sp => new CachedM2MTokenClient(

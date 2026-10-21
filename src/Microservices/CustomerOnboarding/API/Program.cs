@@ -9,9 +9,8 @@ using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using OpenTelemetry.Trace;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 using EnterpriseWebPlatform.Common.Observability;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.CustomerOnboarding.API.Authorization;
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Persistence;
@@ -29,6 +28,14 @@ using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence;
 // │       OWASP API1 / API5 | Authorization-Model 4
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 var builder = WebApplication.CreateBuilder(args);
+
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ The client IDs this API pins in its authorization rules, from its own configuration
+// │ (section ClientIds; each must equal the IDP's ClientIds entry). Read now: a missing one
+// │ stops the start-up - a pin is never empty.
+// └──────────────────────────────────────────────────────────────────────────────────────
+var clientIds = ClientIds.From(builder.Configuration).Require(nameof(ClientIds.OnboardingOutcomeSubscriber));
+builder.Services.AddSingleton(clientIds);
 
 // Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
 // over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
@@ -143,8 +150,8 @@ builder.Services.AddAuthorization(options =>
 
         policy.RequireClaim(
             "scope",
-            CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_READ,
-            CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_WRITE);
+            "customer-onboarding.read",
+            "customer-onboarding.write");
     });
 
     // Operation policies: the client must hold the scope for THIS kind of
@@ -160,7 +167,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("CustomerRead", policy =>
     {
         policy.RequireAuthenticatedUser();
-        policy.RequireClaim("scope", CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_READ);
+        policy.RequireClaim("scope", "customer-onboarding.read");
         policy.RequireRole(
             "customer_service_agent",
             "operations_administrator",
@@ -170,14 +177,14 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("CustomerWrite", policy =>
     {
         policy.RequireAuthenticatedUser();
-        policy.RequireClaim("scope", CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_WRITE);
+        policy.RequireClaim("scope", "customer-onboarding.write");
         policy.RequireRole("customer_service_agent");
     });
 
     options.AddPolicy("OnboardingRead", policy =>
     {
         policy.RequireAuthenticatedUser();
-        policy.RequireClaim("scope", CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_READ);
+        policy.RequireClaim("scope", "customer-onboarding.read");
         policy.RequireRole(
             "customer_service_agent",
             "operations_administrator",
@@ -187,7 +194,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("OnboardingWrite", policy =>
     {
         policy.RequireAuthenticatedUser();
-        policy.RequireClaim("scope", CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_WRITE);
+        policy.RequireClaim("scope", "customer-onboarding.write");
         policy.RequireRole("customer_service_agent");
     });
 
@@ -196,10 +203,10 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("OnboardingOutcomeSubscriberWrite", policy =>
     {
         policy.RequireAuthenticatedUser();
-        policy.RequireClaim("scope", CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_WRITE);
+        policy.RequireClaim("scope", "customer-onboarding.write");
         policy.RequireClaim(
             "client_id",
-            CustomerOnboardingMicroservice.CLIENT_ID_FOR_IDP_FOR_ONBOARDING_OUTCOME_SUBSCRIBER_TO_CUST_ONBOARDING_API_M2M);
+            clientIds.OnboardingOutcomeSubscriber);
     });
 });
 

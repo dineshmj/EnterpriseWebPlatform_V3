@@ -1,8 +1,7 @@
 ﻿using Duende.IdentityServer;
 using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.IdentityServer.Security;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients;
@@ -18,9 +17,9 @@ public sealed class BssClient
                 // Shell BFF Client (BFF using ASP.NET Core 10)
                 new()
                 {
-                    ClientId = BSSShellBFF.CLIENT_ID_FOR_IDP,
-                    ClientName = BSSShellBFF.CLIENT_NAME_FOR_IDP,
-                    ClientSecrets = { ClientSecretStore.For(BSSShellBFF.CLIENT_ID_FOR_IDP) },
+                    ClientId = ClientSettings.Ids.Shell,
+                    ClientName = "BSS Shell BFF Client",
+                    ClientSecrets = { ClientSecretStore.For(ClientSettings.Ids.Shell) },
 
                     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
                     // │ Authorization Code (+ PKCE) for a confidential BFF: tokens are issued to the server,
@@ -30,12 +29,12 @@ public sealed class BssClient
                     RequirePkce = true,
 
 
-                    RedirectUris = { $"{BSSShellBFF.SHELL_BFF_CLIENT_BASE_URL}/signin-oidc" },
-                    PostLogoutRedirectUris = { $"{BSSShellBFF.SHELL_BFF_CLIENT_BASE_URL}/signout-callback-oidc" },
-                    FrontChannelLogoutUri = $"{BSSShellBFF.SHELL_BFF_CLIENT_BASE_URL}/signout-oidc",
+                    RedirectUris = { $"{ClientSettings.BaseUrlOf(nameof(ClientIds.Shell))}/signin-oidc" },
+                    PostLogoutRedirectUris = { $"{ClientSettings.BaseUrlOf(nameof(ClientIds.Shell))}/signout-callback-oidc" },
+                    FrontChannelLogoutUri = $"{ClientSettings.BaseUrlOf(nameof(ClientIds.Shell))}/signout-oidc",
                     // Back-channel logout (server-to-server; Duende BFF endpoint): ends the
                     // server-side session even when the browser blocks the front-channel iframe.
-                    BackChannelLogoutUri = $"{BSSShellBFF.SHELL_BFF_CLIENT_BASE_URL}/bff/backchannel",
+                    BackChannelLogoutUri = $"{ClientSettings.BaseUrlOf(nameof(ClientIds.Shell))}/bff/backchannel",
                     BackChannelLogoutSessionRequired = true,
 
                     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
@@ -56,8 +55,8 @@ public sealed class BssClient
                         "organization",
 
                         // Notifications: the Shell shows the person's notifications (bell, live via SignalR).
-                        NotificationsApiScopesRequired.NOTIFICATIONS_READ,
-                        NotificationsApiScopesRequired.NOTIFICATIONS_WRITE
+                        "notifications.read",
+                        "notifications.write"
                     },
 
                     // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────

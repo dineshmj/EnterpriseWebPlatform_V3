@@ -6,6 +6,13 @@ using EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.M2M;
 using EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.MFEs;
 using EnterpriseWebPlatform.IdentityServer.ConfigRegistration.MicroserviceApiScopes;
 
+// ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+// │ The IDP is the source of truth for scope names (ConfigRegistration/MicroserviceApiScopes),
+// │ API resource names / audiences (ConfigRegistration/ApiResources) and client IDs
+// │ (appsettings.json ClientIds). No shared library carries them any more: each component
+// │ repeats the names it uses (scope checks, audiences, its own client ID), so a rename here
+// │ must be made there too - search the repository for the old name.
+// └──────────────────────────────────────────────────────────────────────────────────────
 public static class Config
 {
     public static IEnumerable<IdentityResource> IdentityResources =>

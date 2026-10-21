@@ -3,7 +3,7 @@ using System.Text.Json;
 
 using Microsoft.AspNetCore.Authorization;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.Payments.Api.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.Payments.Api.Authorization;
@@ -30,12 +30,12 @@ public sealed class PaymentsStaffRequirement(params string[] anyOfPermissions) :
     public IReadOnlyList<string> AnyOfPermissions { get; } = anyOfPermissions;
 }
 
-public sealed class PaymentsStaffAuthorizationHandler : AuthorizationHandler<PaymentsStaffRequirement>
+public sealed class PaymentsStaffAuthorizationHandler(ClientIds clientIds) : AuthorizationHandler<PaymentsStaffRequirement>
 {
     protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, PaymentsStaffRequirement requirement)
     {
         var user = context.User;
-        var permissions = EffectivePermissionsOf(user);
+        var permissions = EffectivePermissionsOf(user, clientIds.AuditJourneyApi);
 
         if (!requirement.AnyOfPermissions.Any(permissions.Contains) || BranchOf(user) is null)
             return Task.CompletedTask;
@@ -54,13 +54,14 @@ public sealed class PaymentsStaffAuthorizationHandler : AuthorizationHandler<Pay
     /// dropped otherwise - also for a person holding it next to another role, who must not gain
     /// the auditor's all-branches reach on the Payments screens.
     /// </summary>
-    public static IReadOnlySet<string> EffectivePermissionsOf(ClaimsPrincipal user)
+    /// <param name="auditJourneyApiClientId">The Audit Journey API's client ID (ClientIds configuration).</param>
+    public static IReadOnlySet<string> EffectivePermissionsOf(ClaimsPrincipal user, string auditJourneyApiClientId)
     {
         // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
         // │ The auditor's permission counts only through the Audit Journey API (token exchange) -
         // │ anywhere else it is dropped, even for a person who also holds another role.
         // └──────────────────────────────────────────────────────────────────────────────────────
-        var viaAuditContext = ActingClientOf(user) == AuditMicroservice.CLIENT_ID_FOR_IDP_FOR_AUDIT_JOURNEY_API;
+        var viaAuditContext = !string.IsNullOrEmpty(auditJourneyApiClientId) && ActingClientOf(user) == auditJourneyApiClientId;
         return user.Claims
             .Where(c => c.Type == "permission" && (viaAuditContext || c.Value != AuditReadPermission))
             .Select(c => c.Value)
@@ -95,9 +96,9 @@ public sealed class PaymentsStaffAuthorizationHandler : AuthorizationHandler<Pay
     /// The branch a read is limited to: none (all branches) for operations and auditors, the
     /// user's own branch for everyone else.
     /// </summary>
-    public static (bool Allowed, BranchCode? Branch) ReadScopeOf(ClaimsPrincipal user)
+    public static (bool Allowed, BranchCode? Branch) ReadScopeOf(ClaimsPrincipal user, string auditJourneyApiClientId)
     {
-        if (EffectivePermissionsOf(user).Overlaps(AllBranchesPermissions))
+        if (EffectivePermissionsOf(user, auditJourneyApiClientId).Overlaps(AllBranchesPermissions))
             return (true, null);
         var branch = BranchOf(user);
         return (branch is not null, branch);

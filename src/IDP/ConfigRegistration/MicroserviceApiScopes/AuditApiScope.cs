@@ -1,6 +1,5 @@
 using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.MicroserviceApiScopes;
 
@@ -10,7 +9,7 @@ public static class AuditApiScope
     /// <summary>The Audit Domain API, read-only (it has no write endpoint: entries come from Kafka).</summary>
     public static ApiScope Read =>
         new(
-                AuditApiScopesRequired.AUDIT_READ,
+                "audit.read",
                 "Audit API - Read")
         {
             UserClaims = { "role", "name" }
@@ -19,7 +18,7 @@ public static class AuditApiScope
     /// <summary>The Audit Journey API (the Next.js BFF calls it for the signed-in auditor).</summary>
     public static ApiScope JourneyRead =>
         new(
-                AuditApiScopesRequired.AUDIT_JOURNEY_READ,
+                "audit-journey.read",
                 "Audit Journey API - Read")
         {
             UserClaims = { "role", "name" }

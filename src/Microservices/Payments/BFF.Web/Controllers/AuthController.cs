@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 using Duende.AccessTokenManagement.OpenIdConnect;
 
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.Payments.Bff.Web.Configuration;
 
 namespace EnterpriseWebPlatform.Payments.Bff.Web.Controllers;
@@ -82,7 +83,7 @@ public sealed class AuthController : ControllerBase
     {
         if (host == "shell")
         {
-            var shellOrigin = configuration["ShellOrigin"] ?? EnterpriseWebPlatform.Common.Landscape.BSSShellBFF.SHELL_BFF_CLIENT_BASE_URL;
+            var shellOrigin = RequiredSetting.HttpsUrl(configuration["ShellOrigin"], "ShellOrigin");
             return Redirect($"{new Uri(shellOrigin).GetLeftPart(UriPartial.Authority)}/step-up-done.html");
         }
         return new ContentResult

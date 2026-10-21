@@ -1,7 +1,6 @@
 ﻿using Duende.IdentityServer;
 using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients;
 
@@ -41,25 +40,25 @@ public sealed class Bruno
                 IdentityServerConstants.StandardScopes.Profile,
                 IdentityServerConstants.StandardScopes.Email,
                 "roles",
-                CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_READ,
-                CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_WRITE,
+                "customer-onboarding.read",
+                "customer-onboarding.write",
 
-                CustomerKycApiScopesRequired.CUSTOMER_KYC_READ,
-                CustomerKycApiScopesRequired.CUSTOMER_KYC_WRITE,
+                "customer-kyc.read",
+                "customer-kyc.write",
 
-                DocumentsManagementApiScopesRequired.DOCUMENTS_MANAGEMENT_READ,
-                DocumentsManagementApiScopesRequired.DOCUMENTS_MANAGEMENT_WRITE,
+                "documents-management.read",
+                "documents-management.write",
 
-                ComplianceApiScopesRequired.COMPLIANCE_READ,
-                ComplianceApiScopesRequired.COMPLIANCE_WRITE,
+                "compliance.read",
+                "compliance.write",
 
-                AccountsApiScopesRequired.ACCOUNTS_READ,
-                AccountsApiScopesRequired.ACCOUNTS_WRITE,
-                NotificationsApiScopesRequired.NOTIFICATIONS_READ,
-                NotificationsApiScopesRequired.NOTIFICATIONS_WRITE,
+                "accounts.read",
+                "accounts.write",
+                "notifications.read",
+                "notifications.write",
 
-                PaymentsApiScopesRequired.PAYMENTS_READ,
-                PaymentsApiScopesRequired.PAYMENTS_WRITE
+                "payments.read",
+                "payments.write"
             },
 
                 // Bruno doesn't need refresh-token support for our API testing client.

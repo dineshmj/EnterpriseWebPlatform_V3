@@ -18,9 +18,8 @@ using Polly;
 
 using EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.Configuration;
 using EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.Services;
-using EnterpriseWebPlatform.Common.Landscape;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 using EnterpriseWebPlatform.Common.Observability;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 
 // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
@@ -39,6 +38,14 @@ JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
 // │       ASVS V3
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 var builder = WebApplication.CreateBuilder(args);
+
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ The IDP, this BFF's client ID and the Shell's origin (the only page that may frame it)
+// │ come from configuration only - nothing compiled in; missing or not https = no start-up.
+// └──────────────────────────────────────────────────────────────────────────────────────
+var oidcAuthority = RequiredSetting.HttpsUrl(builder.Configuration["Oidc:Authority"], "Oidc:Authority");
+var oidcClientId = RequiredSetting.Text(builder.Configuration["Oidc:ClientId"], "Oidc:ClientId");
+var shellOrigin = RequiredSetting.HttpsUrl(builder.Configuration["ShellOrigin"], "ShellOrigin");
 
 // Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
 // over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
@@ -101,7 +108,7 @@ builder.Services
     })
     .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
     {
-        options.Cookie.Name = CookieNames.MICROSERVICE_CUSTOMER_ONBOARDING_HOST_BFF;
+        options.Cookie.Name = "__Host-Microservice-Customer-Onboarding-bff";
         options.Cookie.Path = "/";
         // Lax: never sent on cross-site sub-requests (second CSRF defence besides the
         // X-CSRF header). The Shell, this MFE and the IDP are one site, so the framed
@@ -122,8 +129,8 @@ builder.Services
     })
     .AddOpenIdConnect("oidc", options =>
     {
-        options.Authority = IDP.AUTHORITY;
-        options.ClientId = CustomerOnboardingMicroservice.CLIENT_ID_FOR_IDP;
+        options.Authority = oidcAuthority;
+        options.ClientId = oidcClientId;
 
         // Front-channel logout (/signout-oidc, called by the IDP in a hidden iframe)
         // must clear THIS BFF's session cookie. Without an explicit scheme it falls
@@ -296,8 +303,7 @@ app.UseHttpsRedirection();
 // Browser security headers. This MFE may be framed only by the Shell, and by
 // the IDP (which loads /signout-oidc in a hidden iframe for front-channel logout).
 // Full CSP: scripts limited to 'self' + the hashed inline scripts of the export.
-var shellOrigin = builder.Configuration["ShellOrigin"] ?? BSSShellBFF.SHELL_BFF_CLIENT_BASE_URL;
-var idpOrigin = ContentSecurityPolicy.Origin(IDP.AUTHORITY);
+var idpOrigin = ContentSecurityPolicy.Origin(oidcAuthority);
 var csp = ContentSecurityPolicy.Build(
     app.Environment.WebRootPath,
     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────

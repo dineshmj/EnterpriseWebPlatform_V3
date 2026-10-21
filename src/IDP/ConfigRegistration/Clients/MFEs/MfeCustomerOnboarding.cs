@@ -2,9 +2,7 @@
 using Duende.IdentityServer;
 using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.IdentityServer.Security;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.MFEs;
@@ -20,9 +18,9 @@ public sealed class MfeCustomerOnboarding
                 // Customer Onboarding Microservice Client (BFF using ASP.NET Core 10)
                 new()
                 {
-                    ClientId = CustomerOnboardingMicroservice.CLIENT_ID_FOR_IDP,
-                    ClientName = CustomerOnboardingMicroservice.CLIENT_NAME_FOR_IDP,
-                    ClientSecrets = { ClientSecretStore.For(CustomerOnboardingMicroservice.CLIENT_ID_FOR_IDP) },
+                    ClientId = ClientSettings.Ids.CustomerOnboardingWeb,
+                    ClientName = "Customer Onboarding Microservice BFF Client",
+                    ClientSecrets = { ClientSecretStore.For(ClientSettings.Ids.CustomerOnboardingWeb) },
 
                     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
                     // │ Authorization Code (+ PKCE) for the BFF, plus token exchange (RFC 8693) for Documents
@@ -33,12 +31,12 @@ public sealed class MfeCustomerOnboarding
 
                     RequirePkce = true,
 
-                    RedirectUris = { $"{CustomerOnboardingMicroservice.BFF_CLIENT_BASE_URL}/signin-oidc" },
-                    PostLogoutRedirectUris = { $"{CustomerOnboardingMicroservice.BFF_CLIENT_BASE_URL}/signout-callback-oidc" },
-                    FrontChannelLogoutUri = $"{CustomerOnboardingMicroservice.BFF_CLIENT_BASE_URL}/signout-oidc",
+                    RedirectUris = { $"{ClientSettings.BaseUrlOf(nameof(ClientIds.CustomerOnboardingWeb))}/signin-oidc" },
+                    PostLogoutRedirectUris = { $"{ClientSettings.BaseUrlOf(nameof(ClientIds.CustomerOnboardingWeb))}/signout-callback-oidc" },
+                    FrontChannelLogoutUri = $"{ClientSettings.BaseUrlOf(nameof(ClientIds.CustomerOnboardingWeb))}/signout-oidc",
                     // Back-channel logout (server-to-server; Duende BFF endpoint): ends the
                     // server-side session even when the browser blocks the front-channel iframe.
-                    BackChannelLogoutUri = $"{CustomerOnboardingMicroservice.BFF_CLIENT_BASE_URL}/bff/backchannel",
+                    BackChannelLogoutUri = $"{ClientSettings.BaseUrlOf(nameof(ClientIds.CustomerOnboardingWeb))}/bff/backchannel",
                     BackChannelLogoutSessionRequired = true,
 
                     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
@@ -59,11 +57,11 @@ public sealed class MfeCustomerOnboarding
                         // │ API scopes: only what this BFF's screens need; the Documents Management scope is
                         // │ requested only in the token exchange, never at sign-in.
                         // └──────────────────────────────────────────────────────────────────────────────────────
-                        MicroserviceApiResourceNames.CUSTOMER_ONBOARDING_API,
-                        CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_READ,
-                        CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_WRITE,
+                        "customer-onboarding-api",
+                        "customer-onboarding.read",
+                        "customer-onboarding.write",
                         // Requested only in the token exchange, never at sign-in.
-                        DocumentsManagementApiScopesRequired.DOCUMENTS_MANAGEMENT_WRITE
+                        "documents-management.write"
                     },
 
                     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────

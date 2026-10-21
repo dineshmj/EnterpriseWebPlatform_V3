@@ -23,8 +23,10 @@ echo [2/3] Configuring (DEVELOPMENT values only)...
 
 set "AUDIT_WEB_PORT=46380"
 set "AUDIT_WEB_PUBLIC_ORIGIN=https://audit.dev.localhost:46380"
+REM Must equal ClientBaseUrls:Shell in src\IDP\appsettings.json and ShellOrigin in the Shell.
 set "AUDIT_WEB_SHELL_ORIGIN=https://shell.dev.localhost:46367"
 set "AUDIT_WEB_IDP_AUTHORITY=https://idp.dev.localhost:46392"
+REM Must equal ClientIds:AuditWeb in src\IDP\appsettings.json (where the IDP registers that client).
 set "AUDIT_WEB_CLIENT_ID=Audit.Microservice.Web.ClientID"
 set "AUDIT_WEB_CLIENT_SECRET=7af784d2-4d35-45e2-b4f7-b56f674d6ead"
 REM Encrypts the tokens in the session table (32 random bytes, base64). Changing it signs everybody out.

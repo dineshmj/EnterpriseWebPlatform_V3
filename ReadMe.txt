@@ -599,7 +599,9 @@ Operations Journey API (Node.js):  https://operations-journey.dev.localhost:4638
 			.\ps\build\Scan-Dependencies.ps1            # or -FailOn critical
 
 	e) Secrets:
-		Each component reads its own client secrets from its own configuration; nothing is compiled into Common.Landscape any more.
+		Each component reads its own client secrets, client IDs and service URLs from its own configuration (no shared constants library).
+		A client ID or web address must be the same as the IDP's entry in src\IDP\appsettings.json (ClientIds / ClientBaseUrls);
+		each setting says which entry. A missing one stops the component at start-up, naming the key.
 		Development values (client secrets, Kafka passwords, the simulators' API keys): the appsettings.Development.json of the
 		component that uses them - the IDP, the Shell BFF, every .NET MFE BFF and API, every relay and subscriber, and the three
 		simulators - and the runnow.bat of the Node.js services (KYC BFF, Audit Journey API, Audit web).

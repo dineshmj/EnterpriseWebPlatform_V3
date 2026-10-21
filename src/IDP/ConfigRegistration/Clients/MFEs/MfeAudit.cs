@@ -2,8 +2,7 @@ using Duende.IdentityModel;
 using Duende.IdentityServer;
 using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.IdentityServer.Security;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.MFEs;
@@ -19,9 +18,9 @@ public sealed class MfeAudit
     public static Client Client =>
         new()
         {
-            ClientId = AuditMicroservice.CLIENT_ID_FOR_IDP,
-            ClientName = AuditMicroservice.CLIENT_NAME_FOR_IDP,
-            ClientSecrets = { ClientSecretStore.For(AuditMicroservice.CLIENT_ID_FOR_IDP) },
+            ClientId = ClientSettings.Ids.AuditWeb,
+            ClientName = "Audit Microservice Web (Next.js BFF) Client",
+            ClientSecrets = { ClientSecretStore.For(ClientSettings.Ids.AuditWeb) },
 
             // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
             // │ Sign-in (Authorization Code + PKCE, tokens on the server) plus token exchange (RFC
@@ -32,10 +31,10 @@ public sealed class MfeAudit
 
             RequirePkce = true,
 
-            RedirectUris = { $"{AuditMicroservice.WEB_CLIENT_BASE_URL}/api/auth/callback" },
-            PostLogoutRedirectUris = { $"{AuditMicroservice.WEB_CLIENT_BASE_URL}/" },
-            FrontChannelLogoutUri = $"{AuditMicroservice.WEB_CLIENT_BASE_URL}/api/auth/frontchannel-logout",
-            BackChannelLogoutUri = $"{AuditMicroservice.WEB_CLIENT_BASE_URL}/api/auth/backchannel-logout",
+            RedirectUris = { $"{ClientSettings.BaseUrlOf(nameof(ClientIds.AuditWeb))}/api/auth/callback" },
+            PostLogoutRedirectUris = { $"{ClientSettings.BaseUrlOf(nameof(ClientIds.AuditWeb))}/" },
+            FrontChannelLogoutUri = $"{ClientSettings.BaseUrlOf(nameof(ClientIds.AuditWeb))}/api/auth/frontchannel-logout",
+            BackChannelLogoutUri = $"{ClientSettings.BaseUrlOf(nameof(ClientIds.AuditWeb))}/api/auth/backchannel-logout",
             BackChannelLogoutSessionRequired = true,
 
             AllowOfflineAccess = true,
@@ -51,7 +50,7 @@ public sealed class MfeAudit
                 "roles",
                 "organization",
                 // Requested only in the token exchange, never at sign-in.
-                AuditApiScopesRequired.AUDIT_JOURNEY_READ
+                "audit-journey.read"
             }
         };
 }

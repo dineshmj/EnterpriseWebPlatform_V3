@@ -1,8 +1,7 @@
 using Duende.IdentityModel;
 using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.IdentityServer.Security;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.M2M;
@@ -19,15 +18,15 @@ public sealed class AuditJourneyApiTokenExchange
     public static Client Client =>
         new()
         {
-            ClientId = AuditMicroservice.CLIENT_ID_FOR_IDP_FOR_AUDIT_JOURNEY_API,
-            ClientName = AuditMicroservice.CLIENT_NAME_FOR_IDP_FOR_AUDIT_JOURNEY_API,
-            ClientSecrets = { ClientSecretStore.For(AuditMicroservice.CLIENT_ID_FOR_IDP_FOR_AUDIT_JOURNEY_API) },
+            ClientId = ClientSettings.Ids.AuditJourneyApi,
+            ClientName = "Audit Journey API Client",
+            ClientSecrets = { ClientSecretStore.For(ClientSettings.Ids.AuditJourneyApi) },
             // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
             // │ Token exchange ONLY - no client credentials: the Audit Journey API can never call a
             // │ Domain API as itself, only for a person (read scopes only).
             // └──────────────────────────────────────────────────────────────────────────────────────
             AllowedGrantTypes = { OidcConstants.GrantTypes.TokenExchange },
-            AllowedScopes = { AuditApiScopesRequired.AUDIT_READ, PaymentsApiScopesRequired.PAYMENTS_READ },
+            AllowedScopes = { "audit.read", "payments.read" },
 
             // Delegated tokens are short-lived: one journey, a few calls.
             AccessTokenLifetime = 300

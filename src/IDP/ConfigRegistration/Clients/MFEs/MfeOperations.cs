@@ -2,8 +2,7 @@ using Duende.IdentityModel;
 using Duende.IdentityServer;
 using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.IdentityServer.Security;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.MFEs;
@@ -19,9 +18,9 @@ public sealed class MfeOperations
     public static Client Client =>
         new()
         {
-            ClientId = OperationsMicroservice.CLIENT_ID_FOR_IDP,
-            ClientName = OperationsMicroservice.CLIENT_NAME_FOR_IDP,
-            ClientSecrets = { ClientSecretStore.For(OperationsMicroservice.CLIENT_ID_FOR_IDP) },
+            ClientId = ClientSettings.Ids.OperationsWeb,
+            ClientName = "Operations Microservice Web (Next.js BFF) Client",
+            ClientSecrets = { ClientSecretStore.For(ClientSettings.Ids.OperationsWeb) },
 
             // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
             // │ Sign-in (Authorization Code + PKCE, tokens on the server) plus token exchange (RFC
@@ -32,10 +31,10 @@ public sealed class MfeOperations
 
             RequirePkce = true,
 
-            RedirectUris = { $"{OperationsMicroservice.WEB_CLIENT_BASE_URL}/api/auth/callback" },
-            PostLogoutRedirectUris = { $"{OperationsMicroservice.WEB_CLIENT_BASE_URL}/" },
-            FrontChannelLogoutUri = $"{OperationsMicroservice.WEB_CLIENT_BASE_URL}/api/auth/frontchannel-logout",
-            BackChannelLogoutUri = $"{OperationsMicroservice.WEB_CLIENT_BASE_URL}/api/auth/backchannel-logout",
+            RedirectUris = { $"{ClientSettings.BaseUrlOf(nameof(ClientIds.OperationsWeb))}/api/auth/callback" },
+            PostLogoutRedirectUris = { $"{ClientSettings.BaseUrlOf(nameof(ClientIds.OperationsWeb))}/" },
+            FrontChannelLogoutUri = $"{ClientSettings.BaseUrlOf(nameof(ClientIds.OperationsWeb))}/api/auth/frontchannel-logout",
+            BackChannelLogoutUri = $"{ClientSettings.BaseUrlOf(nameof(ClientIds.OperationsWeb))}/api/auth/backchannel-logout",
             BackChannelLogoutSessionRequired = true,
 
             AllowOfflineAccess = true,
@@ -51,8 +50,8 @@ public sealed class MfeOperations
                 "roles",
                 "organization",
                 // Requested only in the token exchange, never at sign-in.
-                OperationsApiScopesRequired.OPERATIONS_JOURNEY_READ,
-                OperationsApiScopesRequired.OPERATIONS_JOURNEY_WRITE
+                "operations-journey.read",
+                "operations-journey.write"
             }
         };
 }

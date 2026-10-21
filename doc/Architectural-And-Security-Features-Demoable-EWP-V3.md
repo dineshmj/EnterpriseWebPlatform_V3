@@ -170,7 +170,7 @@ Every API, BFF, worker and front end is its own deployable with its own configur
 - Build and export of all front ends: [CompileAndExportBFFClients_V3.ps1](../ps/build/CompileAndExportBFFClients_V3.ps1)
 - Rules and release checklist: [Blueprint §7](Enterprise-Web-Platform-V3-Architectural-Vision-and-Security-Blueprint.md#7-independent-deployability)
 
-**Not yet:** service URLs and client IDs are still compiled into `Common.Landscape`, so changing one forces a rebuild of the others. Secrets are already per deployable.
+**Configuration per deployable:** service URLs, client IDs and secrets come from each deployable's own configuration; the shared `Common.Landscape` library is gone, so changing one address or client ID rebuilds nothing else. Every value is checked at start-up (missing, or an address that is not https = no start), and each setting names the IDP entry it must equal (`ClientIds` / `ClientBaseUrls` in `src/IDP/appsettings.json`). → [ClientIds.cs](../src/Common/WebUtilities/Configuration/ClientIds.cs), [RequiredSetting.cs](../src/Common/WebUtilities/Configuration/RequiredSetting.cs), [ClientSettings.cs](../src/IDP/Security/ClientSettings.cs)
 
 #### 1.1.3 Context-owned asynchronous workers
 
@@ -770,7 +770,7 @@ Session cookies are HttpOnly, Secure, `SameSite=Lax` and use the `__Host-` prefi
 
 - [CO BFF Program.cs](../src/Microservices/CustomerOnboarding/BFF.Web/Program.cs) (`AddAntiforgery`, cookie options), [Shell Program.cs](../src/Shell/Program.cs)
 - [main.ts](../src/Microservices/CustomerKyc/BFF.Web/src/main.ts), [csrf.ts](../src/Microservices/CustomerKyc/BFF.Web/src/auth/csrf.ts), [auth.controller.ts](../src/Microservices/CustomerKyc/BFF.Web/src/auth/auth.controller.ts)
-- Cookie names: [CookieNames.cs](../src/Common/Landscape/CookieNames.cs)
+- Cookie names: set where each cookie is issued (`Cookie.Name` in each BFF's `Program.cs`)
 
 #### 2.3.4 Session management
 

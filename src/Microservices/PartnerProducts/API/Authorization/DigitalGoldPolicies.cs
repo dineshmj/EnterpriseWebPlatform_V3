@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 
 namespace EnterpriseWebPlatform.PartnerProducts.Api.Authorization;
@@ -20,19 +19,20 @@ public static class DigitalGoldPolicies
     public const string Order = "DigitalGoldOrder";
     public const string Worker = "DigitalGoldWorker";
 
-    public static AuthorizationOptions AddDigitalGoldPolicies(this AuthorizationOptions options)
+    /// <param name="clientIds">The Journey API's and the worker's client IDs (configuration, as the IDP registered them).</param>
+    public static AuthorizationOptions AddDigitalGoldPolicies(this AuthorizationOptions options, ClientIds clientIds)
     {
         options.AddPolicy(View, policy => policy
             .RequireAuthenticatedUser()
-            .RequireClaim("scope", PartnerProductsApiScopesRequired.PARTNER_PRODUCTS_READ)
-            .RequireDelegationBy(PartnerProductsMicroservice.CLIENT_ID_FOR_IDP_FOR_PARTNER_PRODUCTS_JOURNEY_API)
+            .RequireClaim("scope", "partner-products.read")
+            .RequireDelegationBy(clientIds.PartnerProductsJourneyApi)
             .RequireClaim("permission", "partner.gold.view")
             .RequireClaim("branch"));
 
         options.AddPolicy(Order, policy => policy
             .RequireAuthenticatedUser()
-            .RequireClaim("scope", PartnerProductsApiScopesRequired.PARTNER_PRODUCTS_WRITE)
-            .RequireDelegationBy(PartnerProductsMicroservice.CLIENT_ID_FOR_IDP_FOR_PARTNER_PRODUCTS_JOURNEY_API)
+            .RequireClaim("scope", "partner-products.write")
+            .RequireDelegationBy(clientIds.PartnerProductsJourneyApi)
             .RequireClaim("permission", "partner.gold.order")
             .RequireClaim("branch"));
 
@@ -43,8 +43,8 @@ public static class DigitalGoldPolicies
         // └──────────────────────────────────────────────────────────────────────────────────────
         options.AddPolicy(Worker, policy => policy
             .RequireAuthenticatedUser()
-            .RequireClaim("scope", PartnerProductsApiScopesRequired.PARTNER_PRODUCTS_WRITE)
-            .RequireClaim("client_id", PartnerProductsMicroservice.CLIENT_ID_FOR_IDP_FOR_PARTNER_PRODUCTS_WORKER_M2M)
+            .RequireClaim("scope", "partner-products.write")
+            .RequireClaim("client_id", clientIds.PartnerProductsWorker)
             .RequireAssertion(context => !context.User.HasClaim(c => c.Type is "sub" or "act")));
 
         return options;

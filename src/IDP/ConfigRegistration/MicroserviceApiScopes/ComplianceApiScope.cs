@@ -1,6 +1,5 @@
 using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.MicroserviceApiScopes;
 
@@ -8,7 +7,7 @@ public sealed class ComplianceApiScope : IDuendeMicroserviceApiScope
 {
     public static ApiScope Read =>
         new(
-                ComplianceApiScopesRequired.COMPLIANCE_READ,
+                "compliance.read",
                 "Compliance API - Read")
         {
             UserClaims = { "role", "name", "email", "permission", "department", "branch", "region", "clearance_level", "employment_type" }
@@ -16,7 +15,7 @@ public sealed class ComplianceApiScope : IDuendeMicroserviceApiScope
 
     public static ApiScope Write =>
         new(
-                ComplianceApiScopesRequired.COMPLIANCE_WRITE,
+                "compliance.write",
                 "Compliance API - Write")
         {
             UserClaims = { "role", "name", "email", "permission", "department", "branch", "region", "clearance_level", "employment_type" }

@@ -1,7 +1,6 @@
 using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.IdentityServer.Security;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.M2M;
@@ -17,14 +16,14 @@ public sealed class NotificationsSubscriberToNotificationsApiM2M
     public static Client Client =>
         new()
         {
-            ClientId = NotificationsMicroservice.CLIENT_ID_FOR_IDP_FOR_NOTIFICATIONS_SUBSCRIBER_TO_NOTIFICATIONS_API_M2M,
-            ClientName = NotificationsMicroservice.CLIENT_NAME_FOR_IDP_FOR_NOTIFICATIONS_SUBSCRIBER_TO_NOTIFICATIONS_API_M2M,
-            ClientSecrets = { ClientSecretStore.For(NotificationsMicroservice.CLIENT_ID_FOR_IDP_FOR_NOTIFICATIONS_SUBSCRIBER_TO_NOTIFICATIONS_API_M2M) },
+            ClientId = ClientSettings.Ids.NotificationsSubscriber,
+            ClientName = "Notifications Subscriber to Notifications API M2M Client",
+            ClientSecrets = { ClientSecretStore.For(ClientSettings.Ids.NotificationsSubscriber) },
             // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
             // │ Client Credentials with ONE write scope: a machine identity for one caller-callee
             // │ purpose; the receiving API also pins this client_id on its internal endpoint.
             // └──────────────────────────────────────────────────────────────────────────────────────
             AllowedGrantTypes = GrantTypes.ClientCredentials,
-            AllowedScopes = { NotificationsApiScopesRequired.NOTIFICATIONS_WRITE }
+            AllowedScopes = { "notifications.write" }
         };
 }

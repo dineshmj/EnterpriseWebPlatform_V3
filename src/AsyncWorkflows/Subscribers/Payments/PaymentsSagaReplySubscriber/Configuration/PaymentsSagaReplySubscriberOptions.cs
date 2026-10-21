@@ -1,8 +1,5 @@
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Subscribers;
-using EnterpriseWebPlatform.Common.Landscape;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.Payments.PaymentsSagaReplySubscriber.Configuration;
 
@@ -22,15 +19,17 @@ public sealed class PaymentsSagaReplySubscriberOptions : ISubscriberSettings, IM
 
     public int TransientRetryMaxDelaySeconds { get; init; } = 60;
 
-    public string IdentityServerAuthority { get; init; } = IDP.AUTHORITY;
+    /// <summary>From configuration only (https); no compiled-in default.</summary>
+    public string IdentityServerAuthority { get; init; } = string.Empty;
 
-    public string ClientId { get; init; } =
-        PaymentsMicroservice.CLIENT_ID_FOR_IDP_FOR_PAYMENTS_SAGA_REPLY_SUBSCRIBER_TO_PAYMENTS_API_M2M;
+    /// <summary>From configuration only: the client ID the IDP registered for this worker.</summary>
+    public string ClientId { get; init; } = string.Empty;
 
     /// <summary>From configuration / secret store only; no compiled-in default.</summary>
     public string ClientSecret { get; init; } = string.Empty;
 
-    public string Scope { get; init; } = PaymentsApiScopesRequired.PAYMENTS_WRITE;
+    public string Scope { get; init; } = "payments.write";
 
-    public string PaymentsApiBaseUrl { get; init; } = PaymentsMicroservice.MICROSERVICE_API_BASE_URL;
+    /// <summary>From configuration only (https); no compiled-in default.</summary>
+    public string PaymentsApiBaseUrl { get; init; } = string.Empty;
 }

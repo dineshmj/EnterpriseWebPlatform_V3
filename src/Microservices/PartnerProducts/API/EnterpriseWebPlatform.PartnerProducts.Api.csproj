@@ -15,7 +15,6 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.20.0" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\Common\Landscape\EnterpriseWebPlatform.Common.Landscape.csproj" />
     <ProjectReference Include="..\..\..\Common\Observability\EnterpriseWebPlatform.Common.Observability.csproj" />
     <ProjectReference Include="..\..\..\Common\WebUtilities\EnterpriseWebPlatform.Common.WebUtilties.csproj" />
     <ProjectReference Include="..\..\..\AsyncWorkflows\Infrastructure\Kafka\EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka.csproj" />

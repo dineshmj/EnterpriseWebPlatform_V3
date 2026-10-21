@@ -1,6 +1,5 @@
 using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.MicroserviceApiScopes;
 
@@ -8,7 +7,7 @@ public sealed class NotificationsApiScope : IDuendeMicroserviceApiScope
 {
     public static ApiScope Read =>
         new(
-                NotificationsApiScopesRequired.NOTIFICATIONS_READ,
+                "notifications.read",
                 "Notifications API - Read")
         {
             UserClaims = { "role", "branch" }
@@ -16,7 +15,7 @@ public sealed class NotificationsApiScope : IDuendeMicroserviceApiScope
 
     public static ApiScope Write =>
         new(
-                NotificationsApiScopesRequired.NOTIFICATIONS_WRITE,
+                "notifications.write",
                 "Notifications API - Write")
         {
             UserClaims = { "role", "branch" }

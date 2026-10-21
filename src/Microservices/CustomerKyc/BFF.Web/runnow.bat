@@ -46,6 +46,7 @@ REM ============================================================
 set "KYC_BFF_PORT=33800"
 
 set "KYC_IDP_AUTHORITY=https://idp.dev.localhost:46392"
+REM Must equal ClientIds:CustomerKycWeb in src\IDP\appsettings.json (where the IDP registers that client).
 set "KYC_BFF_CLIENT_ID=CustomerKYC.Microservice.BFF.ClientID"
 set "KYC_BFF_CLIENT_SECRET=3ac91ab3-7ba0-4727-b4f7-36120bec10c5"
 

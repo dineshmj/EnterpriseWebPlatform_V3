@@ -2,8 +2,7 @@ using Duende.IdentityModel;
 using Duende.IdentityServer;
 using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.IdentityServer.Security;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.MFEs;
@@ -19,9 +18,9 @@ public sealed class MfePartnerProducts
     public static Client Client =>
         new()
         {
-            ClientId = PartnerProductsMicroservice.CLIENT_ID_FOR_IDP,
-            ClientName = PartnerProductsMicroservice.CLIENT_NAME_FOR_IDP,
-            ClientSecrets = { ClientSecretStore.For(PartnerProductsMicroservice.CLIENT_ID_FOR_IDP) },
+            ClientId = ClientSettings.Ids.PartnerProductsWeb,
+            ClientName = "Partner Products Microservice Web (Next.js BFF) Client",
+            ClientSecrets = { ClientSecretStore.For(ClientSettings.Ids.PartnerProductsWeb) },
 
             // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
             // │ Sign-in (Authorization Code + PKCE, tokens on the server) plus token exchange (RFC
@@ -32,10 +31,10 @@ public sealed class MfePartnerProducts
 
             RequirePkce = true,
 
-            RedirectUris = { $"{PartnerProductsMicroservice.WEB_CLIENT_BASE_URL}/api/auth/callback" },
-            PostLogoutRedirectUris = { $"{PartnerProductsMicroservice.WEB_CLIENT_BASE_URL}/" },
-            FrontChannelLogoutUri = $"{PartnerProductsMicroservice.WEB_CLIENT_BASE_URL}/api/auth/frontchannel-logout",
-            BackChannelLogoutUri = $"{PartnerProductsMicroservice.WEB_CLIENT_BASE_URL}/api/auth/backchannel-logout",
+            RedirectUris = { $"{ClientSettings.BaseUrlOf(nameof(ClientIds.PartnerProductsWeb))}/api/auth/callback" },
+            PostLogoutRedirectUris = { $"{ClientSettings.BaseUrlOf(nameof(ClientIds.PartnerProductsWeb))}/" },
+            FrontChannelLogoutUri = $"{ClientSettings.BaseUrlOf(nameof(ClientIds.PartnerProductsWeb))}/api/auth/frontchannel-logout",
+            BackChannelLogoutUri = $"{ClientSettings.BaseUrlOf(nameof(ClientIds.PartnerProductsWeb))}/api/auth/backchannel-logout",
             BackChannelLogoutSessionRequired = true,
 
             AllowOfflineAccess = true,
@@ -51,8 +50,8 @@ public sealed class MfePartnerProducts
                 "roles",
                 "organization",
                 // Requested only in the token exchange, never at sign-in.
-                PartnerProductsApiScopesRequired.PARTNER_PRODUCTS_JOURNEY_READ,
-                PartnerProductsApiScopesRequired.PARTNER_PRODUCTS_JOURNEY_WRITE
+                "partner-products-journey.read",
+                "partner-products-journey.write"
             }
         };
 }

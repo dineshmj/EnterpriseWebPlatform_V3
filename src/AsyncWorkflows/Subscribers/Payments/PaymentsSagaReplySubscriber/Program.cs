@@ -23,7 +23,8 @@ builder.AddEwpObservability("payments-saga-reply-subscriber");
 
 // The shared reliable consume loop (commit after processing, retry in place, dead-letter).
 builder.Services.AddKafkaSubscriber<PaymentsSagaReplyProcessor, PaymentsSagaReplySubscriberOptions>(
-    builder.Configuration, PaymentsSagaReplySubscriberOptions.SectionName);
+    builder.Configuration, PaymentsSagaReplySubscriberOptions.SectionName)
+    .Validate(s => ServiceAddress.IsHttps(s.PaymentsApiBaseUrl), $"{PaymentsSagaReplySubscriberOptions.SectionName}:PaymentsApiBaseUrl must be an absolute https address.");
 
 // The worker's own machine identity; the token is cached until shortly before expiry.
 builder.Services

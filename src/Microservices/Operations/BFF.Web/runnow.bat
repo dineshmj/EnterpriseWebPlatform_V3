@@ -23,8 +23,10 @@ echo [2/3] Configuring (DEVELOPMENT values only)...
 
 set "OPERATIONS_WEB_PORT=46381"
 set "OPERATIONS_WEB_PUBLIC_ORIGIN=https://operations.dev.localhost:46381"
+REM Must equal ClientBaseUrls:Shell in src\IDP\appsettings.json and ShellOrigin in the Shell.
 set "OPERATIONS_WEB_SHELL_ORIGIN=https://shell.dev.localhost:46367"
 set "OPERATIONS_WEB_IDP_AUTHORITY=https://idp.dev.localhost:46392"
+REM Must equal ClientIds:OperationsWeb in src\IDP\appsettings.json (where the IDP registers that client).
 set "OPERATIONS_WEB_CLIENT_ID=Operations.Microservice.Web.ClientID"
 set "OPERATIONS_WEB_CLIENT_SECRET=8c743ece-8834-4906-a324-6f9cdc6a8492"
 REM Encrypts the tokens in the session table (32 random bytes, base64). Changing it signs everybody out.

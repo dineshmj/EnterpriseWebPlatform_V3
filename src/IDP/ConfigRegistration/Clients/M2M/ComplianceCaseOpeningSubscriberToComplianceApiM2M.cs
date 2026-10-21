@@ -1,7 +1,6 @@
 using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.IdentityServer.Security;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.M2M;
@@ -17,14 +16,14 @@ public sealed class ComplianceCaseOpeningSubscriberToComplianceApiM2M
     public static Client Client =>
         new()
         {
-            ClientId = ComplianceMicroservice.CLIENT_ID_FOR_IDP_FOR_COMPLIANCE_CASE_OPENING_SUBSCRIBER_TO_COMPLIANCE_API_M2M,
-            ClientName = ComplianceMicroservice.CLIENT_NAME_FOR_IDP_FOR_COMPLIANCE_CASE_OPENING_SUBSCRIBER_TO_COMPLIANCE_API_M2M,
-            ClientSecrets = { ClientSecretStore.For(ComplianceMicroservice.CLIENT_ID_FOR_IDP_FOR_COMPLIANCE_CASE_OPENING_SUBSCRIBER_TO_COMPLIANCE_API_M2M) },
+            ClientId = ClientSettings.Ids.ComplianceCaseOpeningSubscriber,
+            ClientName = "Compliance Case Opening Subscriber to Compliance API M2M Client",
+            ClientSecrets = { ClientSecretStore.For(ClientSettings.Ids.ComplianceCaseOpeningSubscriber) },
             // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
             // │ Client Credentials with ONE write scope: a machine identity for one caller-callee
             // │ purpose; the receiving API also pins this client_id on its internal endpoint.
             // └──────────────────────────────────────────────────────────────────────────────────────
             AllowedGrantTypes = GrantTypes.ClientCredentials,
-            AllowedScopes = { ComplianceApiScopesRequired.COMPLIANCE_WRITE }
+            AllowedScopes = { "compliance.write" }
         };
 }

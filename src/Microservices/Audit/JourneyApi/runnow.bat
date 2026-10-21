@@ -27,7 +27,9 @@ set "AUDIT_JOURNEY_PORT=46379"
 set "AUDIT_JOURNEY_PUBLIC_ORIGIN=https://audit-journey.dev.localhost:46379"
 set "AUDIT_JOURNEY_IDP_AUTHORITY=https://idp.dev.localhost:46392"
 set "AUDIT_JOURNEY_AUDIENCE=audit-journey-api"
+REM Must equal ClientIds:AuditWeb in src\IDP\appsettings.json (where the IDP registers that client).
 set "AUDIT_JOURNEY_CALLER_CLIENT_ID=Audit.Microservice.Web.ClientID"
+REM Must equal ClientIds:AuditJourneyApi in src\IDP\appsettings.json (where the IDP registers that client).
 set "AUDIT_JOURNEY_CLIENT_ID=Audit.JourneyApi.ClientID"
 set "AUDIT_JOURNEY_CLIENT_SECRET=b749efd3-1000-477e-93df-0fa1fd8eb189"
 

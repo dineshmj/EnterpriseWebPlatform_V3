@@ -28,8 +28,10 @@ set "PARTNER_PRODUCTS_JOURNEY_PORT=46385"
 set "PARTNER_PRODUCTS_JOURNEY_PUBLIC_ORIGIN=https://partner-products-journey.dev.localhost:46385"
 set "PARTNER_PRODUCTS_JOURNEY_IDP_AUTHORITY=https://idp.dev.localhost:46392"
 set "PARTNER_PRODUCTS_JOURNEY_AUDIENCE=partner-products-journey-api"
+REM Must equal ClientIds:PartnerProductsWeb in src\IDP\appsettings.json (where the IDP registers that client).
 set "PARTNER_PRODUCTS_JOURNEY_CALLER_CLIENT_ID=PartnerProducts.Microservice.Web.ClientID"
 REM This API's own client: token exchange only (the Domain APIs below, always for the staff member).
+REM Must equal ClientIds:PartnerProductsJourneyApi in src\IDP\appsettings.json (where the IDP registers that client).
 set "PARTNER_PRODUCTS_JOURNEY_CLIENT_ID=PartnerProducts.JourneyApi.ClientID"
 set "PARTNER_PRODUCTS_JOURNEY_CLIENT_SECRET=c13649b2-6a6e-41a3-b7f7-6cd20e5e0dec"
 

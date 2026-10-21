@@ -24,7 +24,8 @@ builder.AddEwpObservability("onboarding-outcome-subscriber");
 // The shared reliable consume loop (commit after processing, retry in place,
 // dead-letter) with this worker's processor.
 builder.Services.AddKafkaSubscriber<OnboardingOutcomeProcessor, OnboardingOutcomeSubscriberOptions>(
-    builder.Configuration, OnboardingOutcomeSubscriberOptions.SectionName);
+    builder.Configuration, OnboardingOutcomeSubscriberOptions.SectionName)
+    .Validate(s => ServiceAddress.IsHttps(s.CustomerOnboardingApiBaseUrl), $"{OnboardingOutcomeSubscriberOptions.SectionName}:CustomerOnboardingApiBaseUrl must be an absolute https address.");
 
 // The worker's own machine identity; the token is cached until shortly before expiry.
 builder.Services

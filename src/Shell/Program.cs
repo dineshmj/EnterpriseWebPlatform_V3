@@ -14,10 +14,8 @@ using Npgsql;
 using OpenTelemetry.Trace;
 
 using EnterpriseWebPlatform.BSS.BFFWeb.Data;
-using EnterpriseWebPlatform.Common.Landscape;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 using EnterpriseWebPlatform.Common.Observability;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 
 // ┌─ :: ARCHITECTURE + SECURITY :: Shell BFF: a business-neutral host behind a BFF ────────────────
@@ -31,6 +29,21 @@ using EnterpriseWebPlatform.Common.WebUtilities.Security;
 // │       Shell-Requirements.md
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 var builder = WebApplication.CreateBuilder(args);
+
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ The IDP, the Shell's client ID and own origin, the MFEs it may frame and the
+// │ Notifications API come from configuration only - nothing compiled in; a missing value,
+// │ or an address that is not https, stops the start-up.
+// └──────────────────────────────────────────────────────────────────────────────────────
+var oidcAuthority = RequiredSetting.HttpsUrl(builder.Configuration["Oidc:Authority"], "Oidc:Authority");
+var oidcClientId = RequiredSetting.Text(builder.Configuration["Oidc:ClientId"], "Oidc:ClientId");
+var shellPublicOrigin = RequiredSetting.HttpsUrl(builder.Configuration["ShellOrigin"], "ShellOrigin");
+var mfeOrigins = builder.Configuration.GetSection("MfeOrigins").GetChildren()
+    .Select(mfe => RequiredSetting.HttpsUrl(mfe.Value, $"MfeOrigins:{mfe.Key}"))
+    .ToArray();
+if (mfeOrigins.Length == 0)
+    throw new InvalidOperationException("MfeOrigins is not configured: the Shell would frame no MFE.");
+var notificationsApiBaseUrl = RequiredSetting.HttpsUrl(builder.Configuration["NotificationsApiBaseUrl"], "NotificationsApiBaseUrl");
 
 // Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
 // over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
@@ -109,7 +122,7 @@ builder.Services
     })
     .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
     {
-        options.Cookie.Name = CookieNames.BSS_SHELL_HOST_BFF;
+        options.Cookie.Name = "__Host-BSS-Shell-bff";
 
         // Same lifetime as the MFE BFF sessions (30 minutes, sliding) instead of
         // the 14-day framework default.
@@ -143,8 +156,8 @@ builder.Services
     })
     .AddOpenIdConnect("oidc", options =>
     {
-        options.Authority = IDP.AUTHORITY;
-        options.ClientId = BSSShellBFF.CLIENT_ID_FOR_IDP;
+        options.Authority = oidcAuthority;
+        options.ClientId = oidcClientId;
 
         // Front-channel logout (/signout-oidc, called by the IDP in a hidden iframe)
         // must clear THIS BFF's session cookie. Without an explicit scheme it falls
@@ -201,8 +214,8 @@ builder.Services
         options.Scope.Add("organization");
         options.Scope.Add("offline_access");
         // Notifications API: the person's bell (REST) and live channel (SignalR), proxied below.
-        options.Scope.Add(NotificationsApiScopesRequired.NOTIFICATIONS_READ);
-        options.Scope.Add(NotificationsApiScopesRequired.NOTIFICATIONS_WRITE);
+        options.Scope.Add("notifications.read");
+        options.Scope.Add("notifications.write");
 
         // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
         // │ SameSite=None ONLY for the short-lived correlation cookie: it must survive the
@@ -286,7 +299,7 @@ app.UseHttpsRedirection();
 // Duende's anti-forgery header to a WebSocket upgrade, so the hub route skips that check
 // (below); instead, only pages of the Shell's own origin may open the connection. The
 // session cookie is SameSite=Lax as well.
-var shellOrigin = ContentSecurityPolicy.Origin(BSSShellBFF.SHELL_BFF_CLIENT_BASE_URL);
+var shellOrigin = ContentSecurityPolicy.Origin(shellPublicOrigin);
 app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments(NotificationsHubPath))
@@ -327,15 +340,9 @@ var shellCsp = ContentSecurityPolicy.Build(
     [
         // 'self': the step-up overlay ends on the Shell's own /step-up-done.html.
         "'self'",
-        ContentSecurityPolicy.Origin(EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo.CustomerOnboardingMicroservice.BFF_CLIENT_BASE_URL),
-        ContentSecurityPolicy.Origin(EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo.CustomerKycMicroservice.BFF_CLIENT_BASE_URL),
-        ContentSecurityPolicy.Origin(EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo.ComplianceMicroservice.BFF_CLIENT_BASE_URL),
-        ContentSecurityPolicy.Origin(EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo.AccountsMicroservice.BFF_CLIENT_BASE_URL),
-        ContentSecurityPolicy.Origin(EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo.PaymentsMicroservice.BFF_CLIENT_BASE_URL),
-        ContentSecurityPolicy.Origin(EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo.AuditMicroservice.WEB_CLIENT_BASE_URL),
-        ContentSecurityPolicy.Origin(EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo.OperationsMicroservice.WEB_CLIENT_BASE_URL),
-        ContentSecurityPolicy.Origin(EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo.PartnerProductsMicroservice.WEB_CLIENT_BASE_URL),
-        ContentSecurityPolicy.Origin(IDP.AUTHORITY)
+        // The MFEs (configuration: MfeOrigins) and the IDP.
+        .. mfeOrigins.Select(ContentSecurityPolicy.Origin),
+        ContentSecurityPolicy.Origin(oidcAuthority)
     ]);
 // Security:CspReportOnly = true reports violations in the browser console instead of blocking.
 // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
@@ -409,10 +416,10 @@ app.MapBffManagementEndpoints();
 // access token, to the Notifications API. The browser never sees the token.
 //   /bff/notifications/...  -> GET list, POST {id}/read, POST read-all (anti-forgery header required)
 //   /hubs/notifications     -> SignalR (negotiate + WebSocket), guarded by the Origin check above
-app.MapRemoteBffApiEndpoint("/bff/notifications", new Uri($"{NotificationsMicroservice.MICROSERVICE_API_BASE_URL}/v1/notifications"))
+app.MapRemoteBffApiEndpoint("/bff/notifications", new Uri($"{notificationsApiBaseUrl}/v1/notifications"))
     .WithAccessToken(RequiredTokenType.User);
 
-app.MapRemoteBffApiEndpoint(NotificationsHubPath, new Uri($"{NotificationsMicroservice.MICROSERVICE_API_BASE_URL}{NotificationsHubPath}"))
+app.MapRemoteBffApiEndpoint(NotificationsHubPath, new Uri($"{notificationsApiBaseUrl}{NotificationsHubPath}"))
     .WithAccessToken(RequiredTokenType.User)
     .SkipAntiforgery();
 

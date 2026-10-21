@@ -9,9 +9,8 @@ using Npgsql;
 using OpenTelemetry.Trace;
 
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 using EnterpriseWebPlatform.Common.Observability;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.Payments.Api.Application.Abstractions;
 using EnterpriseWebPlatform.Payments.Api.Application.Commands;
@@ -34,6 +33,14 @@ using EnterpriseWebPlatform.Payments.Api.Infrastructure.Saga;
 // │       OWASP API1 / API5 | Authorization-Model 4
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 var builder = WebApplication.CreateBuilder(args);
+
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ The client IDs this API pins in its authorization rules, from its own configuration
+// │ (section ClientIds; each must equal the IDP's ClientIds entry). Read now: a missing one
+// │ stops the start-up - a pin is never empty.
+// └──────────────────────────────────────────────────────────────────────────────────────
+var clientIds = ClientIds.From(builder.Configuration).Require(nameof(ClientIds.AuditJourneyApi), nameof(ClientIds.PartnerProductsWorker), nameof(ClientIds.PaymentsSagaReplySubscriber));
+builder.Services.AddSingleton(clientIds);
 
 // Distributed tracing: W3C trace context across HTTP and Kafka (OTLP export when configured).
 builder.AddEwpObservability("payments-api", tracing => tracing.AddAspNetCoreInstrumentation().AddNpgsql());
@@ -87,9 +94,9 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("PaymentsSagaReplySubscriberWrite", policy =>
     {
         policy.RequireAuthenticatedUser();
-        policy.RequireClaim("scope", PaymentsApiScopesRequired.PAYMENTS_WRITE);
+        policy.RequireClaim("scope", "payments.write");
         policy.RequireClaim("client_id",
-            PaymentsMicroservice.CLIENT_ID_FOR_IDP_FOR_PAYMENTS_SAGA_REPLY_SUBSCRIBER_TO_PAYMENTS_API_M2M);
+            clientIds.PaymentsSagaReplySubscriber);
     });
 
     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
@@ -99,8 +106,8 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("PaymentOutcomeForPartnerProducts", policy =>
     {
         policy.RequireAuthenticatedUser();
-        policy.RequireClaim("scope", PaymentsApiScopesRequired.PAYMENTS_READ);
-        policy.RequireClaim("client_id", PartnerProductsMicroservice.CLIENT_ID_FOR_IDP_FOR_PARTNER_PRODUCTS_WORKER_M2M);
+        policy.RequireClaim("scope", "payments.read");
+        policy.RequireClaim("client_id", clientIds.PartnerProductsWorker);
     });
 
     // Staff policies: scope for the kind of operation + any of the permissions + a branch.
@@ -122,18 +129,18 @@ builder.Services.AddAuthorization(options =>
                 policy.RequireMfa();
         });
 
-    AddStaffPolicy("PaymentInitiate", PaymentsApiScopesRequired.PAYMENTS_WRITE, "payment.initiate");
+    AddStaffPolicy("PaymentInitiate", "payments.write", "payment.initiate");
     // Operations (workflow.view) and audit (payment.history.view) read every branch; the others their own.
     // An auditor only through the Audit Journey API (PaymentsStaffAuthorizationHandler): never the Payments screens.
-    AddStaffPolicy("PaymentView", PaymentsApiScopesRequired.PAYMENTS_READ, "payment.view", "payment.initiate", "workflow.view", "payment.history.view");
-    AddStaffPolicy("PaymentRetryRelease", PaymentsApiScopesRequired.PAYMENTS_WRITE, "workflow.retry");
+    AddStaffPolicy("PaymentView", "payments.read", "payment.view", "payment.initiate", "workflow.view", "payment.history.view");
+    AddStaffPolicy("PaymentRetryRelease", "payments.write", "workflow.retry");
     // Parked Outbox messages: operations see them (outbox.view) and resend one (workflow.reprocess).
-    AddStaffPolicy("PaymentOutboxView", PaymentsApiScopesRequired.PAYMENTS_READ, "outbox.view");
-    AddStaffPolicy("PaymentOutboxResend", PaymentsApiScopesRequired.PAYMENTS_WRITE, "workflow.reprocess");
+    AddStaffPolicy("PaymentOutboxView", "payments.read", "outbox.view");
+    AddStaffPolicy("PaymentOutboxResend", "payments.write", "workflow.reprocess");
     // Manual reconciliation of a payment the network never confirmed (four eyes in the saga).
-    AddStaffPolicy("PaymentReconcile", PaymentsApiScopesRequired.PAYMENTS_WRITE, "payment.reconcile");
-    AddStaffPolicy("PaymentApprove", PaymentsApiScopesRequired.PAYMENTS_WRITE, "payment.approve");
-    AddStaffPolicy("PaymentReject", PaymentsApiScopesRequired.PAYMENTS_WRITE, "payment.reject");
+    AddStaffPolicy("PaymentReconcile", "payments.write", "payment.reconcile");
+    AddStaffPolicy("PaymentApprove", "payments.write", "payment.approve");
+    AddStaffPolicy("PaymentReject", "payments.write", "payment.reject");
 });
 builder.Services.AddSingleton<IAuthorizationHandler, PaymentsStaffAuthorizationHandler>();
 

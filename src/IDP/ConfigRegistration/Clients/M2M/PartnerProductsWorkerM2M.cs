@@ -1,7 +1,6 @@
 using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.IdentityServer.Security;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.M2M;
@@ -17,9 +16,9 @@ public sealed class PartnerProductsWorkerM2M
     public static Client Client =>
         new()
         {
-            ClientId = PartnerProductsMicroservice.CLIENT_ID_FOR_IDP_FOR_PARTNER_PRODUCTS_WORKER_M2M,
-            ClientName = PartnerProductsMicroservice.CLIENT_NAME_FOR_IDP_FOR_PARTNER_PRODUCTS_WORKER_M2M,
-            ClientSecrets = { ClientSecretStore.For(PartnerProductsMicroservice.CLIENT_ID_FOR_IDP_FOR_PARTNER_PRODUCTS_WORKER_M2M) },
+            ClientId = ClientSettings.Ids.PartnerProductsWorker,
+            ClientName = "Partner Products Worker (Temporal) M2M Client",
+            ClientSecrets = { ClientSecretStore.For(ClientSettings.Ids.PartnerProductsWorker) },
             // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
             // │ Client credentials, no person: the worker never acts FOR a staff member (it is
             // │ not on the token-exchange allow-list). Two scopes for its one purpose; the scopes
@@ -27,7 +26,7 @@ public sealed class PartnerProductsWorkerM2M
             // │ (every staff endpoint also needs a person's permission and branch).
             // └──────────────────────────────────────────────────────────────────────────────────────
             AllowedGrantTypes = GrantTypes.ClientCredentials,
-            AllowedScopes = { PaymentsApiScopesRequired.PAYMENTS_READ, PartnerProductsApiScopesRequired.PARTNER_PRODUCTS_WRITE },
+            AllowedScopes = { "payments.read", "partner-products.write" },
             AccessTokenLifetime = 300
         };
 }

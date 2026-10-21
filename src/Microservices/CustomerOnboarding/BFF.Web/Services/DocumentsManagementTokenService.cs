@@ -4,8 +4,8 @@ using System.Text.Json.Serialization;
 using Duende.AccessTokenManagement;
 using Duende.AccessTokenManagement.OpenIdConnect;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
+
 
 namespace EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.Services;
 
@@ -37,6 +37,8 @@ public sealed class DocumentsManagementTokenService(
     private const string AccessTokenType = "urn:ietf:params:oauth:token-type:access_token";
 
     // Required at start-up by the OIDC set-up in Program.cs.
+    private readonly string _clientId = RequiredSetting.Text(configuration["Oidc:ClientId"], "Oidc:ClientId");
+
     private readonly string _clientSecret = configuration["Oidc:ClientSecret"]
         ?? throw new InvalidOperationException("Oidc:ClientSecret is not configured.");
 
@@ -58,11 +60,11 @@ public sealed class DocumentsManagementTokenService(
                     Content = new FormUrlEncodedContent(new Dictionary<string, string>
                     {
                         ["grant_type"] = TokenExchangeGrantType,
-                        ["client_id"] = CustomerOnboardingMicroservice.CLIENT_ID_FOR_IDP,
+                        ["client_id"] = _clientId,
                         ["client_secret"] = _clientSecret,
                         ["subject_token"] = userToken.AccessToken,
                         ["subject_token_type"] = AccessTokenType,
-                        ["scope"] = DocumentsManagementApiScopesRequired.DOCUMENTS_MANAGEMENT_WRITE
+                        ["scope"] = "documents-management.write"
                     })
                 };
 

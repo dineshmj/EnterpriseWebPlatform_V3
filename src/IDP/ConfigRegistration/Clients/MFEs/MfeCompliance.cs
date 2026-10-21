@@ -1,8 +1,7 @@
 using Duende.IdentityServer;
 using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.IdentityServer.Security;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.MFEs;
@@ -18,9 +17,9 @@ public sealed class MfeCompliance
                 // Compliance Microservice Client (BFF using ASP.NET Core 10)
                 new()
                 {
-                    ClientId = ComplianceMicroservice.CLIENT_ID_FOR_IDP,
-                    ClientName = ComplianceMicroservice.CLIENT_NAME_FOR_IDP,
-                    ClientSecrets = { ClientSecretStore.For(ComplianceMicroservice.CLIENT_ID_FOR_IDP) },
+                    ClientId = ClientSettings.Ids.ComplianceWeb,
+                    ClientName = "Compliance Microservice BFF Client",
+                    ClientSecrets = { ClientSecretStore.For(ClientSettings.Ids.ComplianceWeb) },
 
                     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
                     // │ Authorization Code (+ PKCE) for a confidential BFF: tokens are issued to the server,
@@ -30,12 +29,12 @@ public sealed class MfeCompliance
 
                     RequirePkce = true,
 
-                    RedirectUris = { $"{ComplianceMicroservice.BFF_CLIENT_BASE_URL}/signin-oidc" },
-                    PostLogoutRedirectUris = { $"{ComplianceMicroservice.BFF_CLIENT_BASE_URL}/signout-callback-oidc" },
-                    FrontChannelLogoutUri = $"{ComplianceMicroservice.BFF_CLIENT_BASE_URL}/signout-oidc",
+                    RedirectUris = { $"{ClientSettings.BaseUrlOf(nameof(ClientIds.ComplianceWeb))}/signin-oidc" },
+                    PostLogoutRedirectUris = { $"{ClientSettings.BaseUrlOf(nameof(ClientIds.ComplianceWeb))}/signout-callback-oidc" },
+                    FrontChannelLogoutUri = $"{ClientSettings.BaseUrlOf(nameof(ClientIds.ComplianceWeb))}/signout-oidc",
                     // Back-channel logout (server-to-server; Duende BFF endpoint): ends the
                     // server-side session even when the browser blocks the front-channel iframe.
-                    BackChannelLogoutUri = $"{ComplianceMicroservice.BFF_CLIENT_BASE_URL}/bff/backchannel",
+                    BackChannelLogoutUri = $"{ClientSettings.BaseUrlOf(nameof(ClientIds.ComplianceWeb))}/bff/backchannel",
                     BackChannelLogoutSessionRequired = true,
 
                     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
@@ -51,8 +50,8 @@ public sealed class MfeCompliance
                         IdentityServerConstants.StandardScopes.Email,
                         "roles",
                         "organization",
-                        ComplianceApiScopesRequired.COMPLIANCE_READ,
-                        ComplianceApiScopesRequired.COMPLIANCE_WRITE
+                        "compliance.read",
+                        "compliance.write"
                     },
 
                     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────

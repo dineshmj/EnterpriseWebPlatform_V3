@@ -1,7 +1,7 @@
 using System.Security.Claims;
 using System.Text.Json;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.DocumentsManagement.Domain.Aggregates;
 using EnterpriseWebPlatform.DocumentsManagement.Domain.ValueObjects;
 
@@ -35,26 +35,27 @@ namespace EnterpriseWebPlatform.DocumentsManagement.API.Authorization;
 /// Only the Customer Onboarding BFF (cleanup of an unfinished submission) and the Partner Products
 /// Journey API (a scan whose record the Partner Products API then refused) remove documents.
 /// </summary>
-public sealed class DocumentResourceAuthorization
+public sealed class DocumentResourceAuthorization(ClientIds clientIds)
 {
-    private static readonly HashSet<string> ActingClients = new(StringComparer.Ordinal)
+    // The client IDs come from configuration (ClientIds; they must equal the IDP's registrations).
+    private readonly HashSet<string> ActingClients = new(StringComparer.Ordinal)
     {
-        CustomerOnboardingMicroservice.CLIENT_ID_FOR_IDP,
-        CustomerKycMicroservice.CLIENT_ID_FOR_IDP,
+        clientIds.CustomerOnboardingWeb,
+        clientIds.CustomerKycWeb,
         // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
         // │ The scans of a customer's signed Partner Bank forms (Form VII, transfer slips): the
         // │ Journey API uploads them for the staff member at the counter - their branch, their
         // │ token; it never reads other documents through this rule's branch scope beyond that.
         // └──────────────────────────────────────────────────────────────────────────────────────
-        PartnerProductsMicroservice.CLIENT_ID_FOR_IDP_FOR_PARTNER_PRODUCTS_JOURNEY_API
+        clientIds.PartnerProductsJourneyApi
     };
 
-    private static readonly HashSet<string> DeletingClients = new(StringComparer.Ordinal)
+    private readonly HashSet<string> DeletingClients = new(StringComparer.Ordinal)
     {
-        CustomerOnboardingMicroservice.CLIENT_ID_FOR_IDP,
+        clientIds.CustomerOnboardingWeb,
         // A scan uploaded a moment ago whose record was refused (e.g. a second Form VII): removed
         // again, so no evidence is left attached to nothing; retained documents stay (409).
-        PartnerProductsMicroservice.CLIENT_ID_FOR_IDP_FOR_PARTNER_PRODUCTS_JOURNEY_API
+        clientIds.PartnerProductsJourneyApi
     };
 
     /// <summary>The acting person's branch, or null (fail closed).</summary>

@@ -30,8 +30,10 @@ set "OPERATIONS_JOURNEY_PORT=46382"
 set "OPERATIONS_JOURNEY_PUBLIC_ORIGIN=https://operations-journey.dev.localhost:46382"
 set "OPERATIONS_JOURNEY_IDP_AUTHORITY=https://idp.dev.localhost:46392"
 set "OPERATIONS_JOURNEY_AUDIENCE=operations-journey-api"
+REM Must equal ClientIds:OperationsWeb in src\IDP\appsettings.json (where the IDP registers that client).
 set "OPERATIONS_JOURNEY_CALLER_CLIENT_ID=Operations.Microservice.Web.ClientID"
 REM This API's own client: token exchange only (parked Outbox messages of Accounts and Compliance).
+REM Must equal ClientIds:OperationsJourneyApi in src\IDP\appsettings.json (where the IDP registers that client).
 set "OPERATIONS_JOURNEY_CLIENT_ID=Operations.JourneyApi.ClientID"
 set "OPERATIONS_JOURNEY_CLIENT_SECRET=5594deaa-c45c-4299-b628-f877ef42d405"
 set "OPERATIONS_JOURNEY_ACCOUNTS_API=https://accounts-api.dev.localhost:48486"

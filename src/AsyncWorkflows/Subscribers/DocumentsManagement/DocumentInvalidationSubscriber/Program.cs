@@ -24,7 +24,8 @@ builder.AddEwpObservability("document-invalidation-subscriber");
 
 // The shared reliable consume loop (commit after processing, retry in place, dead-letter).
 builder.Services.AddKafkaSubscriber<DocumentEvidenceProcessor, DocumentInvalidationSubscriberOptions>(
-    builder.Configuration, DocumentInvalidationSubscriberOptions.SectionName);
+    builder.Configuration, DocumentInvalidationSubscriberOptions.SectionName)
+    .Validate(s => ServiceAddress.IsHttps(s.DocumentsManagementApiBaseUrl), $"{DocumentInvalidationSubscriberOptions.SectionName}:DocumentsManagementApiBaseUrl must be an absolute https address.");
 
 // The worker's own machine identity; the token is cached until shortly before expiry.
 builder.Services

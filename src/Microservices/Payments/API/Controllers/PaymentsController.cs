@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.Payments.Api.Application.Commands;
 using EnterpriseWebPlatform.Payments.Api.Application.Queries;
 using EnterpriseWebPlatform.Payments.Api.Authorization;
@@ -36,7 +37,8 @@ public sealed class PaymentsController(
     RetryReleaseCommandHandler retryReleaseHandler,
     IPaymentsQueries queries,
     ApprovalTier approvalTier,
-    ApprovalLimits approvalLimits) : ControllerBase
+    ApprovalLimits approvalLimits,
+    ClientIds clientIds) : ControllerBase
 {
     private const int MaxPageSize = 100;
 
@@ -168,7 +170,7 @@ public sealed class PaymentsController(
             statusFilter = parsed;
         }
 
-        var (allowed, branch) = PaymentsStaffAuthorizationHandler.ReadScopeOf(User);
+        var (allowed, branch) = PaymentsStaffAuthorizationHandler.ReadScopeOf(User, clientIds.AuditJourneyApi);
         if (!allowed)
             return Forbid();
 
@@ -183,7 +185,7 @@ public sealed class PaymentsController(
     [Authorize(Policy = "PaymentView")]
     public async Task<IActionResult> GetProcessing(CancellationToken cancellationToken)
     {
-        var (allowed, branch) = PaymentsStaffAuthorizationHandler.ReadScopeOf(User);
+        var (allowed, branch) = PaymentsStaffAuthorizationHandler.ReadScopeOf(User, clientIds.AuditJourneyApi);
         if (!allowed)
             return Forbid();
 
@@ -218,7 +220,7 @@ public sealed class PaymentsController(
     [Authorize(Policy = "PaymentView")]
     public async Task<IActionResult> GetPaymentByNumber(string paymentNumber, CancellationToken cancellationToken)
     {
-        var (allowed, branch) = PaymentsStaffAuthorizationHandler.ReadScopeOf(User);
+        var (allowed, branch) = PaymentsStaffAuthorizationHandler.ReadScopeOf(User, clientIds.AuditJourneyApi);
         if (!allowed)
             return Forbid();
         if (paymentNumber.Length > 40)
@@ -234,7 +236,7 @@ public sealed class PaymentsController(
     [Authorize(Policy = "PaymentView")]
     public async Task<IActionResult> GetPayment(long paymentId, CancellationToken cancellationToken)
     {
-        var (allowed, branch) = PaymentsStaffAuthorizationHandler.ReadScopeOf(User);
+        var (allowed, branch) = PaymentsStaffAuthorizationHandler.ReadScopeOf(User, clientIds.AuditJourneyApi);
         if (!allowed)
             return Forbid();
 

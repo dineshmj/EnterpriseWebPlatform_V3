@@ -17,7 +17,7 @@ Deployable: `src/Shell` (ASP.NET Core + Duende BFF) · Databases: `EwpBssShellDb
   - SameSite=Lax: it is not sent on cross-site sub-requests;
   - `__Host-`: it is locked to this host.
 
-  → `Program.cs`, `src/Common/Landscape/CookieNames.cs`
+  → `Program.cs` (the cookie name is set there)
 - [x] **The session lasts 30 minutes and slides** (instead of the framework's 14 days). It slides on real activity only: the SPA calls `/bff/user` when the person is active (in the Shell or in the hosted application), and its status checks use `/bff/user?slide=false`.
 - [x] **Only the correlation and nonce cookies use SameSite=None (with Secure),** and only for the sign-in round trip. *Because* they must survive the cross-site return from the IDP.
 - [x] **The ASP.NET session cookie is HttpOnly.**

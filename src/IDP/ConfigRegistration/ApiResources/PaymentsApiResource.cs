@@ -1,7 +1,5 @@
 ﻿using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.ApiResources;
 
@@ -9,13 +7,13 @@ public sealed class PaymentsApiResource : IDuendeApiResource
 {
     public static ApiResource ApiResource =>
         new(
-                MicroserviceApiResourceNames.PAYMENTS_API,
+                "payments-api",
                 "Payments API")
         {
             Scopes =
                 {
-                    PaymentsApiScopesRequired.PAYMENTS_READ,
-                    PaymentsApiScopesRequired.PAYMENTS_WRITE
+                    "payments.read",
+                    "payments.write"
                 },
 
             // The ABAC attributes the Payments API authorizes on (permission, branch scope;

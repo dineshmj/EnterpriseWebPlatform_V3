@@ -23,7 +23,8 @@ builder.AddEwpObservability("compliance-case-opening-subscriber");
 
 // The shared reliable consume loop (commit after processing, retry in place, dead-letter).
 builder.Services.AddKafkaSubscriber<ComplianceCaseOpeningProcessor, ComplianceCaseOpeningSubscriberOptions>(
-    builder.Configuration, ComplianceCaseOpeningSubscriberOptions.SectionName);
+    builder.Configuration, ComplianceCaseOpeningSubscriberOptions.SectionName)
+    .Validate(s => ServiceAddress.IsHttps(s.ComplianceApiBaseUrl), $"{ComplianceCaseOpeningSubscriberOptions.SectionName}:ComplianceApiBaseUrl must be an absolute https address.");
 
 // The worker's own machine identity; the token is cached until shortly before expiry.
 builder.Services

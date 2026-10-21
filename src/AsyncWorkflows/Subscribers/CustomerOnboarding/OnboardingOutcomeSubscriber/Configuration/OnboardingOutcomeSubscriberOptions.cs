@@ -1,8 +1,5 @@
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Subscribers;
-using EnterpriseWebPlatform.Common.Landscape;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerOnboarding.OnboardingOutcomeSubscriber.Configuration;
 
@@ -33,15 +30,17 @@ public sealed class OnboardingOutcomeSubscriberOptions : ISubscriberSettings, IM
 
     public int TransientRetryMaxDelaySeconds { get; init; } = 60;
 
-    public string IdentityServerAuthority { get; init; } = IDP.AUTHORITY;
+    /// <summary>From configuration only (https); no compiled-in default.</summary>
+    public string IdentityServerAuthority { get; init; } = string.Empty;
 
-    public string ClientId { get; init; } =
-        CustomerOnboardingMicroservice.CLIENT_ID_FOR_IDP_FOR_ONBOARDING_OUTCOME_SUBSCRIBER_TO_CUST_ONBOARDING_API_M2M;
+    /// <summary>From configuration only: the client ID the IDP registered for this worker.</summary>
+    public string ClientId { get; init; } = string.Empty;
 
     /// <summary>From configuration / secret store only; no compiled-in default.</summary>
     public string ClientSecret { get; init; } = string.Empty;
 
-    public string Scope { get; init; } = CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_WRITE;
+    public string Scope { get; init; } = "customer-onboarding.write";
 
-    public string CustomerOnboardingApiBaseUrl { get; init; } = CustomerOnboardingMicroservice.MICROSERVICE_API_BASE_URL;
+    /// <summary>From configuration only (https); no compiled-in default.</summary>
+    public string CustomerOnboardingApiBaseUrl { get; init; } = string.Empty;
 }

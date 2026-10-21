@@ -9,9 +9,8 @@ using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using OpenTelemetry.Trace;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 using EnterpriseWebPlatform.Common.Observability;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.DocumentsManagement.API.Authorization;
 using EnterpriseWebPlatform.DocumentsManagement.Application.Abstractions.Storage;
@@ -29,6 +28,14 @@ using EnterpriseWebPlatform.DocumentsManagement.Infrastructure.Storage;
 // │       OWASP API1 / API5 | Authorization-Model 4
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 var builder = WebApplication.CreateBuilder(args);
+
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ The client IDs this API pins in its authorization rules, from its own configuration
+// │ (section ClientIds; each must equal the IDP's ClientIds entry). Read now: a missing one
+// │ stops the start-up - a pin is never empty.
+// └──────────────────────────────────────────────────────────────────────────────────────
+var clientIds = ClientIds.From(builder.Configuration).Require(nameof(ClientIds.CustomerKycWeb), nameof(ClientIds.CustomerOnboardingWeb), nameof(ClientIds.DocumentInvalidationSubscriber), nameof(ClientIds.PartnerProductsJourneyApi));
+builder.Services.AddSingleton(clientIds);
 
 // Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
 // over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
@@ -154,7 +161,7 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAuthenticatedUser();
         policy.RequireClaim(
             "scope",
-            DocumentsManagementApiScopesRequired.DOCUMENTS_MANAGEMENT_READ);
+            "documents-management.read");
     });
 
     options.AddPolicy("DocumentWrite", policy =>
@@ -162,7 +169,7 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAuthenticatedUser();
         policy.RequireClaim(
             "scope",
-            DocumentsManagementApiScopesRequired.DOCUMENTS_MANAGEMENT_WRITE);
+            "documents-management.write");
     });
 
     // The Document Invalidation Subscriber's pinned machine identity: nobody else
@@ -172,10 +179,10 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAuthenticatedUser();
         policy.RequireClaim(
             "scope",
-            DocumentsManagementApiScopesRequired.DOCUMENTS_MANAGEMENT_WRITE);
+            "documents-management.write");
         policy.RequireClaim(
             "client_id",
-            DocumentsManagementMicroservice.CLIENT_ID_FOR_IDP_FOR_DOCUMENT_INVALIDATION_SUBSCRIBER_TO_DOC_MGMT_API_M2M);
+            clientIds.DocumentInvalidationSubscriber);
     });
 });
 

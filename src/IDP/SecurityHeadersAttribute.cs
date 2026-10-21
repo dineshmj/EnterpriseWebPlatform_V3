@@ -2,6 +2,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
+using EnterpriseWebPlatform.IdentityServer.Security;
+
 namespace EnterpriseWebPlatform.IdentityServer;
 
 // ┌─ :: SECURITY :: Headers of the sign-in pages ──────────────────────────────────────────────────
@@ -40,7 +43,7 @@ public sealed class SecurityHeadersAttribute
         // │ consent and every other page - and the code page of a normal sign-in - stay 'none'.
         // └──────────────────────────────────────────────────────────────────────────────────────
         var frameAncestors = context.HttpContext.Items.ContainsKey(ShellMayFrameKey)
-            ? ContentSecurityPolicyOrigin(EnterpriseWebPlatform.Common.Landscape.BSSShellBFF.SHELL_BFF_CLIENT_BASE_URL)
+            ? ContentSecurityPolicyOrigin(ClientSettings.BaseUrlOf(nameof(ClientIds.Shell)))
             : "'none'";
 
         // The login page must never be framed (clickjacking / credential capture).

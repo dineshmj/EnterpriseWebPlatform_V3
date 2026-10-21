@@ -13,7 +13,7 @@ Deployables: `src/Microservices/{CustomerOnboarding,Compliance,Accounts,Payments
 
 ## 2. Cookies
 
-- [x] **The session cookie `__Host-Microservice-<Context>-bff` is HttpOnly, Secure, SameSite=Lax and `Path=/`; it lasts 30 minutes and slides.** *Because* script cannot read it, it never travels over HTTP, and it is not sent on cross-site sub-requests. → `Program.cs`, `src/Common/Landscape/CookieNames.cs`
+- [x] **The session cookie `__Host-Microservice-<Context>-bff` is HttpOnly, Secure, SameSite=Lax and `Path=/`; it lasts 30 minutes and slides.** *Because* script cannot read it, it never travels over HTTP, and it is not sent on cross-site sub-requests. → `Program.cs` (the cookie name is set there)
 - [x] **Only the correlation and nonce cookies are SameSite=None (with Secure),** and only for the sign-in round trip.
 - [x] **The anti-forgery cookie `__Host-<Context>-Bff-CSRF` is HttpOnly, Secure and SameSite=Lax.** *Because* the SPA gets the request token from `/api/auth/csrf`, never from the cookie, so script never needs it and an XSS bug cannot read it.
 

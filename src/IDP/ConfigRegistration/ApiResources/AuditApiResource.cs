@@ -1,7 +1,5 @@
 using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.ApiResources;
 
@@ -13,10 +11,10 @@ public sealed class AuditApiResource : IDuendeApiResource
 {
     public static ApiResource ApiResource =>
         new(
-                MicroserviceApiResourceNames.AUDIT_API,
+                "audit-api",
                 "Audit API")
         {
-            Scopes = { AuditApiScopesRequired.AUDIT_READ },
+            Scopes = { "audit.read" },
 
             // Who is reading the trail (auditor permissions), and the LAN ID recorded on the
             // ACCESS entry each read leaves behind.
@@ -25,10 +23,10 @@ public sealed class AuditApiResource : IDuendeApiResource
 
     public static ApiResource JourneyApiResource =>
         new(
-                MicroserviceApiResourceNames.AUDIT_JOURNEY_API,
+                "audit-journey-api",
                 "Audit Journey API")
         {
-            Scopes = { AuditApiScopesRequired.AUDIT_JOURNEY_READ },
+            Scopes = { "audit-journey.read" },
             UserClaims = { "role", "permission", "lan_id" }
         };
 }

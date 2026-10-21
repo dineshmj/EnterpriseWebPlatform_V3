@@ -8,8 +8,8 @@ using Npgsql;
 using OpenTelemetry.Trace;
 
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 using EnterpriseWebPlatform.Common.Observability;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.CustomerKyc.Api.Application.Abstractions;
 using EnterpriseWebPlatform.CustomerKyc.Api.Application.Commands.AssignKycCase;
@@ -29,6 +29,14 @@ using EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure;
 // │       OWASP API1 / API5 | Authorization-Model 4
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 var builder = WebApplication.CreateBuilder(args);
+
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ The client IDs this API pins in its authorization rules, from its own configuration
+// │ (section ClientIds; each must equal the IDP's ClientIds entry). Read now: a missing one
+// │ stops the start-up - a pin is never empty.
+// └──────────────────────────────────────────────────────────────────────────────────────
+var clientIds = ClientIds.From(builder.Configuration).Require(nameof(ClientIds.KycCaseOpeningSubscriber));
+builder.Services.AddSingleton(clientIds);
 
 // Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
 // over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
@@ -83,7 +91,7 @@ builder.Services.AddAuthorization(options =>
         policy.RequireClaim("scope", "customer-kyc.write");
         policy.RequireClaim(
             "client_id",
-            CustomerKycMicroservice.CLIENT_ID_FOR_IDP_FOR_KYC_CASE_OPENING_SUBSCRIBER_TO_CUST_KYC_API_M2M);
+            clientIds.KycCaseOpeningSubscriber);
     });
 
     options.AddPolicy("KycCaseView", policy =>

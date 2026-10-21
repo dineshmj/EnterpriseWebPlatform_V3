@@ -8,6 +8,7 @@ using OpenTelemetry.Trace;
 
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 using EnterpriseWebPlatform.Common.Observability;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.PartnerProducts.Api.Authorization;
 using EnterpriseWebPlatform.PartnerProducts.Api.Controllers;
@@ -27,6 +28,14 @@ using EnterpriseWebPlatform.PartnerProducts.Api.PartnerBank;
 // │       OWASP API1 / API5 | Partner Bank repo doc/Architecture.md D14
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 var builder = WebApplication.CreateBuilder(args);
+
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ The client IDs this API pins in its authorization rules, from its own configuration
+// │ (section ClientIds; each must equal the IDP's ClientIds entry). Read now: a missing one
+// │ stops the start-up - a pin is never empty.
+// └──────────────────────────────────────────────────────────────────────────────────────
+var clientIds = ClientIds.From(builder.Configuration).Require(nameof(ClientIds.PartnerProductsJourneyApi), nameof(ClientIds.PartnerProductsWorker));
+builder.Services.AddSingleton(clientIds);
 
 // Traces, Serilog logs and Prometheus metrics (OTLP export when configured).
 builder.AddEwpObservability("partner-products-api", tracing => tracing.AddAspNetCoreInstrumentation().AddNpgsql());
@@ -123,7 +132,7 @@ builder.Services.AddAuthorization(options =>
     // Deny by default: an endpoint without its own policy still needs an authenticated caller.
     // :: SECURITY :: Deny by default - see Common/WebUtilities/Security/ApiEndpointAuthorization.cs
     options.DenyAnonymousByDefault();
-    options.AddDigitalGoldPolicies();
+    options.AddDigitalGoldPolicies(clientIds);
 });
 
 // OWASP API4: per-caller rate limits on the API surface (429 + Retry-After); configuration "RateLimiting".

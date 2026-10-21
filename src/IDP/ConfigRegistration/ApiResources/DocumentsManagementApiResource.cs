@@ -1,7 +1,5 @@
 ﻿using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.ApiResources;
 
@@ -9,13 +7,13 @@ public sealed class DocumentsManagementApiResource : IDuendeApiResource
 {
     public static ApiResource ApiResource =>
         new(
-                MicroserviceApiResourceNames.DOCUMENTS_MANAGEMENT_API,
+                "documents-management-api",
                 "Documents Management API")
         {
             Scopes =
                 {
-                    DocumentsManagementApiScopesRequired.DOCUMENTS_MANAGEMENT_READ,
-                    DocumentsManagementApiScopesRequired.DOCUMENTS_MANAGEMENT_WRITE
+                    "documents-management.read",
+                    "documents-management.write"
                 },
 
             UserClaims =

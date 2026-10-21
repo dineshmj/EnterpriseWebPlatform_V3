@@ -13,6 +13,7 @@ using EnterpriseWebPlatform.Audit.Api.Controllers;
 using EnterpriseWebPlatform.Audit.Api.Infrastructure;
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Subscribers;
 using EnterpriseWebPlatform.Common.Observability;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 
 // ┌─ :: ARCHITECTURE + SECURITY :: Audit API: a resource server ───────────────────────────────────
@@ -25,6 +26,14 @@ using EnterpriseWebPlatform.Common.WebUtilities.Security;
 // │       OWASP API1 / API5 | Authorization-Model 4
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 var builder = WebApplication.CreateBuilder(args);
+
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ The client IDs this API pins in its authorization rules, from its own configuration
+// │ (section ClientIds; each must equal the IDP's ClientIds entry). Read now: a missing one
+// │ stops the start-up - a pin is never empty.
+// └──────────────────────────────────────────────────────────────────────────────────────
+var clientIds = ClientIds.From(builder.Configuration).Require(nameof(ClientIds.AuditJourneyApi));
+builder.Services.AddSingleton(clientIds);
 
 // Traces, Serilog logs and Prometheus metrics (OTLP export when configured).
 builder.AddEwpObservability("audit-api", tracing => tracing.AddAspNetCoreInstrumentation().AddNpgsql());

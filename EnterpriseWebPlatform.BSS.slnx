@@ -35,7 +35,6 @@
     <Project Path="src/AsyncWorkflows/Subscribers/Payments/PaymentsSagaReplySubscriber/PaymentsSagaReplySubscriber.csproj" />
   </Folder>
   <Folder Name="/Common/">
-    <Project Path="src/Common/Landscape/EnterpriseWebPlatform.Common.Landscape.csproj" />
     <Project Path="src/Common/Observability/EnterpriseWebPlatform.Common.Observability.csproj" />
     <Project Path="src/Common/WebUtilities/EnterpriseWebPlatform.Common.WebUtilties.csproj" />
   </Folder>

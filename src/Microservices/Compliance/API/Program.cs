@@ -9,9 +9,8 @@ using Npgsql;
 using OpenTelemetry.Trace;
 
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 using EnterpriseWebPlatform.Common.Observability;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.Compliance.Api.Application.Abstractions;
 using EnterpriseWebPlatform.Compliance.Api.Application.Commands;
@@ -31,6 +30,14 @@ using EnterpriseWebPlatform.Compliance.Api.Infrastructure.Screening;
 // │       OWASP API1 / API5 | Authorization-Model 4
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 var builder = WebApplication.CreateBuilder(args);
+
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ The client IDs this API pins in its authorization rules, from its own configuration
+// │ (section ClientIds; each must equal the IDP's ClientIds entry). Read now: a missing one
+// │ stops the start-up - a pin is never empty.
+// └──────────────────────────────────────────────────────────────────────────────────────
+var clientIds = ClientIds.From(builder.Configuration).Require(nameof(ClientIds.ComplianceCaseOpeningSubscriber), nameof(ClientIds.OperationsJourneyApi));
+builder.Services.AddSingleton(clientIds);
 
 // Distributed tracing: W3C trace context across HTTP and Kafka (OTLP export when configured).
 builder.AddEwpObservability("compliance-api", tracing => tracing.AddAspNetCoreInstrumentation().AddNpgsql());
@@ -84,9 +91,9 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("ComplianceCaseOpeningSubscriberWrite", policy =>
     {
         policy.RequireAuthenticatedUser();
-        policy.RequireClaim("scope", ComplianceApiScopesRequired.COMPLIANCE_WRITE);
+        policy.RequireClaim("scope", "compliance.write");
         policy.RequireClaim("client_id",
-            ComplianceMicroservice.CLIENT_ID_FOR_IDP_FOR_COMPLIANCE_CASE_OPENING_SUBSCRIBER_TO_COMPLIANCE_API_M2M);
+            clientIds.ComplianceCaseOpeningSubscriber);
     });
 
     // Officer policies: scope for the kind of operation + role, department, clearance
@@ -101,16 +108,16 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("ComplianceOutboxView", policy =>
     {
         policy.RequireAuthenticatedUser();
-        policy.RequireClaim("scope", ComplianceApiScopesRequired.COMPLIANCE_READ);
+        policy.RequireClaim("scope", "compliance.read");
         policy.RequireClaim("permission", "outbox.view");
-        policy.RequireDelegationBy(OperationsMicroservice.CLIENT_ID_FOR_IDP_FOR_OPERATIONS_JOURNEY_API);
+        policy.RequireDelegationBy(clientIds.OperationsJourneyApi);
     });
     options.AddPolicy("ComplianceOutboxResend", policy =>
     {
         policy.RequireAuthenticatedUser();
-        policy.RequireClaim("scope", ComplianceApiScopesRequired.COMPLIANCE_WRITE);
+        policy.RequireClaim("scope", "compliance.write");
         policy.RequireClaim("permission", "workflow.reprocess");
-        policy.RequireDelegationBy(OperationsMicroservice.CLIENT_ID_FOR_IDP_FOR_OPERATIONS_JOURNEY_API);
+        policy.RequireDelegationBy(clientIds.OperationsJourneyApi);
         policy.RequireMfa();
     });
 
@@ -126,12 +133,12 @@ builder.Services.AddAuthorization(options =>
                 policy.RequireMfa();
         });
 
-    AddOfficerPolicy("ComplianceCaseView", ComplianceApiScopesRequired.COMPLIANCE_READ, "compliance.case.view");
-    AddOfficerPolicy("ComplianceCaseReview", ComplianceApiScopesRequired.COMPLIANCE_WRITE, "compliance.case.review");
-    AddOfficerPolicy("ComplianceCaseApprove", ComplianceApiScopesRequired.COMPLIANCE_WRITE, "compliance.case.approve");
-    AddOfficerPolicy("ComplianceCaseReject", ComplianceApiScopesRequired.COMPLIANCE_WRITE, "compliance.case.reject");
-    AddOfficerPolicy("ComplianceCaseHold", ComplianceApiScopesRequired.COMPLIANCE_WRITE, "compliance.case.hold");
-    AddOfficerPolicy("ComplianceCaseReleaseHold", ComplianceApiScopesRequired.COMPLIANCE_WRITE, "compliance.case.release");
+    AddOfficerPolicy("ComplianceCaseView", "compliance.read", "compliance.case.view");
+    AddOfficerPolicy("ComplianceCaseReview", "compliance.write", "compliance.case.review");
+    AddOfficerPolicy("ComplianceCaseApprove", "compliance.write", "compliance.case.approve");
+    AddOfficerPolicy("ComplianceCaseReject", "compliance.write", "compliance.case.reject");
+    AddOfficerPolicy("ComplianceCaseHold", "compliance.write", "compliance.case.hold");
+    AddOfficerPolicy("ComplianceCaseReleaseHold", "compliance.write", "compliance.case.release");
 });
 builder.Services.AddSingleton<IAuthorizationHandler, ComplianceOfficerAuthorizationHandler>();
 

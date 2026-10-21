@@ -2,9 +2,7 @@
 using Duende.IdentityServer;
 using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.IdentityServer.Security;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.MFEs;
@@ -20,9 +18,9 @@ public sealed class MfeCustomerKyc
                 // CustomerKyc Microservice Client (BFF using NestJS, and not ASP.NET Core 10).
                 new()
                 {
-                    ClientId = CustomerKycMicroservice.CLIENT_ID_FOR_IDP,
-                    ClientName = CustomerKycMicroservice.CLIENT_NAME_FOR_IDP,
-                    ClientSecrets = { ClientSecretStore.For(CustomerKycMicroservice.CLIENT_ID_FOR_IDP) },
+                    ClientId = ClientSettings.Ids.CustomerKycWeb,
+                    ClientName = "Customer KYC Microservice BFF Client",
+                    ClientSecrets = { ClientSecretStore.For(ClientSettings.Ids.CustomerKycWeb) },
 
                     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
                     // │ Authorization Code (+ PKCE) for the BFF, plus token exchange (RFC 8693) for Documents
@@ -32,12 +30,12 @@ public sealed class MfeCustomerKyc
                     AllowedGrantTypes = { GrantType.AuthorizationCode, OidcConstants.GrantTypes.TokenExchange },
                     RequirePkce = true,
 
-                    RedirectUris = { $"{CustomerKycMicroservice.BFF_CLIENT_BASE_URL}/api/auth/callback" },
-                    PostLogoutRedirectUris = { $"{CustomerKycMicroservice.BFF_CLIENT_BASE_URL}/signout-callback-oidc" },
-                    FrontChannelLogoutUri = $"{CustomerKycMicroservice.BFF_CLIENT_BASE_URL}/signout-oidc",
+                    RedirectUris = { $"{ClientSettings.BaseUrlOf(nameof(ClientIds.CustomerKycWeb))}/api/auth/callback" },
+                    PostLogoutRedirectUris = { $"{ClientSettings.BaseUrlOf(nameof(ClientIds.CustomerKycWeb))}/signout-callback-oidc" },
+                    FrontChannelLogoutUri = $"{ClientSettings.BaseUrlOf(nameof(ClientIds.CustomerKycWeb))}/signout-oidc",
                     // Back-channel logout (server-to-server; NestJS BackChannelLogoutController):
                     // ends the BFF session even when the browser blocks the front-channel iframe.
-                    BackChannelLogoutUri = $"{CustomerKycMicroservice.BFF_CLIENT_BASE_URL}/backchannel-logout",
+                    BackChannelLogoutUri = $"{ClientSettings.BaseUrlOf(nameof(ClientIds.CustomerKycWeb))}/backchannel-logout",
                     BackChannelLogoutSessionRequired = true,
 
                     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
@@ -58,11 +56,11 @@ public sealed class MfeCustomerKyc
                         // │ API scopes: only what this BFF's screens need; the Documents Management scope is
                         // │ requested only in the token exchange, never at sign-in.
                         // └──────────────────────────────────────────────────────────────────────────────────────
-                        MicroserviceApiResourceNames.CUSTOMER_KYC_API,
-                        CustomerKycApiScopesRequired.CUSTOMER_KYC_READ,
-                        CustomerKycApiScopesRequired.CUSTOMER_KYC_WRITE,
+                        "customer-kyc-api",
+                        "customer-kyc.read",
+                        "customer-kyc.write",
                         // Requested only in the token exchange, never at sign-in.
-                        DocumentsManagementApiScopesRequired.DOCUMENTS_MANAGEMENT_READ
+                        "documents-management.read"
                 
                     },
 

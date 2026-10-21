@@ -1,7 +1,5 @@
 ﻿using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.ApiResources;
 
@@ -9,13 +7,13 @@ public sealed class CustomerOnboardingApiResource : IDuendeApiResource
 {
     public static ApiResource ApiResource =>
         new(
-            MicroserviceApiResourceNames.CUSTOMER_ONBOARDING_API,
+            "customer-onboarding-api",
             "Customer Onboarding API")
         {
             Scopes =
                 {
-                    CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_READ,
-                    CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_WRITE
+                    "customer-onboarding.read",
+                    "customer-onboarding.write"
                 },
 
             UserClaims =

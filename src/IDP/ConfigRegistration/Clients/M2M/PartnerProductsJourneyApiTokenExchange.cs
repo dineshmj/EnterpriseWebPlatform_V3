@@ -1,8 +1,7 @@
 using Duende.IdentityModel;
 using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.IdentityServer.Security;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.M2M;
@@ -13,9 +12,9 @@ public sealed class PartnerProductsJourneyApiTokenExchange
     public static Client Client =>
         new()
         {
-            ClientId = PartnerProductsMicroservice.CLIENT_ID_FOR_IDP_FOR_PARTNER_PRODUCTS_JOURNEY_API,
-            ClientName = PartnerProductsMicroservice.CLIENT_NAME_FOR_IDP_FOR_PARTNER_PRODUCTS_JOURNEY_API,
-            ClientSecrets = { ClientSecretStore.For(PartnerProductsMicroservice.CLIENT_ID_FOR_IDP_FOR_PARTNER_PRODUCTS_JOURNEY_API) },
+            ClientId = ClientSettings.Ids.PartnerProductsJourneyApi,
+            ClientName = "Partner Products Journey API Client",
+            ClientSecrets = { ClientSecretStore.For(ClientSettings.Ids.PartnerProductsJourneyApi) },
             // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
             // │ Token exchange ONLY - no client credentials: the Partner Products Journey API can
             // │ never call another API as itself, only for the signed-in staff member, whose own
@@ -27,11 +26,11 @@ public sealed class PartnerProductsJourneyApiTokenExchange
             AllowedGrantTypes = { OidcConstants.GrantTypes.TokenExchange },
             AllowedScopes =
             {
-                PartnerProductsApiScopesRequired.PARTNER_PRODUCTS_READ, PartnerProductsApiScopesRequired.PARTNER_PRODUCTS_WRITE,
-                CustomerOnboardingApiScopesRequired.CUSTOMER_ONBOARDING_READ,
-                AccountsApiScopesRequired.ACCOUNTS_READ,
-                DocumentsManagementApiScopesRequired.DOCUMENTS_MANAGEMENT_WRITE,
-                PaymentsApiScopesRequired.PAYMENTS_WRITE
+                "partner-products.read", "partner-products.write",
+                "customer-onboarding.read",
+                "accounts.read",
+                "documents-management.write",
+                "payments.write"
             },
 
             // Delegated tokens are short-lived: one request, one call.

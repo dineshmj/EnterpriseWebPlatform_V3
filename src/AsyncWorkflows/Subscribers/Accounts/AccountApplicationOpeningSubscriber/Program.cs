@@ -23,7 +23,8 @@ builder.AddEwpObservability("account-application-opening-subscriber");
 
 // The shared reliable consume loop (commit after processing, retry in place, dead-letter).
 builder.Services.AddKafkaSubscriber<AccountApplicationOpeningProcessor, AccountApplicationOpeningSubscriberOptions>(
-    builder.Configuration, AccountApplicationOpeningSubscriberOptions.SectionName);
+    builder.Configuration, AccountApplicationOpeningSubscriberOptions.SectionName)
+    .Validate(s => ServiceAddress.IsHttps(s.AccountsApiBaseUrl), $"{AccountApplicationOpeningSubscriberOptions.SectionName}:AccountsApiBaseUrl must be an absolute https address.");
 
 // The worker's own machine identity; the token is cached until shortly before expiry.
 builder.Services

@@ -1,10 +1,11 @@
 using System.Security.Claims;
 
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Configuration;
 
 using AwesomeAssertions;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.Payments.Api.Authorization;
 using EnterpriseWebPlatform.Payments.Api.Domain.ValueObjects;
 
@@ -20,6 +21,13 @@ namespace EnterpriseWebPlatform.Payments.Api.Tests.Authorization;
 [Category("Security")]
 public sealed class PaymentsStaffAuthorizationHandler_Edge_PermissionsAndBranch
 {
+    /// <summary>The Audit Journey API's client ID, as the Payments API's ClientIds configuration holds it.</summary>
+    private const string AuditJourneyApi = "Audit.JourneyApi.ClientID";
+
+    private static readonly ClientIds ClientIds = ClientIds.From(new ConfigurationBuilder()
+        .AddInMemoryCollection(new Dictionary<string, string?> { [$"{ClientIds.SectionName}:{nameof(ClientIds.AuditJourneyApi)}"] = AuditJourneyApi })
+        .Build());
+
     private static ClaimsPrincipal Person(string? branch, string? actingClient, params string[] permissions)
     {
         var claims = permissions.Select(p => new Claim("permission", p)).ToList();
@@ -34,7 +42,7 @@ public sealed class PaymentsStaffAuthorizationHandler_Edge_PermissionsAndBranch
     {
         var requirement = new PaymentsStaffRequirement(anyOfPermissions);
         var context = new AuthorizationHandlerContext([requirement], user, resource: null);
-        await new PaymentsStaffAuthorizationHandler().HandleAsync(context);
+        await new PaymentsStaffAuthorizationHandler(ClientIds).HandleAsync(context);
         return context.HasSucceeded;
     }
 
@@ -76,25 +84,25 @@ public sealed class PaymentsStaffAuthorizationHandler_Edge_PermissionsAndBranch
         var sarah = Person("SYD001", null, PaymentsStaffAuthorizationHandler.AuditReadPermission);
 
         // When
-        var permissions = PaymentsStaffAuthorizationHandler.EffectivePermissionsOf(sarah);
+        var permissions = PaymentsStaffAuthorizationHandler.EffectivePermissionsOf(sarah, AuditJourneyApi);
 
         // Then
         permissions.Should().BeEmpty();
-        PaymentsStaffAuthorizationHandler.ReadScopeOf(sarah).Should().Be((true, BranchCode.Create("SYD001")));
+        PaymentsStaffAuthorizationHandler.ReadScopeOf(sarah, AuditJourneyApi).Should().Be((true, BranchCode.Create("SYD001")));
     }
 
     [Test]
     public void Given_TheAuditReadPermissionThroughTheAuditJourneyApi_When_PermissionsAreWorkedOut_Then_ItCountsForAllBranches()
     {
         // Given
-        var sarah = Person(null, AuditMicroservice.CLIENT_ID_FOR_IDP_FOR_AUDIT_JOURNEY_API, PaymentsStaffAuthorizationHandler.AuditReadPermission);
+        var sarah = Person(null, AuditJourneyApi, PaymentsStaffAuthorizationHandler.AuditReadPermission);
 
         // When
-        var permissions = PaymentsStaffAuthorizationHandler.EffectivePermissionsOf(sarah);
+        var permissions = PaymentsStaffAuthorizationHandler.EffectivePermissionsOf(sarah, AuditJourneyApi);
 
         // Then
         permissions.Should().Contain(PaymentsStaffAuthorizationHandler.AuditReadPermission);
-        PaymentsStaffAuthorizationHandler.ReadScopeOf(sarah).Should().Be((true, (BranchCode?)null));
+        PaymentsStaffAuthorizationHandler.ReadScopeOf(sarah, AuditJourneyApi).Should().Be((true, (BranchCode?)null));
     }
 
     [Test]
@@ -114,6 +122,6 @@ public sealed class PaymentsStaffAuthorizationHandler_Edge_PermissionsAndBranch
         var nobody = Person(null, null, "payment.view");
 
         // When / Then
-        PaymentsStaffAuthorizationHandler.ReadScopeOf(nobody).Allowed.Should().BeFalse();
+        PaymentsStaffAuthorizationHandler.ReadScopeOf(nobody, AuditJourneyApi).Allowed.Should().BeFalse();
     }
 }

@@ -1,7 +1,6 @@
 ﻿using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.IdentityServer.Security;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.M2M;
@@ -17,9 +16,9 @@ public sealed class KycCaseOpeningSubscriberToCustomerKycApiM2M
                 // Customer KYC Subscribre M2M Client
                 new()
                 {
-                    ClientId = CustomerKycMicroservice.CLIENT_ID_FOR_IDP_FOR_KYC_CASE_OPENING_SUBSCRIBER_TO_CUST_KYC_API_M2M,
-                    ClientName = CustomerKycMicroservice.CLIENT_NAME_FOR_IDP_FOR_KYC_CASE_OPENING_SUBSCRIBER_TO_CUST_KYC_API_M2M,
-                    ClientSecrets = { ClientSecretStore.For(CustomerKycMicroservice.CLIENT_ID_FOR_IDP_FOR_KYC_CASE_OPENING_SUBSCRIBER_TO_CUST_KYC_API_M2M) },
+                    ClientId = ClientSettings.Ids.KycCaseOpeningSubscriber,
+                    ClientName = "KYC Case Opening Subscriber to Customer KYC API M2M Client",
+                    ClientSecrets = { ClientSecretStore.For(ClientSettings.Ids.KycCaseOpeningSubscriber) },
 
                     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
                     // │ Client Credentials: a machine identity with no person and no browser - one client per
@@ -33,7 +32,7 @@ public sealed class KycCaseOpeningSubscriberToCustomerKycApiM2M
                         // │ Least privilege: only the write scope this worker needs; the KYC API also pins this
                         // │ client_id on its internal endpoint.
                         // └──────────────────────────────────────────────────────────────────────────────────────
-                        CustomerKycApiScopesRequired.CUSTOMER_KYC_WRITE
+                        "customer-kyc.write"
                 
                     }
                 };

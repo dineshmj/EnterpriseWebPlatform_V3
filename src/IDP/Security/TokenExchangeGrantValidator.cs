@@ -7,8 +7,9 @@ using Duende.IdentityServer;
 using Duende.IdentityServer.Models;
 using Duende.IdentityServer.Validation;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
+using EnterpriseWebPlatform.IdentityServer.Security;
+
 
 namespace EnterpriseWebPlatform.IdentityServer.Security;
 
@@ -47,45 +48,46 @@ public sealed class TokenExchangeGrantValidator(
     /// Audit web BFF exchanged for the Journey API. The scopes a client may ask for are its
     /// AllowedScopes (e.g. the KYC BFF: documents-management.read only).
     /// </summary>
-    private static readonly Dictionary<string, Func<SubjectToken, bool>> AllowedExchanges = new()
+    // Built per validator (after ClientSettings.Initialize at start-up): the client IDs come from configuration.
+    private readonly Dictionary<string, Func<SubjectToken, bool>> AllowedExchanges = new()
     {
-        [AuditMicroservice.CLIENT_ID_FOR_IDP] = token =>
-            token.ClientId == AuditMicroservice.CLIENT_ID_FOR_IDP && token.ActingClientId is null,
+        [ClientSettings.Ids.AuditWeb] = token =>
+            token.ClientId == ClientSettings.Ids.AuditWeb && token.ActingClientId is null,
 
         // The Operations web BFF: only the person's own token from its sign-in, for its Journey API.
-        [OperationsMicroservice.CLIENT_ID_FOR_IDP] = token =>
-            token.ClientId == OperationsMicroservice.CLIENT_ID_FOR_IDP && token.ActingClientId is null,
+        [ClientSettings.Ids.OperationsWeb] = token =>
+            token.ClientId == ClientSettings.Ids.OperationsWeb && token.ActingClientId is null,
 
-        [AuditMicroservice.CLIENT_ID_FOR_IDP_FOR_AUDIT_JOURNEY_API] = token =>
-            token.Audiences.Contains(MicroserviceApiResourceNames.AUDIT_JOURNEY_API) &&
-            token.ActingClientId == AuditMicroservice.CLIENT_ID_FOR_IDP,
+        [ClientSettings.Ids.AuditJourneyApi] = token =>
+            token.Audiences.Contains("audit-journey-api") &&
+            token.ActingClientId == ClientSettings.Ids.AuditWeb,
 
         // The Operations Journey API: only a token the Operations web BFF exchanged for it (parked
         // Outbox messages of Accounts and Compliance; the scopes are its AllowedScopes).
-        [OperationsMicroservice.CLIENT_ID_FOR_IDP_FOR_OPERATIONS_JOURNEY_API] = token =>
-            token.Audiences.Contains(MicroserviceApiResourceNames.OPERATIONS_JOURNEY_API) &&
-            token.ActingClientId == OperationsMicroservice.CLIENT_ID_FOR_IDP,
+        [ClientSettings.Ids.OperationsJourneyApi] = token =>
+            token.Audiences.Contains("operations-journey-api") &&
+            token.ActingClientId == ClientSettings.Ids.OperationsWeb,
 
         // The Partner Products web BFF: only the person's own token from its sign-in, for its Journey API.
-        [PartnerProductsMicroservice.CLIENT_ID_FOR_IDP] = token =>
-            token.ClientId == PartnerProductsMicroservice.CLIENT_ID_FOR_IDP && token.ActingClientId is null,
+        [ClientSettings.Ids.PartnerProductsWeb] = token =>
+            token.ClientId == ClientSettings.Ids.PartnerProductsWeb && token.ActingClientId is null,
 
         // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
         // │ The Partner Products Journey API: only a token the Partner Products web BFF exchanged
         // │ for it - so the customer lookup, the account lookup and the scan upload it makes are
         // │ always FOR the signed-in staff member, within their own branch and permissions.
         // └──────────────────────────────────────────────────────────────────────────────────────
-        [PartnerProductsMicroservice.CLIENT_ID_FOR_IDP_FOR_PARTNER_PRODUCTS_JOURNEY_API] = token =>
-            token.Audiences.Contains(MicroserviceApiResourceNames.PARTNER_PRODUCTS_JOURNEY_API) &&
-            token.ActingClientId == PartnerProductsMicroservice.CLIENT_ID_FOR_IDP,
+        [ClientSettings.Ids.PartnerProductsJourneyApi] = token =>
+            token.Audiences.Contains("partner-products-journey-api") &&
+            token.ActingClientId == ClientSettings.Ids.PartnerProductsWeb,
 
         // Documents Management for the signed-in agent (upload, clean-up of an unfinished submission).
-        [CustomerOnboardingMicroservice.CLIENT_ID_FOR_IDP] = token =>
-            token.ClientId == CustomerOnboardingMicroservice.CLIENT_ID_FOR_IDP && token.ActingClientId is null,
+        [ClientSettings.Ids.CustomerOnboardingWeb] = token =>
+            token.ClientId == ClientSettings.Ids.CustomerOnboardingWeb && token.ActingClientId is null,
 
         // Documents Management for the signed-in KYC officer (reading the evidence).
-        [CustomerKycMicroservice.CLIENT_ID_FOR_IDP] = token =>
-            token.ClientId == CustomerKycMicroservice.CLIENT_ID_FOR_IDP && token.ActingClientId is null
+        [ClientSettings.Ids.CustomerKycWeb] = token =>
+            token.ClientId == ClientSettings.Ids.CustomerKycWeb && token.ActingClientId is null
     };
 
     public async Task ValidateAsync(ExtensionGrantValidationContext context, CancellationToken cancellationToken)

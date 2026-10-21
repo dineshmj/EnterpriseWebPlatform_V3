@@ -1,6 +1,5 @@
 using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.MicroserviceApiScopes;
 
@@ -9,7 +8,7 @@ public static class PartnerProductsApiScope
 {
     public static ApiScope Read =>
         new(
-                PartnerProductsApiScopesRequired.PARTNER_PRODUCTS_READ,
+                "partner-products.read",
                 "Partner Products API - Read")
         {
             UserClaims = { "role", "name" }
@@ -17,7 +16,7 @@ public static class PartnerProductsApiScope
 
     public static ApiScope Write =>
         new(
-                PartnerProductsApiScopesRequired.PARTNER_PRODUCTS_WRITE,
+                "partner-products.write",
                 "Partner Products API - Write")
         {
             UserClaims = { "role", "name" }
@@ -25,7 +24,7 @@ public static class PartnerProductsApiScope
 
     public static ApiScope JourneyRead =>
         new(
-                PartnerProductsApiScopesRequired.PARTNER_PRODUCTS_JOURNEY_READ,
+                "partner-products-journey.read",
                 "Partner Products Journey API - Read")
         {
             UserClaims = { "role", "name" }
@@ -33,7 +32,7 @@ public static class PartnerProductsApiScope
 
     public static ApiScope JourneyWrite =>
         new(
-                PartnerProductsApiScopesRequired.PARTNER_PRODUCTS_JOURNEY_WRITE,
+                "partner-products-journey.write",
                 "Partner Products Journey API - Write")
         {
             UserClaims = { "role", "name" }

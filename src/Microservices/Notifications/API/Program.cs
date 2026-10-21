@@ -6,9 +6,8 @@ using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using OpenTelemetry.Trace;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 using EnterpriseWebPlatform.Common.Observability;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.Notifications.Api.Application;
 using EnterpriseWebPlatform.Notifications.Api.Hubs;
@@ -24,6 +23,14 @@ using EnterpriseWebPlatform.Notifications.Api.Infrastructure;
 // │       OWASP API1 / API5 | Authorization-Model 4
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 var builder = WebApplication.CreateBuilder(args);
+
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ The client IDs this API pins in its authorization rules, from its own configuration
+// │ (section ClientIds; each must equal the IDP's ClientIds entry). Read now: a missing one
+// │ stops the start-up - a pin is never empty.
+// └──────────────────────────────────────────────────────────────────────────────────────
+var clientIds = ClientIds.From(builder.Configuration).Require(nameof(ClientIds.NotificationsSubscriber));
+builder.Services.AddSingleton(clientIds);
 
 // Distributed tracing: W3C trace context across HTTP and Kafka (OTLP export when configured).
 builder.AddEwpObservability("notifications-api", tracing => tracing.AddAspNetCoreInstrumentation().AddNpgsql());
@@ -80,7 +87,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("NotificationsRead", policy =>
     {
         policy.RequireAuthenticatedUser();
-        policy.RequireClaim("scope", NotificationsApiScopesRequired.NOTIFICATIONS_READ);
+        policy.RequireClaim("scope", "notifications.read");
         policy.RequireClaim("sub");
     });
 
@@ -88,7 +95,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("NotificationsWrite", policy =>
     {
         policy.RequireAuthenticatedUser();
-        policy.RequireClaim("scope", NotificationsApiScopesRequired.NOTIFICATIONS_WRITE);
+        policy.RequireClaim("scope", "notifications.write");
         policy.RequireClaim("sub");
     });
 
@@ -96,9 +103,9 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("NotificationsSubscriberWrite", policy =>
     {
         policy.RequireAuthenticatedUser();
-        policy.RequireClaim("scope", NotificationsApiScopesRequired.NOTIFICATIONS_WRITE);
+        policy.RequireClaim("scope", "notifications.write");
         policy.RequireClaim("client_id",
-            NotificationsMicroservice.CLIENT_ID_FOR_IDP_FOR_NOTIFICATIONS_SUBSCRIBER_TO_NOTIFICATIONS_API_M2M);
+            clientIds.NotificationsSubscriber);
     });
 });
 

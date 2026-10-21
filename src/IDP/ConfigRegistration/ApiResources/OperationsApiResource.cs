@@ -1,7 +1,5 @@
 using Duende.IdentityServer.Models;
 
-using EnterpriseWebPlatform.Common.Landscape.Microservices;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
 
 namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.ApiResources;
 
@@ -14,10 +12,10 @@ public sealed class OperationsApiResource : IDuendeApiResource
 {
     public static ApiResource ApiResource =>
         new(
-                MicroserviceApiResourceNames.OPERATIONS_JOURNEY_API,
+                "operations-journey-api",
                 "Operations Journey API")
         {
-            Scopes = { OperationsApiScopesRequired.OPERATIONS_JOURNEY_READ, OperationsApiScopesRequired.OPERATIONS_JOURNEY_WRITE },
+            Scopes = { "operations-journey.read", "operations-journey.write" },
             UserClaims = { "role", "permission", "lan_id" }
         };
 }

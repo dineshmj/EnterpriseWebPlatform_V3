@@ -24,7 +24,8 @@ builder.AddEwpObservability("kyc-case-opening-subscriber");
 // The shared reliable consume loop (commit after processing, retry in place,
 // dead-letter) with this worker's processor.
 builder.Services.AddKafkaSubscriber<KycCaseOpeningProcessor, KycCaseOpeningSubscriberOptions>(
-    builder.Configuration, KycCaseOpeningSubscriberOptions.SectionName);
+    builder.Configuration, KycCaseOpeningSubscriberOptions.SectionName)
+    .Validate(s => ServiceAddress.IsHttps(s.KycApiBaseUrl), $"{KycCaseOpeningSubscriberOptions.SectionName}:KycApiBaseUrl must be an absolute https address.");
 
 // The worker's own machine identity; the token is cached until shortly before expiry.
 builder.Services

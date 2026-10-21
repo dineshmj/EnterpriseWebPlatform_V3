@@ -1,8 +1,5 @@
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Subscribers;
-using EnterpriseWebPlatform.Common.Landscape;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.ApiScopes;
-using EnterpriseWebPlatform.Common.Landscape.Microservices.IdpInfo;
 
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.Notifications.NotificationsSubscriber.Configuration;
 
@@ -39,15 +36,17 @@ public sealed class NotificationsSubscriberOptions : ISubscriberSettings, IM2MCl
 
     public int TransientRetryMaxDelaySeconds { get; init; } = 60;
 
-    public string IdentityServerAuthority { get; init; } = IDP.AUTHORITY;
+    /// <summary>From configuration only (https); no compiled-in default.</summary>
+    public string IdentityServerAuthority { get; init; } = string.Empty;
 
-    public string ClientId { get; init; } =
-        NotificationsMicroservice.CLIENT_ID_FOR_IDP_FOR_NOTIFICATIONS_SUBSCRIBER_TO_NOTIFICATIONS_API_M2M;
+    /// <summary>From configuration only: the client ID the IDP registered for this worker.</summary>
+    public string ClientId { get; init; } = string.Empty;
 
     /// <summary>From configuration / secret store only; no compiled-in default.</summary>
     public string ClientSecret { get; init; } = string.Empty;
 
-    public string Scope { get; init; } = NotificationsApiScopesRequired.NOTIFICATIONS_WRITE;
+    public string Scope { get; init; } = "notifications.write";
 
-    public string NotificationsApiBaseUrl { get; init; } = NotificationsMicroservice.MICROSERVICE_API_BASE_URL;
+    /// <summary>From configuration only (https); no compiled-in default.</summary>
+    public string NotificationsApiBaseUrl { get; init; } = string.Empty;
 }
