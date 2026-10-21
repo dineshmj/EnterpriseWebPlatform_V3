@@ -12,8 +12,12 @@ using EnterpriseWebPlatform.Compliance.Api.Infrastructure.Persistence;
 namespace EnterpriseWebPlatform.Compliance.Api.Infrastructure.Messaging;
 
 /// <summary>One long-lived, idempotent producer, authenticated as the Compliance API's own Kafka user.</summary>
-public sealed class ComplianceKafkaProducer(Microsoft.Extensions.Options.IOptions<KafkaOptions> options) : IDisposable
+public sealed class ComplianceKafkaProducer(Microsoft.Extensions.Options.IOptions<KafkaOptions> options, ILogger<ComplianceKafkaProducer> logger) : IDisposable
 {
+    // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+    // │ The Kafka library's own lines and errors go through the logger (KafkaClientLog):
+    // │ once per change, not two console lines every few seconds while the broker is down.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     public IProducer<string, string> Producer { get; } =
         new ProducerBuilder<string, string>(KafkaClientSecurity.Apply(new ProducerConfig
         {
@@ -21,7 +25,7 @@ public sealed class ComplianceKafkaProducer(Microsoft.Extensions.Options.IOption
             EnableIdempotence = true,
             MaxInFlight = 5,
             MessageTimeoutMs = 30_000
-        }, options.Value)).Build();
+        }, options.Value)).WithClientLog(new KafkaClientLog(logger, "producer")).Build();
 
     public void Dispose()
     {

@@ -13,8 +13,12 @@ namespace EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure;
 /// </summary>
 public sealed class KycKafkaProducer : IDisposable
 {
-    public KycKafkaProducer(IConfiguration config)
+    public KycKafkaProducer(IConfiguration config, ILogger<KycKafkaProducer> logger)
     {
+        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // │ The Kafka library's own lines and errors go through the logger (KafkaClientLog):
+        // │ once per change, not two console lines every few seconds while the broker is down.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         // Authenticates as the KYC API's own Kafka user: ACLs allow it to write kyc.* only.
         var kafka = config.GetSection(KafkaOptions.SectionName).Get<KafkaOptions>()
             ?? throw new InvalidOperationException("The Kafka configuration section is missing.");
@@ -25,7 +29,7 @@ public sealed class KycKafkaProducer : IDisposable
             EnableIdempotence = true,
             MaxInFlight = 5,
             MessageTimeoutMs = 30_000
-        }, kafka)).Build();
+        }, kafka)).WithClientLog(new KafkaClientLog(logger, "producer")).Build();
     }
 
     public IProducer<string, string> Producer { get; }

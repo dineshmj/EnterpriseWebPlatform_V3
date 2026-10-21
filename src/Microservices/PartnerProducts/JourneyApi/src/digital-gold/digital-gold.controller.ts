@@ -8,6 +8,7 @@ const MAX_SCAN_BYTES = 5 * 1024 * 1024;
 const SCAN_TYPES = ['application/pdf', 'image/png', 'image/jpeg'];
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const DOCUMENT_NUMBER = /^[A-Za-z0-9][A-Za-z0-9-]{3,31}$/;
+const CUSTOMER_NUMBER = /^CUST-\d{1,12}$/;
 
 // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
 // │ The scan is held in memory for this one request only (never written to this server's
@@ -34,6 +35,17 @@ export class DigitalGoldController {
   @Requires(VIEW)
   customer(@Req() request: DelegatedRequest, @Param('customerId', ParseIntPipe) customerId: number) {
     return this.digitalGold.customer(request.delegation!.subjectToken, customerId);
+  }
+
+  // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+  // │ The light read the screen polls while a purchase waits for its payment: Partner
+  // │ Products only (it limits the answer to the staff member's branch), nothing else.
+  // └──────────────────────────────────────────────────────────────────────────────────────
+  @Get('customers/:customerNumber/digital-gold')
+  @Requires(VIEW)
+  digitalGoldOf(@Req() request: DelegatedRequest, @Param('customerNumber') customerNumber: string) {
+    if (!CUSTOMER_NUMBER.test(customerNumber)) throw new BadRequestException('An EWP customer number (CUST-...) is required.');
+    return this.digitalGold.digitalGoldOf(request.delegation!.subjectToken, customerNumber);
   }
 
   @Get('applications')

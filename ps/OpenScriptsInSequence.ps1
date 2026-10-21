@@ -14,3 +14,5 @@ foreach ($File in $ScriptFiles) {
         Write-Warning "File not found: $File"
     }
 }
+
+cls;

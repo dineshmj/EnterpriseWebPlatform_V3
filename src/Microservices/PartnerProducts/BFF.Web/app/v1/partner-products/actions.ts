@@ -29,6 +29,17 @@ export async function loadCustomer(customerId: number): Promise<ActionResult<Cus
   return callJourney<CustomerAtCounter>(READ, 'GET', `/v1/journeys/partner-products/customers/${customerId}`);
 }
 
+// ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+// │ The screen follows a purchase that waits for its payment with this light read: the
+// │ customer's Form VII and slips from the Partner Products API only (its own database,
+// │ the staff member's branch) - no Customer Onboarding, Accounts or Partner Bank call.
+// │ It is not the person's activity, so it does not extend the session.
+// └──────────────────────────────────────────────────────────────────────────────────────
+export async function loadPurchases(customerNumber: string): Promise<ActionResult<CustomerAtCounter['digitalGold']>> {
+  if (!/^CUST-\d{1,12}$/.test(customerNumber)) return { ok: false, error: 'Unknown customer.' };
+  return callJourney<CustomerAtCounter['digitalGold']>(READ, 'GET', `/v1/journeys/partner-products/customers/${customerNumber}/digital-gold`, undefined, { slide: false });
+}
+
 export async function loadApplications(): Promise<ActionResult<GoldApplication[]>> {
   return callJourney<GoldApplication[]>(READ, 'GET', '/v1/journeys/partner-products/applications');
 }
@@ -100,11 +111,11 @@ async function recordSigned<T>(customerId: number, kind: 'form-vii' | 'transfer-
 // │ Ref : Features 3.3, 2.1.2 | Customer pattern (Next.js BFF -> NestJS Journey API -> domain API)
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 async function callJourney<T>(
-  scope: typeof READ | typeof WRITE, method: 'GET' | 'POST', path: string, body?: FormData,
+  scope: typeof READ | typeof WRITE, method: 'GET' | 'POST', path: string, body?: FormData, { slide = true }: { slide?: boolean } = {},
 ): Promise<ActionResult<T>> {
   const cookieStore = await cookies();
   const cookieValue = cookieStore.get(SESSION_COOKIE)?.value;
-  const session = await readSession(cookieValue);
+  const session = await readSession(cookieValue, { slide });
   if (!session || !cookieValue) return { ok: false, signedOut: true, error: 'Your session has ended.' };
 
   let journeyToken: string;

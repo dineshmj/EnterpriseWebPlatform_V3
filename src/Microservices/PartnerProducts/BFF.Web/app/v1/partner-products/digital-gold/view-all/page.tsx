@@ -9,10 +9,16 @@ import { DescriptionList, Table, Td, Th } from '@/app/components/ui/data';
 import { Alert, Badge, EmptyState } from '@/app/components/ui/feedback';
 import { Field, Input, Select } from '@/app/components/ui/form';
 import type { ActionResult, CustomerAtCounter, CustomerMatch, GoldApplication, GoldPurchase } from '@/lib/partner-products-types';
-import { buyGold, loadApplications, loadCustomer, openPartnerView, recordFormVii, recordTransferSlip, searchCustomers, sendFormVii } from '../../actions';
+import { buyGold, loadApplications, loadCustomer, loadPurchases, openPartnerView, recordFormVii, recordTransferSlip, searchCustomers, sendFormVii } from '../../actions';
 
 /** Today in Sydney (yyyy-mm-dd) - the date a transfer slip must carry. */
 const sydneyToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' }).format(new Date());
+
+/** Slips whose next step happens without the staff member: the workflow follows the payment. */
+const isWaiting = (p: GoldPurchase) => p.status === 'ORDERED' || p.status === 'PAID';
+const statusesOf = (purchases: GoldPurchase[]) => purchases.map((p) => `${p.number}:${p.status}`).join('|');
+const FOLLOW_EVERY_MS = 5_000;
+const FOLLOW_AT_MOST_MS = 30 * 60_000;
 
 const applicationTone = (status: string) =>
   status === 'OPENED' ? 'success' : status === 'REFUSED' ? 'danger' : status === 'SENT' ? 'info' : 'warning';
@@ -75,6 +81,37 @@ export default function DigitalGoldPage() {
     setNotice(message);
     await refreshApplications();
   };
+
+  // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+  // │ While a slip is ORDERED or PAID, the Temporal workflow moves it on without the staff
+  // │ member, so the screen follows it: a light read every 5 s (not while the tab is hidden,
+  // │ one at a time, at most 30 minutes, never extending the session). When a status
+  // │ changes, the customer is loaded once in full - the holding and the balances change too.
+  // └──────────────────────────────────────────────────────────────────────────────────────
+  const following = customer?.digitalGold.purchases.some(isWaiting) ?? false;
+  useEffect(() => {
+    if (!customer || !following) return;
+    const { customerId, customerNumber } = customer;
+    const before = statusesOf(customer.digitalGold.purchases);
+    const startedAt = Date.now();
+    let stopped = false;
+    let inFlight = false;
+    const stop = () => { stopped = true; window.clearInterval(timer); };
+    const timer = window.setInterval(async () => {
+      if (stopped || inFlight || document.hidden) return;
+      if (Date.now() - startedAt > FOLLOW_AT_MOST_MS) { stop(); return; }
+      inFlight = true;
+      const latest = await loadPurchases(customerNumber);
+      inFlight = false;
+      if (stopped) return;
+      if (!latest.ok) { if (latest.signedOut) stop(); return; }   // an outage: look again next time
+      if (statusesOf(latest.data.purchases) === before) return;
+      stop();
+      const reloaded = await loadCustomer(customerId);
+      if (reloaded.ok) setCustomer(reloaded.data);
+    }, FOLLOW_EVERY_MS);
+    return stop;
+  }, [customer, following]);
 
   return (
     <MfeShell title="Digital Gold">
@@ -300,7 +337,10 @@ function PurchasesCard({ purchases, onRecorded, onError }: {
 
   return (
     <Card>
-      <CardHeader title="Transfer authorization slips" description="Each slip buys once, at the day's price: send it to the Partner Bank and pay on the day it was signed." icon={<ReceiptText />} />
+      <CardHeader title="Transfer authorization slips" icon={<ReceiptText />}
+        description={purchases.some(isWaiting)
+          ? 'A payment is awaited: this list updates by itself when the purchase moves on.'
+          : 'Each slip buys once, at the day\'s price: send it to the Partner Bank and pay on the day it was signed.'} />
       <Table>
         <thead><tr><Th>Purchase</Th><Th>Slip</Th><Th>Amount</Th><Th>From</Th><Th>Status</Th><Th>Partner Bank / payment</Th><Th>Recorded</Th><Th /></tr></thead>
         <tbody>

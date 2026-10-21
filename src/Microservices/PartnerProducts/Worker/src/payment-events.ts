@@ -92,7 +92,12 @@ export class PaymentEventListener {
       await client.workflow.getHandle(`gold-purchase-${purchaseNumber}`).signal(paymentSettledSignal);
       console.log(`${event.EventType} ${payload.PaymentNumber ?? ''}: purchase ${purchaseNumber}'s workflow told to look again.`);
     } catch (error) {
-      if (error instanceof WorkflowNotFoundError) return;   // already ended (or not started yet: it checks on start)
+      // Already ended (e.g. the 5-minute check got there first after a restart) or not started
+      // yet (it reads the payment on start): nothing to do - said once, so a log reads clearly.
+      if (error instanceof WorkflowNotFoundError) {
+        console.log(`${event.EventType} ${payload.PaymentNumber ?? ''}: purchase ${purchaseNumber}'s workflow is not running (already ended, or not started yet) - nothing to tell it.`);
+        return;
+      }
       throw error;
     }
   }

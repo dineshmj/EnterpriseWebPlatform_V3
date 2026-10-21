@@ -66,17 +66,24 @@ public sealed class KafkaSubscriberHostedService<TProcessor, TSettings>(
             EnablePartitionEof = false
         }, kafkaOptions.Value);
 
+        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // │ The Kafka library's own lines and errors go through the logger (KafkaClientLog):
+        // │ once per change, not two console lines every few seconds while the broker is down.
+        // │ Health still hears of every error.
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        var clientLog = new KafkaClientLog(logger, "consumer");
         using var consumer = new ConsumerBuilder<string, string>(config)
             .SetPartitionsAssignedHandler((_, partitions) =>
             {
                 health.PartitionsAssigned(partitions.Count);
                 logger.LogInformation("Partitions assigned: {Partitions}", string.Join(", ", partitions));
             })
+            .SetLogHandler((_, message) => clientLog.OnLog(message))
             .SetErrorHandler((_, error) =>
             {
                 // e.g. authentication or authorization failures; the client keeps retrying.
                 health.KafkaError(error.Reason);
-                logger.LogWarning("Kafka client error: {Code} {Reason}", error.Code, error.Reason);
+                clientLog.OnError(error);
             })
             .SetPartitionsRevokedHandler((_, partitions) =>
                 logger.LogInformation("Partitions revoked: {Partitions}", string.Join(", ", partitions)))

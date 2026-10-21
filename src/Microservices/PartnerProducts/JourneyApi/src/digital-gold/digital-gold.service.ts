@@ -291,7 +291,8 @@ export class DigitalGoldService {
     return this.api.get<CustomerDetails>(token, CO_READ, `${this.options.customerOnboardingApiBaseUrl}/v1/customers/${customerId}`, 'Customer Onboarding');
   }
 
-  private digitalGoldOf(token: string, customerNumber: string): Promise<CustomerDigitalGold> {
+  /** The customer's Form VII and slips from the Partner Products API (the staff member's branch only). */
+  digitalGoldOf(token: string, customerNumber: string): Promise<CustomerDigitalGold> {
     return this.api.get<CustomerDigitalGold>(token, PP_READ,
       `${this.options.partnerProductsApiBaseUrl}/v1/partner-products/customers/${encodeURIComponent(customerNumber)}/digital-gold`, 'Partner Products');
   }

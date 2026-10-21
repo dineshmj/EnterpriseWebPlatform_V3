@@ -26,6 +26,7 @@ It holds no data and no business rules of its own: it composes the Domain API ca
 |---|---|---|---|
 | `GET /v1/journeys/partner-products/customers?search=` | `partner-products-journey.read` | `partner.gold.view` | Customers of the staff member's branch (Customer Onboarding) |
 | `GET /v1/journeys/partner-products/customers/{customerId}` | `partner-products-journey.read` | `partner.gold.view` | The customer (mobile masked), their paying accounts and their Digital Gold - three contexts in parallel; once the account is open, the holding read from the Partner Bank |
+| `GET /v1/journeys/partner-products/customers/{customerNumber}/digital-gold` | `partner-products-journey.read` | `partner.gold.view` | The customer's Form VII and slips only (Partner Products, branch-scoped) - the light read the screen polls while a purchase waits for its payment |
 | `GET /v1/journeys/partner-products/applications` | `partner-products-journey.read` | `partner.gold.view` | The branch's latest Form VII applications |
 | `POST /v1/journeys/partner-products/applications/{number}/send` | `partner-products-journey.write` | `partner.gold.order` | Ask the Partner Products API to send Form VII to the Partner Bank (only an EWP application number reaches the path) |
 | `POST /v1/journeys/partner-products/customers/{customerId}/form-vii` | `partner-products-journey.write` | `partner.gold.order` | Multipart: Form VII's number, date signed, date of birth, the two checks, the scan |

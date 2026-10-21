@@ -61,14 +61,24 @@ export async function createSession(data: SessionData): Promise<string> {
   return cookieValue;
 }
 
-/** The session for this cookie, sliding its expiry; null when unknown or expired. */
-export async function readSession(cookieValue: string | undefined): Promise<SessionData | null> {
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ Only what the PERSON does slides the 30-minute idle expiry. A read the screen makes on
+// │ its own (following a purchase's payment) passes slide: false - otherwise a forgotten
+// │ tab would keep the session alive for ever.
+// └──────────────────────────────────────────────────────────────────────────────────────
+/** The session for this cookie, sliding its expiry unless slide is false; null when unknown or expired. */
+export async function readSession(cookieValue: string | undefined, { slide = true }: { slide?: boolean } = {}): Promise<SessionData | null> {
   if (!cookieValue) return null;
-  const result = await db().query<{ data: string }>(
-    `UPDATE partner_products_bff.sessions SET renewed_at = now(), expires_at = now() + make_interval(mins => $2)
-     WHERE session_hash = $1 AND expires_at > now() RETURNING data`,
-    [hashOf(cookieValue), SESSION_IDLE_MINUTES],
-  );
+  const result = slide
+    ? await db().query<{ data: string }>(
+      `UPDATE partner_products_bff.sessions SET renewed_at = now(), expires_at = now() + make_interval(mins => $2)
+       WHERE session_hash = $1 AND expires_at > now() RETURNING data`,
+      [hashOf(cookieValue), SESSION_IDLE_MINUTES],
+    )
+    : await db().query<{ data: string }>(
+      `SELECT data FROM partner_products_bff.sessions WHERE session_hash = $1 AND expires_at > now()`,
+      [hashOf(cookieValue)],
+    );
   if (result.rowCount === 0) return null;
   try {
     return JSON.parse(decrypt(result.rows[0].data)) as SessionData;

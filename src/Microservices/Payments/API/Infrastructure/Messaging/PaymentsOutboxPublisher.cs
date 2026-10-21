@@ -12,8 +12,12 @@ using EnterpriseWebPlatform.Payments.Api.Infrastructure.Persistence;
 namespace EnterpriseWebPlatform.Payments.Api.Infrastructure.Messaging;
 
 /// <summary>One long-lived, idempotent producer, authenticated as the Payments API's own Kafka user.</summary>
-public sealed class PaymentsKafkaProducer(Microsoft.Extensions.Options.IOptions<KafkaOptions> options) : IDisposable
+public sealed class PaymentsKafkaProducer(Microsoft.Extensions.Options.IOptions<KafkaOptions> options, ILogger<PaymentsKafkaProducer> logger) : IDisposable
 {
+    // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+    // │ The Kafka library's own lines and errors go through the logger (KafkaClientLog):
+    // │ once per change, not two console lines every few seconds while the broker is down.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     public IProducer<string, string> Producer { get; } =
         new ProducerBuilder<string, string>(KafkaClientSecurity.Apply(new ProducerConfig
         {
@@ -21,7 +25,7 @@ public sealed class PaymentsKafkaProducer(Microsoft.Extensions.Options.IOptions<
             EnableIdempotence = true,
             MaxInFlight = 5,
             MessageTimeoutMs = 30_000
-        }, options.Value)).Build();
+        }, options.Value)).WithClientLog(new KafkaClientLog(logger, "producer")).Build();
 
     public void Dispose()
     {

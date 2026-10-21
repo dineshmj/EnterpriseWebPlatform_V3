@@ -1,5 +1,6 @@
 using System.Diagnostics.Metrics;
 
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 using Confluent.Kafka;
@@ -24,7 +25,7 @@ public sealed class KafkaProducer : IKafkaProducer, IDisposable
 
     private readonly IProducer<string, string> _producer;
 
-    public KafkaProducer(IOptions<KafkaOptions> options)
+    public KafkaProducer(IOptions<KafkaOptions> options, ILogger<KafkaProducer> logger)
     {
         var configuration = KafkaClientSecurity.Apply(new ProducerConfig
         {
@@ -37,7 +38,9 @@ public sealed class KafkaProducer : IKafkaProducer, IDisposable
             MessageTimeoutMs = 30_000
         }, options.Value);
 
-        _producer = new ProducerBuilder<string, string>(configuration).Build();
+        _producer = new ProducerBuilder<string, string>(configuration)
+            .WithClientLog(new KafkaClientLog(logger, "producer"))
+            .Build();
     }
 
     public async Task ProduceAsync(
