@@ -12,12 +12,12 @@ import type { ContextParkedMessages, ParkedMessage } from '@/lib/operations-type
 import { confirmWithAuthenticator, NOT_CONFIRMED } from '@/lib/step-up';
 import { loadParkedMessages, resendParkedMessage } from '../../actions';
 
-const CONTEXT_LABEL: Record<string, string> = { accounts: 'Accounts', compliance: 'Compliance' };
+const CONTEXT_LABEL: Record<string, string> = { accounts: 'Accounts', compliance: 'Compliance', 'partner-products': 'Partner Products' };
 const MIN_REASON = 10;
 const MAX_REASON = 500;
 
 /**
- * Parked Outbox messages of Accounts and Compliance: what the relay gave up on (Kafka unreachable
+ * Parked Outbox messages of Accounts, Compliance and Partner Products: what the relay gave up on (Kafka unreachable
  * for long), and the resend of one of them - the same message, with a reason, a recent
  * authenticator code and workflow.reprocess. (Payments' parked messages are on its Processing Monitor.)
  */
@@ -80,7 +80,7 @@ export function ParkedMessagesCard() {
     <Card>
       <CardHeader
         icon={<Inbox />}
-        title="Parked messages - Accounts and Compliance"
+        title="Parked messages - Accounts, Compliance and Partner Products"
         description="Messages the Outbox relay gave up on after its attempts (the message broker could not take them). Make sure Kafka is up, then resend: the same message goes out again, and a receiver that already has it ignores the copy."
         actions={<Button variant="secondary" size="sm" onClick={() => void refresh()}><RefreshCw aria-hidden="true" />Refresh</Button>}
       />
@@ -91,7 +91,7 @@ export function ParkedMessagesCard() {
           <Alert key={c.context} tone="warning">{CONTEXT_LABEL[c.context]} could not be asked right now - its parked messages are not shown.</Alert>
         ))}
         {!contexts && !error && <p className="text-sm text-ink-muted">Reading the parked messages…</p>}
-        {contexts && total === 0 && <EmptyState title="Nothing is parked">Every message of Accounts and Compliance was published.</EmptyState>}
+        {contexts && total === 0 && <EmptyState title="Nothing is parked">Every message of Accounts, Compliance and Partner Products was published.</EmptyState>}
         {contexts && total > 0 && (
           <Table aria-label="Parked messages">
             <thead>

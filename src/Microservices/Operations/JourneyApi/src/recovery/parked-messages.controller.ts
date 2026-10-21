@@ -6,7 +6,7 @@ const VIEW = { scope: 'operations-journey.read', permission: 'outbox.view' };
 const RESEND = { scope: 'operations-journey.write', permission: 'workflow.reprocess', stepUp: true };
 const MESSAGE_ID = /^[0-9a-fA-F-]{36}$/;
 
-/** Parked Outbox messages of Accounts and Compliance: see them, and resend one with a reason. */
+/** Parked Outbox messages of Accounts, Compliance and Partner Products: see them, and resend one with a reason. */
 @Controller('v1/journeys/operations/parked-messages')
 @UseGuards(DelegatedTokenGuard)
 export class ParkedMessagesController {

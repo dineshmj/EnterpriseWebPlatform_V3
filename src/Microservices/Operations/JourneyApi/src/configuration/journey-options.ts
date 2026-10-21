@@ -36,6 +36,7 @@ export interface JourneyOptions {
   /** The Domain APIs whose parked Outbox messages operations may see and resend. */
   accountsApiBaseUrl: string;
   complianceApiBaseUrl: string;
+  partnerProductsApiBaseUrl: string;
 
   tlsPfxPath: string;
   tlsPfxPassword: string;
@@ -112,6 +113,7 @@ export function loadOptions(): JourneyOptions {
     clientSecret: required('OPERATIONS_JOURNEY_CLIENT_SECRET'),
     accountsApiBaseUrl: required('OPERATIONS_JOURNEY_ACCOUNTS_API').replace(/\/$/, ''),
     complianceApiBaseUrl: required('OPERATIONS_JOURNEY_COMPLIANCE_API').replace(/\/$/, ''),
+    partnerProductsApiBaseUrl: required('OPERATIONS_JOURNEY_PARTNER_PRODUCTS_API').replace(/\/$/, ''),
     tlsPfxPath: required('OPERATIONS_JOURNEY_TLS_PFX_PATH'),
     tlsPfxPassword: required('OPERATIONS_JOURNEY_TLS_PFX_PASSWORD'),
   };

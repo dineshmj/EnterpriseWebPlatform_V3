@@ -3,7 +3,7 @@ import { JOURNEY_OPTIONS, JourneyOptions } from '../configuration/journey-option
 import { TokenExchangeService } from '../services/token-exchange.service';
 
 /** The contexts whose parked Outbox messages operations may see and resend. */
-export const recoveryContexts = ['accounts', 'compliance'] as const;
+export const recoveryContexts = ['accounts', 'compliance', 'partner-products'] as const;
 export type RecoveryContext = (typeof recoveryContexts)[number];
 
 /** A parked message as the Domain API lists it - no payload. */
@@ -71,12 +71,16 @@ export class ParkedMessagesService {
   }
 
   private async call(context: RecoveryContext, token: string, method: 'GET' | 'POST', path: string, body?: unknown): Promise<unknown> {
-    const base = context === 'accounts' ? this.options.accountsApiBaseUrl : this.options.complianceApiBaseUrl;
+    const base: Record<RecoveryContext, string> = {
+      accounts: this.options.accountsApiBaseUrl,
+      compliance: this.options.complianceApiBaseUrl,
+      'partner-products': this.options.partnerProductsApiBaseUrl,
+    };
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 10_000);
     let response: Response;
     try {
-      response = await fetch(`${base}/v1/${context}/outbox${path}`, {
+      response = await fetch(`${base[context]}/v1/${context}/outbox${path}`, {
         method,
         headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
         body: body ? JSON.stringify(body) : undefined,

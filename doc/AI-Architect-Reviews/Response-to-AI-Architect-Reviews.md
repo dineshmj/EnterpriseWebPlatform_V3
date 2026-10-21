@@ -562,7 +562,7 @@ Microsoft recommends no new patterns. Instead, it asks for **evidence that the c
 | Partner Bank patterns B and C tested separately | Agreed. | WireMock adapter tests (C1): refusal, time-out, lost answer and resend with the same `jti`. Partner Bank repository: replayed instruction, staff-view reference redeemed twice. |
 | An altered audit entry or checkpoint is detected | Agreed. The control exists (R-3); the tamper test was deferred. | Tamper test: change an entry and delete a checkpoint, then expect Audit health Unhealthy. |
 | Payment outcome unknown → funds not released without authoritative evidence | **Already in place:** the network status enquiry and the four-eyes reconciliation (`9b6efbf`, `276ce97`). The workflow re-reads the payment instead of trusting the event. | Covered by the deviation runs; no new control. |
-| Every non-final state has a detection mechanism and an owner | Agreed for Partner Products. Onboarding (age alerts) and Payments (unconfirmed-saga alert) already have one. | A health check for purchases left ORDERED too long, and a resend tool for parked Partner Products Outbox messages. |
+| Every non-final state has a detection mechanism and an owner | Agreed for Partner Products. Onboarding (age alerts) and Payments (unconfirmed-saga alert) already have one. | A health check for purchases left ORDERED too long, and a resend tool for parked Partner Products Outbox messages. **Done 21-OCT** (`DigitalGoldAgeHealthCheck`, which also covers a Form VII left SENT; resend on Platform Health). |
 | Threat-model-to-test traceability | Agreed: cheap, and it makes the evidence visible. | A "Verified by" column in Threat-Model §7 and the abuse cases. |
 | Prove the EWP → Partner Bank PAR / JAR / PKCE flow and the resulting customer identity | **Aimed at the wrong pattern for today.** EWP has no customer channel yet. Pattern A is exercised on the Partner Bank side by `tools/HandshakeCheck` and `tools/JourneyCheck`. | Definition of done for A7 + B1, not a gap in the current PoC. |
 | Deployment-wide rate limits | Already a production requirement (R-14, item 10 below). Rate limits per instance backed by a shared store would be throwaway work in a PoC. | D-series gateway. |
@@ -593,7 +593,7 @@ These are the production requirements from all four rounds. Each is recorded in 
 **Operations and monitoring**
 
 11. A security-event stream and dashboards: sign-in failures, MFA lockouts, token-exchange refusals, dead-letter depth.
-12. A resend tool for parked Customer Onboarding and KYC Outbox messages (Payments, Accounts and Compliance have one since 15-OCT).
+12. A resend tool for parked Customer Onboarding and KYC Outbox messages (Payments, Accounts and Compliance have one since 15-OCT, Partner Products since 21-OCT).
 13. Retention and access rules for stored notifications.
 
 **Load and contracts**

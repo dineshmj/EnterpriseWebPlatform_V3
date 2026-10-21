@@ -3,7 +3,7 @@
     Switches two-step sign-in (MFA) on or off for the whole local platform, in every place that must agree.
 
 .DESCRIPTION
-    MFA is one switch in seven places (ReadMe.txt, section f); they must always be equal, or the IDP
+    MFA is one switch in eight places (ReadMe.txt, section f); they must always be equal, or the IDP
     would sign people in without a code while the APIs ask for a recent one (or the other way round):
 
       src\IDP\appsettings.json                                  Mfa:Enabled - the sign-in itself
@@ -11,6 +11,7 @@
       src\Microservices\Accounts\API\appsettings.json           Mfa:Enabled
       src\Microservices\Compliance\API\appsettings.json         Mfa:Enabled
       src\Microservices\CustomerKyc\API\appsettings.json        Mfa:Enabled
+      src\Microservices\PartnerProducts\API\appsettings.json    Mfa:Enabled - step-up on the Outbox resend
       src\Microservices\Operations\JourneyApi\runnow.bat        OPERATIONS_MFA_ENABLED (the simulator switch)
       tst\playwright\.env                                       EWP_MFA_ENABLED (the automated MFA test)
 
@@ -49,7 +50,7 @@ function Set-InFile([string] $relative, [string] $pattern, [string] $replacement
 }
 
 # ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
-# │ All seven places, or say which one failed: a half-switched platform (sign-in without
+# │ All eight places, or say which one failed: a half-switched platform (sign-in without
 # │ a code, but APIs demanding a recent one - or the reverse) is the misconfiguration this
 # │ script exists to prevent. Only the switch's own value is touched.
 # └──────────────────────────────────────────────────────────────────────────────────────
@@ -61,6 +62,7 @@ $results = @(
     Set-InFile 'src\Microservices\Accounts\API\appsettings.json' $json "`${1}$value"
     Set-InFile 'src\Microservices\Compliance\API\appsettings.json' $json "`${1}$value"
     Set-InFile 'src\Microservices\CustomerKyc\API\appsettings.json' $json "`${1}$value"
+    Set-InFile 'src\Microservices\PartnerProducts\API\appsettings.json' $json "`${1}$value"
     Set-InFile 'src\Microservices\Operations\JourneyApi\runnow.bat' '(set "OPERATIONS_MFA_ENABLED=)(true|false)' "`${1}$value"
     Set-InFile 'tst\playwright\.env' '(?m)^(EWP_MFA_ENABLED=)(true|false)' "`${1}$value"
 )

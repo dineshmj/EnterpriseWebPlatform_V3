@@ -30,7 +30,7 @@ export interface SimulatorState {
   changedBy: string | null;
 }
 
-/** A message the Outbox relay of Accounts or Compliance parked - no payload. */
+/** A message the Outbox relay of Accounts, Compliance or Partner Products parked - no payload. */
 export interface ParkedMessage {
   messageId: string;
   eventType: string;
@@ -48,7 +48,7 @@ export interface ParkedMessage {
 }
 
 export interface ContextParkedMessages {
-  context: 'accounts' | 'compliance';
+  context: 'accounts' | 'compliance' | 'partner-products';
   available: boolean;
   messages: ParkedMessage[];
 }

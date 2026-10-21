@@ -25,5 +25,5 @@ Deployables:
 - [x] **Readiness turns Degraded** while any row is parked or a pending one is overdue. → `src/Common/Observability/OutboxBacklogHealthCheck.cs`
 - [x] **Liveness follows the loop's heartbeat:** a stopped loop is restarted.
 - [x] **Payments: parked messages can be resent by an operator** with `workflow.reprocess`, recent MFA and a reason. The same message ID is kept, and the resend is recorded on the timeline.
-- [x] **Accounts and Compliance: the same resend** from the Operations Platform Health page, through the Operations Journey API (the operator's token exchanged; the Domain API accepts only that delegated token, with `workflow.reprocess`, recent MFA and a reason). One atomic `UPDATE` resends only a message that is still parked. → `Controllers/OutboxController.cs`, `Infrastructure/Messaging/ParkedOutbox.cs`
+- [x] **Accounts, Compliance and Partner Products: the same resend** from the Operations Platform Health page, through the Operations Journey API (the operator's token exchanged; the Domain API accepts only that delegated token, with `workflow.reprocess`, recent MFA and a reason). One atomic `UPDATE` resends only a message that is still parked. → `Controllers/OutboxController.cs`, `Infrastructure/Messaging/ParkedOutbox.cs`
 - [ ] **The same resend for Customer Onboarding's relay and KYC's Outbox.**

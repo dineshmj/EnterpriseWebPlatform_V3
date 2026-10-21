@@ -44,7 +44,7 @@ export async function resendParkedMessage(context: string, messageId: string, re
   // │ Only the two known contexts and a GUID go into the path; the reason is checked again by
   // │ the Journey API and the Domain API (10-500 characters).
   // └──────────────────────────────────────────────────────────────────────────────────────
-  if (!['accounts', 'compliance'].includes(context) || !/^[0-9a-fA-F-]{36}$/.test(messageId)) return { ok: false, error: 'Unknown message.' };
+  if (!['accounts', 'compliance', 'partner-products'].includes(context) || !/^[0-9a-fA-F-]{36}$/.test(messageId)) return { ok: false, error: 'Unknown message.' };
   const trimmed = reason.trim();
   if (trimmed.length < 10 || trimmed.length > 500) return { ok: false, error: 'A reason of 10 to 500 characters is required.' };
   return callJourney<unknown>('operations-journey.write', 'POST', `/v1/journeys/operations/parked-messages/${context}/${messageId}/resend`, { reason: trimmed });

@@ -15,6 +15,7 @@ using EnterpriseWebPlatform.PartnerProducts.Api.Controllers;
 using EnterpriseWebPlatform.PartnerProducts.Api.Domain;
 using EnterpriseWebPlatform.PartnerProducts.Api.Infrastructure;
 using EnterpriseWebPlatform.PartnerProducts.Api.Infrastructure.Messaging;
+using EnterpriseWebPlatform.PartnerProducts.Api.Infrastructure.Monitoring;
 using EnterpriseWebPlatform.PartnerProducts.Api.PartnerBank;
 
 // ┌─ :: ARCHITECTURE + SECURITY :: Partner Products API: a resource server ────────────────────────
@@ -34,7 +35,8 @@ var builder = WebApplication.CreateBuilder(args);
 // │ (section ClientIds; each must equal the IDP's ClientIds entry). Read now: a missing one
 // │ stops the start-up - a pin is never empty.
 // └──────────────────────────────────────────────────────────────────────────────────────
-var clientIds = ClientIds.From(builder.Configuration).Require(nameof(ClientIds.PartnerProductsJourneyApi), nameof(ClientIds.PartnerProductsWorker));
+var clientIds = ClientIds.From(builder.Configuration).Require(
+    nameof(ClientIds.PartnerProductsJourneyApi), nameof(ClientIds.PartnerProductsWorker), nameof(ClientIds.OperationsJourneyApi));
 builder.Services.AddSingleton(clientIds);
 
 // Traces, Serilog logs and Prometheus metrics (OTLP export when configured).
@@ -134,6 +136,9 @@ builder.Services.AddAuthorization(options =>
     options.DenyAnonymousByDefault();
     options.AddDigitalGoldPolicies(clientIds);
 });
+builder.Services.AddEwpMfaStepUp();   // the step-up requirement of the Outbox resend and its clear 403 ("mfa_required")
+// :: SECURITY :: Step-up MFA - see Common/WebUtilities/Security/MfaStepUp.cs
+builder.RequireMfaOutsideDevelopment();   // fail closed: MFA can be off on a developer's machine only
 
 // OWASP API4: per-caller rate limits on the API surface (429 + Retry-After); configuration "RateLimiting".
 // :: SECURITY :: Per-caller rate limits - see Common/WebUtilities/Security/RateLimiting.cs
@@ -146,9 +151,22 @@ builder.Services.AddSingleton<PartnerProductsKafkaProducer>();
 builder.Services.AddScoped<PartnerProductsOutboxPublisher>();
 builder.Services.AddKeyedSingleton<LoopHeartbeat>(PartnerProductsOutboxPublisherHostedService.HeartbeatKey);
 builder.Services.AddHostedService<PartnerProductsOutboxPublisherHostedService>();
+builder.Services.AddScoped<ParkedOutbox>();   // operations: list / resend parked messages
+
+// ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+// │ If an alert age is missing, not positive, or the unpaid-order age does not exceed the
+// │ Worker's own cancellation (35 min), refuse to start - a silent zero would raise alarms
+// │ for everything, a too-short age would report orders the Worker is about to cancel.
+// └──────────────────────────────────────────────────────────────────────────────────────
+builder.Services.AddOptions<DigitalGoldAlertOptions>()
+    .Bind(builder.Configuration.GetSection(DigitalGoldAlertOptions.SectionName))
+    .Validate(o => o.HandoverMinutes > 0 && o.PaymentDecisionMinutes > 0 &&
+                   o.UnpaidOrderMinutes > DigitalGoldAlertOptions.WorkerCancelsUnpaidWithinMinutes,
+        $"DigitalGold:Alerts needs HandoverMinutes and PaymentDecisionMinutes > 0 and UnpaidOrderMinutes > {DigitalGoldAlertOptions.WorkerCancelsUnpaidWithinMinutes} (whole minutes).")
+    .ValidateOnStart();
 
 // live: the process and its Outbox relay are cycling; ready: the database answers - Degraded
-// when Outbox rows wait too long or are parked.
+// when Outbox rows wait too long or are parked, or a Form VII or purchase waits too long in one step.
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), tags: [HealthEndpoints.LiveTag])
     .Add(new HealthCheckRegistration("outbox-relay",
@@ -159,6 +177,9 @@ builder.Services.AddHealthChecks()
     .Add(new HealthCheckRegistration("outbox-backlog",
         sp => new OutboxBacklogHealthCheck(ct => PartnerProductsOutboxPublisher.GetBacklogAsync(sp.GetRequiredService<PartnerProductsDbContext>(), ct),
             TimeSpan.FromMinutes(2)),
+        HealthStatus.Degraded, [HealthEndpoints.ReadyTag]))
+    .Add(new HealthCheckRegistration("digital-gold-age",
+        sp => ActivatorUtilities.CreateInstance<DigitalGoldAgeHealthCheck>(sp),
         HealthStatus.Degraded, [HealthEndpoints.ReadyTag]));
 
 var app = builder.Build();

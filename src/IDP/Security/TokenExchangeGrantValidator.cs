@@ -63,7 +63,7 @@ public sealed class TokenExchangeGrantValidator(
             token.ActingClientId == ClientSettings.Ids.AuditWeb,
 
         // The Operations Journey API: only a token the Operations web BFF exchanged for it (parked
-        // Outbox messages of Accounts and Compliance; the scopes are its AllowedScopes).
+        // Outbox messages of Accounts, Compliance and Partner Products; the scopes are its AllowedScopes).
         [ClientSettings.Ids.OperationsJourneyApi] = token =>
             token.Audiences.Contains("operations-journey-api") &&
             token.ActingClientId == ClientSettings.Ids.OperationsWeb,

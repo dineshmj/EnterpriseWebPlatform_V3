@@ -16,7 +16,7 @@ import { TokenExchangeService } from './services/token-exchange.service';
     RateLimiter,   // the per-person limits (DelegatedTokenGuard)
     HealthProbeService,
     SimulatorService,
-    TokenExchangeService,   // the second exchange: the operator's token for Accounts / Compliance
+    TokenExchangeService,   // the second exchange: the operator's token for Accounts / Compliance / Partner Products
     ParkedMessagesService,
   ],
 })

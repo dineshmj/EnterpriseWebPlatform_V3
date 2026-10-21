@@ -18,8 +18,10 @@ public static class DigitalGoldPolicies
     public const string View = "DigitalGoldView";
     public const string Order = "DigitalGoldOrder";
     public const string Worker = "DigitalGoldWorker";
+    public const string OutboxView = "PartnerProductsOutboxView";
+    public const string OutboxResend = "PartnerProductsOutboxResend";
 
-    /// <param name="clientIds">The Journey API's and the worker's client IDs (configuration, as the IDP registered them).</param>
+    /// <param name="clientIds">The Journey APIs' and the worker's client IDs (configuration, as the IDP registered them).</param>
     public static AuthorizationOptions AddDigitalGoldPolicies(this AuthorizationOptions options, ClientIds clientIds)
     {
         options.AddPolicy(View, policy => policy
@@ -46,6 +48,25 @@ public static class DigitalGoldPolicies
             .RequireClaim("scope", "partner-products.write")
             .RequireClaim("client_id", clientIds.PartnerProductsWorker)
             .RequireAssertion(context => !context.User.HasClaim(c => c.Type is "sub" or "act")));
+
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ Parked Outbox messages: only through the Operations Journey API, acting for an operator
+        // │ (delegated token, act = that API) with outbox.view - and, to resend, workflow.reprocess
+        // │ and a recent MFA sign-in. No branch: the operations desk is central. The counter's
+        // │ Journey API and the worker never pass (another acting client, or no person at all).
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        options.AddPolicy(OutboxView, policy => policy
+            .RequireAuthenticatedUser()
+            .RequireClaim("scope", "partner-products.read")
+            .RequireClaim("permission", "outbox.view")
+            .RequireDelegationBy(clientIds.OperationsJourneyApi));
+
+        options.AddPolicy(OutboxResend, policy => policy
+            .RequireAuthenticatedUser()
+            .RequireClaim("scope", "partner-products.write")
+            .RequireClaim("permission", "workflow.reprocess")
+            .RequireDelegationBy(clientIds.OperationsJourneyApi)
+            .RequireMfa());
 
         return options;
     }

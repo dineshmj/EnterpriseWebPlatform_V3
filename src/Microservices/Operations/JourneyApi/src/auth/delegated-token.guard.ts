@@ -16,7 +16,7 @@ import { CHANGE_LIMIT, RateLimiter, READ_LIMIT } from '../http/rate-limit';
 /** The person this request acts for. */
 export interface Delegation {
   sub: string;
-  /** The token this API received: the subject of a further exchange (Accounts / Compliance). */
+  /** The token this API received: the subject of a further exchange (Accounts / Compliance / Partner Products). */
   subjectToken: string;
   lanId?: string;
   permissions: string[];
