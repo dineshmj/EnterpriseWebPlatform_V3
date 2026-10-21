@@ -857,10 +857,10 @@ The message broker is secured like any other service. In plain terms: a program 
 **Where to look at:**
 
 - Users, ACLs and broker settings: [Setup-KafkaSecurity.ps1](../ps/kafka/Setup-KafkaSecurity.ps1), [kafka/README.md](../kafka/README.md)
-- Client side, failing closed without credentials: [KafkaClientSecurity.cs](../src/AsyncWorkflows/Infrastructure/Kafka/KafkaClientSecurity.cs)
+- Client side, failing closed without credentials, TLS with the broker's certificate and host name checked: [KafkaClientSecurity.cs](../src/AsyncWorkflows/Infrastructure/Kafka/KafkaClientSecurity.cs)
 - Per-component Kafka user: `Kafka:SaslUsername` in each component's `appsettings.json`
 
-**Not yet:** TLS on the broker (`SASL_SSL`). Local development uses `SASL_PLAINTEXT` on localhost.
+**Encrypted too:** the broker listens with `SASL_SSL` (TLS, certificate from the local PKI `ps/pki/New-EwpLocalPki.ps1`), so nobody watching the traffic can read or change an event, and every client refuses a broker whose certificate or host name does not match. **Not yet:** the CONTROLLER listener is still PLAINTEXT on localhost (production secures it).
 
 #### 2.4.7 Rate limiting
 

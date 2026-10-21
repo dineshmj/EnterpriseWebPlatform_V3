@@ -39,17 +39,20 @@ export class PaymentEventListener {
     const client = new Client({ connection: this.temporal, namespace: this.options.temporalNamespace });
 
     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
-    // │ SASL/SCRAM-SHA-512 as the worker's own Kafka user (development: SASL_PLAINTEXT on
-    // │ localhost; production SASL_SSL). Starts at the latest offset: a past outcome needs no
-    // │ signal - the workflow's own check on start-up reads it.
+    // │ SASL_SSL everywhere (localhost included): TLS with the broker's certificate checked
+    // │ against the configured CA and its host name, then SCRAM-SHA-512 as the worker's own
+    // │ Kafka user. Starts at the latest offset: a past outcome needs no signal - the
+    // │ workflow's own check on start-up reads it.
     // └──────────────────────────────────────────────────────────────────────────────────────
     const kafka = new KafkaJS.Kafka({
       kafkaJS: {
         brokers: this.options.kafkaBootstrapServers.split(',').map((b) => b.trim()),
         clientId: 'partner-products-worker',
-        ssl: false,
+        ssl: true,
         sasl: { mechanism: 'scram-sha-512', username: this.options.kafkaUsername, password: this.options.kafkaPassword },
       },
+      ...(this.options.kafkaSslCaLocation ? { 'ssl.ca.location': this.options.kafkaSslCaLocation } : {}),
+      'ssl.endpoint.identification.algorithm': 'https',
     });
     this.consumer = kafka.consumer({ kafkaJS: { groupId: GROUP_ID, fromBeginning: false, autoCommit: true } });
     await this.consumer.connect();

@@ -1,8 +1,8 @@
 ﻿<#
 .SYNOPSIS
-    Secures the local Kafka broker (C:\Kafka, KRaft) for EWP V3: SCRAM-SHA-512
-    authentication, one Kafka user per deployable, least-privilege ACLs, and no
-    topic auto-creation.
+    Secures the local Kafka broker (C:\Kafka, KRaft) for EWP V3: TLS (SASL_SSL),
+    SCRAM-SHA-512 authentication, one Kafka user per deployable, least-privilege ACLs,
+    and no topic auto-creation.
 
 .DESCRIPTION
     Run the phases in order. Each phase checks its precondition and is safe to re-run.
@@ -12,8 +12,10 @@
                           consumer groups at the end of their topics.
       2. (stop Kafka)
          -Phase Secure    Kafka STOPPED: backs up server.properties and switches the
-                          client listener to SASL_PLAINTEXT with the StandardAuthorizer;
-                          writes config\admin.properties for the CLI tools.
+                          client listener to SASL_SSL (TLS with the kafka-broker certificate
+                          from ps\pki\New-EwpLocalPki.ps1) with the StandardAuthorizer;
+                          writes config\admin.properties for the CLI tools. Also the way
+                          to move an existing SASL_PLAINTEXT broker to SASL_SSL.
       3. (start Kafka)
          -Phase Acls      Kafka RUNNING with SASL: grants each user only what it needs
                           and prints the resulting ACLs.
@@ -24,8 +26,9 @@
     from its appsettings.Development.json (Kafka:SaslPassword); outside Development
     they come from the environment or a secret store.
 
-    Local development uses SASL_PLAINTEXT on localhost: SCRAM never sends the password
-    itself, but the data is not encrypted. Production uses SASL_SSL (or mTLS).
+    Local development uses SASL_SSL like production: the data is encrypted and every
+    client checks the broker's certificate (issued by the EWP local trust root for
+    localhost) before it authenticates with SCRAM.
 
 .EXAMPLE
     .\ps\kafka\Setup-KafkaSecurity.ps1 -Phase Prepare
@@ -37,7 +40,10 @@ param(
 
     [switch] $Revert,
 
-    [string] $KafkaHome = 'C:\Kafka'
+    [string] $KafkaHome = 'C:\Kafka',
+
+    # The local PKI (ps\pki\New-EwpLocalPki.ps1): kafka-broker.pfx and ewp-trust-root.pem.
+    [string] $PkiFolder = (Join-Path $env:USERPROFILE '.ewp-pki')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -166,6 +172,13 @@ function Set-Property([string[]] $Lines, [string] $Key, [string] $Value) {
     return ,$result
 }
 
+function Remove-Property([string[]] $Lines, [string] $Key) {
+    return ,@($Lines | Where-Object { $_ -notmatch ('^\s*' + [regex]::Escape($Key) + '\s*=') })
+}
+
+# Java .properties treat "\" as an escape character: paths are written with "/".
+function ConvertTo-PropertyPath([string] $Path) { return $Path -replace '\\', '/' }
+
 # =======================================================================================
 if ($Revert) {
     if (Test-KafkaPort) { throw 'Stop Kafka before reverting (Ctrl+C in its window).' }
@@ -173,8 +186,8 @@ if ($Revert) {
         Sort-Object Name -Descending | Select-Object -First 1
     if (-not $backup) { throw 'No server.properties.pre-sasl-* backup found.' }
     Copy-Item $backup.FullName $ServerProps -Force
-    Write-Host "Restored $($backup.Name) -> server.properties. Start Kafka; it runs PLAINTEXT without an authorizer again." -ForegroundColor Green
-    Write-Host 'Set Kafka:SecurityProtocol to "Plaintext" in the components (or remove the SASL settings) to match.'
+    Write-Host "Restored $($backup.Name) -> server.properties. Start Kafka; it runs the settings it had before that -Phase Secure." -ForegroundColor Green
+    Write-Host 'Set Kafka:SecurityProtocol (and the Worker, Kafka UI and config\admin.properties) to match.'
     return
 }
 
@@ -233,29 +246,51 @@ switch ($Phase) {
 'Secure' {
     if (Test-KafkaPort) { throw 'Stop Kafka first (Ctrl+C in its window): server.properties is read only at start-up.' }
 
+    $brokerPfx = Join-Path $PkiFolder 'kafka-broker.pfx'
+    $trustPem  = Join-Path $PkiFolder 'ewp-trust-root.pem'
+    foreach ($file in $brokerPfx, "$brokerPfx.password", $trustPem) {
+        if (-not (Test-Path $file)) { throw "$file is missing: run .\ps\pki\New-EwpLocalPki.ps1 first (it issues the Kafka broker's certificate)." }
+    }
+    $brokerPfxPassword = [System.IO.File]::ReadAllText("$brokerPfx.password")
+
     $backup = "$ServerProps.pre-sasl-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
     Copy-Item $ServerProps $backup
     Write-Host "Backup: $backup" -ForegroundColor Cyan
 
     $adminPassword = $Users['admin']
     $lines = [string[]](Get-Content $ServerProps)
-    # ┌─ :: SECURITY :: Broker: SASL/SCRAM and deny-by-default ACLs ────────────────────────────────────
+    # ┌─ :: SECURITY :: Broker: TLS, SASL/SCRAM and deny-by-default ACLs ───────────────────────────────
     # │ Why : A broker that lets anyone connect, or allows everything without an ACL, lets any program
-    # │       publish forged events.
-    # │ How : SASL/SCRAM-SHA-512 on the client listener; StandardAuthorizer with
+    # │       publish forged events; without TLS anyone who can watch the traffic reads every business
+    # │       event (customer numbers, payment details) and could change it on the way.
+    # │ How : SASL_SSL on the client listener: TLS 1.2+ with the kafka-broker certificate (local trust
+    # │       root, names localhost only), then SCRAM-SHA-512 inside the tunnel. StandardAuthorizer with
     # │       allow.everyone.if.no.acl.found=false; topic auto-creation off. The Acls phase then grants
     # │       each user only its own topics and consumer group.
-    # │ Ref : Features 2.4.6 | kafka/README.md | OWASP A01 (least privilege) | CIS Apache Kafka guidance
+    # │ Ref : Features 2.4.6 | kafka/README.md | OWASP A01 (least privilege), A02 Cryptographic
+    # │       Failures | CWE-319 | CIS Apache Kafka guidance
     # └─────────────────────────────────────────────────────────────────────────────────────────────────
     $settings = [ordered]@{
-        # Clients authenticate with SCRAM; both listeners bound to localhost only.
-        'listeners'                            = 'SASL_PLAINTEXT://localhost:9092,CONTROLLER://localhost:9093'
-        'advertised.listeners'                 = 'SASL_PLAINTEXT://localhost:9092'
-        'inter.broker.listener.name'           = 'SASL_PLAINTEXT'
+        # Clients connect over TLS and authenticate with SCRAM; both listeners bound to localhost only.
+        'listeners'                            = 'SASL_SSL://localhost:9092,CONTROLLER://localhost:9093'
+        'advertised.listeners'                 = 'SASL_SSL://localhost:9092'
+        'inter.broker.listener.name'           = 'SASL_SSL'
         'sasl.enabled.mechanisms'              = 'SCRAM-SHA-512'
         'sasl.mechanism.inter.broker.protocol' = 'SCRAM-SHA-512'
-        'listener.name.sasl_plaintext.scram-sha-512.sasl.jaas.config' =
+        'listener.name.sasl_ssl.scram-sha-512.sasl.jaas.config' =
             "org.apache.kafka.common.security.scram.ScramLoginModule required username=`"admin`" password=`"$adminPassword`";"
+        # The broker's TLS identity (DEVELOPMENT: the .pfx password is written here, like the admin
+        # password above; production reads both from a secret store or a config provider).
+        'ssl.keystore.type'                    = 'PKCS12'
+        'ssl.keystore.location'                = (ConvertTo-PropertyPath $brokerPfx)
+        'ssl.keystore.password'                = $brokerPfxPassword
+        # Trust anchor for the broker's own inter-broker connections (it checks its own certificate).
+        'ssl.truststore.type'                  = 'PEM'
+        'ssl.truststore.location'              = (ConvertTo-PropertyPath $trustPem)
+        'ssl.enabled.protocols'                = 'TLSv1.3,TLSv1.2'
+        'ssl.endpoint.identification.algorithm' = 'https'
+        # Clients prove who they are with SCRAM, not with certificates.
+        'ssl.client.auth'                      = 'none'
         # Deny by default; only ACLs grant access.
         'authorizer.class.name'                = 'org.apache.kafka.metadata.authorizer.StandardAuthorizer'
         'allow.everyone.if.no.acl.found'       = 'false'
@@ -266,18 +301,23 @@ switch ($Phase) {
         'auto.create.topics.enable'            = 'false'
     }
     foreach ($key in $settings.Keys) { $lines = Set-Property $lines $key $settings[$key] }
+    # The SASL_PLAINTEXT listener's login from an earlier -Phase Secure is no longer used.
+    $lines = Remove-Property $lines 'listener.name.sasl_plaintext.scram-sha-512.sasl.jaas.config'
     Set-Content -Path $ServerProps -Value $lines -Encoding ASCII
 
     Set-Content -Path $AdminProps -Encoding ASCII -Value @(
         '# Kafka CLI tools as the admin super user (DEVELOPMENT ONLY), e.g.:',
         '#   bin\windows\kafka-topics.bat --bootstrap-server localhost:9092 --command-config config\admin.properties --list',
-        'security.protocol=SASL_PLAINTEXT',
+        'security.protocol=SASL_SSL',
+        'ssl.truststore.type=PEM',
+        "ssl.truststore.location=$(ConvertTo-PropertyPath $trustPem)",
         'sasl.mechanism=SCRAM-SHA-512',
         "sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username=`"admin`" password=`"$adminPassword`";"
     )
 
-    Write-Host 'server.properties now uses SASL_PLAINTEXT + StandardAuthorizer; config\admin.properties written.' -ForegroundColor Green
+    Write-Host 'server.properties now uses SASL_SSL + StandardAuthorizer; config\admin.properties written.' -ForegroundColor Green
     Write-Host "Next: start Kafka (StartKafka.bat), then run:  .\ps\kafka\Setup-KafkaSecurity.ps1 -Phase Acls" -ForegroundColor Green
+    Write-Host '      (a broker that was already on SASL_PLAINTEXT keeps its users and ACLs: -Phase Acls is optional).' -ForegroundColor Green
 }
 
 # ---------------------------------------------------------------------------------------

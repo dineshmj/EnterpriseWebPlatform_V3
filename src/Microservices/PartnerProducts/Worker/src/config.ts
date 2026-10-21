@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+
 /**
  * Configuration of the Partner Products Worker - environment variables only (runnow.bat sets the
  * development values). Fail closed: a missing value stops the start-up; no secret has a default.
@@ -18,12 +20,15 @@ export interface WorkerOptions {
   paymentsApiBaseUrl: string;
 
   /**
-   * Kafka (SASL/SCRAM-SHA-512 as the worker's own user): the listener for payments.payment.events.
-   * Read rights on that topic and the group partner-products.worker only (Setup-KafkaSecurity.ps1).
+   * Kafka (TLS, then SASL/SCRAM-SHA-512 as the worker's own user): the listener for
+   * payments.payment.events. Read rights on that topic and the group partner-products.worker only
+   * (Setup-KafkaSecurity.ps1). The CA file verifies the broker's certificate; undefined = the
+   * operating system's trusted roots.
    */
   kafkaBootstrapServers: string;
   kafkaUsername: string;
   kafkaPassword: string;
+  kafkaSslCaLocation: string | undefined;
 
   /** The Partner Bank's settlement account (the payee of every purchase): only its payments are looked up. */
   settlementBsb: string;
@@ -54,6 +59,19 @@ function httpsUrl(name: string): string {
   return value;
 }
 
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ If a Kafka CA file is configured it must exist: a typo must stop the start-up, not
+// │ fall back quietly to a different set of trusted roots.
+// └──────────────────────────────────────────────────────────────────────────────────────
+function optionalFile(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  if (!value) return undefined;
+  if (!existsSync(value)) {
+    throw new Error(`Configuration ${name} names ${value}, which does not exist; the Partner Products Worker refuses to start.`);
+  }
+  return value;
+}
+
 export function loadOptions(): WorkerOptions {
   return {
     temporalAddress: required('TEMPORAL_ADDRESS'),
@@ -67,6 +85,7 @@ export function loadOptions(): WorkerOptions {
     kafkaBootstrapServers: required('KAFKA_BOOTSTRAP_SERVERS'),
     kafkaUsername: required('PARTNER_PRODUCTS_WORKER_KAFKA_USERNAME'),
     kafkaPassword: required('PARTNER_PRODUCTS_WORKER_KAFKA_PASSWORD'),
+    kafkaSslCaLocation: optionalFile('KAFKA_SSL_CA_LOCATION'),
     settlementBsb: required('PARTNER_PRODUCTS_SETTLEMENT_BSB'),
     settlementAccountNumber: required('PARTNER_PRODUCTS_SETTLEMENT_ACCOUNT_NUMBER'),
     healthPort: Number(required('PARTNER_PRODUCTS_WORKER_HEALTH_PORT')),

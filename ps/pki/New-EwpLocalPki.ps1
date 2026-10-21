@@ -24,6 +24,12 @@
                                               stays on this laptop; the Partner Bank gets ONLY
                                               ewp-request-signing.cer (the public part) -> copy to the PC
 
+        kafka-broker.pfx        + .password   the local Kafka broker's TLS server certificate (localhost,
+                                              127.0.0.1): SASL_SSL on localhost:9092 - stays on this laptop
+
+        ewp-trust-root.pem                    the root certificate in PEM form, for the clients that read
+                                              PEM (Kafka: librdkafka, the Kafka CLI tools and Kafka UI)
+
     Windows' certificate stores are used only briefly to create and sign the certificates, and are
     cleaned again: the services trust ewp-trust-root.cer through their own configuration. Browsers
     that open Partner Bank pages need the root in "Trusted Root Certification Authorities" - that is a
@@ -49,6 +55,7 @@ $rootSubject      = 'CN=EWP Local Trust Root (DEVELOPMENT ONLY), O=EWP V3 PoC'
 $serverSubject    = 'CN=partner-auth.ewp.home.arpa, O=Partner Bank (PoC)'
 $clientSubject    = 'CN=EWP BSS Partner Products Client, O=Four Walls Inc.'
 $signingSubject   = 'CN=EWP BSS Request Signing, O=Four Walls Inc.'
+$kafkaSubject     = 'CN=localhost, O=EWP V3 PoC (Kafka broker)'
 $store            = 'Cert:\CurrentUser\My'
 
 # ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
@@ -68,7 +75,8 @@ function Export-WithPassword {
 
     $password = New-RandomPassword
     $secure = ConvertTo-SecureString -String $password -AsPlainText -Force
-    Export-PfxCertificate -Cert $Certificate -FilePath (Join-Path $OutputFolder "$Name.pfx") -Password $secure | Out-Null
+    # AES-256 protection of the .pfx (Windows' default is 3DES): the Kafka broker's Java reads it too.
+    Export-PfxCertificate -Cert $Certificate -FilePath (Join-Path $OutputFolder "$Name.pfx") -Password $secure -CryptoAlgorithmOption AES256_SHA256 | Out-Null
     Export-Certificate -Cert $Certificate -FilePath (Join-Path $OutputFolder "$Name.cer") -Type CERT | Out-Null
     [System.IO.File]::WriteAllText((Join-Path $OutputFolder "$Name.pfx.password"), $password)
 }
@@ -106,6 +114,12 @@ else {
     Write-Host "Created the trust root ($($root.Thumbprint))."
 }
 
+# PEM copy of the root (public): Kafka's clients and broker read their trust anchor as PEM.
+$rootPem = "-----BEGIN CERTIFICATE-----`n" +
+    (([Convert]::ToBase64String($root.RawData) -split '(.{64})' | Where-Object { $_ }) -join "`n") +
+    "`n-----END CERTIFICATE-----`n"
+[System.IO.File]::WriteAllText((Join-Path $OutputFolder 'ewp-trust-root.pem'), $rootPem)
+
 try {
     # ---------------------------------------------------------------------- server, client and signing
 
@@ -119,7 +133,15 @@ try {
         @{ Name = 'partner-bank-server'; Subject = $serverSubject; Algorithm = 'RSA'; Purpose = '1.3.6.1.5.5.7.3.1'; Usage = @('DigitalSignature', 'KeyEncipherment');
            Extra = @('2.5.29.17={text}' + (($partnerHostNames | ForEach-Object { "DNS=$_" }) -join '&')) },
         @{ Name = 'ewp-partner-client'; Subject = $clientSubject; Algorithm = 'RSA'; Purpose = '1.3.6.1.5.5.7.3.2'; Usage = @('DigitalSignature'); Extra = @() },
-        @{ Name = 'ewp-request-signing'; Subject = $signingSubject; Algorithm = 'ECDSA_nistP256'; Purpose = $null; Usage = @('DigitalSignature'); Extra = @() }
+        @{ Name = 'ewp-request-signing'; Subject = $signingSubject; Algorithm = 'ECDSA_nistP256'; Purpose = $null; Usage = @('DigitalSignature'); Extra = @() },
+        # ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        # │ The Kafka broker's TLS certificate names localhost and 127.0.0.1 only, so the clients'
+        # │ host-name check (ssl.endpoint.identification.algorithm=https) passes for the local
+        # │ broker and for nothing else. Server authentication only: the clients prove who they
+        # │ are with SCRAM inside the TLS tunnel, not with certificates.
+        # └──────────────────────────────────────────────────────────────────────────────────────
+        @{ Name = 'kafka-broker'; Subject = $kafkaSubject; Algorithm = 'RSA'; Purpose = '1.3.6.1.5.5.7.3.1'; Usage = @('DigitalSignature', 'KeyEncipherment');
+           Extra = @('2.5.29.17={text}DNS=localhost&IPAddress=127.0.0.1') }
     )
 
     foreach ($certificate in $issued) {
@@ -158,4 +180,5 @@ finally {
 Write-Host ''
 Write-Host "Written to $OutputFolder"
 Write-Host '  Home PC (Partner Bank): copy ewp-trust-root.cer, ewp-request-signing.cer, partner-bank-server.pfx and partner-bank-server.pfx.password'
-Write-Host '  Never copy ewp-trust-root.pfx, ewp-partner-client.pfx or ewp-request-signing.pfx off this laptop.'
+Write-Host '  Never copy ewp-trust-root.pfx, ewp-partner-client.pfx, ewp-request-signing.pfx or kafka-broker.pfx off this laptop.'
+Write-Host '  Kafka (new kafka-broker certificate): stop Kafka, run .\ps\kafka\Setup-KafkaSecurity.ps1 -Phase Secure, start Kafka.'

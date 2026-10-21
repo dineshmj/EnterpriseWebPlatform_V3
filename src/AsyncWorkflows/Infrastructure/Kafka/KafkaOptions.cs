@@ -3,10 +3,10 @@ namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 // ┌─ :: SECURITY :: One Kafka identity per deployable ─────────────────────────────────────────────
 // │ Why : A shared Kafka account would let any component act as any other one.
 // │ How : Each deployable has its own user name in its appsettings.json and its own password from
-// │       Development settings or a secret store - never compiled in. Production uses SaslSsl
-// │       (TLS); localhost uses SaslPlaintext.
+// │       Development settings or a secret store - never compiled in. Every environment, localhost
+// │       included, uses SaslSsl (TLS, broker certificate checked against SslCaLocation).
 // │ Ref : Features 2.4.5, 2.4.6 | Threat-Model R-10 |
-// │       OWASP A02 Cryptographic Failures (TLS in production)
+// │       OWASP A02 Cryptographic Failures | CWE-319
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Connection settings for one Kafka client (producer or consumer). Each deployable
@@ -20,10 +20,19 @@ public sealed class KafkaOptions
     public string BootstrapServers { get; init; } = string.Empty;
 
     /// <summary>
-    /// "Plaintext" (no authentication) or "SaslPlaintext" / "SaslSsl" (SCRAM). Local
-    /// development uses SaslPlaintext on localhost; production uses SaslSsl.
+    /// "SaslSsl" (TLS + SCRAM) everywhere, local development included. "SaslPlaintext"
+    /// (SCRAM without TLS) and "Plaintext" (neither) remain only for a broker reverted with
+    /// Setup-KafkaSecurity.ps1 -Revert. The default is the safe one.
     /// </summary>
-    public string SecurityProtocol { get; init; } = "Plaintext";
+    public string SecurityProtocol { get; init; } = "SaslSsl";
+
+    /// <summary>
+    /// PEM file with the certificate authority that issued the broker's certificate
+    /// (local development: %USERPROFILE%\.ewp-pki\ewp-trust-root.pem; environment variables
+    /// are expanded). Empty = the operating system's trusted roots (e.g. a managed Kafka
+    /// service with a public certificate).
+    /// </summary>
+    public string? SslCaLocation { get; init; }
 
     public string SaslMechanism { get; init; } = "ScramSha512";
 

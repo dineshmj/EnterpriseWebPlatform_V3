@@ -656,11 +656,16 @@ Operations Journey API (Node.js):  https://operations-journey.dev.localhost:4638
 	   says it is not connected to its consumer group:
 		- Run ps\kafka\Setup-KafkaSecurity.ps1 (all three phases) - the users or ACLs are missing.
 		- Check that the component's appsettings.Development.json has Kafka:SaslPassword (it refuses to start without it
-		  when Kafka:SecurityProtocol is SaslPlaintext).
+		  when Kafka:SecurityProtocol is SaslSsl).
+		- "SSL handshake failed" / "certificate verify failed": run ps\pki\New-EwpLocalPki.ps1, stop Kafka, run
+		  ps\kafka\Setup-KafkaSecurity.ps1 -Phase Secure and start Kafka again (the broker must listen with SASL_SSL
+		  and %USERPROFILE%\.ewp-pki\ewp-trust-root.pem must exist).
 		- A component that stops at start-up with "Kafka:SaslPassword is not configured" was started without
 		  DOTNET_ENVIRONMENT=Development, so appsettings.Development.json was not loaded: start it with its launch profile.
 
-	j) A Kafka CLI tool hangs or reports "Disconnected" after securing Kafka: add --command-config C:\Kafka\config\admin.properties.
+	j) A Kafka CLI tool hangs, reports "Disconnected", or fails with "java.lang.OutOfMemoryError: Java heap space" (a
+	   plain client reading the broker's TLS reply as a message size) after securing Kafka: add
+	   --command-config C:\Kafka\config\admin.properties (C:\Kafka\ListTopics.bat included).
 
 	k) Visual Studio uses a stale launch profile: close VS, delete the solution's ".vs" folder, reopen, and check the start-up profile.
 

@@ -4,7 +4,7 @@
 #
 # Hardened on purpose:
 #  - listens on 127.0.0.1 only, behind a login form;
-#  - connects as the read-only Kafka user "ewp-kafka-ui" (ACLs: Read/Describe only);
+#  - connects over TLS (SASL_SSL) as the read-only Kafka user "ewp-kafka-ui" (ACLs: Read/Describe only);
 #  - readOnly cluster and no dynamic configuration, so the UI cannot change Kafka.
 
 server:
@@ -30,6 +30,11 @@ kafka:
       bootstrapServers: localhost:9092
       readOnly: true
       properties:
-        security.protocol: SASL_PLAINTEXT
+        # TLS first: the broker's certificate is checked against the EWP local trust root
+        # (ps/pki/New-EwpLocalPki.ps1), then SCRAM as the read-only user.
+        security.protocol: SASL_SSL
+        ssl.truststore.type: PEM
+        ssl.truststore.location: ${USERPROFILE}/.ewp-pki/ewp-trust-root.pem
+        ssl.endpoint.identification.algorithm: https
         sasl.mechanism: SCRAM-SHA-512
         sasl.jaas.config: org.apache.kafka.common.security.scram.ScramLoginModule required username="ewp-kafka-ui" password="ewp-kafka-ui-dev";

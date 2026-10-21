@@ -39,12 +39,14 @@ set "PARTNER_PRODUCTS_API_BASE_URL=https://partner-products-api.dev.localhost:46
 set "PAYMENTS_API_BASE_URL=https://payments-api.dev.localhost:44488"
 
 REM +- SEC --------------------------------------------------------------------------------
-REM | The payment-event listener reads payments.payment.events as the worker's OWN Kafka
-REM | user (read on that topic and group partner-products.worker only). DEVELOPMENT password;
+REM | The payment-event listener reads payments.payment.events over TLS (SASL_SSL; the
+REM | broker's certificate is checked against the EWP local trust root) as the worker's OWN
+REM | Kafka user (read on that topic and group partner-products.worker only). DEVELOPMENT password;
 REM | elsewhere from the environment or a secret store. The settlement account must match the
 REM | Partner Products API's PartnerBank:Settlement - only its payments are looked up.
 REM +--------------------------------------------------------------------------------------
 set "KAFKA_BOOTSTRAP_SERVERS=localhost:9092"
+set "KAFKA_SSL_CA_LOCATION=%USERPROFILE%\.ewp-pki\ewp-trust-root.pem"
 set "PARTNER_PRODUCTS_WORKER_KAFKA_USERNAME=ewp-partner-products-worker"
 set "PARTNER_PRODUCTS_WORKER_KAFKA_PASSWORD=ewp-partner-products-worker-kafka-dev"
 set "PARTNER_PRODUCTS_SETTLEMENT_BSB=182-512"

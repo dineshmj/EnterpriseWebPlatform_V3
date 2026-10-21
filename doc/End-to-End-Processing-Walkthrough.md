@@ -285,7 +285,7 @@ kyc.case.approved|rejected, compliance.case.*, accounts.application.rejected, ac
 
 ## Known gaps on this path
 
-- **Kafka is authenticated but not encrypted locally.** Every component connects as its own SCRAM user with deny-by-default ACLs, so only the Customer Onboarding relay can publish a submission and only the KYC API can publish KYC outcomes ([kafka/README.md](../kafka/README.md)). Local development uses `SASL_PLAINTEXT`; production needs `SASL_SSL`.
+- **Kafka is authenticated and encrypted.** Every component connects as its own SCRAM user with deny-by-default ACLs, so only the Customer Onboarding relay can publish a submission and only the KYC API can publish KYC outcomes ([kafka/README.md](../kafka/README.md)). The connection is `SASL_SSL` locally too: TLS with the broker's certificate checked, then SCRAM.
 - **Every hop is traced and probed:** one OpenTelemetry trace follows the onboarding through the Outbox and Kafka (`traceparent` header), and every component exposes `/health/live` and `/health/ready`.
 - **Every subscriber shares one reliable consume loop** (`AsyncWorkflows.Infrastructure.Subscribers`): transient failures are retried in place, permanent ones go to the worker's own dead-letter topic, and each receiving API records each message in its Inbox.
 - **The KYC MFE has no claim / release buttons;** the first decision assigns the case.

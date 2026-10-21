@@ -24,7 +24,7 @@ The Partner Products API is EWP's adapter to the Partner Bank: it holds the mutu
 | Start | Temporal first: `temporal server start-dev` (UI http://localhost:8233); then `runnow.bat` (or `.\ps\run\Start-NodeServices.ps1 -Only PartnerProducts`) |
 | Temporal | `localhost:7233`, namespace `default`, task queue `partner-products`, workflow `goldPurchaseWorkflow` |
 | Health | https://localhost:46383/health/live, /health/ready (ready = polling Temporal; `paymentEvents` shows the listener: starting / running) |
-| Kafka | Consumer group `partner-products.worker` on `payments.payment.events`, user `ewp-partner-products-worker` (SCRAM-SHA-512), Confluent's `@confluentinc/kafka-javascript` |
+| Kafka | Consumer group `partner-products.worker` on `payments.payment.events`, user `ewp-partner-products-worker` (SCRAM-SHA-512 over TLS, CA `KAFKA_SSL_CA_LOCATION`), Confluent's `@confluentinc/kafka-javascript` |
 | Identity | Machine client `PartnerProducts.Worker.M2M.ClientID` (client credentials): `payments.read`, `partner-products.write` |
 
 ## Security controls
@@ -38,7 +38,7 @@ The Partner Products API is EWP's adapter to the Partner Bank: it holds the mutu
 | 5 | Fail-closed configuration: every address https, no secret defaults | Bearer tokens sent in the clear; a half-configured worker | Misconfiguration (OWASP A05) | [config.ts](src/config.ts) |
 | 6 | The health probe serves only its two answers over https (`nosniff`, `no-store`) | A probe that leaks or does more | Information disclosure | [main.ts](src/main.ts) |
 | 7 | A payment event only WAKES the workflow (signal without data); the workflow decides from the payment the Payments API shows by the purchase's own key - so no Inbox is needed, and a repeated, late or forged event costs one extra look | An event on the topic could allocate gold or cancel an order by itself | Forged or replayed messages (spoofing, tampering) | [signals.ts](src/signals.ts), [workflows.ts](src/workflows.ts) |
-| 8 | Its own Kafka user, READ on `payments.payment.events` and its group only; only final outcomes to the settlement account are looked up, by an internal endpoint pinned to this worker | A broad Kafka identity; a lookup for every payment of the bank | Excessive privilege; data exposure | [payment-events.ts](src/payment-events.ts), `Setup-KafkaSecurity.ps1` |
+| 8 | Its own Kafka user over TLS (SASL_SSL; the broker's certificate and host name checked, a configured CA file that is missing stops the start-up), READ on `payments.payment.events` and its group only; only final outcomes to the settlement account are looked up, by an internal endpoint pinned to this worker | A broad Kafka identity; a lookup for every payment of the bank | Excessive privilege; data exposure | [payment-events.ts](src/payment-events.ts), `Setup-KafkaSecurity.ps1` |
 | 9 | Polling stays as the safety net (every 5 minutes): Kafka down, the listener stopped or an event missed only slow a purchase down | A missed event leaves a paid purchase unallocated | Lost update; availability | [workflows.ts](src/workflows.ts) |
 
 The development client secret is in `runnow.bat` (and the IDP's `appsettings.Development.json`); outside Development it comes from the environment or a secret store.

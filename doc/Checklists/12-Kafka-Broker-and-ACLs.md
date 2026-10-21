@@ -7,6 +7,7 @@ Deployable: the local Kafka broker (`C:\Kafka`, KRaft), set up by `ps/kafka/Setu
 - [x] **SASL/SCRAM-SHA-512 on the client listener:** one user per deployable, each with its own password. *Because* a client without credentials cannot connect at all.
 - [x] **Both listeners are bound to `localhost` only.**
 - [x] **Every client fails closed:** without SASL settings it does not start. → `src/AsyncWorkflows/Infrastructure/Kafka/KafkaClientSecurity.cs`
+- [x] **TLS on the client listener (`SASL_SSL`):** the `kafka-broker` certificate from `ps/pki/New-EwpLocalPki.ps1` (localhost / 127.0.0.1 only), TLS 1.2+. Every client (.NET `Kafka:SslCaLocation`, the Partner Products Worker, Kafka UI, the CLI tools) checks it against the EWP trust root and checks the host name. *Because* SCRAM protects the password but not the events themselves.
 
 ## 2. Authorization (deny by default)
 
@@ -32,7 +33,7 @@ Deployable: the local Kafka broker (`C:\Kafka`, KRaft), set up by `ps/kafka/Setu
 
 ## 4. Production (open)
 
-- [ ] **`SASL_SSL` (TLS) instead of `SASL_PLAINTEXT`** (R-10). Locally, SCRAM never sends the password itself.
+- [ ] **Broker certificate from the bank's CA, with rotation,** and the keystore password from a secret store (locally it is written into `server.properties`).
 - [ ] **No `User:ANONYMOUS` in `super.users`.** Locally it is there because the controller listener is PLAINTEXT on localhost; in production the controller listener is secured.
 - [ ] **Replication factor of 3 or more** and `min.insync.replicas` of 2 or more. Locally there is one broker with replication factor 1.
 - [ ] **Credentials in a secret store,** with rotation.

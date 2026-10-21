@@ -2,21 +2,24 @@ using Confluent.Kafka;
 
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 
-// ┌─ :: SECURITY :: Kafka authentication, fail closed ─────────────────────────────────────────────
+// ┌─ :: SECURITY :: Kafka TLS and authentication, fail closed ─────────────────────────────────────
 // │ Why : Without credentials any program on the network could publish a forged business event
-// │       (e.g. a fake "application submitted") or read every message.
-// │ How : Each deployable connects as its OWN SCRAM-SHA-512 user; a SASL protocol without a user
-// │       name or password stops the start-up instead of silently connecting unauthenticated. The
-// │       broker's ACLs do the rest.
-// │ Ref : Features 2.4.6 | kafka/README.md | OWASP A07 Identification and Authentication Failures |
-// │       CWE-306
+// │       (e.g. a fake "application submitted") or read every message; without TLS anyone who can
+// │       watch the traffic reads the events, or poses as the broker.
+// │ How : SaslSsl: TLS with the broker's certificate checked against SslCaLocation AND its host
+// │       name (endpoint identification), then each deployable's OWN SCRAM-SHA-512 user. A SASL
+// │       protocol without a user name or password, or a CA file that is not there, stops the
+// │       start-up instead of silently connecting unauthenticated or untrusted. The broker's ACLs
+// │       do the rest.
+// │ Ref : Features 2.4.6 | kafka/README.md | OWASP A02 Cryptographic Failures, A07 Identification
+// │       and Authentication Failures | CWE-306, CWE-319, CWE-297
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>Applies <see cref="KafkaOptions"/> to a Confluent producer or consumer configuration.</summary>
 public static class KafkaClientSecurity
 {
     /// <summary>
-    /// Sets the bootstrap servers and, for a SASL protocol, the SCRAM credentials.
-    /// Fails closed: a SASL protocol without a username and password throws at
+    /// Sets the bootstrap servers, for SaslSsl the trusted CA and host-name check, and for a
+    /// SASL protocol the SCRAM credentials. Fails closed: incomplete settings throw at
     /// start-up instead of silently connecting unauthenticated.
     /// </summary>
     public static T Apply<T>(T config, KafkaOptions options) where T : ClientConfig
@@ -32,6 +35,17 @@ public static class KafkaClientSecurity
 
         var protocol = Enum.Parse<SecurityProtocol>(options.SecurityProtocol, ignoreCase: true);
         config.SecurityProtocol = protocol;
+
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ If TLS is on: trust only the configured CA (or the OS roots when none is set) and
+        // │ check the broker's host name, explicitly - not left to librdkafka's default.
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        if (protocol is SecurityProtocol.Ssl or SecurityProtocol.SaslSsl)
+        {
+            if (CaLocationOf(options) is { } caLocation)
+                config.SslCaLocation = caLocation;
+            config.SslEndpointIdentificationAlgorithm = SslEndpointIdentificationAlgorithm.Https;
+        }
 
         if (protocol is SecurityProtocol.SaslPlaintext or SecurityProtocol.SaslSsl)
         {
@@ -50,7 +64,11 @@ public static class KafkaClientSecurity
             return "Kafka:BootstrapServers is not configured.";
 
         if (!Enum.TryParse<SecurityProtocol>(options.SecurityProtocol, ignoreCase: true, out var protocol))
-            return $"Kafka:SecurityProtocol '{options.SecurityProtocol}' is not valid (Plaintext, SaslPlaintext, SaslSsl).";
+            return $"Kafka:SecurityProtocol '{options.SecurityProtocol}' is not valid (SaslSsl; SaslPlaintext or Plaintext only for a reverted broker).";
+
+        if ((protocol is SecurityProtocol.Ssl or SecurityProtocol.SaslSsl) &&
+            CaLocationOf(options) is { } caLocation && !File.Exists(caLocation))
+            return $"Kafka:SslCaLocation '{caLocation}' does not exist (local development: run ps\\pki\\New-EwpLocalPki.ps1).";
 
         if (protocol is SecurityProtocol.SaslPlaintext or SecurityProtocol.SaslSsl)
         {
@@ -65,4 +83,10 @@ public static class KafkaClientSecurity
 
         return null;
     }
+
+    /// <summary>The CA file with environment variables expanded, or null for the OS's trusted roots.</summary>
+    private static string? CaLocationOf(KafkaOptions options) =>
+        string.IsNullOrWhiteSpace(options.SslCaLocation)
+            ? null
+            : Environment.ExpandEnvironmentVariables(options.SslCaLocation);
 }

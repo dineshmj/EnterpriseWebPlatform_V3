@@ -4,20 +4,23 @@ The platform uses a single-node Kafka broker in KRaft mode, installed natively a
 
 | File | Purpose |
 |---|---|
-| [Setup-KafkaSecurity.ps1](../ps/kafka/Setup-KafkaSecurity.ps1) | SCRAM-SHA-512 authentication, one Kafka user per deployable, deny-by-default ACLs, explicit topics, no auto-creation |
+| [Setup-KafkaSecurity.ps1](../ps/kafka/Setup-KafkaSecurity.ps1) | TLS (`SASL_SSL`), SCRAM-SHA-512 authentication, one Kafka user per deployable, deny-by-default ACLs, explicit topics, no auto-creation |
 | [Reset-KafkaRecords.ps1](../ps/kafka/Reset-KafkaRecords.ps1) | Empties every topic (deletes all records up to each topic's end) while the topics, ACLs and consumer groups stay - with `ps\database\Initialize-EwpDatabases.ps1`, a clean slate. Asks first; Kafka running, EWP services stopped |
 | [Stop-Kafka.ps1](../ps/kafka/Stop-Kafka.ps1) | Stops the broker without knowing its PID (for when Ctrl+C is not possible, e.g. under PowerShell ISE), waits for the ports to free, and clears the read-only flag on metadata snapshots that otherwise breaks the next start on Windows |
-| [kafka-ui.yml](kafka-ui.yml) | Configuration for Kafka UI: localhost only, login form, read-only Kafka user, read-only cluster |
+| [kafka-ui.yml](kafka-ui.yml) | Configuration for Kafka UI: localhost only, login form, TLS to the broker, read-only Kafka user, read-only cluster |
 
 ## 1. Secure the broker (once)
 
 Run the phases in order from the repository root (PowerShell). Each phase checks its precondition and is safe to re-run.
 
 ```powershell
+# Once: the local PKI issues the broker's certificate (kafka-broker.pfx) and writes ewp-trust-root.pem
+.\ps\pki\New-EwpLocalPki.ps1
+
 # Kafka RUNNING (still PLAINTEXT): users, topics, new consumer groups
 .\ps\kafka\Setup-KafkaSecurity.ps1 -Phase Prepare
 
-# Stop Kafka (Ctrl+C in its window), then: SASL listener + authorizer (server.properties is backed up first)
+# Stop Kafka (Ctrl+C in its window), then: SASL_SSL listener + authorizer (server.properties is backed up first)
 .\ps\kafka\Setup-KafkaSecurity.ps1 -Phase Secure
 
 # Start Kafka (C:\Kafka\StartKafka.bat), then: least-privilege ACLs
@@ -26,7 +29,9 @@ Run the phases in order from the repository root (PowerShell). Each phase checks
 
 **Adding a component to an already-secured broker** (e.g. a new bounded context): with Kafka running, run `-Phase Prepare` (it detects `config\admin.properties` and authenticates as admin) and then `-Phase Acls`. The Secure phase is not needed again.
 
-To undo: stop Kafka and run `.\ps\kafka\Setup-KafkaSecurity.ps1 -Revert` (restores the backed-up `server.properties`), then set `Kafka:SecurityProtocol` back to `Plaintext` in the components.
+**Moving a broker from `SASL_PLAINTEXT` to `SASL_SSL`** (set up before B8): run `New-EwpLocalPki.ps1`, stop Kafka, run `-Phase Secure`, start Kafka. Users, topics, ACLs and offsets stay; restart every EWP component afterwards (they now connect with TLS).
+
+To undo: stop Kafka and run `.\ps\kafka\Setup-KafkaSecurity.ps1 -Revert` (restores the backed-up `server.properties`), then set `Kafka:SecurityProtocol` in the components (and the Worker, Kafka UI and `config\admin.properties`) to match.
 
 ### Who may do what
 
@@ -63,7 +68,9 @@ C:\Kafka\bin\windows\kafka-topics.bat --bootstrap-server localhost:9092 --comman
 
 Update `C:\Kafka\ListTopics.bat` the same way.
 
-**Local versus production.** Local development uses `SASL_PLAINTEXT` on localhost. SCRAM never sends the password itself, but the traffic is not encrypted. The CONTROLLER listener stays PLAINTEXT, bound to localhost: the broker's own requests to the controller arrive as `User:ANONYMOUS`, which is therefore a super user. Production uses `SASL_SSL` (or mTLS) on every listener, a managed secret store, and no anonymous super user.
+**TLS.** The client listener is `SASL_SSL`: TLS 1.2 or 1.3 with the `kafka-broker` certificate (issued by the EWP local trust root for `localhost` and `127.0.0.1` only), then SCRAM inside the tunnel. Every client checks the certificate against `ewp-trust-root.pem` and checks the host name: the .NET components (`Kafka:SslCaLocation`), the Partner Products Worker (`KAFKA_SSL_CA_LOCATION`), Kafka UI and the CLI tools (`config\admin.properties`). Clients do not present certificates; SCRAM identifies them.
+
+**Local versus production.** The CONTROLLER listener stays PLAINTEXT, bound to localhost: the broker's own requests to the controller arrive as `User:ANONYMOUS`, which is therefore a super user. Development writes the keystore and admin passwords into `server.properties`. Production secures every listener (TLS or mTLS), uses certificates from the bank's CA with rotation, a managed secret store, and no anonymous super user.
 
 ## 2. Kafka UI (optional)
 
