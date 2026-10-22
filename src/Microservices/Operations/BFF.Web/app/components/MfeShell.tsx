@@ -3,10 +3,7 @@
 import { Activity } from 'lucide-react';
 import { useEffect } from 'react';
 import { Badge } from './ui/feedback';
-
-// The only origin allowed to embed this MFE and exchange protocol messages with it. A static
-// allow-list (set at build time), never document.referrer and never '*'.
-const SHELL_ORIGIN = process.env.NEXT_PUBLIC_SHELL_ORIGIN ?? 'https://shell.dev.localhost:46367';
+import { shellOrigin } from '../../lib/shell-origin';
 
 /** How often, at most, this application tells the Shell that the person is active here. */
 const ACTIVITY_REPORT_MS = 60_000;
@@ -25,7 +22,7 @@ function useReportActivityToShell() {
       const now = Date.now();
       if (now - lastReport < ACTIVITY_REPORT_MS) return;
       lastReport = now;
-      parentWindow.postMessage({ type: 'BSS_MFE_ACTIVITY' }, SHELL_ORIGIN);
+      parentWindow.postMessage({ type: 'BSS_MFE_ACTIVITY' }, shellOrigin());
     };
     window.addEventListener('pointerdown', report, true);
     window.addEventListener('keydown', report, true);
@@ -49,7 +46,7 @@ export function MfeShell({ title, subtitle = 'Operations', children }: { title: 
     if (!parentWindow || parentWindow === window) return;
 
     const handler = (event: MessageEvent) => {
-      if (event.source !== parentWindow || event.origin !== SHELL_ORIGIN) return;
+      if (event.source !== parentWindow || event.origin !== shellOrigin()) return;
       if (event.data?.type === 'BSS_NAVIGATION_REQUEST' && event.data.requestId) {
         (event.source as Window).postMessage(
           { type: 'BSS_NAVIGATION_RESPONSE', requestId: event.data.requestId, allowed: true },
@@ -59,7 +56,7 @@ export function MfeShell({ title, subtitle = 'Operations', children }: { title: 
     };
 
     window.addEventListener('message', handler);
-    parentWindow.postMessage({ type: 'BSS_MFE_READY' }, SHELL_ORIGIN);
+    parentWindow.postMessage({ type: 'BSS_MFE_READY' }, shellOrigin());
     return () => window.removeEventListener('message', handler);
   }, []);
 

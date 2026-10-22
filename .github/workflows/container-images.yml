@@ -59,14 +59,10 @@ jobs:
         include:
           - image: ewp-payments-api
             dockerfile: src/Microservices/Payments/API/Dockerfile
-            build-args: ''
           - image: ewp-payments-bff-web
             dockerfile: src/Microservices/Payments/BFF.Web/Dockerfile
-            # DEBT: the Shell origin is compiled into the micro front end (see that Dockerfile).
-            build-args: SHELL_ORIGIN=${{ vars.EWP_SHELL_ORIGIN || 'https://shell.dev.localhost:46367' }}
           - image: ewp-payments-saga-reply-subscriber
             dockerfile: src/AsyncWorkflows/Subscribers/Payments/PaymentsSagaReplySubscriber/Dockerfile
-            build-args: ''
 
     steps:
       - name: Check out
@@ -98,7 +94,6 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
-          build-args: ${{ matrix.build-args }}
           platforms: linux/amd64
           load: true
           push: false
@@ -136,7 +131,6 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
-          build-args: ${{ matrix.build-args }}
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}

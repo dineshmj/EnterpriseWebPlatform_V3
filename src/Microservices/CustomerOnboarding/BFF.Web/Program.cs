@@ -280,6 +280,13 @@ builder.Services.AddEwpRateLimiting(builder.Configuration, "/bff", "/api");
 
 var app = builder.Build();
 
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ First in the pipeline: behind the ingress (TLS ends there), the original scheme and
+// │ client address - only from the proxies listed under ForwardedHeaders; none listed
+// │ (local runs) = no forwarded header is trusted.
+// └──────────────────────────────────────────────────────────────────────────────────────
+app.UseEwpForwardedHeaders();
+
 // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
 // │ An API that is down, too slow, or behind an open circuit: a readable 503 at once, never a
 // │ hanging page or a bare 500 (the submission flow handles its own failures and compensation).
@@ -363,6 +370,7 @@ app.MapControllers();
 
 app.MapBffManagementEndpoints();
 
+app.MapEwpMfeRuntimeConfig(shellOrigin);   // /ewp-runtime-config.js: the MFE's Shell origin, set at run time
 app.MapEwpHealthEndpoints();
 app.MapEwpMetricsEndpoint();   // Prometheus scrape (GET /metrics)
 

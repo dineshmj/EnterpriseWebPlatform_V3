@@ -195,6 +195,13 @@ try
 
     var app = builder.Build();
 
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ First in the pipeline: behind the ingress (TLS ends there), the original scheme and
+    // │ client address - only from the proxies listed under ForwardedHeaders; none listed
+    // │ (local runs) = no forwarded header is trusted.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    app.UseEwpForwardedHeaders();
+
     // Application logging and exception handling.
     app.UseEwpRequestLogging();
 

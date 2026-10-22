@@ -21,3 +21,11 @@ updates:
       - /src/AsyncWorkflows/Subscribers/Payments/PaymentsSagaReplySubscriber
     schedule:
       interval: weekly
+    # ┌─ ARCH ─────────────────────────────────────────────────────────────────────────────────────
+    # │ Minor and patch updates only (security fixes, e.g. .NET 10.0.13 -> 10.0.14). A new major
+    # │ (Node 24 -> 26, .NET 10 -> 11) is a planned step: local install, every project and the
+    # │ images together - otherwise CI would build with another runtime than development tests.
+    # └────────────────────────────────────────────────────────────────────────────────────────────
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']

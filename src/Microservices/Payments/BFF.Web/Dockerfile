@@ -1,7 +1,6 @@
 # syntax=docker/dockerfile:1.7
-# Build from the repository root (SHELL_ORIGIN is required - see the DEBT note below):
-#   docker build -f src/Microservices/Payments/BFF.Web/Dockerfile \
-#     --build-arg SHELL_ORIGIN=https://shell.dev.localhost:46367 -t ewp/payments-bff-web .
+# Build from the repository root:
+#   docker build -f src/Microservices/Payments/BFF.Web/Dockerfile -t ewp/payments-bff-web .
 
 # ┌─ :: ARCHITECTURE + SECURITY :: Payments BFF (+ its micro front end) container image ──────────
 # │ Why : The BFF serves the Payments micro front end and holds the browser's session; the image
@@ -11,26 +10,20 @@
 # │       (the same steps as CompileAndExportBFFClients_V3.ps1, without the copy to wwwroot).
 # │       (2) The .NET SDK publishes the BFF with that export in wwwroot. (3) A chiseled,
 # │       non-root ASP.NET runtime runs it on plain HTTP 8080; TLS ends at the ingress.
-# │       Oidc__ClientSecret and ConnectionStrings__BffStateDbConnection come from the
-# │       environment at run time.
+# │       Oidc__ClientSecret, ConnectionStrings__BffStateDbConnection and ShellOrigin come from
+# │       the environment at run time.
 # │ Ref : doc/Containers.md | Features 2.3.3, 2.4.5 | OWASP A05, A08
 # └────────────────────────────────────────────────────────────────────────────────────────────────
 
 FROM node:24.21.0-bookworm-slim AS client
 ARG PNPM_VERSION=12.11.2
 
-# ┌─ SEC + DEBT ─────────────────────────────────────────────────────────────────────────────────────
-# │ The Shell origin is compiled into the static export (NEXT_PUBLIC_SHELL_ORIGIN): the only
-# │ window whose messages the MFE accepts, and where it sends its own. A wrong value must not
-# │ build, so there is no default. It makes this image specific to one environment.
-# │ Production: the MFE reads the Shell origin at run time from the BFF (its ShellOrigin
-# │ setting), so one image serves every environment.
+# ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────────────────
+# │ No environment's settings in the export: the MFE reads the Shell origin at run time from
+# │ this BFF (/ewp-runtime-config.js, its ShellOrigin setting), so one image serves every
+# │ environment.
 # └──────────────────────────────────────────────────────────────────────────────────────────────────
-ARG SHELL_ORIGIN
-RUN test -n "$SHELL_ORIGIN" || { echo "Build argument SHELL_ORIGIN is required (the Shell's https origin)." >&2; exit 1; }
-
-ENV NEXT_TELEMETRY_DISABLED=1 \
-    NEXT_PUBLIC_SHELL_ORIGIN=$SHELL_ORIGIN
+ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm install --global "pnpm@${PNPM_VERSION}"
 
 WORKDIR /src

@@ -1,3 +1,5 @@
+import { shellOrigin } from './shell-origin';
+
 /**
  * Step-up for a risky action (a resend, a simulator change): the API answers
  * 403 "mfa_required" when the person's last sign-in with the authenticator code is too old. Inside
@@ -15,7 +17,6 @@
 // │       is retried at most once: the API itself checks the fresh MFA.
 // │ Ref : Features 2.1.5 | RFC 9470 | HTML postMessage security | Threat-Model R-13
 // └────────────────────────────────────────────────────────────────────────────────────────────────
-const SHELL_ORIGIN = process.env.NEXT_PUBLIC_SHELL_ORIGIN ?? 'https://shell.dev.localhost:46367';
 const STEP_UP_URL = '/api/auth/step-up';
 const STEP_UP_DONE_PATH = '/api/auth/step-up-done';
 const GIVE_UP_AFTER_MS = 5 * 60_000;
@@ -48,13 +49,13 @@ function askTheShell(): Promise<boolean> {
       // │ If the answer is not from the parent window AND the Shell's origin, or not for this
       // │ request, ignore it: a page that frames this app must not answer for the Shell.
       // └──────────────────────────────────────────────────────────────────────────────────────
-      if (event.source !== window.parent || event.origin !== SHELL_ORIGIN) return;
+      if (event.source !== window.parent || event.origin !== shellOrigin()) return;
       if (event.data?.type !== 'BSS_STEP_UP_RESULT' || event.data.requestId !== requestId) return;
       finish(event.data.confirmed === true);
     }
     window.addEventListener('message', onMessage);
     const timer = window.setTimeout(() => finish(false), GIVE_UP_AFTER_MS + 30_000);
-    window.parent.postMessage({ type: 'BSS_STEP_UP_REQUEST', requestId }, SHELL_ORIGIN);
+    window.parent.postMessage({ type: 'BSS_STEP_UP_REQUEST', requestId }, shellOrigin());
   });
 }
 

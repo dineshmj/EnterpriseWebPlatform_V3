@@ -277,6 +277,13 @@ builder.Services.AddEwpRateLimiting(builder.Configuration, "/bff");
 
 var app = builder.Build();
 
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ First in the pipeline: behind the ingress (TLS ends there), the original scheme and
+// │ client address - only from the proxies listed under ForwardedHeaders; none listed
+// │ (local runs) = no forwarded header is trusted.
+// └──────────────────────────────────────────────────────────────────────────────────────
+app.UseEwpForwardedHeaders();
+
 // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
 // │ One structured log line per request (Serilog), with the caller and the trace ID.
 // └──────────────────────────────────────────────────────────────────────────────────────

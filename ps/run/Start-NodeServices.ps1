@@ -29,11 +29,14 @@
     .\ps\run\Start-NodeServices.ps1 -Only Operations   # only the two Operations services
     .\ps\run\Start-NodeServices.ps1 -Only PartnerProducts   # only the three Partner Products services
     .\ps\run\Start-NodeServices.ps1 -Stop              # stop all eight and the fault proxy (the processes listening on their ports)
+    .\ps\run\Start-NodeServices.ps1 -Restart           # stop, wait until the ports are free, start again (picks up changed code;
+                                                       # the web apps rebuild as they start). Works with -Only too.
 #>
 param(
     [ValidateSet('All', 'Kyc', 'Audit', 'Operations', 'PartnerProducts')]
     [string] $Only = 'All',
-    [switch] $Stop
+    [switch] $Stop,
+    [switch] $Restart
 )
 
 cls
@@ -63,7 +66,12 @@ function Get-Listener([int] $port) {
 # The fault proxy's admin port (ps\toxiproxy\toxiproxy.json holds its routes, 47101-47111).
 $faultProxyPort = 8474
 
-if ($Stop) {
+if ($Stop -and $Restart) {
+    Write-Host 'Use -Stop or -Restart, not both.' -ForegroundColor Red
+    exit 1
+}
+
+if ($Stop -or $Restart) {
     if ($Only -eq 'All') {
         $listener = Get-Listener $faultProxyPort
         if ($listener) {
@@ -80,7 +88,21 @@ if ($Stop) {
             Write-Host "$($s.Name) was not running." -ForegroundColor DarkGray
         }
     }
-    return
+    if ($Stop) { return }
+
+    # ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+    # │ -Restart: wait until every port is free, or the start below would see the old process
+    # │ still listening and skip that service - leaving the OLD code running.
+    # └──────────────────────────────────────────────────────────────────────────────────────
+    $ports = @($services.Port) + $(if ($Only -eq 'All') { $faultProxyPort } else { @() })
+    $deadline = (Get-Date).AddSeconds(30)
+    while (($ports | Where-Object { Get-Listener $_ }) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
+    $stillBusy = @($ports | Where-Object { Get-Listener $_ })
+    if ($stillBusy.Count -gt 0) {
+        Write-Host "Still in use after 30 s: port(s) $($stillBusy -join ', '). Stop them by hand, then start again." -ForegroundColor Red
+        exit 1
+    }
+    Write-Host 'All stopped. Starting again...' -ForegroundColor Yellow
 }
 
 # The Audit, Operations and Partner Products services read the development certificate from the user profile.

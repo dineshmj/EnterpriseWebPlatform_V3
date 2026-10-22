@@ -99,6 +99,19 @@ async function bootstrap() {
     next();
   });
 
+  // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+  // │ The MFE's Shell origin, set at run time from KYC_BFF_SHELL_ORIGIN (the same contract as
+  // │ the .NET BFFs' MfeRuntimeConfig.cs): the export loads /ewp-runtime-config.js before Next.js starts the page
+  // │ and lib/shell-origin.ts reads it, so one image serves every environment. JSON-encoded,
+  // │ frozen, not cached; no secret, so no session needed.
+  // └──────────────────────────────────────────────────────────────────────────────────────
+  const runtimeConfig = `window.__EWP_RUNTIME__ = Object.freeze(${JSON.stringify({ shellOrigin: new URL(options.shellOrigin).origin })});`;
+  http.get('/ewp-runtime-config.js', (_req, res) => {
+    res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.send(runtimeConfig);
+  });
+
   app.use(
     express.static(path.resolve(options.staticRoot), {
       extensions: ['html'],

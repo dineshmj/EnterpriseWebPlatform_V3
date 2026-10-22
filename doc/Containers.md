@@ -5,8 +5,8 @@ First slice: the **Payments** context (API, BFF with its micro front end, saga r
 The other deployables follow the same pattern (see [Adding an image](#adding-an-image)).
 
 In short: **CI builds every image from a commit, checks it, and publishes it only if the checks
-pass. An image holds no secret and no environment's settings, except the one known gap below. Each
-environment supplies settings and secrets when the container starts.**
+pass. An image holds no secret and no environment's settings: each environment supplies settings
+and secrets when the container starts, so one image runs everywhere.**
 
 ## Decisions
 
@@ -49,7 +49,7 @@ writable `/tmp` (emptyDir).
 | Image | Probes (8080) | Required from the environment | Mounted files |
 |---|---|---|---|
 | `ewp-payments-api` | `/health/live`, `/health/ready` | `ConnectionStrings__PaymentsDbConnection`, `Kafka__BootstrapServers`, `Kafka__SaslPassword`, `Authentication__Authority`, `PaymentNetwork__BaseUrl` (https), `PaymentNetwork__PermittedHosts__0`, `PaymentNetwork__ApiKey`, `AllowedHosts` | Kafka trust root -> `Kafka__SslCaLocation` |
-| `ewp-payments-bff-web` | `/health/live`, `/health/ready` | `ConnectionStrings__BffStateDbConnection`, `Oidc__Authority`, `Oidc__ClientSecret`, `ShellOrigin`, `PaymentsBff__PaymentsApiBaseUrl`, `PaymentsBff__AccountsApiBaseUrl` (both https), `AllowedHosts` | - |
+| `ewp-payments-bff-web` | `/health/live`, `/health/ready` | `ConnectionStrings__BffStateDbConnection`, `Oidc__Authority`, `Oidc__ClientSecret`, `ShellOrigin`, `PaymentsBff__PaymentsApiBaseUrl`, `PaymentsBff__AccountsApiBaseUrl` (both https), `AllowedHosts`, `ForwardedHeaders__KnownNetworks__0` (see below) | - |
 | `ewp-payments-saga-reply-subscriber` | `/health/live`, `/health/ready` (`Health__Urls` is set to `http://+:8080` in the image) | `Kafka__BootstrapServers`, `Kafka__SaslPassword`, `PaymentsSagaReplySubscriber__IdentityServerAuthority`, `PaymentsSagaReplySubscriber__ClientSecret`, `PaymentsSagaReplySubscriber__PaymentsApiBaseUrl` | Kafka trust root -> `Kafka__SslCaLocation` |
 
 `/metrics` is off outside Development. A deployment turns it on with
@@ -58,12 +58,32 @@ writable `/tmp` (emptyDir).
 The IDP's and the APIs' certificates must be trusted by the containers: either issued by a public
 CA, or the private root added to the image's trust store by the platform.
 
+### Behind the ingress
+
+The ingress ends TLS, so the IDP, the Shell and the .NET BFFs must learn the original scheme and
+client address from `X-Forwarded-Proto` / `X-Forwarded-For` (otherwise the IDP publishes `http://`
+endpoints and a BFF sends `http://` sign-in redirect URIs, which the IDP refuses). They trust those
+headers **only from the ingress**: list its addresses as `ForwardedHeaders__KnownNetworks__0`
+(CIDR, e.g. the ingress subnet) or `ForwardedHeaders__KnownProxies__0` (IP). Nothing listed = no
+forwarded header is trusted (local runs). The Host header is never taken from a forwarded header;
+`AllowedHosts` checks the one the ingress passes on
+([ProxyForwardedHeaders.cs](../src/Common/WebUtilities/Security/ProxyForwardedHeaders.cs)).
+
+### The micro front ends' Shell origin
+
+The Shell origin is the only window an MFE exchanges messages with. It is **not** compiled into
+the front end: each BFF serves `/ewp-runtime-config.js` from its own `ShellOrigin` setting
+(.NET: [MfeRuntimeConfig.cs](../src/Common/WebUtilities/Security/MfeRuntimeConfig.cs); KYC:
+`main.ts`; Next.js BFFs: `app/ewp-runtime-config.js/route.ts`). The layout loads it as a
+`beforeInteractive` script, so Next.js has it before it starts the page, and each MFE's
+`shell-origin.ts` reads it. Missing, or not an https origin = the MFE sends and accepts no message
+(fail closed, with a console error).
+
 ## Known gaps (to close at the deployment step)
 
 | Gap | Effect | Planned fix |
 |---|---|---|
-| The micro front end's Shell origin is compiled into the static export (`NEXT_PUBLIC_SHELL_ORIGIN`, build argument `SHELL_ORIGIN`, no default; CI uses the repository variable `EWP_SHELL_ORIGIN`) | The BFF image is specific to one environment | The front end reads the Shell origin from the BFF at run time (its `ShellOrigin` setting) |
-| No forwarded-headers handling behind an ingress that ends TLS | A BFF would see `http` and build `http` sign-in redirect URIs, which the IDP refuses | `UseForwardedHeaders` limited to the ingress's addresses, in the shared web utilities |
+| The KYC BFF (NestJS) listens on HTTPS with its own certificate, and express is not told to trust the ingress (`trust proxy`) | Its container needs a certificate, or its `Secure` session cookie is not set behind a TLS-ending ingress | With its image: plain HTTP behind the ingress, `trust proxy` limited to the ingress's addresses (like `ForwardedHeaders`) |
 | The BFF validates that API addresses are `https`, but the API containers listen on HTTP | Pod-to-pod calls need TLS from the platform | Choose at deployment: mesh mTLS with https service addresses, or Kestrel TLS from a mounted certificate (`ASPNETCORE_URLS=https://+:8443`, `ASPNETCORE_Kestrel__Certificates__Default__Path`); no code change either way |
 | Base images are pinned by tag, not by digest | A re-pushed tag could change an image between two builds | Pin `@sha256:` digests (Dependabot keeps them current) |
 

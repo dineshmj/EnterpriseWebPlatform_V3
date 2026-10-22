@@ -992,7 +992,7 @@ Demo: Sophie records Camilla's Form VII and sends it (the PC's Partner Bank wind
 
 #### 2.5.1 Dependency vulnerability scanning
 
-One script checks every .NET and npm dependency of the solution against published vulnerability advisories. It fails the run when a deployed dependency has a known vulnerability at or above a chosen severity, so it can gate a CI pipeline. Dependencies are kept on patched versions (for example Next.js 16.3.8 after a critical advisory).
+One script checks every .NET and npm dependency of the solution against published vulnerability advisories. It fails the run when a deployed dependency has a known vulnerability at or above a chosen severity, so it can gate a CI pipeline. Dependencies are kept on patched versions (for example Next.js 16.3.8 after a critical advisory, then 16.4.2 on 22-OCT after an unauthenticated remote code execution in the image optimiser and a Server Actions denial of service).
 
 **Where to look at:**
 

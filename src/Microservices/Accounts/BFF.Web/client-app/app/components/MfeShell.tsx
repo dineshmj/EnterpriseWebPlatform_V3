@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { cn } from './ui/cn';
 import { ConfirmDialog } from './ui/confirm-dialog';
 import { Badge } from './ui/feedback';
+import { shellOrigin } from '../lib/shell-origin';
 
 let hasUnsavedChanges = false;
 
@@ -37,14 +38,12 @@ let latestWorkspaceContext: WorkspaceContext = EMPTY;
 
 // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
 // │ The only origin allowed to embed this MFE and exchange protocol messages with
-// │ it. A static allow-list (set at build time), never document.referrer and
-// │ never '*': a page that frames the MFE must not become its "trusted parent".
+// │ it. An exact allow-list - this BFF's ShellOrigin setting, read at run time
+// │ (lib/shell-origin.ts) - never document.referrer and never '*': a page that frames
+// │ the MFE must not become its "trusted parent".
 // └──────────────────────────────────────────────────────────────────────────────────────
-const SHELL_ORIGIN =
-  process.env.NEXT_PUBLIC_SHELL_ORIGIN ?? 'https://shell.dev.localhost:46367';
-
 function parentOrigin(): string {
-  return SHELL_ORIGIN;
+  return shellOrigin();
 }
 
 export function publishWorkspaceContext(context: WorkspaceContext) {
@@ -153,7 +152,7 @@ function useReportActivityToShell() {
       const now = Date.now();
       if (now - lastReport < ACTIVITY_REPORT_MS) return;
       lastReport = now;
-      parentWindow.postMessage({ type: 'BSS_MFE_ACTIVITY' }, SHELL_ORIGIN);
+      parentWindow.postMessage({ type: 'BSS_MFE_ACTIVITY' }, shellOrigin());
     };
     window.addEventListener('pointerdown', report, true);
     window.addEventListener('keydown', report, true);

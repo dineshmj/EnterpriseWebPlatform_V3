@@ -139,7 +139,7 @@ Cookies stay isolated per host name (`*.dev.localhost` locally), and a logout mu
 |---|---|
 | Tokens never reach browser JavaScript (BFF pattern) | Present |
 | `postMessage` origin and source validation in the Shell | Present |
-| MFEs use a static parent-origin allow-list | Present (`NEXT_PUBLIC_SHELL_ORIGIN`, built into each MFE; no `document.referrer`, no `'*'`) |
+| MFEs use a static parent-origin allow-list | Present (each BFF's `ShellOrigin` setting, served at run time as `/ewp-runtime-config.js` and read by the MFE's `shell-origin.ts`; missing = no messages; no `document.referrer`, no `'*'`) |
 | Step-up without a pop-up | Present: the in-page overlay (`BSS_STEP_UP_REQUEST` / `_RESULT`); only for the MFE in the frame; it frames the MFE's own fixed step-up address; the IDP lets the Shell frame its step-up code page only; "Nothing shown? Use a separate window" as the fallback |
 | CSP `frame-ancestors` on the Shell and every MFE | Present: the Shell cannot be framed (`frame-ancestors 'none'`, `X-Frame-Options: DENY`) - except its static `/step-up-done.html`, which only the Shell itself may frame (`'self'`); MFE BFFs may be framed only by the Shell (and by the IDP, for front-channel logout); `nosniff` and a referrer policy everywhere |
 | Shell session lifetime aligned with the MFE BFFs | Present (30 minutes, sliding) |
