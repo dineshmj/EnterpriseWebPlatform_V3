@@ -15,9 +15,11 @@ public sealed class AuditChainStatus
     /// <summary>The newest entry anchored outside the database (the latest checkpoint's sequence).</summary>
     public long AnchoredSequence { get; set; }
 
-    /// <summary>Checkpoint files now, and the most ever seen since start-up: fewer now means files went missing.</summary>
-    public int Checkpoints { get; set; }
-    public int MostCheckpointsSeen { get; set; }
+    /// <summary>Every checkpoint (by its entry's sequence) seen since start-up - touched by the monitor only.</summary>
+    public HashSet<long> SeenCheckpoints { get; } = [];
+
+    /// <summary>Checkpoints seen before that are gone now (oldest first); replaced as a whole, so the health check reads a stable list.</summary>
+    public IReadOnlyList<long> MissingCheckpoints { get; set; } = [];
 }
 
 /// <summary>
@@ -70,10 +72,17 @@ public sealed class AuditChainMonitor(
 
                 var checkpoints = await anchors.ReadAllAsync(stoppingToken);
                 status.AnchoredSequence = checkpoints.Select(c => c.Sequence).DefaultIfEmpty(0).Max();
-                status.Checkpoints = checkpoints.Count;
-                status.MostCheckpointsSeen = Math.Max(status.MostCheckpointsSeen, checkpoints.Count);
-                if (status.Checkpoints < status.MostCheckpointsSeen)
-                    logger.LogCritical("AUDIT CHECKPOINTS MISSING: {Missing} checkpoint file(s) disappeared since start-up.", status.MostCheckpointsSeen - status.Checkpoints);
+                // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+                // │ Remember WHICH checkpoints were seen, not how many: a count is masked when one
+                // │ file is removed and the next anchor is written in the same minute (found by the
+                // │ Playwright tamper test, round-4 item 4).
+                // └──────────────────────────────────────────────────────────────────────────────────────
+                var present = checkpoints.Select(c => c.Sequence).ToHashSet();
+                status.SeenCheckpoints.UnionWith(present);
+                status.MissingCheckpoints = status.SeenCheckpoints.Where(s => !present.Contains(s)).Order().ToList();
+                if (status.MissingCheckpoints.Count > 0)
+                    logger.LogCritical("AUDIT CHECKPOINTS MISSING: the checkpoint(s) for entry {Sequences} disappeared since start-up.",
+                        string.Join(", ", status.MissingCheckpoints));
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (Exception ex) { logger.LogError(ex, "Audit chain verification could not run."); }
@@ -106,7 +115,7 @@ public sealed class AuditChainHealthCheck(AuditChainStatus status, TimeProvider 
             ["brokenAtSequence"] = latest.BrokenAtSequence ?? 0L,
             ["minutesSinceVerification"] = Math.Round(age.TotalMinutes, 1),
             ["unanchoredEntries"] = Math.Max(0, latest.LastSequence - status.AnchoredSequence),
-            ["missingCheckpoints"] = status.MostCheckpointsSeen - status.Checkpoints
+            ["missingCheckpoints"] = status.MissingCheckpoints.Count
         };
 
         var problems = new List<string>();
@@ -120,8 +129,8 @@ public sealed class AuditChainHealthCheck(AuditChainStatus status, TimeProvider 
         // │ If checkpoint files disappeared since the last run, readiness degrades - removed
         // │ anchors are themselves tampering.
         // └──────────────────────────────────────────────────────────────────────────────────────
-        if (status.Checkpoints < status.MostCheckpointsSeen)
-            problems.Add($"{status.MostCheckpointsSeen - status.Checkpoints} audit checkpoint file(s) missing since start-up");
+        if (status.MissingCheckpoints is { Count: > 0 } missing)
+            problems.Add($"{missing.Count} audit checkpoint file(s) missing since start-up (entry {string.Join(", ", missing)})");
 
         return Task.FromResult(problems.Count == 0
             ? HealthCheckResult.Healthy($"Audit chain intact and anchored ({latest.EntriesChecked} entries, verified {latest.VerifiedAt:u}).", data)
