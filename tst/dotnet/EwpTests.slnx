@@ -1,11 +1,13 @@
 <Solution>
   <Folder Name="/TargetProjects/">
+    <Project Path="../../src/IDP/EnterpriseWebPlatform.IdentityServer.csproj" />
     <Project Path="../../src/Microservices/Accounts/API/EnterpriseWebPlatform.Accounts.Api.csproj" />
     <Project Path="../../src/Microservices/PartnerProducts/API/EnterpriseWebPlatform.PartnerProducts.Api.csproj" />
     <Project Path="../../src/Microservices/Payments/API/EnterpriseWebPlatform.Payments.Api.csproj" />
   </Folder>
   <Folder Name="/Unit/">
     <Project Path="Accounts.Api.Tests/Accounts.Api.Tests.csproj" />
+    <Project Path="IDP.Tests/IDP.Tests.csproj" />
     <Project Path="PartnerProducts.Api.Tests/PartnerProducts.Api.Tests.csproj" />
     <Project Path="Payments.Api.Tests/Payments.Api.Tests.csproj" />
   </Folder>
