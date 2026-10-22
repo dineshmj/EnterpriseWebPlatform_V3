@@ -16,7 +16,7 @@
 # │ Ref : doc/Containers.md | Features 2.3.3, 2.4.5 | OWASP A05, A08
 # └────────────────────────────────────────────────────────────────────────────────────────────────
 
-FROM node:24.21.0-bookworm-slim AS client
+FROM node:26.11.1-bookworm-slim AS client
 ARG PNPM_VERSION=12.11.2
 
 # ┌─ SEC + DEBT ─────────────────────────────────────────────────────────────────────────────────────
