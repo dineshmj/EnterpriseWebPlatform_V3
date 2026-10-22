@@ -1,0 +1,66 @@
+@page
+@using EnterpriseWebPlatform.IdentityServer.Data.Entities
+@model EnterpriseWebPlatform.IdentityServer.Pages.Customer.CodeModel
+@{
+    var registering = Model.Purpose == CustomerCodePurpose.Registration;
+    ViewData["Title"] = registering ? "Confirm your registration" : "Enter your code";
+}
+
+<section class="card" aria-labelledby="customer-code-title">
+    <header class="card-head">
+        <p class="eyebrow">@(registering ? "Online access" : "Two-step sign-in")</p>
+        <h1 class="card-title" id="customer-code-title">@(registering ? "Check your phone" : "Enter your code")</h1>
+        @if (!Model.Ended)
+        {
+            @if (registering)
+            {
+                <p class="card-lead">If your details match our records, we have sent a 6-digit code to the mobile number we hold for you. Enter it below and choose your password.</p>
+            }
+            else
+            {
+                <p class="card-lead">We have sent a 6-digit code to your mobile ending in <strong>@Model.MobileEnding</strong>.</p>
+            }
+        }
+    </header>
+
+    <partial name="_ValidationSummary" />
+
+    @if (Model.Ended)
+    {
+        <div class="actions">
+            <a class="btn btn-primary btn-block" asp-page="/Customer/Login" asp-route-returnUrl="@Model.ReturnUrl">Back to sign-in</a>
+        </div>
+    }
+    else
+    {
+        @if (Model.DevelopmentCode is not null)
+        {
+            <p class="card-lead"><strong>Development:</strong> the SMS would say <strong>@Model.DevelopmentCode</strong>.</p>
+        }
+
+        <form method="post" novalidate>
+            <div class="field">
+                <label asp-for="Code">Code</label>
+                <input class="input" asp-for="Code" inputmode="numeric" autocomplete="one-time-code"
+                       maxlength="6" placeholder="123456" autocapitalize="none" spellcheck="false" autofocus />
+            </div>
+
+            @if (registering)
+            {
+                <div class="field">
+                    <label asp-for="Password">New password (at least 12 characters)</label>
+                    <input class="input" type="password" asp-for="Password" autocomplete="new-password" />
+                </div>
+                <div class="field">
+                    <label asp-for="ConfirmPassword">Repeat the password</label>
+                    <input class="input" type="password" asp-for="ConfirmPassword" autocomplete="new-password" />
+                </div>
+            }
+
+            <div class="actions">
+                <button class="btn btn-primary btn-block">@(registering ? "Register and sign in" : "Verify and sign in")</button>
+                <a class="btn btn-ghost btn-block" asp-page="/Customer/Login" asp-route-returnUrl="@Model.ReturnUrl">Cancel</a>
+            </div>
+        </form>
+    }
+</section>

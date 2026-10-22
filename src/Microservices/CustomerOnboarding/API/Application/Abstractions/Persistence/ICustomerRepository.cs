@@ -5,5 +5,6 @@ namespace EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Pers
 public interface ICustomerRepository
 {
     Task<Customer?> GetByIdAsync(long id, CancellationToken cancellationToken);
+    Task<Customer?> GetByCustomerNumberAsync(string customerNumber, CancellationToken cancellationToken);
     Task AddAsync(Customer customer, CancellationToken cancellationToken);
 }

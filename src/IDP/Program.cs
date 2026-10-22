@@ -9,7 +9,9 @@ using OpenTelemetry.Trace;
 using Serilog;
 
 using EnterpriseWebPlatform.Common.Observability;
+using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
+using EnterpriseWebPlatform.IdentityServer.Customers;
 using EnterpriseWebPlatform.IdentityServer.Data;
 using EnterpriseWebPlatform.IdentityServer.Repositories;
 using EnterpriseWebPlatform.IdentityServer.Security;
@@ -56,6 +58,36 @@ try
     builder.Services.AddSingleton(TimeProvider.System);
     builder.Services.AddScoped<MfaService>();
 
+    // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+    // │ The customers' own sign-in ("My EWP"): their table, one-time codes, and Customer
+    // │ Onboarding's answers during an online registration. Codes on the page (in place of an
+    // │ SMS) only in Development - anywhere else the IDP refuses to start with it on.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    builder.Services.AddOptions<CustomerSignInOptions>()
+        .Bind(builder.Configuration.GetSection(CustomerSignInOptions.SectionName))
+        .Validate(o => !o.ShowCodesOnPage || builder.Environment.IsDevelopment(),
+            "CustomerSignIn:ShowCodesOnPage is allowed in Development only.")
+        .ValidateOnStart();
+    var customerSignIn = builder.Configuration.GetSection(CustomerSignInOptions.SectionName).Get<CustomerSignInOptions>() ?? new();
+    builder.Services.AddSingleton(ClientIds.From(builder.Configuration).Require(nameof(ClientIds.IdpCustomerDirectory)));
+    builder.Services.AddScoped<CustomerLoginStore>();
+    builder.Services.AddScoped<CustomerOneTimeCodes>();
+    builder.Services.AddScoped<CustomerSignIn>();
+    builder.Services.AddHttpClient<CustomerDirectory>(http =>
+    {
+        http.BaseAddress = new Uri(RequiredSetting.HttpsUrl(customerSignIn.CustomerOnboardingApiBaseUrl,
+            $"{CustomerSignInOptions.SectionName}:{nameof(CustomerSignInOptions.CustomerOnboardingApiBaseUrl)}") + "/");
+        http.Timeout = TimeSpan.FromSeconds(10);
+    });
+
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ DPoP proofs are accepted once (RFC 9449 jti replay check): Duende's replay cache
+    // │ lives in IDistributedCache - in memory for this single instance; production with
+    // │ several IDP instances needs a shared one (Redis), or a proof could be replayed at
+    // │ another instance within its minute (Threat-Model R-14).
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    builder.Services.AddDistributedMemoryCache();
+
     builder.Services.AddRazorPages();
 
     // Login throttling per client IP, complementing per-account lockout
@@ -85,6 +117,8 @@ try
     // │ of failing at the first sign-in.
     // └──────────────────────────────────────────────────────────────────────────────────────
     ClientSecretStore.Initialize(builder.Configuration);
+    // The public keys of the private_key_jwt clients (the customers' channel) - files, read now.
+    ClientKeyStore.Initialize(builder.Configuration);
     // Client IDs and the web clients' addresses (redirect URIs) - configuration, not code.
     ClientSettings.Initialize(builder.Configuration);
     var clients = Config.GetClients(builder.Environment.IsDevelopment()).ToList();
@@ -102,6 +136,14 @@ try
             options.ServerSideSessions.UserDisplayNameClaimType = "name";
             options.ServerSideSessions.RemoveExpiredSessions = true;
             options.ServerSideSessions.ExpiredSessionsTriggerBackchannelLogout = true;
+
+            // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+            // │ FAPI 2.0 for private_key_jwt: the client's assertion must name EXACTLY this
+            // │ issuer as its audience (not the token endpoint or any list) - an assertion made
+            // │ for another server is never accepted here. ES256 / PS256 only.
+            // └──────────────────────────────────────────────────────────────────────────────────────
+            options.StrictClientAssertionAudienceValidation = true;
+            options.SupportedClientAssertionSigningAlgorithms = ["ES256", "PS256"];
         })
         .AddInMemoryIdentityResources(Config.IdentityResources)
         .AddInMemoryApiScopes(Config.ApiScopes)
@@ -128,6 +170,8 @@ try
         // OAuth 2.0 Token Exchange (RFC 8693): a service swaps a person's token for one aimed at
         // the next service, keeping the person as subject and naming itself in "act".
         .AddExtensionGrantValidator<TokenExchangeGrantValidator>()
+        // private_key_jwt (RFC 7523): clients that sign an assertion with their own key - no secret.
+        .AddJwtBearerClientAuthentication()
         .AddSigningCredential(builder);
 
     // Health endpoints for the orchestrator's probes: /health/live (process working)

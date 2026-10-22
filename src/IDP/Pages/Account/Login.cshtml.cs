@@ -95,6 +95,15 @@ public sealed class LoginModel : PageModel
             Input.ReturnUrl,
             HttpContext.RequestAborted);
 
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ A customer client's request belongs to the customers' sign-in page (own users, own
+        // │ rules): this staff page never signs anybody in for it.
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        if (context?.Client.ServesCustomers() == true)
+        {
+            return RedirectToPage("/Customer/Login", new { returnUrl = Input.ReturnUrl });
+        }
+
         ClientName = DisplayNameOf(context);
 
         // Step-up (RFC 9470 style): a client asks for a FRESH authenticator code ("acr_values=mfa",
@@ -139,6 +148,11 @@ public sealed class LoginModel : PageModel
         var context = await _interaction.GetAuthorizationContextAsync(
             Input.ReturnUrl,
             cancellationToken);
+
+        if (context?.Client.ServesCustomers() == true)
+        {
+            return RedirectToPage("/Customer/Login", new { returnUrl = Input.ReturnUrl });
+        }
 
         ClientName = DisplayNameOf(context);
 

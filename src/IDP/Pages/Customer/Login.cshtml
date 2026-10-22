@@ -1,0 +1,47 @@
+@page
+@model EnterpriseWebPlatform.IdentityServer.Pages.Customer.LoginModel
+@{
+    ViewData["Title"] = "Sign in to My EWP";
+}
+
+<section class="card" aria-labelledby="customer-login-title">
+    <header class="card-head">
+        <p class="eyebrow">Customer sign-in</p>
+        <h1 class="card-title" id="customer-login-title">Welcome to My EWP</h1>
+        @if (Model.ClientName is not null)
+        {
+            <p class="card-lead">Sign in to continue to <strong>@Model.ClientName</strong>.</p>
+        }
+        else
+        {
+            <p class="card-lead">Sign in with your customer number.</p>
+        }
+    </header>
+
+    <partial name="_ValidationSummary" />
+
+    <form method="post" novalidate>
+        <input type="hidden" asp-for="Input.ReturnUrl" />
+
+        <div class="field">
+            <label asp-for="Input.CustomerNumber">Customer number</label>
+            <input class="input" asp-for="Input.CustomerNumber" placeholder="e.g. CUST-100001"
+                   autocomplete="username" autocapitalize="characters" spellcheck="false" autofocus />
+        </div>
+
+        <div class="field">
+            <label asp-for="Input.Password">Password</label>
+            <input class="input" type="password" asp-for="Input.Password" autocomplete="current-password" />
+        </div>
+
+        <div class="actions">
+            <button class="btn btn-primary btn-block" name="Input.Button" value="login">
+                Sign in
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+            </button>
+            <button class="btn btn-ghost btn-block" name="Input.Button" value="cancel">Cancel</button>
+        </div>
+    </form>
+
+    <p class="card-lead">First time here? <a asp-page="/Customer/Register" asp-route-returnUrl="@Model.Input.ReturnUrl">Register for online access</a> with your customer number and the e-mail address we hold for you.</p>
+</section>

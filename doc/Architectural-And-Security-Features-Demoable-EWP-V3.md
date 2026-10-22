@@ -701,6 +701,33 @@ Some actions need more than being signed in: a payments officer's approval or re
 
 **Not yet:** passkeys / FIDO2 for the step-up.
 
+#### 2.1.6 Customers sign in to their own channel (My EWP, FAPI 2.0)
+
+EWP's customers get their own channel, "My EWP" (being built: A7 + B1). They sign in to the same IDP as the staff, but as a **separate population**: their own table (`customer_logins`), their own sign-in pages (`/Customer/Login`, `/Register`, `/Code`) and their own clients. The client decides which population is looked up. A customer token carries the `customer_number` and nothing organisational (no role, permission or branch), so every staff policy refuses it. A staff member's IDP session does not count for a customer client, and the staff sign-in page never completes a customer client's request (nor the reverse).
+
+**Online registration.** The customer types their customer number and the e-mail address EWP holds for them. The IDP asks Customer Onboarding as itself: a 60-second token it signs in-process for a pseudo-client that has no secret anywhere, aimed at two internal endpoints that pin it. Only an onboarded customer without online access matches. Whatever the answer, the person sees the same page and the same words; on a miss, no code is sent. A one-time code goes to the mobile on record (simulated: the console, and in Development the page). The customer enters the code and chooses a password (12+ characters). The sign-in is created first, then Customer Onboarding links it to the customer; if that fails, the sign-in is removed again. One online identity per customer.
+
+**The customers' channel on the FAPI 2.0 Security Profile.**
+
+- **PAR:** the authorization request is pushed server to server; the browser carries only a one-time `request_uri` (60 s).
+- **PKCE S256** and 60-second codes.
+- **`private_key_jwt`:** the BFF signs a short assertion with its own EC key (ES256); the IDP holds only the public key, and the assertion must name exactly this issuer.
+- **DPoP (RFC 9449)** on access and refresh tokens, along the whole chain: the BFF may exchange only a token bound to the key it proves on that very request, and the Journey API's tokens are bound to its own key. A stolen token is useless without the private key.
+- **PS256** for the customer-facing ID token and the Journey API's tokens (FAPI 2.0 does not allow RS256).
+
+With MFA on, every customer sign-in needs a one-time code too (`amr` pwd sms mfa). Codes: six digits, five minutes, five tries counted on the server, accepted once.
+
+DPoP versus mutual TLS: the bank-to-bank calls to the Partner Bank keep mutual TLS and certificate-bound tokens (2.4.10). DPoP is used inside EWP's customer channel, where no service holds a client certificate.
+
+**Where to look at:**
+
+- Separate populations: [ClientAudience.cs](../src/IDP/Security/ClientAudience.cs), [CustomProfileService.cs](../src/IDP/Services/CustomProfileService.cs), [Customer/Login.cshtml.cs](../src/IDP/Pages/Customer/Login.cshtml.cs)
+- Registration: [Register.cshtml.cs](../src/IDP/Pages/Customer/Register.cshtml.cs), [Code.cshtml.cs](../src/IDP/Pages/Customer/Code.cshtml.cs), [CustomerDirectory.cs](../src/IDP/Customers/CustomerDirectory.cs), [InternalCustomerOnlineIdentityController.cs](../src/Microservices/CustomerOnboarding/API/API/Controllers/InternalCustomerOnlineIdentityController.cs)
+- FAPI 2.0 client: [SelfServiceWeb.cs](../src/IDP/ConfigRegistration/Clients/Customers/SelfServiceWeb.cs), [ClientKeyStore.cs](../src/IDP/Security/ClientKeyStore.cs), [New-EwpClientKeys.mjs](../ps/pki/New-EwpClientKeys.mjs); DPoP in the exchange: `SenderConstrained` in [TokenExchangeGrantValidator.cs](../src/IDP/Security/TokenExchangeGrantValidator.cs)
+- Automated proof: `tst/dotnet/IDP.Tests` (one-time codes, lockout, password rule)
+
+**Not yet:** the My EWP web and its Journey API (step 1b); an app authenticator or passkeys instead of SMS codes (R-17).
+
 ### 2.2 Authorization beyond RBAC
 
 #### 2.2.1 Deny by default and strict token validation

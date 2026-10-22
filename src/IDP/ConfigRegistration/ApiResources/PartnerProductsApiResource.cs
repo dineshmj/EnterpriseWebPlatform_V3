@@ -15,12 +15,13 @@ public sealed class PartnerProductsApiResource : IDuendeApiResource
                 "partner-products-api",
                 "Partner Products API")
         {
-            Scopes = { "partner-products.read", "partner-products.write" },
+            Scopes = { "partner-products.read", "partner-products.write", "partner-products.customer.read" },
             // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
             // │ Exactly what the Domain API decides on: the permission (view / order), the branch
             // │ (every record and list is branch-scoped) and the LAN ID it records as the actor.
             // └──────────────────────────────────────────────────────────────────────────────────────
-            UserClaims = { "role", "name", "permission", "lan_id", "branch" }
+            // customer_number: a customer token (partner-products.customer.read) - whose Digital Gold.
+            UserClaims = { "role", "name", "permission", "lan_id", "branch", "customer_number" }
         };
 
     public static ApiResource JourneyApiResource =>

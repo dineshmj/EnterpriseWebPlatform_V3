@@ -1,0 +1,30 @@
+@page
+@model EnterpriseWebPlatform.IdentityServer.Pages.Customer.DoneModel
+@{
+    ViewData["Title"] = "My EWP";
+}
+
+<section class="card" aria-labelledby="customer-done-title">
+    <header class="card-head">
+        <p class="eyebrow">Online access</p>
+        <h1 class="card-title" id="customer-done-title">You're all set</h1>
+        <p class="card-lead">Open <strong>My EWP</strong> to see your accounts. You may close this page.</p>
+    </header>
+
+    @* ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+       │ Sign out is a POST with the anti-forgery token (the staff Logout page's handler):
+       │ no link or image elsewhere can sign a customer out (logout CSRF).
+       └────────────────────────────────────────────────────────────────────────────────────── *@
+    <div class="actions">
+        @if (User.Identity?.IsAuthenticated == true)
+        {
+            <form method="post" asp-page="/Account/Logout">
+                <button class="btn btn-secondary btn-block">Sign out</button>
+            </form>
+        }
+        else
+        {
+            <a class="btn btn-primary btn-block" asp-page="/Customer/Login">Sign in</a>
+        }
+    </div>
+</section>

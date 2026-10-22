@@ -13,7 +13,9 @@ public sealed class CustomerOnboardingApiResource : IDuendeApiResource
             Scopes =
                 {
                     "customer-onboarding.read",
-                    "customer-onboarding.write"
+                    "customer-onboarding.write",
+                    // The IDP itself during a customer's online registration (no person in the token).
+                    "customer-onboarding.online-identity"
                 },
 
             UserClaims =

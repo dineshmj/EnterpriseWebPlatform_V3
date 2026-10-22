@@ -30,6 +30,13 @@
         ewp-trust-root.pem                    the root certificate in PEM form, for the clients that read
                                               PEM (Kafka: librdkafka, the Kafka CLI tools and Kafka UI)
 
+        self-service-web-client.key.pem + .password       the client keys of the customers' channel
+        self-service-journey-api-client.key.pem + .password  (My EWP, FAPI 2.0 private_key_jwt): EC
+        self-service-*-client.public.jwk                  P-256 key pairs, NOT certificates - the
+                                              private key as encrypted PKCS#8 PEM (the Node services read
+                                              PEM), the public key as a JWK that the IDP registers. Made by
+                                              New-EwpClientKeys.mjs (needs Node.js) - stay on this laptop
+
     Windows' certificate stores are used only briefly to create and sign the certificates, and are
     cleaned again: the services trust ewp-trust-root.cer through their own configuration. Browsers
     that open Partner Bank pages need the root in "Trusted Root Certification Authorities" - that is a
@@ -177,8 +184,27 @@ finally {
     Remove-FromStores -Thumbprint $root.Thumbprint
 }
 
+# ---------------------------------------------------------------------- client keys (private_key_jwt)
+
+# ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+# │ The customers' channel authenticates to the IDP with private_key_jwt (FAPI 2.0): plain
+# │ key pairs, no certificate - the IDP trusts the registered PUBLIC key, not a CA. Node.js
+# │ writes them (PowerShell 5.1 cannot export PKCS#8 PEM); a new key needs an IDP restart.
+# └──────────────────────────────────────────────────────────────────────────────────────
+$node = Get-Command node -ErrorAction SilentlyContinue
+if ($node) {
+    Write-Host 'Client keys (private_key_jwt):'
+    $keyArgs = @((Join-Path $PSScriptRoot 'New-EwpClientKeys.mjs'), $OutputFolder)
+    if ($Force) { $keyArgs += '--force' }
+    & $node.Source @keyArgs
+    if ($LASTEXITCODE -ne 0) { throw 'New-EwpClientKeys.mjs failed.' }
+}
+else {
+    Write-Warning 'Node.js is not on PATH: the client keys of the customers channel (My EWP) were NOT created.'
+}
+
 Write-Host ''
 Write-Host "Written to $OutputFolder"
 Write-Host '  Home PC (Partner Bank): copy ewp-trust-root.cer, ewp-request-signing.cer, partner-bank-server.pfx and partner-bank-server.pfx.password'
-Write-Host '  Never copy ewp-trust-root.pfx, ewp-partner-client.pfx, ewp-request-signing.pfx or kafka-broker.pfx off this laptop.'
+Write-Host '  Never copy ewp-trust-root.pfx, ewp-partner-client.pfx, ewp-request-signing.pfx, kafka-broker.pfx or the *.key.pem files off this laptop.'
 Write-Host '  Kafka (new kafka-broker certificate): stop Kafka, run .\ps\kafka\Setup-KafkaSecurity.ps1 -Phase Secure, start Kafka.'

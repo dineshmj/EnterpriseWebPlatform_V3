@@ -13,7 +13,9 @@ public sealed class AccountsApiResource : IDuendeApiResource
             Scopes =
                 {
                     "accounts.read",
-                    "accounts.write"
+                    "accounts.write",
+                    // A customer reading their OWN accounts (the Self-Service Journey API, by exchange).
+                    "accounts.customer.read"
                 },
 
             // The ABAC attributes the Accounts API authorizes on (branch scope, officer department, clearance).
@@ -28,7 +30,9 @@ public sealed class AccountsApiResource : IDuendeApiResource
                     "region",
                     "clearance_level",
                     "lan_id",
-                    "employment_type"
+                    "employment_type",
+                    // A customer token (accounts.customer.read): whose accounts these are.
+                    "customer_number"
                 }
         };
 }

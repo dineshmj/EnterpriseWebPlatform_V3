@@ -34,7 +34,9 @@ var builder = WebApplication.CreateBuilder(args);
 // │ (section ClientIds; each must equal the IDP's ClientIds entry). Read now: a missing one
 // │ stops the start-up - a pin is never empty.
 // └──────────────────────────────────────────────────────────────────────────────────────
-var clientIds = ClientIds.From(builder.Configuration).Require(nameof(ClientIds.OnboardingOutcomeSubscriber));
+var clientIds = ClientIds.From(builder.Configuration).Require(
+    nameof(ClientIds.OnboardingOutcomeSubscriber),
+    nameof(ClientIds.IdpCustomerDirectory));
 builder.Services.AddSingleton(clientIds);
 
 // Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
@@ -151,7 +153,8 @@ builder.Services.AddAuthorization(options =>
         policy.RequireClaim(
             "scope",
             "customer-onboarding.read",
-            "customer-onboarding.write");
+            "customer-onboarding.write",
+            "customer-onboarding.online-identity");
     });
 
     // Operation policies: the client must hold the scope for THIS kind of
@@ -207,6 +210,17 @@ builder.Services.AddAuthorization(options =>
         policy.RequireClaim(
             "client_id",
             clientIds.OnboardingOutcomeSubscriber);
+    });
+
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ The customer's online registration: ONLY the IDP (its customer-directory identity,
+    // │ pinned) with the scope for exactly this purpose. Staff tokens never carry that scope.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    options.AddPolicy("CustomerOnlineIdentity", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireClaim("scope", "customer-onboarding.online-identity");
+        policy.RequireClaim("client_id", clientIds.IdpCustomerDirectory);
     });
 });
 

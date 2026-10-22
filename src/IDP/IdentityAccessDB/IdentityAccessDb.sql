@@ -12,6 +12,8 @@ BEGIN;
 -- RESET: reverse dependency order
 -- =========================================================
 
+DROP TABLE IF EXISTS customer_one_time_codes;
+DROP TABLE IF EXISTS customer_logins;
 DROP TABLE IF EXISTS user_mfa_recovery_codes;
 DROP TABLE IF EXISTS user_mfa;
 DROP TABLE IF EXISTS user_relationships;
@@ -168,6 +170,54 @@ CREATE TABLE user_mfa_recovery_codes (
 );
 
 CREATE INDEX ix_user_mfa_recovery_codes_user_id ON user_mfa_recovery_codes (user_id);
+
+-- =========================================================
+-- CUSTOMERS' OWN SIGN-INS ("My EWP", the customer self-service channel)
+-- =========================================================
+-- Customers are NOT staff: no role, branch, department or permission, and a table of their own.
+-- The IDP answers a customer client only from here and a staff client only from users, so a
+-- customer sign-in never opens a staff screen (nor the reverse). The customer number is EWP's
+-- (Customer Onboarding), which links back by subject_id once the registration completes.
+-- No seed rows: a customer registers online (customer number + e-mail on record + one-time code).
+
+CREATE TABLE customer_logins (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    subject_id UUID NOT NULL,
+    customer_number VARCHAR(20) NOT NULL,
+    display_name VARCHAR(100) NOT NULL,
+    -- The last three digits of the mobile on record (where one-time codes go); never the full number.
+    mobile_ending VARCHAR(3) NOT NULL,
+    hashed_password VARCHAR(500) NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    access_failed_count INT NOT NULL DEFAULT 0,
+    lockout_end TIMESTAMPTZ NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX ux_customer_logins_subject_id ON customer_logins (subject_id);
+CREATE UNIQUE INDEX ux_customer_logins_customer_number ON customer_logins (customer_number);
+
+-- One-time codes (registration, and the second factor while MFA is on): six digits, 5 minutes,
+-- 5 tries, used once. Only a salted SHA-256 hash is kept; the browser holds just the row's id.
+CREATE TABLE customer_one_time_codes (
+    id UUID PRIMARY KEY,
+    purpose VARCHAR(20) NOT NULL CHECK (purpose IN ('REGISTRATION', 'SIGN_IN')),
+    customer_number VARCHAR(20) NOT NULL,
+    email VARCHAR(254) NULL,
+    subject_id UUID NULL,
+    display_name VARCHAR(100) NOT NULL,
+    mobile_ending VARCHAR(3) NOT NULL,
+    salt VARCHAR(32) NOT NULL,
+    code_hash CHAR(64) NOT NULL,
+    failed_attempts INT NOT NULL DEFAULT 0,
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at TIMESTAMPTZ NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (purpose <> 'SIGN_IN' OR subject_id IS NOT NULL)
+);
+
+CREATE INDEX ix_customer_one_time_codes_expires_at ON customer_one_time_codes (expires_at);
 
 -- =========================================================
 -- 9. REBAC RELATIONSHIPS - not stored here

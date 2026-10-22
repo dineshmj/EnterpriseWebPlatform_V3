@@ -48,6 +48,10 @@ public sealed class ClientIds
     public string OperationsWeb => Of(nameof(OperationsWeb));
     public string PartnerProductsWeb => Of(nameof(PartnerProductsWeb));
 
+    // The customers' own channel ("My EWP", FAPI 2.0: PAR, private_key_jwt, DPoP) and its Journey API.
+    public string SelfServiceWeb => Of(nameof(SelfServiceWeb));
+    public string SelfServiceJourneyApi => Of(nameof(SelfServiceJourneyApi));
+
     // Journey APIs (token exchange only: they always act for a person).
     public string AuditJourneyApi => Of(nameof(AuditJourneyApi));
     public string OperationsJourneyApi => Of(nameof(OperationsJourneyApi));
@@ -63,6 +67,9 @@ public sealed class ClientIds
     public string AccountsCommandSubscriber => Of(nameof(AccountsCommandSubscriber));
     public string PaymentsSagaReplySubscriber => Of(nameof(PaymentsSagaReplySubscriber));
     public string PartnerProductsWorker => Of(nameof(PartnerProductsWorker));
+
+    // The IDP itself, asking Customer Onboarding during a customer's online registration.
+    public string IdpCustomerDirectory => Of(nameof(IdpCustomerDirectory));
 
     private string Of(string name) =>
         RequiredSetting.Text(_section[name], $"{SectionName}:{name}");

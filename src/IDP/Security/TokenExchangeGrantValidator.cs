@@ -87,8 +87,26 @@ public sealed class TokenExchangeGrantValidator(
 
         // Documents Management for the signed-in KYC officer (reading the evidence).
         [ClientSettings.Ids.CustomerKycWeb] = token =>
-            token.ClientId == ClientSettings.Ids.CustomerKycWeb && token.ActingClientId is null
+            token.ClientId == ClientSettings.Ids.CustomerKycWeb && token.ActingClientId is null,
+
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ The customers' channel (My EWP). Its BFF: only the customer's own sign-in token,
+        // │ for its Journey API. The Self-Service Journey API: only a token that BFF exchanged
+        // │ for it - so the domain APIs are only ever reached FOR the signed-in customer. Both
+        // │ clients serve customers only (IsActive), so a staff token never passes here, and no
+        // │ staff client's rule accepts a customer token (each names its own client).
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        [ClientSettings.Ids.SelfServiceWeb] = token =>
+            token.ClientId == ClientSettings.Ids.SelfServiceWeb && token.ActingClientId is null,
+
+        [ClientSettings.Ids.SelfServiceJourneyApi] = token =>
+            token.Audiences.Contains("self-service-journey-api") &&
+            token.ActingClientId == ClientSettings.Ids.SelfServiceWeb
     };
+
+    /// <summary>Clients whose subject tokens are DPoP-bound (RFC 9449): the customers' channel.</summary>
+    private readonly HashSet<string> SenderConstrained =
+        [ClientSettings.Ids.SelfServiceWeb, ClientSettings.Ids.SelfServiceJourneyApi];
 
     public async Task ValidateAsync(ExtensionGrantValidationContext context, CancellationToken cancellationToken)
     {
@@ -135,6 +153,27 @@ public sealed class TokenExchangeGrantValidator(
             return;
         }
 
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ DPoP (RFC 9449) along the customers' chain. The subject token must itself be
+        // │ sender-constrained (cnf.jkt); the BFF must ALSO prove it holds that very key (its
+        // │ proof on this request has the same thumbprint) - a copied customer token cannot be
+        // │ exchanged by anyone else. The Journey API's subject token is bound to the BFF's key
+        // │ (it was the BFF that called it); the new token is bound to the Journey API's own.
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        if (SenderConstrained.Contains(requester))
+        {
+            var proofKey = context.Request.ProofKeyThumbprint;
+            var bound = token.ConfirmationKeyThumbprint is not null &&
+                        !string.IsNullOrEmpty(proofKey) &&
+                        (requester != ClientSettings.Ids.SelfServiceWeb || token.ConfirmationKeyThumbprint == proofKey);
+            if (!bound)
+            {
+                logger.LogWarning("Token exchange refused: {Requester} presented a subject token that is not bound to the expected DPoP key.", requester);
+                context.Result = new GrantValidationResult(TokenRequestErrors.InvalidGrant, "The subject token is not bound to the presenter's DPoP key.");
+                return;
+            }
+        }
+
         // act = this client, wrapping the chain the subject token already carried.
         var actor = new JsonObject { ["client_id"] = requester };
         if (token.Actor is not null)
@@ -159,13 +198,19 @@ public sealed class TokenExchangeGrantValidator(
     /// <summary>The parts of the presented token the rules look at.</summary>
     private sealed record SubjectToken(
         string? Subject, string? ClientId, IReadOnlySet<string> Audiences, string? Actor, string? ActingClientId,
-        IReadOnlyList<string> AuthenticationMethods, DateTimeOffset? AuthTime)
+        IReadOnlyList<string> AuthenticationMethods, DateTimeOffset? AuthTime, string? ConfirmationKeyThumbprint)
     {
         public static SubjectToken From(IEnumerable<Claim> claims)
         {
             var list = claims.ToList();
             var actor = list.FirstOrDefault(c => c.Type == JwtClaimTypes.Actor)?.Value;
             string? actingClient = null;
+            string? jkt = null;
+            if (list.FirstOrDefault(c => c.Type == JwtClaimTypes.Confirmation)?.Value is { } cnf)
+            {
+                try { jkt = JsonNode.Parse(cnf)?["jkt"]?.GetValue<string>(); }
+                catch (Exception ex) when (ex is JsonException or InvalidOperationException) { jkt = null; }
+            }
             if (actor is not null)
             {
                 try { actingClient = JsonNode.Parse(actor)?["client_id"]?.GetValue<string>(); }
@@ -181,7 +226,8 @@ public sealed class TokenExchangeGrantValidator(
                 list.Where(c => c.Type == JwtClaimTypes.AuthenticationMethod).Select(c => c.Value).Distinct().ToList(),
                 long.TryParse(list.FirstOrDefault(c => c.Type == JwtClaimTypes.AuthenticationTime)?.Value, out var seconds)
                     ? DateTimeOffset.FromUnixTimeSeconds(seconds)
-                    : null);
+                    : null,
+                jkt);
         }
     }
 }

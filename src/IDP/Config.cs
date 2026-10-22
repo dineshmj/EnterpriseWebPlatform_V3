@@ -2,6 +2,7 @@ using Duende.IdentityServer.Models;
 
 using EnterpriseWebPlatform.IdentityServer.ConfigRegistration.ApiResources;
 using EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients;
+using EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.Customers;
 using EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.M2M;
 using EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.MFEs;
 using EnterpriseWebPlatform.IdentityServer.ConfigRegistration.MicroserviceApiScopes;
@@ -26,7 +27,10 @@ public static class Config
             // scope so they know the acting user's branch (e.g. to stop early when a
             // user has none). Documents Management reads it from its own token.
             new (name: "organization", displayName: "Organization", userClaims:
-                [ "employee_id", "lan_id", "department", "branch", "branch_city", "branch_country_code", "region", "clearance_level", "employment_type" ])
+                [ "employee_id", "lan_id", "department", "branch", "branch_city", "branch_country_code", "region", "clearance_level", "employment_type" ]),
+
+            // A customer of the bank (My EWP): their customer number. Never on a staff token.
+            new (name: "customer", displayName: "Customer", userClaims: [ "customer_number" ])
         ];
 
     public static IEnumerable<ApiScope> ApiScopes =>
@@ -71,7 +75,13 @@ public static class Config
             PartnerProductsApiScope.Read,
             PartnerProductsApiScope.Write,
             PartnerProductsApiScope.JourneyRead,
-            PartnerProductsApiScope.JourneyWrite
+            PartnerProductsApiScope.JourneyWrite,
+
+            // The customers' channel (My EWP) and the customer's own data in the domain APIs
+            SelfServiceApiScope.JourneyRead,
+            SelfServiceApiScope.AccountsCustomerRead,
+            SelfServiceApiScope.PartnerProductsCustomerRead,
+            SelfServiceApiScope.CustomerOnboardingOnlineIdentity
         ];
 
     public static IEnumerable<ApiResource> ApiResources =>
@@ -87,7 +97,8 @@ public static class Config
             AuditApiResource.JourneyApiResource,
             OperationsApiResource.ApiResource,
             PartnerProductsApiResource.ApiResource,
-            PartnerProductsApiResource.JourneyApiResource
+            PartnerProductsApiResource.JourneyApiResource,
+            SelfServiceApiResource.ApiResource
         ];
 
     /// <summary>
@@ -126,6 +137,10 @@ public static class Config
             // Token exchange only (delegation): the Journey APIs act for a signed-in person.
             AuditJourneyApiTokenExchange.Client,
             OperationsJourneyApiTokenExchange.Client,
-            PartnerProductsJourneyApiTokenExchange.Client
+            PartnerProductsJourneyApiTokenExchange.Client,
+
+            // The customers' channel (FAPI 2.0: PAR, private_key_jwt, DPoP) - customers only.
+            SelfServiceWeb.Client,
+            SelfServiceJourneyApiTokenExchange.Client
         ];
 }

@@ -15,6 +15,9 @@ public static class DependencyInjection
             Customers.Commands.UpdateCustomer.UpdateCustomerCommandHandler>();
 
         services.AddScoped<
+            Customers.Commands.OnlineIdentity.CustomerOnlineIdentityHandler>();
+
+        services.AddScoped<
             Customers.Queries.GetCustomer.GetCustomerQueryHandler>();
 
         services.AddScoped<

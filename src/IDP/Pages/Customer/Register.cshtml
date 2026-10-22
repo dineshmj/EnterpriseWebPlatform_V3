@@ -1,0 +1,37 @@
+@page
+@model EnterpriseWebPlatform.IdentityServer.Pages.Customer.RegisterModel
+@{
+    ViewData["Title"] = "Register for My EWP";
+}
+
+<section class="card" aria-labelledby="customer-register-title">
+    <header class="card-head">
+        <p class="eyebrow">Online access</p>
+        <h1 class="card-title" id="customer-register-title">Register for My EWP</h1>
+        <p class="card-lead">Enter your customer number (on your account letter) and the e-mail address we hold for you. We will send a code to the mobile number on your record.</p>
+    </header>
+
+    <partial name="_ValidationSummary" />
+
+    <form method="post" novalidate>
+        <input type="hidden" asp-for="Input.ReturnUrl" />
+
+        <div class="field">
+            <label asp-for="Input.CustomerNumber">Customer number</label>
+            <input class="input" asp-for="Input.CustomerNumber" placeholder="e.g. CUST-100001"
+                   autocomplete="username" autocapitalize="characters" spellcheck="false" autofocus />
+        </div>
+
+        <div class="field">
+            <label asp-for="Input.Email">E-mail address</label>
+            <input class="input" type="email" asp-for="Input.Email" autocomplete="email" autocapitalize="none" spellcheck="false" />
+        </div>
+
+        <div class="actions">
+            <button class="btn btn-primary btn-block">Send me a code</button>
+            <a class="btn btn-ghost btn-block" asp-page="/Customer/Login" asp-route-returnUrl="@Model.Input.ReturnUrl">Back to sign-in</a>
+        </div>
+    </form>
+
+    <p class="card-lead">Already registered? Sign in instead. Details changed? Visit your branch.</p>
+</section>

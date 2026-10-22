@@ -214,6 +214,45 @@ public sealed class Customer : AggregateRoot
         Touch(now);
     }
 
+    /// <summary>
+    /// Whether the details a person typed at the online registration are this customer's: an
+    /// onboarded (ACTIVE) customer with exactly this e-mail address on record.
+    /// </summary>
+    public bool MayRegisterOnlineAs(EmailAddress email) =>
+        Status == CustomerStatus.Active && Email == email;
+
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ One online identity per customer: the IDP subject is linked once, only to an ACTIVE
+    // │ customer, and never replaced by another one (a second registration is refused, not
+    // │ silently taken over). Linking the same subject again changes nothing (a retried call).
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    /// <summary>Links the customer's own sign-in (the IDP subject of their online identity).</summary>
+    public void LinkOnlineIdentity(Guid subjectId, DateTimeOffset now)
+    {
+        if (subjectId == Guid.Empty)
+        {
+            throw new DomainRuleViolationException("An online identity needs a subject.");
+        }
+
+        if (SubjectId == subjectId)
+        {
+            return;
+        }
+
+        if (SubjectId is not null)
+        {
+            throw new DomainRuleViolationException("The customer already has an online identity.");
+        }
+
+        if (Status != CustomerStatus.Active)
+        {
+            throw new DomainRuleViolationException("Only an onboarded customer can register for online access.");
+        }
+
+        SubjectId = subjectId;
+        Touch(now);
+    }
+
     public void StartOnboarding(DateTimeOffset now)
     {
         var refusal = Status switch

@@ -5,7 +5,9 @@ using Duende.IdentityServer.Extensions;
 using Duende.IdentityServer.Models;
 using Duende.IdentityServer.Services;
 
+using EnterpriseWebPlatform.IdentityServer.Customers;
 using EnterpriseWebPlatform.IdentityServer.Repositories;
+using EnterpriseWebPlatform.IdentityServer.Security;
 
 namespace EnterpriseWebPlatform.IdentityServer.Services;
 
@@ -21,13 +23,16 @@ namespace EnterpriseWebPlatform.IdentityServer.Services;
 public sealed class CustomProfileService : IProfileService
 {
     private readonly IUserRepository _userRepository;
+    private readonly CustomerLoginStore _customerLogins;
     private readonly ILogger<CustomProfileService> _logger;
 
     public CustomProfileService(
         IUserRepository userRepository,
+        CustomerLoginStore customerLogins,
         ILogger<CustomProfileService> logger)
     {
         _userRepository = userRepository;
+        _customerLogins = customerLogins;
         _logger = logger;
     }
 
@@ -42,6 +47,18 @@ public sealed class CustomProfileService : IProfileService
             _logger.LogWarning(
                 "Profile data requested without a valid subject ID.");
 
+            return;
+        }
+
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ A customer client's tokens come ONLY from customer_logins, a staff client's ONLY
+        // │ from users: the client decides which population is looked up, so a customer can
+        // │ never receive a staff claim (role, permission, branch) and no staff member a
+        // │ customer number.
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        if (context.Application.ServesCustomers())
+        {
+            await IssueCustomerClaimsAsync(context, subjectId, cancellationToken);
             return;
         }
 
@@ -269,11 +286,46 @@ public sealed class CustomProfileService : IProfileService
             return;
         }
 
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ The same split for "may this session or token go on?": a staff member's IDP
+        // │ session is NOT active for a customer client (and the reverse), so Duende asks for
+        // │ a new sign-in on the right page instead of reusing the other population's session.
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        if (context.Application.ServesCustomers())
+        {
+            var customer = await _customerLogins.FindBySubjectIdAsync(subjectId, cancellationToken);
+            context.IsActive = customer is { IsActive: true };
+            return;
+        }
+
         var user =
             await _userRepository.FindActiveBySubjectIdAsync(subjectId, cancellationToken);
 
         context.IsActive = user is not null;
     }
+
+    // A customer's claims: who they are and their customer number - nothing organisational.
+    private async Task IssueCustomerClaimsAsync(ProfileDataRequestContext context, string subjectId, CancellationToken cancellationToken)
+    {
+        var customer = await _customerLogins.FindBySubjectIdAsync(subjectId, cancellationToken);
+        if (customer is not { IsActive: true })
+        {
+            _logger.LogWarning("Profile data requested for unknown or inactive customer sign-in {SubjectId}.", subjectId);
+            return;
+        }
+
+        if (context.Caller == Duende.IdentityServer.IdentityServerConstants.ProfileDataCallers.ClaimsProviderAccessToken &&
+            context.Subject.FindFirst(JwtClaimTypes.Actor) is { } actor)
+        {
+            context.IssuedClaims.Add(actor);
+        }
+
+        AddClaimIfRequested(context, JwtClaimTypes.Name, customer.DisplayName);
+        AddClaimIfRequested(context, CustomerNumberClaim, customer.CustomerNumber);
+    }
+
+    /// <summary>The claim that names the customer in a customer token (EWP's customer number).</summary>
+    public const string CustomerNumberClaim = "customer_number";
 
     // ================================================================
     // Helpers

@@ -32,6 +32,10 @@ public sealed class IdentityDbContext : DbContext
 
     public DbSet<UserMfaRecoveryCode> UserMfaRecoveryCodes => Set<UserMfaRecoveryCode>();
 
+    public DbSet<CustomerLogin> CustomerLogins => Set<CustomerLogin>();
+
+    public DbSet<CustomerOneTimeCode> CustomerOneTimeCodes => Set<CustomerOneTimeCode>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -45,6 +49,48 @@ public sealed class IdentityDbContext : DbContext
         ConfigureDepartment(modelBuilder);
         ConfigureUserEmploymentProfile(modelBuilder);
         ConfigureMfa(modelBuilder);
+        ConfigureCustomers(modelBuilder);
+    }
+
+    // Customers' own sign-ins ("My EWP") and their one-time codes - apart from the staff tables.
+    private static void ConfigureCustomers(ModelBuilder modelBuilder)
+    {
+        var login = modelBuilder.Entity<CustomerLogin>();
+        login.ToTable("customer_logins");
+        login.HasKey(x => x.Id);
+        login.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        login.Property(x => x.SubjectId).HasColumnName("subject_id").IsRequired();
+        login.HasIndex(x => x.SubjectId).IsUnique().HasDatabaseName("ux_customer_logins_subject_id");
+        login.Property(x => x.CustomerNumber).HasColumnName("customer_number").HasMaxLength(20).IsRequired();
+        login.HasIndex(x => x.CustomerNumber).IsUnique().HasDatabaseName("ux_customer_logins_customer_number");
+        login.Property(x => x.DisplayName).HasColumnName("display_name").HasMaxLength(100).IsRequired();
+        login.Property(x => x.MobileEnding).HasColumnName("mobile_ending").HasMaxLength(3).IsRequired();
+        login.Property(x => x.HashedPassword).HasColumnName("hashed_password").HasMaxLength(500).IsRequired();
+        login.Property(x => x.IsActive).HasColumnName("is_active");
+        login.Property(x => x.AccessFailedCount).HasColumnName("access_failed_count");
+        login.Property(x => x.LockoutEnd).HasColumnName("lockout_end");
+        login.Property(x => x.CreatedAt).HasColumnName("created_at");
+        login.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+
+        var code = modelBuilder.Entity<CustomerOneTimeCode>();
+        code.ToTable("customer_one_time_codes");
+        code.HasKey(x => x.Id);
+        code.Property(x => x.Id).HasColumnName("id").ValueGeneratedNever();
+        code.Property(x => x.Purpose).HasColumnName("purpose").HasMaxLength(20)
+            .HasConversion(v => v == CustomerCodePurpose.SignIn ? "SIGN_IN" : "REGISTRATION",
+                           v => v == "SIGN_IN" ? CustomerCodePurpose.SignIn : CustomerCodePurpose.Registration);
+        code.Property(x => x.CustomerNumber).HasColumnName("customer_number").HasMaxLength(20).IsRequired();
+        code.Property(x => x.Email).HasColumnName("email").HasMaxLength(254);
+        code.Property(x => x.SubjectId).HasColumnName("subject_id");
+        code.Property(x => x.DisplayName).HasColumnName("display_name").HasMaxLength(100).IsRequired();
+        code.Property(x => x.MobileEnding).HasColumnName("mobile_ending").HasMaxLength(3).IsRequired();
+        code.Property(x => x.Salt).HasColumnName("salt").HasMaxLength(32).IsRequired();
+        code.Property(x => x.CodeHash).HasColumnName("code_hash").HasMaxLength(64).IsRequired();
+        code.Property(x => x.FailedAttempts).HasColumnName("failed_attempts");
+        code.Property(x => x.ExpiresAt).HasColumnName("expires_at");
+        code.Property(x => x.UsedAt).HasColumnName("used_at");
+        code.Property(x => x.CreatedAt).HasColumnName("created_at");
+        code.HasIndex(x => x.ExpiresAt).HasDatabaseName("ix_customer_one_time_codes_expires_at");
     }
 
     // Multi-factor authentication (TOTP): one authenticator per user, and its recovery codes.
