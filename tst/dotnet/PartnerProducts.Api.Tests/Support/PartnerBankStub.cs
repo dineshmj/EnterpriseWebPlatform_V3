@@ -98,8 +98,10 @@ public sealed class PartnerBankStub : IDisposable
         return Received(path);
     }
 
-    // The first request a WireMock server answers in a process is slow (its pipeline warms up) -
-    // longer than the shortened timeouts some tests use. One throw-away request first, then a clean log.
+    // ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+    // │ The first request a WireMock server answers in a process is slow (its pipeline warms up) -
+    // │ longer than the shortened timeouts some tests use. One throw-away request first, then a clean log.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     private void WarmUp()
     {
         using var warmUp = new HttpClient();

@@ -39,7 +39,9 @@ async function bootstrap() {
     logger,
   });
 
-  // Telemetry first, so every request - static files included - is traced, timed and logged.
+  // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+  // │ Telemetry first, so every request - static files included - is traced, timed and logged.
+  // └──────────────────────────────────────────────────────────────────────────────────────
   app.use(traceMiddleware);
   app.use(requestMetrics);
   app.use(requestLogging(logger));
@@ -47,8 +49,10 @@ async function bootstrap() {
   // Sessions in PostgreSQL (EwpBffStateDb, schema kyc_bff), encrypted at rest (session-store.ts).
   const store = sessionStore(options.databaseUrl, options.sessionKey);
 
-  // Probes and the Prometheus scrape, like the .NET components: anonymous, no session, no
-  // internals in the body. Live: the process answers. Ready: the session database answers too.
+  // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+  // │ Probes and the Prometheus scrape, like the .NET components: anonymous, no session, no
+  // │ internals in the body. Live: the process answers. Ready: the session database answers too.
+  // └──────────────────────────────────────────────────────────────────────────────────────
   const http = app.getHttpAdapter().getInstance() as express.Express;
   http.get('/health/live', (_req, res) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -65,8 +69,10 @@ async function bootstrap() {
       res.status(503).json({ status: 'Unhealthy', checks: [{ name: 'session-database', status: 'Unhealthy', description: 'The session database is not reachable.' }] });
     }
   });
-  // Like Observability:Metrics:Enabled in .NET: on in development, off in production unless
-  // KYC_BFF_METRICS_ENABLED=true - the scrape is anonymous, so only the cluster's scraper may reach it.
+  // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+  // │ Like Observability:Metrics:Enabled in .NET: on in development, off in production unless
+  // │ KYC_BFF_METRICS_ENABLED=true - the scrape is anonymous, so only the cluster's scraper may reach it.
+  // └──────────────────────────────────────────────────────────────────────────────────────
   const metricsEnabled = process.env.KYC_BFF_METRICS_ENABLED
     ? process.env.KYC_BFF_METRICS_ENABLED === 'true'
     : process.env.NODE_ENV !== 'production';

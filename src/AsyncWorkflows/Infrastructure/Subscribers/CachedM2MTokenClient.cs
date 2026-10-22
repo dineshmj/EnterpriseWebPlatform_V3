@@ -36,7 +36,7 @@ public sealed class CachedM2MTokenClient(
 
     public async Task<string> GetAccessTokenAsync(CancellationToken cancellationToken)
     {
-        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // ┌─ PERF ───────────────────────────────────────────────────────────────────────────────
         // │ If the cached token is still valid, reuse it - one token request per token lifetime,
         // │ not one per message.
         // └──────────────────────────────────────────────────────────────────────────────────────
@@ -46,6 +46,10 @@ public sealed class CachedM2MTokenClient(
         await _refreshLock.WaitAsync(cancellationToken);
         try
         {
+            // ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+            // │ Checked again inside the lock: a caller that waited for the lock finds the token
+            // │ another caller has just fetched, so only one token request goes to the IDP.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             if (_accessToken is not null && DateTimeOffset.UtcNow < _expiresAt)
                 return _accessToken;
 

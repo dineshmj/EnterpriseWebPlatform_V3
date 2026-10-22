@@ -67,7 +67,7 @@ public sealed class OpenKycCaseCommandHandler(
     public async Task<OpenKycCaseResult> HandleAsync(OpenKycCaseCommand command, CancellationToken cancellationToken)
     {
         var existing = await repository.GetByApplicationRefAsync(command.ApplicationRef, cancellationToken);
-        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
         // │ If the case already exists, this is a redelivery: answer with the existing case -
         // │ never open a second one.
         // └──────────────────────────────────────────────────────────────────────────────────────

@@ -55,15 +55,19 @@ public sealed class AccountsDbContext(DbContextOptions<AccountsDbContext> option
             .Where(h => h.DomainEvents.Count > 0)
             .ToList();
 
-        // An approval hands the account to the background opening: remember its trace.
+        // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+        // │ An approval hands the account to the background opening: remember its trace.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         foreach (var approved in changed.Where(a => a.DomainEvents.OfType<AccountApplicationApprovedDomainEvent>().Any()))
             Entry(approved).Property<string?>(OpeningTraceParent).CurrentValue = MessagingTelemetry.CurrentTraceParent();
 
         // 1. The aggregates (a new application or account gets its database ID here).
         await SaveTranslatingErrorsAsync(cancellationToken);
 
-        // 2. Their published events, one Outbox row at a time so the database-assigned
-        //    sequence follows the order the events were raised (cause before effect).
+        // ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+        // │ 2. Their published events, one Outbox row at a time so the database-assigned
+        // │    sequence follows the order the events were raised (cause before effect).
+        // └──────────────────────────────────────────────────────────────────────────────────────
         foreach (var aggregate in changed)
         {
             var events = aggregate.DomainEvents.ToList();

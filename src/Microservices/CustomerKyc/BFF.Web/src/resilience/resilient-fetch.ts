@@ -4,7 +4,7 @@ import { traceHeaders } from '../observability/trace-context';
 
 type State = 'closed' | 'open' | 'half-open';
 
-// ┌─ :: ARCHITECTURE :: Circuit breaker and GET-only retries ──────────────────────────────────────
+// ┌─ :: RESILIENCE :: Circuit breaker and GET-only retries ────────────────────────────────────────
 // │ Why : A struggling downstream service hammered by every retry never recovers, and a hung call
 // │       blocks the officer.
 // │ How : One breaker per downstream (half of the calls in 30 s failing opens it for 30 s), a

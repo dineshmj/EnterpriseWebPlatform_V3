@@ -37,6 +37,10 @@ public sealed class CustomerOutboxPublisherHostedService(
             {
                 break;
             }
+            // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+            // │ If one cycle fails (e.g. the database is down), log it and try again at the next poll
+            // │ - the loop never dies; the heartbeat keeps liveness honest.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             catch (Exception ex)
             {
                 logger.LogError(ex, "Unexpected error in Customer Outbox Publisher.");

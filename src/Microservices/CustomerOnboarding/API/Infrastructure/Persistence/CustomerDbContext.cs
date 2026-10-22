@@ -10,7 +10,7 @@ using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence.Outbox
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence;
 
-// ┌─ :: ARCHITECTURE :: State and Outbox in one transaction ───────────────────────────────────────
+// ┌─ :: RESILIENCE :: State and Outbox in one transaction ─────────────────────────────────────────
 // │ Why : Saving the change and publishing it separately loses events (dual write).
 // │ How : Domain events become Outbox rows in the same SaveChanges; consumed messages are recorded
 // │       in inbox_messages in the same transaction; Version guards concurrent edits.
@@ -90,12 +90,14 @@ public sealed class CustomerDbContext :
                     _workflowContext.GetInitiatedByUserId(),
                     cancellationToken);
 
-            // Persist the Outbox rows using the SAME database transaction, one at a
-            // time and in domain-event order. outbox_messages.sequence is assigned in
-            // INSERT order, and EF Core does not guarantee that rows added in one
-            // SaveChanges are inserted in the order they were added. The relay
-            // publishes per aggregate in sequence order, so a cause (e.g. Submitted)
-            // must be inserted before its effect (StatusChanged).
+            // ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+            // │ Persist the Outbox rows using the SAME database transaction, one at a
+            // │ time and in domain-event order. outbox_messages.sequence is assigned in
+            // │ INSERT order, and EF Core does not guarantee that rows added in one
+            // │ SaveChanges are inserted in the order they were added. The relay
+            // │ publishes per aggregate in sequence order, so a cause (e.g. Submitted)
+            // │ must be inserted before its effect (StatusChanged).
+            // └──────────────────────────────────────────────────────────────────────────────────────
             foreach (var outboxMessage in outboxMessages)
             {
                 OutboxMessages.Add(outboxMessage);

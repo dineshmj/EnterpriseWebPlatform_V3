@@ -12,7 +12,7 @@ using EnterpriseWebPlatform.Payments.Api.Infrastructure.Messaging;
 
 namespace EnterpriseWebPlatform.Payments.Api.Infrastructure.Persistence;
 
-// ┌─ :: ARCHITECTURE :: One transaction: state, saga and Outbox ───────────────────────────────────
+// ┌─ :: RESILIENCE :: One transaction: state, saga and Outbox ─────────────────────────────────────
 // │ Why : Saving the change and publishing it separately loses events (dual write).
 // │ How : SaveAsync writes the aggregates, then the saga's commands and the payment's facts as
 // │       Outbox rows, in raise order, in the same transaction; inbox_messages records consumed
@@ -54,15 +54,19 @@ public sealed class PaymentsDbContext(DbContextOptions<PaymentsDbContext> option
         var sagas = ChangeTracker.Entries<PaymentSaga>().Select(e => e.Entity).ToList();
         var payments = ChangeTracker.Entries<Payment>().Select(e => e.Entity).ToList();
 
-        // A new saga remembers the trace of the request that started it.
+        // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+        // │ A new saga remembers the trace of the request that started it.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         foreach (var added in ChangeTracker.Entries<PaymentSaga>().Where(e => e.State == EntityState.Added))
             added.Property<string?>(TraceParent).CurrentValue = MessagingTelemetry.CurrentTraceParent();
 
         // 1. The aggregates and the saga's new history lines.
         await SaveTranslatingErrorsAsync(cancellationToken);
 
-        // 2. The saga's commands, then the payment's published facts: one Outbox row at a
-        //    time, so the database-assigned sequence keeps the order they were raised in.
+        // ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+        // │ 2. The saga's commands, then the payment's published facts: one Outbox row at a
+        // │    time, so the database-assigned sequence keeps the order they were raised in.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         foreach (var saga in sagas.Where(s => s.DomainEvents.Count > 0 || payments.Any(p => p.Id == s.PaymentId && p.DomainEvents.Count > 0)))
         {
             var payment = payments.SingleOrDefault(p => p.Id == saga.PaymentId)

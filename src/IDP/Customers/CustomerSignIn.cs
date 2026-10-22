@@ -35,7 +35,7 @@ public sealed class CustomerSignIn(
     public static string SafeReturnUrl(AuthorizationRequest? context, string? returnUrl) =>
         context is not null && !string.IsNullOrEmpty(returnUrl) ? returnUrl : "~/";
 
-    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // ┌─ SEC + DEBT ─────────────────────────────────────────────────────────────────────────
     // │ PoC: there is no SMS gateway. The code goes to the console (the mobile masked to its
     // │ last three digits - never the full number, never the code outside Development) and,
     // │ ONLY while CustomerSignIn:ShowCodesOnPage is on (Development), onto the page.

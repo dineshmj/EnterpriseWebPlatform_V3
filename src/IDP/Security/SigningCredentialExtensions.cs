@@ -34,6 +34,11 @@ public static class SigningCredentialExtensions
         // └──────────────────────────────────────────────────────────────────────────────────────
         if (builder.Environment.IsDevelopment())
         {
+            // ┌─ DEBT ───────────────────────────────────────────────────────────────────────────────
+            // │ Development keys are files next to the IDP (tempkey.jwk, tempkey-ps256.jwk;
+            // │ git-ignored), made on the first start. Production: the signing certificate in a key
+            // │ vault or HSM, with rotation and backup (production item 1).
+            // └──────────────────────────────────────────────────────────────────────────────────────
             return identityServer
                 .AddDeveloperSigningCredential()
                 .AddDeveloperSigningCredential(filename: "tempkey-ps256.jwk", signingAlgorithm: IdentityServerConstants.RsaSigningAlgorithm.PS256);

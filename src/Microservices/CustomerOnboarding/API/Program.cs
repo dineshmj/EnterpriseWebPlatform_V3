@@ -39,8 +39,10 @@ var clientIds = ClientIds.From(builder.Configuration).Require(
     nameof(ClientIds.IdpCustomerDirectory));
 builder.Services.AddSingleton(clientIds);
 
-// Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
-// over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
+// │ over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.AddEwpObservability("customer-onboarding-api", tracing => tracing.AddAspNetCoreInstrumentation().AddNpgsql());
 
 // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
@@ -227,8 +229,10 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<EnterpriseWebPlatform.CustomerOnboarding.API.ErrorHandling.ApiExceptionHandler>();
 
-// Health endpoints for the orchestrator's probes: /health/live (process working)
-// and /health/ready (dependencies reachable). Anonymous; no internals in the body.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ Health endpoints for the orchestrator's probes: /health/live (process working)
+// │ and /health/ready (dependencies reachable). Anonymous; no internals in the body.
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), tags: [HealthEndpoints.LiveTag])
     .AddDbContextCheck<CustomerDbContext>("database", tags: [HealthEndpoints.ReadyTag])
@@ -256,7 +260,9 @@ builder.Services.AddEwpRateLimiting(builder.Configuration, "/v1", "/internal");
 
 var app = builder.Build();
 
-// One structured log line per request (Serilog), with the caller and the trace ID.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ One structured log line per request (Serilog), with the caller and the trace ID.
+// └──────────────────────────────────────────────────────────────────────────────────────
 app.UseEwpRequestLogging();
 
 if (app.Environment.IsDevelopment())

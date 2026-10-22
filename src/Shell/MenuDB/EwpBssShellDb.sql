@@ -25,6 +25,11 @@
 BEGIN;
 
 -- ============================================================
+-- ┌─ DEBT ───────────────────────────────────────────────────────────────────────────────
+-- │ A full reset script, not a migration: running it drops and re-creates the menu tables
+-- │ (the databases are re-created on purpose in the PoC). Production: versioned
+-- │ migrations (production item 8).
+-- └──────────────────────────────────────────────────────────────────────────────────────
 -- Drop existing V2/V3 Shell menu tables.
 -- Reverse dependency order.
 -- ============================================================

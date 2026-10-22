@@ -9,7 +9,7 @@ using EnterpriseWebPlatform.Payments.Api.Infrastructure.Persistence;
 
 namespace EnterpriseWebPlatform.Payments.Api.Infrastructure.Saga;
 
-// ┌─ :: ARCHITECTURE :: The saga's timer ──────────────────────────────────────────────────────────
+// ┌─ :: RESILIENCE :: The saga's timer ────────────────────────────────────────────────────────────
 // │ Why : Time-outs and due network calls need a clock that survives restarts and runs on several
 // │       instances.
 // │ How : A background loop picks due sagas with FOR UPDATE SKIP LOCKED (one instance per saga),

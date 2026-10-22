@@ -86,8 +86,11 @@ export function useNotifications(onLive?: (notification: ShellNotification) => v
     connection.onreconnecting(() => { setStatus('connecting'); watchSession(); });
     connection.onreconnected(() => { window.clearInterval(sessionCheck); setStatus('live'); void reload(); });
 
-    // Started, or closed without an automatic reconnect (e.g. the API was down at
-    // start-up): keep trying with back-off until the page goes away.
+    // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+    // │ Not started, or closed without an automatic reconnect (e.g. the API was down at
+    // │ start-up): keep trying with back-off (2 s doubling to 30 s) until the page goes away
+    // │ or the session has ended.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     const start = async (attempt: number) => {
       try {
         await connection.start();
@@ -100,7 +103,7 @@ export function useNotifications(onLive?: (notification: ShellNotification) => v
         retryTimer = window.setTimeout(() => void start(attempt + 1), Math.min(30_000, 2_000 * 2 ** Math.min(attempt, 4)));
       }
     };
-    // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+    // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
     // │ If the connection closes (token expired, API restarted), reconnect through the BFF -
     // │ which supplies a fresh token; notifications missed meanwhile are re-read from the
     // │ stored list.

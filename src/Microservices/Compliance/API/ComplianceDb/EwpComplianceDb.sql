@@ -6,6 +6,11 @@
 -- The CHECK constraints mirror the ComplianceCase aggregate's invariants.
 -- =============================================================================
 
+-- ┌─ DEBT ───────────────────────────────────────────────────────────────────────────────
+-- │ A full reset script, not a migration: running it drops and re-creates every table
+-- │ (the databases are re-created on purpose in the PoC). Production: versioned
+-- │ migrations (production item 8).
+-- └──────────────────────────────────────────────────────────────────────────────────────
 DROP TABLE IF EXISTS compliance_cases CASCADE;
 DROP TABLE IF EXISTS outbox_messages CASCADE;
 DROP TABLE IF EXISTS inbox_messages CASCADE;

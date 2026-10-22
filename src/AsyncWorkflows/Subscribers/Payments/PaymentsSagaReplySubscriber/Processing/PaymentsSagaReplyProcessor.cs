@@ -89,7 +89,7 @@ public sealed class PaymentsSagaReplyProcessor(
                 return ProcessingOutcome.Processed;
             }
 
-            // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+            // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
             // │ Refused identity, time-out, throttling, a server error - or 409, two deliveries
             // │ racing on the saga row - is retried in place; any other 4xx means the reply itself is
             // │ bad: dead-letter it.
@@ -121,7 +121,11 @@ public sealed class PaymentsSagaReplyProcessor(
         return await httpClientFactory.CreateClient(HttpClientName).SendAsync(request, cancellationToken);
     }
 
-    // Tolerant reader: only the fields the saga needs; unknown fields are ignored.
+    // ┌─ CONTRACT ───────────────────────────────────────────────────────────────────────────
+    // │ Tolerant reader of the producer's event envelope (workflow metadata at the top level,
+    // │ the event under "Payload"): only the fields the saga needs; unknown fields are
+    // │ ignored, so the producer can add fields without breaking this worker.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     private sealed record Envelope(
         Guid MessageId,
         string? EventType,

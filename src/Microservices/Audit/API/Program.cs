@@ -35,7 +35,9 @@ var builder = WebApplication.CreateBuilder(args);
 var clientIds = ClientIds.From(builder.Configuration).Require(nameof(ClientIds.AuditJourneyApi));
 builder.Services.AddSingleton(clientIds);
 
-// Traces, Serilog logs and Prometheus metrics (OTLP export when configured).
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ Traces, Serilog logs and Prometheus metrics (OTLP export when configured).
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.AddEwpObservability("audit-api", tracing => tracing.AddAspNetCoreInstrumentation().AddNpgsql());
 
 var connectionString = builder.Configuration.GetConnectionString("AuditDbConnection")
@@ -46,11 +48,13 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<AuditTrailAppender>();
 builder.Services.AddScoped<AuditChainVerifier>();
 
-// The chain's anchor outside the database: signed checkpoints in write-once storage. Fail closed -
-// without a signing key and a directory the API does not start. Development values are in
-// appsettings.Development.json; elsewhere the key comes from a key vault / HSM and the directory
-// is immutable storage under another administrator.
-// :: SECURITY :: Audit chain anchors - see Microservices/Audit/API/Infrastructure/AuditAnchors.cs
+// ┌─ SEC + DEBT ─────────────────────────────────────────────────────────────────────────
+// │ The chain's anchor outside the database: signed checkpoints in write-once storage. Fail closed -
+// │ without a signing key and a directory the API does not start. Development values are in
+// │ appsettings.Development.json; elsewhere the key comes from a key vault / HSM and the directory
+// │ is immutable storage under another administrator (production items 1 and 2).
+// │ See class AuditAnchors.
+// └──────────────────────────────────────────────────────────────────────────────────────
 var anchorSettings = builder.Configuration.GetSection("Audit:Anchors");
 builder.Services.AddSingleton(new AuditCheckpointSigner(anchorSettings["KeyId"] ?? string.Empty, anchorSettings["SigningKey"] ?? string.Empty));
 builder.Services.AddSingleton(new AuditAnchorStore(anchorSettings["Directory"] ?? string.Empty));
@@ -121,8 +125,10 @@ builder.Services.AddSingleton<AuditChainStatus>();
 builder.Services.AddHostedService<AuditChainMonitor>();
 
 // ---------------------------------------------------------------- Health
-// live: the process and its consume loop; ready: the database, the consumer group, and the
-// chain (Degraded when broken). The checks' numbers also appear in /metrics.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ live: the process and its consume loop; ready: the database, the consumer group, and the
+// │ chain (Degraded when broken). The checks' numbers also appear in /metrics.
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), tags: [HealthEndpoints.LiveTag])
     .AddDbContextCheck<AuditDbContext>("database", tags: [HealthEndpoints.ReadyTag])
@@ -130,7 +136,9 @@ builder.Services.AddHealthChecks()
 
 var app = builder.Build();
 
-// One structured log line per request (Serilog), with the caller and the trace ID.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ One structured log line per request (Serilog), with the caller and the trace ID.
+// └──────────────────────────────────────────────────────────────────────────────────────
 app.UseEwpRequestLogging();
 
 // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────

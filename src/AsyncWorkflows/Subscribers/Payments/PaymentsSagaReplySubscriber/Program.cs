@@ -17,11 +17,17 @@ using EnterpriseWebPlatform.Common.Observability;
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 var builder = Host.CreateApplicationBuilder(args);
 
-// Distributed tracing: each message is processed in a span that continues the
-// producer's trace (Kafka "traceparent" header) and carries it to the API call.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ Distributed tracing: each message is processed in a span that continues the
+// │ producer's trace (Kafka "traceparent" header) and carries it on to the API call.
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.AddEwpObservability("payments-saga-reply-subscriber");
 
-// The shared reliable consume loop (commit after processing, retry in place, dead-letter).
+// ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+// │ The shared reliable consume loop with this worker's processor: offset committed only
+// │ after processing, transient failures retried in place, bad messages to its
+// │ dead-letter topic.
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.Services.AddKafkaSubscriber<PaymentsSagaReplyProcessor, PaymentsSagaReplySubscriberOptions>(
     builder.Configuration, PaymentsSagaReplySubscriberOptions.SectionName)
     .Validate(s => ServiceAddress.IsHttps(s.PaymentsApiBaseUrl), $"{PaymentsSagaReplySubscriberOptions.SectionName}:PaymentsApiBaseUrl must be an absolute https address.");
@@ -38,12 +44,10 @@ builder.Services
 builder.Services
     .AddHttpClient(PaymentsSagaReplyProcessor.HttpClientName, (sp, client) =>
         client.BaseAddress = new Uri(sp.GetRequiredService<IOptions<PaymentsSagaReplySubscriberOptions>>().Value.PaymentsApiBaseUrl.TrimEnd('/')))
-    // Timeout, jittered retry and circuit breaker; the endpoint is idempotent (Inbox, and
-    // the saga ignores a reply it no longer waits for), so retrying the POST is safe.
-    // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
-    // │ Retrying this POST is safe ONLY because the endpoint is idempotent (Inbox / one
-    // │ record per message); timeouts, jittered retries and a circuit breaker protect the
-    // │ API.
+    // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+    // │ Retrying this POST is safe ONLY because the endpoint is idempotent (Inbox, and the
+    // │ saga ignores a reply it no longer waits for); timeouts, jittered retries and a
+    // │ circuit breaker protect the API.
     // └──────────────────────────────────────────────────────────────────────────────────────
     .AddStandardResilienceHandler(options =>
     {
@@ -57,7 +61,10 @@ builder.Services
         options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(60);
     });
 
-// Health endpoints for the orchestrator's probes, served on Health:Urls.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ Health endpoints for the orchestrator's probes (Health:Urls): live = the consume loop
+// │ runs; ready = joined the consumer group (Degraded while a message is retried).
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.AddWorkerHealthEndpoints();
 
 var host = builder.Build();

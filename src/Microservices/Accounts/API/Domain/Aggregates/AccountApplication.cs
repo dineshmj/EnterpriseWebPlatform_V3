@@ -372,8 +372,6 @@ public sealed class AccountApplication : AggregateRoot
     {
         RequireOfficer(officerUserId);
 
-        // Fail closed: without a known initiator the platform cannot prove that the
-        // officer is not acting on their own workflow.
         // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
         // │ If the initiator is unknown, deny - separation of duties cannot be proven, so it
         // │ fails closed.

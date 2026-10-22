@@ -54,7 +54,7 @@ public sealed class SagaHistoryEntry
         new() { SagaId = sagaId, At = at, Step = step.ToCode(), Kind = kind, Detail = detail, MessageId = messageId };
 }
 
-// ┌─ :: ARCHITECTURE :: Orchestrated saga: a persisted state machine ──────────────────────────────
+// ┌─ :: ARCHITECTURE + RESILIENCE :: Orchestrated saga: a persisted state machine ─────────────────
 // │ Why : A payment touches money in two places (the customer's account, the payment network) that
 // │       must agree, without a distributed transaction; a crash, a lost answer or a late reply
 // │       must never pay twice or lose money.
@@ -343,7 +343,7 @@ public sealed class PaymentSaga : AggregateRoot
         Attempts++;
         LastError = Truncate(error);
 
-        // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+        // ┌─ RESIL + SEC ────────────────────────────────────────────────────────────────────────
         // │ If the network never answered, the outcome is UNKNOWN (it may have sent the payment):
         // │ do not release - ask it (CONFIRM_WITH_NETWORK); otherwise retry with back-off (same
         // │ Idempotency-Key: never paid twice).
@@ -408,7 +408,9 @@ public sealed class PaymentSaga : AggregateRoot
         Touch(now);
         Record(now, "NETWORK_STATUS_UNKNOWN", $"Status enquiry {Attempts} failed: {LastError}. Asking again in {delay.TotalSeconds:F0} s; nothing is released until the network answers.", null);
 
-        // Unconfirmed for too long: tell operations - once - that it needs reconciling.
+        // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+        // │ Unconfirmed for too long: tell operations - once - that it needs reconciling.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (UnconfirmedAlertedAt is null && IsUnconfirmedTooLong(policy, now))
         {
             UnconfirmedAlertedAt = now;
@@ -569,7 +571,7 @@ public sealed class PaymentSaga : AggregateRoot
         var command = CommandOf(Step);
         Record(now, "TIMEOUT", $"No reply to {command} (attempt {Attempts} of {policy.MaxCommandAttempts}).", CurrentCommandId);
 
-        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
         // │ No reply in time: resend the same command (Accounts is idempotent per PaymentRef). A
         // │ settlement is resent for ever - the money already left; a reservation is given up and
         // │ released; a release that keeps failing stops as COMPENSATION_FAILED for operations.
@@ -664,7 +666,7 @@ public sealed class PaymentSaga : AggregateRoot
             return false;
         }
 
-        // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+        // ┌─ RESIL + SEC ────────────────────────────────────────────────────────────────────────
         // │ A reply counts only if it answers the command the saga sent LAST (CausationId); a
         // │ late answer to an earlier attempt is recorded and ignored - it can never move the
         // │ payment out of order.

@@ -148,7 +148,9 @@ internal static class KycIntegrationEventMapper
             CausationId = causationId,
             InitiatedByUserId = kycCase.InitiatedByUserId,
             ActedByUserId = actedByUserId,
-            // The request's trace; the relay continues it and sends it as a Kafka header.
+            // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+            // │ The request's trace; the relay continues it and sends it as a Kafka header.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             TraceParent = MessagingTelemetry.CurrentTraceParent()
         };
     }

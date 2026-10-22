@@ -47,8 +47,10 @@ var oidcAuthority = RequiredSetting.HttpsUrl(builder.Configuration["Oidc:Authori
 var oidcClientId = RequiredSetting.Text(builder.Configuration["Oidc:ClientId"], "Oidc:ClientId");
 var shellOrigin = RequiredSetting.HttpsUrl(builder.Configuration["ShellOrigin"], "ShellOrigin");
 
-// Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
-// over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
+// │ over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.AddEwpObservability("customer-onboarding-bff", tracing => tracing.AddAspNetCoreInstrumentation());
 
 builder.Services.Configure<CustomerOnboardingBffOptions>(
@@ -76,11 +78,13 @@ builder.Services.AddAntiforgery(options =>
     options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
 });
 
-// Server-side sessions and the Data Protection keys (which encrypt the session and
-// anti-forgery cookies) live in PostgreSQL - EwpBffStateDb, schema customer_onboarding_bff, used only by
-// this BFF's own database user - not in memory: a restart signs nobody out, several
-// instances share them, and back-channel logout still ends a session. Expired sessions
-// are removed by Duende's clean-up job.
+// ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+// │ Server-side sessions and the Data Protection keys (which encrypt the session and
+// │ anti-forgery cookies) live in PostgreSQL - EwpBffStateDb, schema customer_onboarding_bff, used only by
+// │ this BFF's own database user - not in memory: a restart signs nobody out, several
+// │ instances share them, and back-channel logout still ends a session. Expired sessions
+// │ are removed by Duende's clean-up job.
+// └──────────────────────────────────────────────────────────────────────────────────────
 var bffStateDb = builder.Configuration.GetConnectionString("BffStateDbConnection")
     ?? throw new InvalidOperationException("Connection string 'BffStateDbConnection' was not configured.");
 // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
@@ -217,9 +221,11 @@ builder.Services
 
 builder.Services.AddSingleton<IDocumentsManagementTokenService, DocumentsManagementTokenService>();
 
-// Calls to the APIs, like the other .NET BFFs: a timeout per attempt and in total, a circuit
-// breaker (a struggling API gets room to recover), and retries for GET only - creating a
-// customer, submitting or uploading is not idempotent, so a write is never retried blindly.
+// ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+// │ Calls to the APIs, like the other .NET BFFs: a timeout per attempt and in total, a circuit
+// │ breaker (a struggling API gets room to recover), and retries for GET only - creating a
+// │ customer, submitting or uploading is not idempotent, so a write is never retried blindly.
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.Services.AddHttpClient("CustomerOnboardingApi", (serviceProvider, client) =>
 {
     var options = serviceProvider.GetRequiredService<IOptions<CustomerOnboardingBffOptions>>().Value;
@@ -239,7 +245,9 @@ builder.Services.AddHttpClient("CustomerOnboardingApi", (serviceProvider, client
     options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(30);
 });
 
-// Documents Management: the same, with more time per attempt for the PDF uploads.
+// ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+// │ Documents Management: the same, with more time per attempt for the PDF uploads.
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.Services.AddHttpClient("DocumentsManagementApi", (serviceProvider, client) =>
 {
     var options = serviceProvider.GetRequiredService<IOptions<CustomerOnboardingBffOptions>>().Value;
@@ -260,8 +268,10 @@ builder.Services.AddHttpClient("IdentityServerTokenClient", (serviceProvider, cl
     client.BaseAddress = new Uri(options.IdentityServerAuthority);
 });
 
-// Health endpoints for the orchestrator's probes: /health/live (process working)
-// and /health/ready (dependencies reachable). Anonymous; no internals in the body.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ Health endpoints for the orchestrator's probes: /health/live (process working)
+// │ and /health/ready (dependencies reachable). Anonymous; no internals in the body.
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), tags: [HealthEndpoints.LiveTag, HealthEndpoints.ReadyTag]);
 
@@ -270,8 +280,10 @@ builder.Services.AddEwpRateLimiting(builder.Configuration, "/bff", "/api");
 
 var app = builder.Build();
 
-// An API that is down, too slow, or behind an open circuit: a readable 503 at once, never a
-// hanging page or a bare 500 (the submission flow handles its own failures and compensation).
+// ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+// │ An API that is down, too slow, or behind an open circuit: a readable 503 at once, never a
+// │ hanging page or a bare 500 (the submission flow handles its own failures and compensation).
+// └──────────────────────────────────────────────────────────────────────────────────────
 app.Use(async (context, next) =>
 {
     try
@@ -287,7 +299,9 @@ app.Use(async (context, next) =>
     }
 });
 
-// One structured log line per request (Serilog), with the caller and the trace ID.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ One structured log line per request (Serilog), with the caller and the trace ID.
+// └──────────────────────────────────────────────────────────────────────────────────────
 app.UseEwpRequestLogging();
 
 if (!app.Environment.IsDevelopment())

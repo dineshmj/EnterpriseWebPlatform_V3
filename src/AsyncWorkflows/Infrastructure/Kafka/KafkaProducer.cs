@@ -7,7 +7,7 @@ using Confluent.Kafka;
 
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 
-// ┌─ :: ARCHITECTURE :: Idempotent, fully acknowledged producer ───────────────────────────────────
+// ┌─ :: RESILIENCE :: Idempotent, fully acknowledged producer ─────────────────────────────────────
 // │ Why : A publish that is retried after a network blip must not create a duplicate, and a message
 // │       the broker acknowledged must survive a broker failure - the Outbox relies on both.
 // │ How : EnableIdempotence (the broker drops a retried duplicate) and Acks=All (every in-sync
@@ -17,8 +17,11 @@ namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 public sealed class KafkaProducer : IKafkaProducer, IDisposable
 {
-    // ewp_messaging_published_total{topic,outcome}: every relay and every dead-letter write
-    // goes through here. Same meter name as the subscriber side (MessagingTelemetry).
+    // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+    // │ Every relay publish and every dead-letter write passes through here, so this counter
+    // │ (ewp_messaging_published_total{topic,outcome}) sees them all. Same meter name as the
+    // │ subscriber side (MessagingTelemetry).
+    // └──────────────────────────────────────────────────────────────────────────────────────
     private static readonly Meter Meter = new("EnterpriseWebPlatform.Messaging");
     private static readonly Counter<long> Published = Meter.CreateCounter<long>(
         "ewp.messaging.published", description: "Kafka messages published, by outcome.");
@@ -29,11 +32,11 @@ public sealed class KafkaProducer : IKafkaProducer, IDisposable
     {
         var configuration = KafkaClientSecurity.Apply(new ProducerConfig
         {
-            // ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+            // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
             // │ `Acks = Acks.All` ensures durability: a publish is acknowledged only when all
             // │ in-sync replicas have it. Combined with `EnableIdempotence = true`, this provides
             // │ both durability and idempotency:
-            // │ 
+            // │
             // │ - EnableIdempotence: broker-side de-duplication prevents duplicates and reordering
             // │   caused by the producer's own internal retries.
             // │ - Acks = Acks.All: all in-sync replicas receive the message before acknowledgment.

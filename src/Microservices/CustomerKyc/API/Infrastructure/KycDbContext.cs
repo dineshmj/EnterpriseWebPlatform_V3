@@ -38,10 +38,12 @@ public sealed class KycDbContext(DbContextOptions<KycDbContext> options, TimePro
         // 1. The aggregates themselves (a new case gets its database ID here).
         await SaveTranslatingErrorsAsync(cancellationToken);
 
-        // 2. Their domain events, as Outbox rows. Each row is saved on its own:
-        //    outbox_messages.sequence is assigned in INSERT order and EF Core may
-        //    reorder rows inserted by one SaveChanges, but the relay publishes each
-        //    aggregate's events strictly in sequence order (cause before effect).
+        // ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+        // │ 2. Their domain events, as Outbox rows. Each row is saved on its own:
+        // │    outbox_messages.sequence is assigned in INSERT order and EF Core may
+        // │    reorder rows inserted by one SaveChanges, but the relay publishes each
+        // │    aggregate's events strictly in sequence order (cause before effect).
+        // └──────────────────────────────────────────────────────────────────────────────────────
         foreach (var aggregate in changedAggregates)
         {
             var domainEvents = aggregate.DomainEvents.ToList();

@@ -47,7 +47,7 @@ public sealed class OpenComplianceCaseCommandHandler(
     public async Task<OpenComplianceCaseResult> HandleAsync(OpenComplianceCaseCommand command, CancellationToken cancellationToken)
     {
         var existing = await repository.GetByApplicationRefAsync(command.ApplicationRef, cancellationToken);
-        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
         // │ If the case already exists, this is a redelivery: answer with the existing case -
         // │ never open a second one.
         // └──────────────────────────────────────────────────────────────────────────────────────

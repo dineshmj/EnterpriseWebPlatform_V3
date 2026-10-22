@@ -35,9 +35,11 @@ const EMPTY: WorkspaceContext = {
 
 let latestWorkspaceContext: WorkspaceContext = EMPTY;
 
-// The only origin allowed to embed this MFE and exchange protocol messages with
-// it. A static allow-list (set at build time), never document.referrer and
-// never '*': a page that frames the MFE must not become its "trusted parent".
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ The only origin allowed to embed this MFE and exchange protocol messages with
+// │ it. A static allow-list (set at build time), never document.referrer and
+// │ never '*': a page that frames the MFE must not become its "trusted parent".
+// └──────────────────────────────────────────────────────────────────────────────────────
 const SHELL_ORIGIN =
   process.env.NEXT_PUBLIC_SHELL_ORIGIN ?? 'https://shell.dev.localhost:46367';
 
@@ -216,9 +218,11 @@ export function MfeShell({
         const source = event.source as Window;
 
         if (!hasUnsavedChanges) {
-          // The Shell waits for this response before replacing the iframe.
-          // Returning it immediately avoids the Shell's 30-second fail-open
-          // timeout for read-only views.
+          // ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+          // │ The Shell waits for this response before replacing the iframe.
+          // │ Returning it immediately avoids the Shell's 30-second fail-open
+          // │ timeout for read-only views.
+          // └──────────────────────────────────────────────────────────────────────────────────────
           retainCurrentContext();
           source.postMessage(
             { type: 'BSS_NAVIGATION_RESPONSE', requestId, allowed: true },

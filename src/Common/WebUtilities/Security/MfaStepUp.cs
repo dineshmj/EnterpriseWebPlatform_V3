@@ -64,6 +64,10 @@ public static class MfaStepUp
     public static TimeSpan MaxAge(IConfiguration configuration) =>
         TimeSpan.FromMinutes(Math.Clamp(configuration.GetValue(MaxAgeKey, 15), 1, 60));
 
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Two checks: the sign-in is no older than maxAge, and not more than 5 minutes in the
+    // │ future (clock skew); a missing, malformed or later auth_time is not recent.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     /// <summary>auth_time (Unix seconds, OIDC Core) is no older than maxAge; a missing or malformed value is not recent.</summary>
     public static bool IsRecent(string? authTime, TimeSpan maxAge, DateTimeOffset now) =>
         long.TryParse(authTime, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var seconds) &&

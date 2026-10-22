@@ -23,7 +23,7 @@ public enum SagaReplyOutcome
     AlreadyProcessed
 }
 
-// ┌─ :: ARCHITECTURE :: Idempotent consumer (Inbox) for the saga's replies ────────────────────────
+// ┌─ :: RESILIENCE :: Idempotent consumer (Inbox) for the saga's replies ──────────────────────────
 // │ Why : Kafka delivers at least once: the same reply can arrive twice.
 // │ How : The reply's MessageId is recorded in inbox_messages in the SAME transaction as the saga
 // │       change; a repeat is acknowledged and ignored.
@@ -46,7 +46,7 @@ public sealed class HandleSagaReplyCommandHandler(
 
     public async Task<SagaReplyOutcome> HandleAsync(SagaReplyCommand reply, CancellationToken cancellationToken)
     {
-        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
         // │ If this reply was already processed, acknowledge it and do nothing (Inbox) - a
         // │ redelivery never moves money twice.
         // └──────────────────────────────────────────────────────────────────────────────────────
@@ -58,7 +58,7 @@ public sealed class HandleSagaReplyCommandHandler(
         var saga = await sagas.GetForUpdateAsync(reply.PaymentRef, cancellationToken)
             ?? throw new DomainRuleViolationException($"No payment saga exists for PaymentRef {reply.PaymentRef}.");
 
-        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
         // │ Check the Inbox again now that the saga row is locked: if the same reply was
         // │ delivered twice at once, the second copy waited for the lock while the first
         // │ committed - it is answered as already processed, not failed on the Inbox key.

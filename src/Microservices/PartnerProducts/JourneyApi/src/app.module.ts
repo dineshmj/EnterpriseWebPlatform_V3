@@ -8,7 +8,7 @@ import { DomainApiClient } from './services/domain-api.client';
 import { PurchaseWorkflowStarter } from './services/purchase-workflow.starter';
 import { TokenExchangeService } from './services/token-exchange.service';
 
-// ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
 // │ Probes only report that the process runs: this API holds no state of its own, and a
 // │ Domain API being down shows on that API's own probe (Operations -> Platform Health).
 // └──────────────────────────────────────────────────────────────────────────────────────

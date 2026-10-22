@@ -34,7 +34,9 @@ export async function loadFaultRoutes(): Promise<ActionResult<FaultRoute[]>> {
 }
 
 export async function changeFaultRoute(key: string, state: RouteState): Promise<ActionResult<FaultRoute[]>> {
-  // SEC: only a route-shaped key and a known state go into the path and the body.
+  // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+  // │ Only a route-shaped key and a known state go into the path and the body.
+  // └──────────────────────────────────────────────────────────────────────────────────────
   if (!/^[a-z-]{1,40}$/.test(key) || !ROUTE_STATES.includes(state)) return { ok: false, error: 'Unknown route or state.' };
   return callJourney<FaultRoute[]>('operations-journey.write', 'PUT', `/v1/journeys/operations/fault-routes/${key}/state`, { state });
 }

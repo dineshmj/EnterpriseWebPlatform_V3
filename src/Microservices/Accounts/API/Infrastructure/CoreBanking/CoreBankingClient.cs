@@ -89,7 +89,7 @@ public sealed class CoreBankingClient(HttpClient http, IOptions<CoreBankingOptio
 
         using (response)
         {
-            // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+            // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
             // │ A 422 is a business "no" - final, never retried; anything else that fails is
             // │ "unavailable" and is retried later.
             // └──────────────────────────────────────────────────────────────────────────────────────

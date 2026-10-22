@@ -15,7 +15,7 @@ public sealed class KycKafkaProducer : IDisposable
 {
     public KycKafkaProducer(IConfiguration config, ILogger<KycKafkaProducer> logger)
     {
-        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
         // │ The Kafka library's own lines and errors go through the logger (KafkaClientLog):
         // │ once per change, not two console lines every few seconds while the broker is down.
         // └──────────────────────────────────────────────────────────────────────────────────────
@@ -25,6 +25,10 @@ public sealed class KycKafkaProducer : IDisposable
 
         Producer = new ProducerBuilder<string, string>(KafkaClientSecurity.Apply(new ProducerConfig
         {
+            // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+            // │ Acks=All with idempotence: a publish counts only when every in-sync replica has it,
+            // │ and a retried send is never duplicated (see class KafkaProducer).
+            // └──────────────────────────────────────────────────────────────────────────────────────
             Acks = Acks.All,
             EnableIdempotence = true,
             MaxInFlight = 5,
@@ -41,7 +45,7 @@ public sealed class KycKafkaProducer : IDisposable
     }
 }
 
-// ┌─ :: ARCHITECTURE :: Transactional Outbox relay (in-process) ───────────────────────────────────
+// ┌─ :: RESILIENCE :: Transactional Outbox relay (in-process) ─────────────────────────────────────
 // │ Why : KYC outcomes must reach Kafka exactly when their decision commits.
 // │ How : FOR UPDATE SKIP LOCKED, per-aggregate order, bounded attempts with back-off, parked after
 // │       MaxAttempts; the decision's trace continues into Kafka.
@@ -143,7 +147,9 @@ public sealed class KycOutboxPublisher(
             var topic = topics[message.EventType];
             var attemptedAt = DateTimeOffset.UtcNow;
 
-            // The publish span continues the trace of the request that raised the event.
+            // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+            // │ The publish span continues the trace of the request that raised the event.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             using var activity = MessagingTelemetry.StartPublish(topic, message.Id, message.EventType, message.TraceParent);
 
             try
@@ -197,6 +203,11 @@ public sealed class KycOutboxPublisher(
             }
         }
 
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+        // │ If the relay dies after a publish but before this commit, the row is published again
+        // │ on the next run (at-least-once); the consumers' Inbox (MessageId) makes the repeat
+        // │ harmless.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
 

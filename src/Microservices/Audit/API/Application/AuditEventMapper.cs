@@ -16,7 +16,12 @@ namespace EnterpriseWebPlatform.Audit.Api.Application;
 /// </summary>
 public static class AuditEventMapper
 {
-    // Who acted, in order of preference: the decider of a decision, the approver of an opening.
+    // ┌─ DEBT ───────────────────────────────────────────────────────────────────────────────
+    // │ Who acted, in order of preference: the decider of a decision, the approver of an
+    // │ opening - taken from the producer's envelope, which is trusted (each producer has its
+    // │ own Kafka user and ACLs) but not signed. Production: signed event envelopes
+    // │ (Threat-Model R-6, production item 3).
+    // └──────────────────────────────────────────────────────────────────────────────────────
     private static readonly (string UserId, string LanId)[] ActorFields =
     [
         ("DecisionByUserId", "DecisionByLanId"),
@@ -43,8 +48,10 @@ public static class AuditEventMapper
 
         var entry = new AuditEntry
         {
-            // A message without a MessageId still gets a stable one (same message, same ID),
-            // so a redelivery is recognised as a duplicate.
+            // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+            // │ A message without a MessageId still gets a stable one (same message, same ID),
+            // │ so a redelivery is recognised as a duplicate.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             MessageId = Id(root, "MessageId") ?? DeterministicId(topic, partition, offset),
             EntryKind = AuditEntryKind.Event,
             EventType = Limit(Text(root, "EventType"), 100) ?? topic,

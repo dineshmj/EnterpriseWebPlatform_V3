@@ -20,7 +20,7 @@ public enum OpeningRunOutcome
     CoreBankingUnavailable
 }
 
-// ┌─ :: ARCHITECTURE :: Opening accounts in the background, safely retried ────────────────────────
+// ┌─ :: RESILIENCE :: Opening accounts in the background, safely retried ──────────────────────────
 // │ Why : Calling core banking inside the officer's request would make the screen hang on an
 // │       outage, and a blind retry could open two accounts.
 // │ How : A worker picks due applications, calls core banking with the ApplicationRef as
@@ -54,10 +54,12 @@ public sealed class OpenDueAccountCommandHandler(
         if (application is null)
             return OpeningRunOutcome.NothingDue;
 
-        // Anything other than core banking's own answer (e.g. the database refusing the new
-        // account) must not leave the application due with no attempt recorded: it would be picked
-        // again every cycle, forever, ahead of every other application. Hand it to the worker,
-        // which records it as a failed attempt in a fresh transaction (RecordOpeningErrorCommandHandler).
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+        // │ Anything other than core banking's own answer (e.g. the database refusing the new
+        // │ account) must not leave the application due with no attempt recorded: it would be picked
+        // │ again every cycle, forever, ahead of every other application. Hand it to the worker,
+        // │ which records it as a failed attempt in a fresh transaction (RecordOpeningErrorCommandHandler).
+        // └──────────────────────────────────────────────────────────────────────────────────────
         try
         {
             return await OpenAsync(application, transaction, cancellationToken);
@@ -70,7 +72,9 @@ public sealed class OpenDueAccountCommandHandler(
 
     private async Task<OpeningRunOutcome> OpenAsync(AccountApplication application, IUnitOfWorkTransaction transaction, CancellationToken cancellationToken)
     {
-        // The core-banking call and the resulting events join the approval's trace.
+        // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+        // │ The core-banking call and the resulting events join the approval's trace.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         using var trace = openingTrace.Continue(application);
 
         OpeningRunOutcome outcome;

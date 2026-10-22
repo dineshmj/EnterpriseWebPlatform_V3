@@ -38,8 +38,10 @@ var builder = WebApplication.CreateBuilder(args);
 var clientIds = ClientIds.From(builder.Configuration).Require(nameof(ClientIds.KycCaseOpeningSubscriber));
 builder.Services.AddSingleton(clientIds);
 
-// Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
-// over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
+// │ over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.AddEwpObservability("customer-kyc-api", tracing => tracing.AddAspNetCoreInstrumentation().AddNpgsql());
 
 builder.Services.AddControllers();
@@ -148,8 +150,10 @@ builder.Services.AddHostedService<KycOutboxPublisherHostedService>();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<EnterpriseWebPlatform.CustomerKyc.Api.Controllers.ApiExceptionHandler>();
 
-// Health endpoints for the orchestrator's probes: /health/live (process working)
-// and /health/ready (dependencies reachable). Anonymous; no internals in the body.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ Health endpoints for the orchestrator's probes: /health/live (process working)
+// │ and /health/ready (dependencies reachable). Anonymous; no internals in the body.
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), tags: [HealthEndpoints.LiveTag])
     .AddDbContextCheck<KycDbContext>("database", tags: [HealthEndpoints.ReadyTag])
@@ -183,7 +187,9 @@ builder.RequireMfaOutsideDevelopment();   // fail closed: MFA can be off on a de
 
 var app = builder.Build();
 
-// One structured log line per request (Serilog), with the caller and the trace ID.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ One structured log line per request (Serilog), with the caller and the trace ID.
+// └──────────────────────────────────────────────────────────────────────────────────────
 app.UseEwpRequestLogging();
 
 // Problem details without internals; see ApiExceptionHandler.

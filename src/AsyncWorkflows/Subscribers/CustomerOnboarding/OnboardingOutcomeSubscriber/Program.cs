@@ -17,12 +17,17 @@ using EnterpriseWebPlatform.Common.Observability;
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 var builder = Host.CreateApplicationBuilder(args);
 
-// Distributed tracing: each message is processed in a span that continues the
-// producer's trace (Kafka "traceparent" header) and carries it to the API call.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ Distributed tracing: each message is processed in a span that continues the
+// │ producer's trace (Kafka "traceparent" header) and carries it on to the API call.
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.AddEwpObservability("onboarding-outcome-subscriber");
 
-// The shared reliable consume loop (commit after processing, retry in place,
-// dead-letter) with this worker's processor.
+// ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+// │ The shared reliable consume loop with this worker's processor: offset committed only
+// │ after processing, transient failures retried in place, bad messages to its
+// │ dead-letter topic.
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.Services.AddKafkaSubscriber<OnboardingOutcomeProcessor, OnboardingOutcomeSubscriberOptions>(
     builder.Configuration, OnboardingOutcomeSubscriberOptions.SectionName)
     .Validate(s => ServiceAddress.IsHttps(s.CustomerOnboardingApiBaseUrl), $"{OnboardingOutcomeSubscriberOptions.SectionName}:CustomerOnboardingApiBaseUrl must be an absolute https address.");
@@ -52,7 +57,7 @@ builder.Services
     //                          rejects calls for 30 s, giving the API room to recover
     //                          instead of being hammered by every retry
     //  - total timeout       : 60 s for the whole sequence
-    // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+    // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
     // │ Retrying this POST is safe ONLY because the endpoint is idempotent (Inbox / one
     // │ record per message); timeouts, jittered retries and a circuit breaker protect the
     // │ API.
@@ -69,8 +74,10 @@ builder.Services
         options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(60);
     });
 
-// Health endpoints for the orchestrator's probes, served on Health:Urls:
-// live = the consume loop runs; ready = joined the consumer group (Degraded while retrying).
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ Health endpoints for the orchestrator's probes (Health:Urls): live = the consume loop
+// │ runs; ready = joined the consumer group (Degraded while a message is retried).
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.AddWorkerHealthEndpoints();
 
 var host = builder.Build();

@@ -12,7 +12,7 @@ using EnterpriseWebPlatform.Common.Observability;
 
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Subscribers;
 
-// ┌─ :: ARCHITECTURE :: Reliable consume loop (at-least-once, in order, dead-letter) ──────────────
+// ┌─ :: RESILIENCE :: Reliable consume loop (at-least-once, in order, dead-letter) ────────────────
 // │ Why : A crash, a rebalance or a bad message must neither lose an event, process it twice in a
 // │       harmful way, nor stop the partition.
 // │ How : Manual commit only AFTER processing or dead-lettering; transient failures are retried in
@@ -60,13 +60,18 @@ public sealed class KafkaSubscriberHostedService<TProcessor, TSettings>(
         // Authenticates as this worker's own Kafka user (ACLs: its topics and group only).
         var config = KafkaClientSecurity.Apply(new ConsumerConfig
         {
+            // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+            // │ No auto-commit: the offset is committed by hand only after processing
+            // │ (at-least-once). Earliest: a new consumer group starts at the oldest message, so
+            // │ nothing published before its first start is missed.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             GroupId = _settings.GroupId,
             AutoOffsetReset = AutoOffsetReset.Earliest,
             EnableAutoCommit = false,
             EnablePartitionEof = false
         }, kafkaOptions.Value);
 
-        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
         // │ The Kafka library's own lines and errors go through the logger (KafkaClientLog):
         // │ once per change, not two console lines every few seconds while the broker is down.
         // │ Health still hears of every error.
@@ -129,15 +134,18 @@ public sealed class KafkaSubscriberHostedService<TProcessor, TSettings>(
 
                 var consumed = ToConsumedMessage(result);
 
-                // The process span continues the producer's trace (Kafka "traceparent"
-                // header); the processor's HttpClient call carries it to the next API.
+                // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+                // │ The process span continues the producer's trace (Kafka "traceparent" header); the
+                // │ processor's HttpClient call carries it on to the next API. RecordConsumed counts each
+                // │ outcome (processed / dead_lettered / retried) as ewp_messaging_consumed_total.
+                // └──────────────────────────────────────────────────────────────────────────────────────
                 using var activity = MessagingTelemetry.StartProcess(result.Topic, result.Partition.Value, result.Offset.Value, consumed.Headers);
 
                 try
                 {
                     var outcome = await processor.ProcessAsync(consumed, stoppingToken);
 
-                    // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+                    // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
                     // │ If the message can never succeed, copy it to the dead-letter topic with diagnostic
                     // │ headers, then commit - the partition keeps flowing. Otherwise it was processed:
                     // │ commit only now (at-least-once).
@@ -153,7 +161,7 @@ public sealed class KafkaSubscriberHostedService<TProcessor, TSettings>(
                     health.Processed(outcome.DeadLetter);
                     MessagingTelemetry.RecordConsumed(result.Topic, outcome.DeadLetter ? "dead_lettered" : "processed");
                 }
-                // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+                // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
                 // │ If processing failed for a transient reason (the API is down), seek back to the SAME
                 // │ offset and retry with back-off - the message is never skipped and the partition's
                 // │ order is kept.
@@ -231,8 +239,10 @@ public sealed class KafkaSubscriberHostedService<TProcessor, TSettings>(
             ["dlq-failed-at"] = DateTimeOffset.UtcNow.ToString("O")
         };
 
-        // If this produce fails, the exception propagates as transient: the
-        // message is retried rather than committed without being parked.
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+        // │ If this produce fails, the exception propagates as transient: the message is retried
+        // │ rather than committed without being parked.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         await producer.ProduceAsync(
             _settings.DeadLetterTopic,
             result.Message.Key ?? string.Empty,

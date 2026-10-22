@@ -116,7 +116,9 @@ public sealed class AccountsQueries(AccountsDbContext db) : IAccountsQueries
 
     public async Task<IReadOnlyList<PaymentAccount>> FindAccountsForPaymentAsync(BranchCode branch, string term, CancellationToken cancellationToken)
     {
-        // A LIKE pattern from user input: escape its wildcards so they match literally.
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ A LIKE pattern from user input: escape its wildcards so they match literally.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         var pattern = "%" + term.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_") + "%";
 
         return await db.Accounts.AsNoTracking()

@@ -37,8 +37,10 @@ public sealed class ComplianceDbContext(DbContextOptions<ComplianceDbContext> op
         // 1. The aggregates (a new case gets its database ID here).
         await SaveTranslatingErrorsAsync(cancellationToken);
 
-        // 2. Their published events, one Outbox row at a time so the database-assigned
-        //    sequence follows the order the events were raised (cause before effect).
+        // ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+        // │ 2. Their published events, one Outbox row at a time so the database-assigned
+        // │    sequence follows the order the events were raised (cause before effect).
+        // └──────────────────────────────────────────────────────────────────────────────────────
         foreach (var aggregate in changed)
         {
             var events = aggregate.DomainEvents.ToList();

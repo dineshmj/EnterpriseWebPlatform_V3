@@ -12,7 +12,7 @@ using Serilog.Sinks.OpenTelemetry;
 
 namespace EnterpriseWebPlatform.Common.Observability;
 
-// ┌─ :: ARCHITECTURE + SECURITY :: Structured logs that leak nothing ──────────────────────────────
+// ┌─ :: OBSERVABILITY + SECURITY :: Structured logs that leak nothing ─────────────────────────────
 // │ Why : Logs are shipped to other systems with other access rules; a query string, token or name
 // │       in a log line is a data leak.
 // │ How : Serilog with the service name and TraceId on every entry; one line per request with
@@ -112,8 +112,10 @@ public static class EwpLogging
     private static void ApplyLevels(LoggerConfiguration logger, IConfigurationSection levels)
     {
         logger.MinimumLevel.Is(ToSerilog(levels["Default"]) ?? LogEventLevel.Information);
-        // Every SQL statement at Information would bury the useful lines (the health checks
-        // alone query every 30 s); a host can still lower it in Logging:LogLevel.
+        // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+        // │ Every SQL statement at Information would bury the useful lines (the health checks
+        // │ alone query every 30 s); a host can still lower it in Logging:LogLevel.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         logger.MinimumLevel.Override("Microsoft.EntityFrameworkCore.Database.Command", LogEventLevel.Warning);
         foreach (var category in levels.GetChildren())
         {

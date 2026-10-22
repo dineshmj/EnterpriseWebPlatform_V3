@@ -119,7 +119,9 @@ export function sessionStore(databaseUrl?: string, key?: Buffer): PostgresSessio
   if (!store) {
     if (!databaseUrl || !key) throw new Error('The session store is not configured.');
     const pool = new Pool({ connectionString: databaseUrl, max: 10 });
-    // An idle connection dropped by the server must not crash the process; the pool reconnects.
+    // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+    // │ An idle connection dropped by the server must not crash the process; the pool reconnects.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     pool.on('error', error => process.stderr.write(`Session database connection error: ${error.message}\n`));
     store = new PostgresSessionStore(pool, key);
   }

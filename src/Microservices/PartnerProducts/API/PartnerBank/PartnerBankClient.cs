@@ -134,7 +134,9 @@ public sealed class PartnerBankClient(
                 case HttpStatusCode.BadRequest or HttpStatusCode.Conflict or HttpStatusCode.NotFound:
                     return new PartnerAnswer(PartnerOutcome.Refused, body, ReasonOf(body) ?? $"The Partner Bank refused the instruction (HTTP {(int)response.StatusCode}).");
                 default:
-                    // 401 / 403 / 415 / 5xx: our credentials or the Partner Bank itself - not an answer about the customer.
+                    // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+                    // │ 401 / 403 / 415 / 5xx: our credentials or the Partner Bank itself - not an answer about the customer.
+                    // └──────────────────────────────────────────────────────────────────────────────────────
                     logger.LogWarning("Partner Bank {Path} answered HTTP {Status}: {Reason}", path, (int)response.StatusCode, ReasonOf(body));
                     if (response.StatusCode is HttpStatusCode.Unauthorized)
                         cachedToken = null;
@@ -176,7 +178,9 @@ public sealed class PartnerBankClient(
         return new JsonWebTokenHandler().CreateToken(descriptor);
     }
 
-    // EWP's own token at the Partner Bank: client credentials over mutual TLS, kept until shortly before it expires.
+    // ┌─ PERF ───────────────────────────────────────────────────────────────────────────────
+    // │ EWP's own token at the Partner Bank: client credentials over mutual TLS, kept until shortly before it expires.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     private async Task<string?> TokenAsync(CancellationToken cancellationToken)
     {
         if (cachedToken is { } valid && valid.ExpiresAt > clock.GetUtcNow().AddSeconds(30))

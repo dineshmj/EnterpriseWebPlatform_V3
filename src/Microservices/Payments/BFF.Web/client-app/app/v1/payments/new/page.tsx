@@ -22,8 +22,10 @@ const AMOUNT_PATTERN = /^\d{1,7}(\.\d{1,2})?$/;
 export default function NewPaymentPage() {
   const router = useRouter();
 
-  // One key per payment form: pressing Transfer twice, or resending after a lost answer,
-  // finds the same payment instead of paying twice.
+  // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+  // │ One key per payment form: pressing Transfer twice, or resending after a lost answer,
+  // │ finds the same payment instead of paying twice.
+  // └──────────────────────────────────────────────────────────────────────────────────────
   const [idempotencyKey] = useState(() => crypto.randomUUID());
   const [policy, setPolicy] = useState<PaymentPolicy | null>(null);
 

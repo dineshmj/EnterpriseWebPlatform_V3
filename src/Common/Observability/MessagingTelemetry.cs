@@ -3,7 +3,7 @@ using System.Diagnostics.Metrics;
 
 namespace EnterpriseWebPlatform.Common.Observability;
 
-// ┌─ :: ARCHITECTURE :: Traces that survive the queue ─────────────────────────────────────────────
+// ┌─ :: OBSERVABILITY :: Traces that survive the queue ────────────────────────────────────────────
 // │ Why : A trace normally ends where a message is put on a queue, so the asynchronous half of a
 // │       workflow would be invisible.
 // │ How : The request's traceparent is stored on the Outbox row; the relay publishes in a span that
@@ -27,6 +27,10 @@ public static class MessagingTelemetry
 {
     public const string SourceName = "EnterpriseWebPlatform.Messaging";
 
+    // ┌─ CONTRACT ───────────────────────────────────────────────────────────────────────────
+    // │ Kafka header names written by every Outbox relay and read by the subscribers and the
+    // │ Audit API - renaming one breaks trace continuation and message routing.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     public const string TraceParentHeader = "traceparent";
     public const string MessageIdHeader = "message-id";
     public const string EventTypeHeader = "event-type";
@@ -36,8 +40,11 @@ public static class MessagingTelemetry
 
     private static readonly ActivitySource Source = new(SourceName);
 
-    // Metrics share the name: ewp_messaging_consumed_total{topic,outcome}. The publish side
-    // (ewp_messaging_published_total) is counted by the Kafka producer.
+    // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+    // │ Metrics share the name: ewp_messaging_consumed_total{topic,outcome}. The publish side
+    // │ (ewp_messaging_published_total) is counted by the Kafka producer (see class
+    // │ KafkaProducer).
+    // └──────────────────────────────────────────────────────────────────────────────────────
     private static readonly Meter Meter = new(SourceName);
     private static readonly Counter<long> Consumed = Meter.CreateCounter<long>(
         "ewp.messaging.consumed", description: "Kafka messages handled by a subscriber, by outcome.");

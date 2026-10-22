@@ -45,7 +45,9 @@ export class Authenticator {
   }
 }
 
-// One authenticator per person for the whole run (one worker), so a used step is never reused.
+// ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+// │ One authenticator per person for the whole run (one worker), so a used step is never reused.
+// └──────────────────────────────────────────────────────────────────────────────────────
 const authenticators = new Map<PersonaName, Authenticator>();
 
 /** The two-step pages of the IDP. */

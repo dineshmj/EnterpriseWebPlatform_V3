@@ -5,7 +5,7 @@ import { KycBffOptions } from '../configuration/kyc-bff-options';
 import { breakers } from '../resilience/breakers';
 import { resilientFetch } from '../resilience/resilient-fetch';
 
-// ┌─ :: ARCHITECTURE :: A decision is sent exactly once ───────────────────────────────────────────
+// ┌─ :: RESILIENCE :: A decision is sent exactly once ─────────────────────────────────────────────
 // │ Why : Retrying a POST whose answer was lost could report a misleading "already decided" or act
 // │       twice.
 // │ How : GETs go through the retrying client; decisions use postOnce (no retry) - a lost answer is

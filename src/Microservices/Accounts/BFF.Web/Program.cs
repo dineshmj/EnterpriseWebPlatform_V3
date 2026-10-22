@@ -48,8 +48,10 @@ var oidcAuthority = RequiredSetting.HttpsUrl(builder.Configuration["Oidc:Authori
 var oidcClientId = RequiredSetting.Text(builder.Configuration["Oidc:ClientId"], "Oidc:ClientId");
 var shellOrigin = RequiredSetting.HttpsUrl(builder.Configuration["ShellOrigin"], "ShellOrigin");
 
-// Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
-// over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
+// │ over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.AddEwpObservability("accounts-bff", tracing => tracing.AddAspNetCoreInstrumentation());
 
 builder.Services.AddOptions<AccountsBffOptions>()
@@ -78,11 +80,13 @@ builder.Services.AddAntiforgery(options =>
     options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
 });
 
-// Server-side sessions and the Data Protection keys (which encrypt the session and
-// anti-forgery cookies) live in PostgreSQL - EwpBffStateDb, schema accounts_bff, used only by
-// this BFF's own database user - not in memory: a restart signs nobody out, several
-// instances share them, and back-channel logout still ends a session. Expired sessions
-// are removed by Duende's clean-up job.
+// ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+// │ Server-side sessions and the Data Protection keys (which encrypt the session and
+// │ anti-forgery cookies) live in PostgreSQL - EwpBffStateDb, schema accounts_bff, used only by
+// │ this BFF's own database user - not in memory: a restart signs nobody out, several
+// │ instances share them, and back-channel logout still ends a session. Expired sessions
+// │ are removed by Duende's clean-up job.
+// └──────────────────────────────────────────────────────────────────────────────────────
 var bffStateDb = builder.Configuration.GetConnectionString("BffStateDbConnection")
     ?? throw new InvalidOperationException("Connection string 'BffStateDbConnection' was not configured.");
 // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
@@ -217,10 +221,12 @@ builder.Services
         };
     });
 
-// Calls to the Accounts API carry the officer's own access token (refreshed when
-// needed). Resilience: per-attempt and total timeouts and a circuit breaker for every
-// call; retries for GETs only - officer actions are not idempotent, so a POST is
-// never repeated automatically.
+// ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+// │ Calls to the Accounts API carry the officer's own access token (refreshed when
+// │ needed). Resilience: per-attempt and total timeouts and a circuit breaker for every
+// │ call; retries for GETs only - officer actions are not idempotent, so a POST is
+// │ never repeated automatically.
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.Services.AddHttpClient("AccountsApi", (serviceProvider, client) =>
     {
         var options = serviceProvider.GetRequiredService<IOptions<AccountsBffOptions>>().Value;
@@ -240,8 +246,10 @@ builder.Services.AddHttpClient("AccountsApi", (serviceProvider, client) =>
         options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(30);
     });
 
-// Health endpoints for the orchestrator's probes: /health/live (process working)
-// and /health/ready (dependencies reachable). Anonymous; no internals in the body.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ Health endpoints for the orchestrator's probes: /health/live (process working)
+// │ and /health/ready (dependencies reachable). Anonymous; no internals in the body.
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), tags: [HealthEndpoints.LiveTag, HealthEndpoints.ReadyTag]);
 
@@ -250,7 +258,9 @@ builder.Services.AddEwpRateLimiting(builder.Configuration, "/bff", "/api");
 
 var app = builder.Build();
 
-// One structured log line per request (Serilog), with the caller and the trace ID.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ One structured log line per request (Serilog), with the caller and the trace ID.
+// └──────────────────────────────────────────────────────────────────────────────────────
 app.UseEwpRequestLogging();
 
 if (!app.Environment.IsDevelopment())

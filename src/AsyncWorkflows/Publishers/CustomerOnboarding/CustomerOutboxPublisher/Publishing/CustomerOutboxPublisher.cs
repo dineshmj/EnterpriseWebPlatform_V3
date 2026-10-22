@@ -8,7 +8,7 @@ using EnterpriseWebPlatform.Common.Observability;
 
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Publishers.CustomerOnboarding.CustomerOutboxPublisher.Publishing;
 
-// ┌─ :: ARCHITECTURE :: Transactional Outbox relay ────────────────────────────────────────────────
+// ┌─ :: RESILIENCE :: Transactional Outbox relay ──────────────────────────────────────────────────
 // │ Why : Writing to the database and publishing to Kafka are two systems; doing both in a request
 // │       would lose an event when one fails (dual write).
 // │ How : The API writes the event to outbox_messages in the SAME transaction as the change; this
@@ -37,7 +37,10 @@ public sealed class CustomerOutboxPublisher(
     ILogger<CustomerOutboxPublisher> logger)
     : ICustomerOutboxPublisher
 {
-    // Only event types with an explicit Kafka contract are ever selected.
+    // ┌─ CONTRACT ───────────────────────────────────────────────────────────────────────────
+    // │ Only event types with an explicit Kafka contract are ever selected: the event type
+    // │ written by the API maps to exactly one topic here.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     private static readonly IReadOnlyDictionary<string, string> TopicByEventType =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -53,9 +56,10 @@ public sealed class CustomerOutboxPublisher(
 
     public async Task PublishPendingAsync(CancellationToken cancellationToken)
     {
-        // Several claim cycles per poll, so consecutive events of one aggregate
-        // (e.g. Submitted followed by StatusChanged) do not each wait a full
-        // poll interval.
+        // ┌─ PERF ───────────────────────────────────────────────────────────────────────────────
+        // │ Several claim cycles per poll, so consecutive events of one aggregate (e.g. Submitted
+        // │ followed by StatusChanged) do not each wait a full poll interval.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         for (var cycle = 0; cycle < MaxCyclesPerPoll; cycle++)
         {
             var published = await PublishBatchAsync(cancellationToken);
@@ -88,6 +92,11 @@ public sealed class CustomerOutboxPublisher(
         var baseDelaySeconds = (double)_options.RetryBaseDelaySeconds;
         var batchSize = _options.BatchSize;
 
+        // ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+        // │ The query does three jobs: a row is due only after its back-off (base * 2^(attempts -
+        // │ 1)); NOT EXISTS keeps per-aggregate order; FOR UPDATE SKIP LOCKED lets several relay
+        // │ instances run side by side.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         var messages = await dbContext.OutboxMessages
             .FromSql($"""
                 SELECT o.*
@@ -119,7 +128,10 @@ public sealed class CustomerOutboxPublisher(
             var topic = TopicByEventType[message.EventType];
             var attemptedAt = DateTimeOffset.UtcNow;
 
-            // The publish span continues the trace of the request that raised the event.
+            // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+            // │ The publish span continues the trace of the request that raised the event; its
+            // │ traceparent goes out in the Kafka headers.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             using var activity = MessagingTelemetry.StartPublish(topic, message.Id, message.EventType, message.TraceParent);
 
             try
@@ -137,6 +149,11 @@ public sealed class CustomerOutboxPublisher(
                         message.Id);
                 }
 
+                // ┌─ CONTRACT ───────────────────────────────────────────────────────────────────────────
+                // │ Key = the aggregate ID (one aggregate stays on one partition, in order). The headers
+                // │ from MessagingTelemetry.PublishHeaders (message ID, event type, workflow,
+                // │ correlation, causation, traceparent) are read by every subscriber and the Audit API.
+                // └──────────────────────────────────────────────────────────────────────────────────────
                 await kafkaProducer.ProduceAsync(
                     topic,
                     message.AggregateId,
@@ -168,7 +185,7 @@ public sealed class CustomerOutboxPublisher(
                 message.LastAttemptAt = attemptedAt;
                 message.LastError = ex.Message.Length > 2000 ? ex.Message[..2000] : ex.Message;
 
-                // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+                // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
                 // │ If the message has failed MaxAttempts times, PARK it (left unpublished with its last
                 // │ error, readiness Degraded) instead of retrying for ever; otherwise back off
                 // │ exponentially and try again.
@@ -201,6 +218,11 @@ public sealed class CustomerOutboxPublisher(
             }
         }
 
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+        // │ If the relay dies after a publish but before this commit, the row is published again
+        // │ on the next run (at-least-once); the subscribers' Inbox (MessageId) makes the repeat
+        // │ harmless.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         await dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 

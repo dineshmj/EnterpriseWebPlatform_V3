@@ -142,9 +142,6 @@ public sealed class UserRepository : IUserRepository
 
         var now = DateTimeOffset.UtcNow;
 
-        // Unknown, inactive and locked-out users cost the same hash computation
-        // as a real check and get the same generic failure, so the response
-        // neither reveals which usernames exist nor that an account is locked.
         // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
         // │ If the user is unknown, inactive or locked, hash a dummy password anyway and fail the
         // │ same way - no timing or message reveals which accounts exist.

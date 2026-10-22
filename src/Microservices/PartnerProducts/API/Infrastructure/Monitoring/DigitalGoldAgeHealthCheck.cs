@@ -27,7 +27,7 @@ public sealed class DigitalGoldAlertOptions
     public int PaymentDecisionMinutes { get; init; }
 }
 
-// ┌─ :: ARCHITECTURE :: Form VII applications and purchases that wait too long ────────────────────
+// ┌─ :: OBSERVABILITY :: Form VII applications and purchases that wait too long ───────────────────
 // │ Why : A Form VII or a purchase is moved on by the Partner Bank and, for a purchase, the Temporal
 // │       workflow. If the Worker or Temporal stopped, the Partner Bank cannot be reached or a
 // │       payment waits in a queue nobody works, nothing on the screen says so - the customer's
@@ -94,7 +94,7 @@ public sealed class DigitalGoldAgeHealthCheck(
             Add("PurchasePaidAdviceOutstanding", purchases.PaidAdviceOutstanding);
         }
 
-        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
         // │ If anything waits too long, report Degraded - never Unhealthy: the API itself works,
         // │ and taking it out of service would stop every other Form VII and purchase too.
         // └──────────────────────────────────────────────────────────────────────────────────────

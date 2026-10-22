@@ -26,8 +26,10 @@ public sealed class DocumentsManagementDbContext(DbContextOptions<DocumentsManag
         var aggregates = ChangeTracker.Entries<AggregateRoot>().Select(e => e.Entity).ToList();
         var result = await base.SaveChangesAsync(cancellationToken);
 
-        // No Outbox in Documents Management yet (no consumer): the domain events have
-        // served their purpose once the state is saved. See AggregateRoot.
+        // ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+        // │ No Outbox in Documents Management yet (no consumer): the domain events have
+        // │ served their purpose once the state is saved. See AggregateRoot.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         aggregates.ForEach(a => a.ClearDomainEvents());
         return result;
     }

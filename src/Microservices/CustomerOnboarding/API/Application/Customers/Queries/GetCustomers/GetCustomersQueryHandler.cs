@@ -33,9 +33,11 @@ public sealed class GetCustomersQueryHandler
         {
             var search = query.Search.Trim();
 
-            // CustomerNumber and Email are value objects stored through value converters:
-            // "(string)(object)x.Email" is how EF Core addresses the stored column value.
-            // (x.Email.Value cannot be translated to SQL.)
+            // ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+            // │ CustomerNumber and Email are value objects stored through value converters:
+            // │ "(string)(object)x.Email" is how EF Core addresses the stored column value.
+            // │ (x.Email.Value cannot be translated to SQL.)
+            // └──────────────────────────────────────────────────────────────────────────────────────
             customers = customers.Where(x =>
                 ((string)(object)x.CustomerNumber).Contains(search) ||
                 x.Name.FirstName.Contains(search) ||
@@ -61,7 +63,7 @@ public sealed class GetCustomersQueryHandler
             })
             .ToListAsync(cancellationToken);
 
-        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // ┌─ PERF ───────────────────────────────────────────────────────────────────────────────
         // │ The latest application of each customer on this page (one query, this page only),
         // │ so a PROSPECT whose application was rejected says so instead of looking brand new.
         // └──────────────────────────────────────────────────────────────────────────────────────

@@ -114,8 +114,10 @@ public sealed class KycCaseQueries(KycDbContext db) : IKycCaseQueries
                     db.StaffMembers.Where(s => s.UserId == x.DecisionByUserId).Select(s => s.LanId).FirstOrDefault())))
             .SingleOrDefaultAsync(cancellationToken);
 
-    // BranchCode is stored through a value converter, so the comparison is made
-    // against a BranchCode value (translated to the stored string), never .Value.
+    // ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+    // │ BranchCode is stored through a value converter, so the comparison is made
+    // │ against a BranchCode value (translated to the stored string), never .Value.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     private IQueryable<KycCase> InBranch(BranchCode branch) =>
         db.KycCases.AsNoTracking().Where(x => x.BranchCode == branch);
 }

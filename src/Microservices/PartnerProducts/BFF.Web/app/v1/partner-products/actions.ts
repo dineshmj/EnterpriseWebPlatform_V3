@@ -135,7 +135,9 @@ async function callJourney<T>(
       headers: { Authorization: `Bearer ${journeyToken}`, Accept: 'application/json' },
       body,
       cache: 'no-store',
-      // Calls on to the Partner Bank (sending, paying, a staff view) may take the Journey API up to 40 s: wait for its own answer.
+      // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+      // │ Calls on to the Partner Bank (sending, paying, a staff view) may take the Journey API up to 40 s: wait for its own answer.
+      // └──────────────────────────────────────────────────────────────────────────────────────
       signal: AbortSignal.timeout(scope === WRITE || method === 'POST' ? 60_000 : 30_000),
     });
     if (response.ok) return { ok: true, data: (await response.json()) as T };

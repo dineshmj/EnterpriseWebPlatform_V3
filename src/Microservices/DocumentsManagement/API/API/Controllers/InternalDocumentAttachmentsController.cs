@@ -73,12 +73,16 @@ public sealed class InternalDocumentAttachmentsController(
         }
         catch (DbUpdateConcurrencyException)
         {
-            // A document changed meanwhile: transient, the subscriber retries in place.
+            // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+            // │ A document changed meanwhile: transient, the subscriber retries in place.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             return Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "Concurrent change; retry.");
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
-            // Two deliveries of the same message raced; the unique Inbox key let one commit.
+            // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+            // │ Two deliveries of the same message raced; the unique Inbox key let one commit.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             result = new AttachDocumentsResult(AttachDocumentsOutcome.Duplicate, 0, 0, 0, 0);
         }
 

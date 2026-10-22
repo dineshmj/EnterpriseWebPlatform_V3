@@ -19,7 +19,7 @@ public sealed class OnboardingAlertOptions
     public int OfficerDecisionMinutes { get; init; }
 }
 
-// ┌─ :: ARCHITECTURE :: Onboarding applications that wait too long ────────────────────────────────
+// ┌─ :: OBSERVABILITY :: Onboarding applications that wait too long ───────────────────────────────
 // │ Why : The choreographed onboarding has no coordinator to notice an application that stopped
 // │       moving - a stopped worker, a parked message or an officer queue nobody works.
 // │       Compensating on a time-out would be wrong (a timeout is not evidence), so people must be
@@ -91,7 +91,7 @@ public sealed class OnboardingAgeHealthCheck(
 
         var data = waiting.ToDictionary(w => w.Status.ToString(), w => (object)w.Count);
 
-        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
         // │ If applications wait too long, report Degraded - never Unhealthy: the API itself
         // │ works, and taking it out of service would stop every other application too.
         // └──────────────────────────────────────────────────────────────────────────────────────

@@ -15,7 +15,7 @@ using OpenTelemetry.Metrics;
 
 namespace EnterpriseWebPlatform.Common.Observability;
 
-// ┌─ :: ARCHITECTURE + SECURITY :: Liveness and readiness endpoints ───────────────────────────────
+// ┌─ :: OBSERVABILITY + SECURITY :: Liveness and readiness endpoints ──────────────────────────────
 // │ Why : An orchestrator must restart a dead process but must not restart one that only waits for
 // │       its database; and a health answer must not tell an attacker what is inside.
 // │ How : /health/live (the process works) and /health/ready (it can do its job now: database,
@@ -64,6 +64,10 @@ public static class HealthEndpoints
         Predicate = check => check.Tags.Contains(tag),
         ResultStatusCodes =
         {
+            // ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+            // │ Degraded answers 200 on purpose: the instance keeps its traffic and is not restarted
+            // │ - an operator looks at the reason instead (parked Outbox, a dependency that is down).
+            // └──────────────────────────────────────────────────────────────────────────────────────
             [HealthStatus.Healthy] = StatusCodes.Status200OK,
             [HealthStatus.Degraded] = StatusCodes.Status200OK,
             [HealthStatus.Unhealthy] = StatusCodes.Status503ServiceUnavailable

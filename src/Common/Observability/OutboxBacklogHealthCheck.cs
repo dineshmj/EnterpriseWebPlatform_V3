@@ -5,7 +5,7 @@ namespace EnterpriseWebPlatform.Common.Observability;
 /// <summary>Unpublished Outbox rows: still being retried (Pending) or given up on (Parked).</summary>
 public sealed record OutboxBacklog(long Parked, long Pending, double? OldestPendingSeconds);
 
-// ┌─ :: ARCHITECTURE :: Outbox backlog visible to operations ──────────────────────────────────────
+// ┌─ :: OBSERVABILITY :: Outbox backlog visible to operations ─────────────────────────────────────
 // │ Why : A relay that cannot publish (Kafka down for long) parks messages; silently, the workflow
 // │       would just stop.
 // │ How : Readiness turns Degraded while any row is parked or a pending one is older than the
@@ -31,7 +31,7 @@ public sealed class OutboxBacklogHealthCheck(Func<CancellationToken, Task<Outbox
             ["oldestPendingSeconds"] = Math.Round(backlog.OldestPendingSeconds ?? 0)
         };
 
-        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
         // │ If any message is parked, or a pending one is older than the allowed age, report
         // │ Degraded - operations must look; the service itself keeps running.
         // └──────────────────────────────────────────────────────────────────────────────────────

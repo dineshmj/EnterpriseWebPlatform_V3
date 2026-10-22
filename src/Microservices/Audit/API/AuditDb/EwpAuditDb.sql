@@ -16,6 +16,11 @@
 -- original message - no names, addresses, contact details or payload copies.
 -- =============================================================================
 
+-- ┌─ DEBT ───────────────────────────────────────────────────────────────────────────────
+-- │ A full reset script, not a migration: running it drops and re-creates every table
+-- │ (the databases are re-created on purpose in the PoC). Production: versioned
+-- │ migrations (production item 8).
+-- └──────────────────────────────────────────────────────────────────────────────────────
 DROP TABLE IF EXISTS audit_entries CASCADE;
 DROP FUNCTION IF EXISTS audit_entries_append_only() CASCADE;
 

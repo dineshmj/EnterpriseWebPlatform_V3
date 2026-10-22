@@ -22,7 +22,7 @@ public interface INotificationPusher
     Task PushAsync(IReadOnlyList<Notification> notifications, CancellationToken cancellationToken);
 }
 
-// ┌─ :: ARCHITECTURE :: Notifications from events, idempotently ───────────────────────────────────
+// ┌─ :: RESILIENCE :: Notifications from events, idempotently ─────────────────────────────────────
 // │ Why : Workflow events arrive at least once; a repeat must not notify twice, and a push failure
 // │       must not lose the notification.
 // │ How : The message ID goes to the Inbox in the same transaction as the notifications; the push
@@ -45,7 +45,7 @@ public sealed class PublishFromEventHandler(
     public async Task<(PublishOutcome Outcome, int Count)> HandleAsync(
         Guid messageId, string eventType, JsonElement envelope, CancellationToken cancellationToken)
     {
-        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
         // │ If this event was already turned into notifications, do nothing (Inbox).
         // └──────────────────────────────────────────────────────────────────────────────────────
         if (await db.InboxMessages.AnyAsync(x => x.MessageId == messageId && x.Consumer == InboxConsumer, cancellationToken))
@@ -56,7 +56,9 @@ public sealed class PublishFromEventHandler(
             .Select(draft => Notification.Create(draft, messageId, eventType, now))
             .ToList();
 
-        // Recorded even when nobody is told, so the event is never evaluated twice.
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+        // │ Recorded even when nobody is told, so the event is never evaluated twice.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         db.Notifications.AddRange(notifications);
         db.InboxMessages.Add(InboxMessage.Processed(messageId, InboxConsumer, now));
 
@@ -66,7 +68,9 @@ public sealed class PublishFromEventHandler(
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
-            // Two deliveries of the same event raced; the unique keys let exactly one commit.
+            // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+            // │ Two deliveries of the same event raced; the unique keys let exactly one commit.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             return (PublishOutcome.Duplicate, 0);
         }
 

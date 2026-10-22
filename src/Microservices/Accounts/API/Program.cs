@@ -39,7 +39,9 @@ var builder = WebApplication.CreateBuilder(args);
 var clientIds = ClientIds.From(builder.Configuration).Require(nameof(ClientIds.AccountApplicationOpeningSubscriber), nameof(ClientIds.AccountsCommandSubscriber), nameof(ClientIds.OperationsJourneyApi));
 builder.Services.AddSingleton(clientIds);
 
-// Distributed tracing: W3C trace context across HTTP and Kafka (OTLP export when configured).
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ Distributed tracing: W3C trace context across HTTP and Kafka (OTLP export when configured).
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.AddEwpObservability("accounts-api", tracing => tracing.AddAspNetCoreInstrumentation().AddNpgsql());
 
 builder.Services.AddControllers();
@@ -178,8 +180,10 @@ builder.Services.AddScoped<OpenDueAccountCommandHandler>();
 builder.Services.AddScoped<RecordOpeningErrorCommandHandler>();
 builder.Services.AddScoped<FundsCommandHandler>();
 
-// Demo only: a new account starts with this balance so payments can be shown at once
-// (Accounts:DemoOpeningDeposit; 0 when not configured).
+// ┌─ DEBT ───────────────────────────────────────────────────────────────────────────────
+// │ Demo only: a new account starts with this balance so payments can be shown at once
+// │ (Accounts:DemoOpeningDeposit; 0 when not configured).
+// └──────────────────────────────────────────────────────────────────────────────────────
 var openingDeposit = builder.Configuration.GetValue<decimal?>("Accounts:DemoOpeningDeposit") ?? 0m;
 if (openingDeposit < 0 || decimal.Round(openingDeposit, 2) != openingDeposit)
     throw new InvalidOperationException("Accounts:DemoOpeningDeposit must be zero or a positive amount in cents.");
@@ -205,14 +209,16 @@ builder.Services
     .AddHttpClient<ICoreBankingSystem, CoreBankingClient>(CoreBankingClient.HttpClientName, (sp, client) =>
         client.BaseAddress = new Uri(sp.GetRequiredService<IOptions<CoreBankingOptions>>().Value.BaseUrl))
     .WithoutRedirects()   // a 3xx never moves the call, and its API key, elsewhere
-    // Resilience pipeline around every call to core banking:
-    //  - attempt timeout : a hung system is abandoned after 5 s
-    //  - retry           : 2 retries with jittered exponential back-off - safe for this
-    //                      POST ONLY because of the Idempotency-Key (same key, same account)
-    //  - circuit breaker : opens when half of at least 3 calls in 30 s fail and then
-    //                      rejects calls for 30 s, so an outage is not hammered
-    //  - total timeout   : 20 s for the whole sequence
-    // What still fails leaves the application OPENING for a later retry - never "opened".
+    // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+    // │ Resilience pipeline around every call to core banking:
+    // │  - attempt timeout : a hung system is abandoned after 5 s
+    // │  - retry           : 2 retries with jittered exponential back-off - safe for this
+    // │                      POST ONLY because of the Idempotency-Key (same key, same account)
+    // │  - circuit breaker : opens when half of at least 3 calls in 30 s fail and then
+    // │                      rejects calls for 30 s, so an outage is not hammered
+    // │  - total timeout   : 20 s for the whole sequence
+    // │ What still fails leaves the application OPENING for a later retry - never "opened".
+    // └──────────────────────────────────────────────────────────────────────────────────────
     .AddStandardResilienceHandler(options =>
     {
         options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(5);
@@ -241,8 +247,10 @@ builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<EnterpriseWebPlatform.Accounts.Api.Controllers.ApiExceptionHandler>();
 
 // ---------------------------------------------------------------- Health
-// live : the process and its two background loops (Outbox relay, account opening) are cycling;
-// ready: the database answers; Degraded when Outbox rows or approved openings are overdue.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ live : the process and its two background loops (Outbox relay, account opening) are cycling;
+// │ ready: the database answers; Degraded when Outbox rows or approved openings are overdue.
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), tags: [HealthEndpoints.LiveTag])
     .Add(new HealthCheckRegistration("outbox-relay",
@@ -275,7 +283,9 @@ builder.RequireMfaOutsideDevelopment();   // fail closed: MFA can be off on a de
 
 var app = builder.Build();
 
-// One structured log line per request (Serilog), with the caller and the trace ID.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ One structured log line per request (Serilog), with the caller and the trace ID.
+// └──────────────────────────────────────────────────────────────────────────────────────
 app.UseEwpRequestLogging();
 
 // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────

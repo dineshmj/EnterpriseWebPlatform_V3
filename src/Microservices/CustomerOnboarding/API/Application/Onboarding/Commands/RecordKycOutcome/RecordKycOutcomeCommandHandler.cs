@@ -2,7 +2,7 @@ using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Persiste
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Application.Onboarding.Commands.RecordKycOutcome;
 
-// ┌─ :: ARCHITECTURE :: Idempotent consumer of workflow outcomes ──────────────────────────────────
+// ┌─ :: RESILIENCE :: Idempotent consumer of workflow outcomes ────────────────────────────────────
 // │ Why : KYC, Compliance and Accounts outcomes arrive through Kafka at least once; a repeat must
 // │       not move the application twice.
 // │ How : The message ID is recorded in inbox_messages in the same transaction as the state change;
@@ -42,7 +42,7 @@ public sealed class RecordKycOutcomeCommandHandler
         RecordKycOutcomeCommand command,
         CancellationToken cancellationToken)
     {
-        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
         // │ If this outcome was already recorded, do nothing (Inbox) - a redelivery never changes
         // │ the application twice.
         // └──────────────────────────────────────────────────────────────────────────────────────
@@ -94,9 +94,11 @@ public sealed class RecordKycOutcomeCommandHandler
             await _customerLifecycle.ApplyAsync(application, now, cancellationToken);
         }
 
-        // The Inbox record, the application's (and customer's) new state and the resulting Outbox
-        // events (OnboardingApplicationStatusChanged) commit in ONE transaction.
-        // Even a no-op is recorded, so the message is never evaluated twice.
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+        // │ The Inbox record, the application's (and customer's) new state and the resulting Outbox
+        // │ events (OnboardingApplicationStatusChanged) commit in ONE transaction.
+        // │ Even a no-op is recorded, so the message is never evaluated twice.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         _inbox.RecordProcessed(command.MessageId, InboxConsumer);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 

@@ -5,7 +5,9 @@ using EnterpriseWebPlatform.PartnerProducts.Api.Domain;
 
 namespace EnterpriseWebPlatform.PartnerProducts.Api.Infrastructure.Messaging;
 
-// Published contracts (topic partner-products.digital-gold.events), in the platform's standard envelope.
+// ┌─ CONTRACT ───────────────────────────────────────────────────────────────────────────
+// │ Published contracts (topic partner-products.digital-gold.events), in the platform's standard envelope.
+// └──────────────────────────────────────────────────────────────────────────────────────
 
 public sealed record DigitalGoldIntegrationEventEnvelope<TPayload>(
     Guid MessageId,

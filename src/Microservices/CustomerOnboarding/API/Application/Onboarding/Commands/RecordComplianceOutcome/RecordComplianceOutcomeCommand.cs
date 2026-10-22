@@ -50,7 +50,9 @@ public sealed class RecordComplianceOutcomeCommandHandler(
         if (changed)
             await customerLifecycle.ApplyAsync(application, now, cancellationToken);
 
-        // Inbox record, new application (and customer) state and its Outbox events: ONE transaction.
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+        // │ Inbox record, new application (and customer) state and its Outbox events: ONE transaction.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         inbox.RecordProcessed(command.MessageId, InboxConsumer);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 

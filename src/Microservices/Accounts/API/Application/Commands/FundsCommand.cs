@@ -61,7 +61,7 @@ public sealed class FundsCommandHandler(
 
     public async Task<FundsCommandResult> HandleAsync(FundsCommand command, CancellationToken cancellationToken)
     {
-        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
         // │ If this command was already processed, do nothing (Inbox) - the hold's state already
         // │ gives the same reply.
         // └──────────────────────────────────────────────────────────────────────────────────────
@@ -74,8 +74,10 @@ public sealed class FundsCommandHandler(
         }
         catch (UniqueConstraintViolationException)
         {
-            // Two deliveries raced to create the same payment's hold: the loser repeats the
-            // winner's answer.
+            // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+            // │ Two deliveries raced to create the same payment's hold: the loser repeats the
+            // │ winner's answer.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             unitOfWork.DiscardChanges();
             return await ApplyAsync(command, cancellationToken);
         }

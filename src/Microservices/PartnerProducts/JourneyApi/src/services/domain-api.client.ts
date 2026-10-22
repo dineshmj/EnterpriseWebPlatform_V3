@@ -50,13 +50,13 @@ export class DomainApiClient {
     return this.call<T>(subjectToken, scope, 'POST', url, what, JSON.stringify(body), 'application/json', headers);
   }
 
-  // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+  // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
   // │ A call the Partner Products API forwards to the Partner Bank (token + instruction,
   // │ up to 15 s each): waited for longer than a plain Domain API call, so the Partner
   // │ Products API's own answer ("not reachable - it stays SENT, send again") reaches the
   // │ counter instead of this API's generic time-out.
   // └──────────────────────────────────────────────────────────────────────────────────────
-  // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+  // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
   // │ A read the Partner Products API answers FROM the Partner Bank (token + GET, each up
   // │ to 15 s there): a slow first answer after a restart must not be cut off at 15 s and
   // │ shown as "not reachable" - but the whole screen load must still end within the web

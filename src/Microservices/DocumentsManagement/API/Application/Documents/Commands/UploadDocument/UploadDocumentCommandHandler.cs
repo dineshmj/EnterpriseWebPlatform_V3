@@ -70,7 +70,9 @@ public sealed class UploadDocumentCommandHandler(
         }
         catch
         {
-            // Never leave stored content without its record.
+            // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+            // │ Never leave stored content without its record.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             await storage.DeleteAsync(stored.StorageReference, CancellationToken.None);
             throw;
         }

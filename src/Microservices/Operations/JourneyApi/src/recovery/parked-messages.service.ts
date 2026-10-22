@@ -54,7 +54,7 @@ export class ParkedMessagesService {
         const messages = (await this.call(context, token, 'GET', '/parked')) as ParkedMessage[];
         return { context, available: true, messages };
       } catch (error) {
-        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
         // │ If one context cannot be asked, show the others and mark it unavailable - one API
         // │ down must not hide every parked message. A refusal (403) is not hidden this way.
         // └──────────────────────────────────────────────────────────────────────────────────────

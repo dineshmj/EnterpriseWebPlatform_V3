@@ -14,13 +14,17 @@ namespace EnterpriseWebPlatform.PartnerProducts.Api.Infrastructure.Messaging;
 /// <summary>One long-lived, idempotent producer, authenticated as the Partner Products API's own Kafka user.</summary>
 public sealed class PartnerProductsKafkaProducer(IOptions<KafkaOptions> options, ILogger<PartnerProductsKafkaProducer> logger) : IDisposable
 {
-    // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+    // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
     // │ The Kafka library's own lines and errors go through the logger (KafkaClientLog):
     // │ once per change, not two console lines every few seconds while the broker is down.
     // └──────────────────────────────────────────────────────────────────────────────────────
     public IProducer<string, string> Producer { get; } =
         new ProducerBuilder<string, string>(KafkaClientSecurity.Apply(new ProducerConfig
         {
+            // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+            // │ Acks=All with idempotence: a publish counts only when every in-sync replica has it,
+            // │ and a retried send is never duplicated (see class KafkaProducer).
+            // └──────────────────────────────────────────────────────────────────────────────────────
             Acks = Acks.All,
             EnableIdempotence = true,
             MaxInFlight = 5,
@@ -34,7 +38,7 @@ public sealed class PartnerProductsKafkaProducer(IOptions<KafkaOptions> options,
     }
 }
 
-// ┌─ :: ARCHITECTURE :: Transactional Outbox relay (in-process) ───────────────────────────────────
+// ┌─ :: RESILIENCE :: Transactional Outbox relay (in-process) ─────────────────────────────────────
 // │ Why : What happened to a Form VII or a purchase must be published exactly when its change
 // │       commits - never an event for a change that was rolled back, never a change without one.
 // │ How : The same relay as Accounts: FOR UPDATE SKIP LOCKED, per-record order (an earlier row of
@@ -95,7 +99,9 @@ public sealed class PartnerProductsOutboxPublisher(
         {
             var attemptedAt = DateTimeOffset.UtcNow;
 
-            // The publish span continues the trace of the request that raised the event.
+            // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+            // │ The publish span continues the trace of the request that raised the event.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             using var activity = MessagingTelemetry.StartPublish(Topic, message.Id, message.EventType, message.TraceParent);
             try
             {
@@ -136,6 +142,11 @@ public sealed class PartnerProductsOutboxPublisher(
             }
         }
 
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+        // │ If the relay dies after a publish but before this commit, the row is published again
+        // │ on the next run (at-least-once); the consumers' Inbox (MessageId) makes the repeat
+        // │ harmless.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return published;

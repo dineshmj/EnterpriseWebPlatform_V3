@@ -41,8 +41,10 @@ async function statusOf(response: Response): Promise<HealthStatus> {
     reported = undefined;   // a page (the Audit web) or an empty body: the HTTP status decides
   }
   if (reported === 'Healthy' || reported === 'Degraded' || reported === 'Unhealthy') return reported;
-  // A page without a health endpoint (a Next.js web app's home): any answer below 400 - a page,
-  // or a redirect to its first screen (not followed) - means it is up.
+  // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+  // │ A page without a health endpoint (a Next.js web app's home): any answer below 400 - a page,
+  // │ or a redirect to its first screen (not followed) - means it is up.
+  // └──────────────────────────────────────────────────────────────────────────────────────
   return response.status < 400 ? 'Healthy' : 'Unhealthy';
 }
 
@@ -120,7 +122,9 @@ export class SimulatorService implements OnModuleDestroy {
       this.reverts.set(key, { timer, at, by });
     }
 
-    // The record of who changed what (the log is shipped like every other component's).
+    // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+    // │ The record of who changed what (the log is shipped like every other component's).
+    // └──────────────────────────────────────────────────────────────────────────────────────
     console.log(`SIMULATOR BEHAVIOUR CHANGED: ${simulator.name} -> ${behaviour} by ${by}` +
       (behaviour === 'Healthy' ? '.' : `; back to Healthy automatically at ${this.reverts.get(key)!.at.toISOString()}.`));
   }

@@ -27,9 +27,11 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
 
-    // Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
-    // over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt); Serilog logs and
-    // Prometheus metrics come with it.
+    // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+    // │ Distributed tracing (W3C trace context across HTTP and Kafka; OTLP export when
+    // │ OTEL_EXPORTER_OTLP_ENDPOINT is set - see ReadMe.txt), Serilog logs and Prometheus
+    // │ metrics.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     builder.AddEwpObservability("identity-server", tracing => tracing.AddAspNetCoreInstrumentation().AddNpgsql());
 
     // PostgreSQL database for identity and authorization data.
@@ -80,7 +82,7 @@ try
         http.Timeout = TimeSpan.FromSeconds(10);
     });
 
-    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // ┌─ SEC + DEBT ─────────────────────────────────────────────────────────────────────────
     // │ DPoP proofs are accepted once (RFC 9449 jti replay check): Duende's replay cache
     // │ lives in IDistributedCache - in memory for this single instance; production with
     // │ several IDP instances needs a shared one (Redis), or a proof could be replayed at
@@ -90,8 +92,6 @@ try
 
     builder.Services.AddRazorPages();
 
-    // Login throttling per client IP, complementing per-account lockout
-    // (UserRepository): slows password spraying across many usernames.
     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
     // │ Per-IP login throttling (20 a minute) on top of per-account lockout: slows password
     // │ spraying across many usernames.
@@ -110,8 +110,6 @@ try
                 }));
     });
 
-    // Client secrets come from this deployable's configuration. The client list
-    // is materialized now, so a missing secret stops start-up (fail closed).
     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
     // │ The client list is built NOW, so a missing client secret stops the start-up instead
     // │ of failing at the first sign-in.
@@ -126,6 +124,10 @@ try
     builder.Services
         .AddIdentityServer(options =>
         {
+            // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+            // │ IdentityServer's events (sign-in success and failure, tokens issued, errors) go to
+            // │ the log: the IDP's own security trail, with the trace ID of the request.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             options.Events.RaiseErrorEvents = true;
             options.Events.RaiseInformationEvents = true;
             options.Events.RaiseFailureEvents = true;
@@ -149,7 +151,7 @@ try
         .AddInMemoryApiScopes(Config.ApiScopes)
         .AddInMemoryApiResources(Config.ApiResources)
         .AddInMemoryClients(clients)
-        // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+        // ┌─ RESIL + SEC ────────────────────────────────────────────────────────────────────────
         // │ Operational store in PostgreSQL: refresh tokens (hashed handles), PAR requests and
         // │ signing keys survive a restart and are shared by IDP instances; hourly clean-up. In
         // │ memory, a restart would invalidate every refresh token.
@@ -174,8 +176,10 @@ try
         .AddJwtBearerClientAuthentication()
         .AddSigningCredential(builder);
 
-    // Health endpoints for the orchestrator's probes: /health/live (process working)
-    // and /health/ready (dependencies reachable). Anonymous; no internals in the body.
+    // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+    // │ Health endpoints for the orchestrator's probes: /health/live (process working) and
+    // │ /health/ready (database reachable). Anonymous; no internals in the body.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     builder.Services.AddHealthChecks()
         .AddCheck("self", () => HealthCheckResult.Healthy(), tags: [HealthEndpoints.LiveTag])
         .AddDbContextCheck<IdentityDbContext>("database", tags: [HealthEndpoints.ReadyTag]);

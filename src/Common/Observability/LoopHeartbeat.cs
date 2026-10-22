@@ -2,7 +2,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace EnterpriseWebPlatform.Common.Observability;
 
-// ┌─ :: ARCHITECTURE :: Background-loop heartbeat ─────────────────────────────────────────────────
+// ┌─ :: OBSERVABILITY :: Background-loop heartbeat ────────────────────────────────────────────────
 // │ Why : A background loop (Outbox relay, saga step runner) can hang while the process still
 // │       answers HTTP.
 // │ How : Each cycle beats; liveness fails when the last beat is older than the allowed time, so

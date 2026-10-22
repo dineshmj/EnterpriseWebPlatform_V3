@@ -2,7 +2,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Subscribers;
 
-// ┌─ :: ARCHITECTURE :: Worker liveness and readiness ─────────────────────────────────────────────
+// ┌─ :: OBSERVABILITY :: Worker liveness and readiness ────────────────────────────────────────────
 // │ Why : An orchestrator (AKS / EKS) must know whether to restart a stuck worker or simply wait
 // │       for a dependency.
 // │ How : Liveness fails when the consume loop stops cycling (restart helps); readiness turns
@@ -91,7 +91,7 @@ public sealed class SubscriberReadinessCheck(SubscriberHealth health) : IHealthC
 {
     public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
-        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
         // │ If the consumer has not joined its consumer group yet, it is not ready - it receives
         // │ no partitions.
         // └──────────────────────────────────────────────────────────────────────────────────────

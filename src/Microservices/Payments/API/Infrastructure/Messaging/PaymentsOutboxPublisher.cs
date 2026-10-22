@@ -14,13 +14,17 @@ namespace EnterpriseWebPlatform.Payments.Api.Infrastructure.Messaging;
 /// <summary>One long-lived, idempotent producer, authenticated as the Payments API's own Kafka user.</summary>
 public sealed class PaymentsKafkaProducer(Microsoft.Extensions.Options.IOptions<KafkaOptions> options, ILogger<PaymentsKafkaProducer> logger) : IDisposable
 {
-    // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+    // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
     // │ The Kafka library's own lines and errors go through the logger (KafkaClientLog):
     // │ once per change, not two console lines every few seconds while the broker is down.
     // └──────────────────────────────────────────────────────────────────────────────────────
     public IProducer<string, string> Producer { get; } =
         new ProducerBuilder<string, string>(KafkaClientSecurity.Apply(new ProducerConfig
         {
+            // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+            // │ Acks=All with idempotence: a publish counts only when every in-sync replica has it,
+            // │ and a retried send is never duplicated (see class KafkaProducer).
+            // └──────────────────────────────────────────────────────────────────────────────────────
             Acks = Acks.All,
             EnableIdempotence = true,
             MaxInFlight = 5,
@@ -41,7 +45,7 @@ public sealed class PaymentsKafkaProducer(Microsoft.Extensions.Options.IOptions<
 /// </summary>
 public sealed record OutboxPolicy(int MaxAttempts, double BaseDelaySeconds);
 
-// ┌─ :: ARCHITECTURE :: Transactional Outbox relay (in-process) ───────────────────────────────────
+// ┌─ :: RESILIENCE :: Transactional Outbox relay (in-process) ─────────────────────────────────────
 // │ Why : The saga's commands and the payment's facts must reach Kafka exactly when the transaction
 // │       that produced them commits - never before, never lost.
 // │ How : Committed outbox rows are claimed with FOR UPDATE SKIP LOCKED, published in per-payment
@@ -65,6 +69,10 @@ public sealed class PaymentsOutboxPublisher(
     private double BaseDelaySeconds => policy.BaseDelaySeconds;
     private const int BatchSize = 50;
 
+    // ┌─ CONTRACT ───────────────────────────────────────────────────────────────────────────
+    // │ Event type to topic: only mapped event types are ever published - to the topics other
+    // │ contexts subscribe to (see class KafkaTopicNames).
+    // └──────────────────────────────────────────────────────────────────────────────────────
     private static readonly Dictionary<string, string> TopicByEventType = new(StringComparer.Ordinal)
     {
         // The orchestrator's commands to Accounts.
@@ -130,7 +138,9 @@ public sealed class PaymentsOutboxPublisher(
             var topic = TopicByEventType[message.EventType];
             var attemptedAt = DateTimeOffset.UtcNow;
 
-            // The publish span continues the trace of the request that raised the message.
+            // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+            // │ The publish span continues the trace of the request that raised the message.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             using var activity = MessagingTelemetry.StartPublish(topic, message.Id, message.EventType, message.TraceParent);
             try
             {
@@ -171,6 +181,11 @@ public sealed class PaymentsOutboxPublisher(
             }
         }
 
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+        // │ If the relay dies after a publish but before this commit, the row is published again
+        // │ on the next run (at-least-once); the consumers' Inbox (MessageId) makes the repeat
+        // │ harmless.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return published;

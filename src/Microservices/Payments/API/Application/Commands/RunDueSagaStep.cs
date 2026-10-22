@@ -17,7 +17,7 @@ public enum SagaStepRunOutcome
     NetworkStatusUnknown
 }
 
-// ┌─ :: ARCHITECTURE :: Claim, call, record: no transaction around the network call ───────────────
+// ┌─ :: RESILIENCE :: Claim, call, record: no transaction around the network call ─────────────────
 // │ Why : Holding a row lock while waiting up to 20 seconds for an external system blocks every
 // │       other step of that payment and exhausts database connections.
 // │ How : A short transaction claims the step (a 60-second lease); the network is called with no
@@ -172,7 +172,7 @@ public sealed class RunDueSagaStepCommandHandler(
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
 
         var saga = await sagas.GetForUpdateAsync(claim.PaymentRef, cancellationToken);
-        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
         // │ If the saga changed while the call was on its way (another decision, a reply),
         // │ discard this answer - the step will be claimed again; the Idempotency-Key makes the
         // │ repeat safe.

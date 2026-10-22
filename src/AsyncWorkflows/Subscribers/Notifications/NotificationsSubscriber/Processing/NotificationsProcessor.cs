@@ -79,7 +79,7 @@ public sealed class NotificationsProcessor(
                 return ProcessingOutcome.Processed;
             }
 
-            // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+            // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
             // │ Refused identity, time-out, throttling or a server error is not the message's fault:
             // │ retry in place. Any other 4xx means the message itself is bad: dead-letter it.
             // └──────────────────────────────────────────────────────────────────────────────────────

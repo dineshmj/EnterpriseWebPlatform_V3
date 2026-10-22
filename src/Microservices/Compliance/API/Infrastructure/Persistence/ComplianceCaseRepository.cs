@@ -69,7 +69,9 @@ public sealed class ComplianceCaseQueries(ComplianceDbContext db) : IComplianceC
     public Task<ComplianceCaseDetail?> GetCaseAsync(long caseId, BranchCode branch, CancellationToken cancellationToken) =>
         Project(InBranch(branch).Where(x => x.Id == caseId)).SingleOrDefaultAsync(cancellationToken);
 
-    // BranchCode is stored through a value converter: compare against a BranchCode value.
+    // ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+    // │ BranchCode is stored through a value converter: compare against a BranchCode value.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     private IQueryable<ComplianceCase> InBranch(BranchCode branch) =>
         db.ComplianceCases.AsNoTracking().Where(x => x.BranchCode == branch);
 

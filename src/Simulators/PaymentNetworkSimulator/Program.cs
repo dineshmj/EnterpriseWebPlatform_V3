@@ -109,8 +109,10 @@ app.MapPost("/v1/payments", async (HttpContext http, PaymentRequest request, Can
         return Results.StatusCode((int)HttpStatusCode.GatewayTimeout);
     }
 
-    // A repeated request returns the first answer, whatever the behaviour now: the payment
-    // was already sent (or refused); only the answer was lost.
+    // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+    // │ A repeated request returns the first answer, whatever the behaviour now: the payment
+    // │ was already sent (or refused); only the answer was lost.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     if (sent.TryGetValue(idempotencyKey, out var existing))
     {
         log.LogInformation("Repeated request (key {Key}): payment {EndToEndId} was already sent ({Reference}).", idempotencyKey, request.EndToEndId, existing.NetworkReference);
@@ -159,9 +161,11 @@ app.MapPost("/v1/payments", async (HttpContext http, PaymentRequest request, Can
     return Results.Created($"/v1/payments/{payment.NetworkReference}", payment);
 });
 
-// Status enquiry by the sender's Idempotency-Key - how a participant reconciles an unknown
-// outcome before deciding anything. It answers while the network is merely losing answers; when
-// the network is down or failing, so is the enquiry.
+// ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+// │ Status enquiry by the sender's Idempotency-Key - how a participant reconciles an unknown
+// │ outcome before deciding anything. It answers while the network is merely losing answers; when
+// │ the network is down or failing, so is the enquiry.
+// └──────────────────────────────────────────────────────────────────────────────────────
 app.MapGet("/v1/payments/by-idempotency-key/{idempotencyKey}", (HttpContext http, string idempotencyKey) =>
 {
     if (!Authorised(http))

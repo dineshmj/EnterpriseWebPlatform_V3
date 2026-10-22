@@ -14,7 +14,7 @@ export interface FaultRouteView {
   changedBy: string | null;
 }
 
-// ┌─ :: ARCHITECTURE + SECURITY :: Turning an API "off" for a demonstration ───────────────────────
+// ┌─ :: RESILIENCE + SECURITY :: Turning an API "off" for a demonstration ─────────────────────────
 // │ Why : Resilience is only believable when you can watch a caller meet a dead API - yet a switch
 // │       that takes an API off the network must never exist where real customers are.
 // │ How : Only when OPERATIONS_FAULT_CONTROLS_ENABLED, which the API refuses outside Development,
@@ -104,7 +104,9 @@ export class FaultControlService implements OnModuleInit, OnModuleDestroy {
       this.reverts.set(key, { timer, at, by });
     }
 
-    // The record of who changed what (the log is shipped like every other component's).
+    // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+    // │ The record of who changed what (the log is shipped like every other component's).
+    // └──────────────────────────────────────────────────────────────────────────────────────
     this.logger.log(`FAULT ROUTE CHANGED: ${route.component} -> ${state} by ${by}` +
       (state === 'Open' ? '.' : `; open again automatically at ${this.reverts.get(key)!.at.toISOString()}.`));
   }

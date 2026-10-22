@@ -33,6 +33,11 @@ export class TooManyRequestsException extends HttpException {
  * gateway or a shared store (e.g. Redis) must hold the deployment-wide limit (Threat-Model R-14).
  */
 export class RateLimiter {
+  // ┌─ DEBT ───────────────────────────────────────────────────────────────────────────────
+  // │ Counters in this process's memory: with several instances each has its own budget,
+  // │ and a restart resets it. Production holds the deployment-wide limit at a gateway or
+  // │ in a shared store (Threat-Model R-14, production item 10).
+  // └──────────────────────────────────────────────────────────────────────────────────────
   private readonly windows = new Map<string, { endsAt: number; count: number }>();
   private nextPruneAt = 0;
 

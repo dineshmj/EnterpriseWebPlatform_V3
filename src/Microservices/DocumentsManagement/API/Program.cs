@@ -37,8 +37,10 @@ var builder = WebApplication.CreateBuilder(args);
 var clientIds = ClientIds.From(builder.Configuration).Require(nameof(ClientIds.CustomerKycWeb), nameof(ClientIds.CustomerOnboardingWeb), nameof(ClientIds.DocumentInvalidationSubscriber), nameof(ClientIds.PartnerProductsJourneyApi));
 builder.Services.AddSingleton(clientIds);
 
-// Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
-// over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
+// │ over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.AddEwpObservability("documents-management-api", tracing => tracing.AddAspNetCoreInstrumentation().AddNpgsql());
 
 builder.Services
@@ -97,9 +99,12 @@ if (string.IsNullOrWhiteSpace(storageRoot))
         "DocumentStorage:RootPath was not configured.");
 }
 
-// Encryption at rest (envelope, AES-256-GCM): fail closed - without a valid key ring the API
-// does not start. The Development key is in appsettings.Development.json; elsewhere the keys come
-// from a secret store (e.g. DocumentStorage__Encryption__Keys__<id>), never from a file.
+// ┌─ SEC + DEBT ─────────────────────────────────────────────────────────────────────────
+// │ Encryption at rest (envelope, AES-256-GCM): fail closed - without a valid key ring the API
+// │ does not start. The Development key is in appsettings.Development.json; elsewhere the keys come
+// │ from a secret store (e.g. DocumentStorage__Encryption__Keys__<id>), never from a file.
+// │ Production: the key-encryption keys in a key vault or HSM (production item 1).
+// └──────────────────────────────────────────────────────────────────────────────────────
 var encryption = builder.Configuration.GetSection("DocumentStorage:Encryption");
 var documentKeys = new DocumentKeyRing(
     encryption["CurrentKeyId"] ?? string.Empty,
@@ -189,8 +194,10 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<EnterpriseWebPlatform.DocumentsManagement.API.ErrorHandling.ApiExceptionHandler>();
 
-// Health endpoints for the orchestrator's probes: /health/live (process working)
-// and /health/ready (dependencies reachable). Anonymous; no internals in the body.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ Health endpoints for the orchestrator's probes: /health/live (process working)
+// │ and /health/ready (dependencies reachable). Anonymous; no internals in the body.
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), tags: [HealthEndpoints.LiveTag])
     .AddDbContextCheck<DocumentsManagementDbContext>("database", tags: [HealthEndpoints.ReadyTag]);
@@ -205,7 +212,9 @@ builder.Services.AddEwpRateLimiting(builder.Configuration, "/v1", "/internal");
 
 var app = builder.Build();
 
-// One structured log line per request (Serilog), with the caller and the trace ID.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ One structured log line per request (Serilog), with the caller and the trace ID.
+// └──────────────────────────────────────────────────────────────────────────────────────
 app.UseEwpRequestLogging();
 
 if (app.Environment.IsDevelopment())

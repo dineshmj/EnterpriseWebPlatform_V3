@@ -10,7 +10,7 @@ using Serilog;
 
 namespace EnterpriseWebPlatform.Common.Observability;
 
-// ┌─ :: ARCHITECTURE :: OpenTelemetry: traces, metrics and logs with one trace ID ─────────────────
+// ┌─ :: OBSERVABILITY :: OpenTelemetry: traces, metrics and logs with one trace ID ────────────────
 // │ Why : One business transaction crosses BFFs, APIs, the Outbox and Kafka; without a shared trace
 // │       ID nobody can follow it or find the log lines of one failing request.
 // │ How : Every .NET component gets the same OpenTelemetry set-up: W3C trace context, ASP.NET Core
@@ -59,7 +59,10 @@ public static class ObservabilityExtensions
         builder.Services.AddSerilog((_, logger) =>
             EwpLogging.Configure(logger, builder.Configuration, builder.Environment, serviceName, otlpEndpoint));
 
-        // Each health check's status and numbers become metrics (re-evaluated every 30 s).
+        // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+        // │ Each health check's status and numbers become metrics (re-evaluated every 30 s), so a
+        // │ dashboard and an alert see what the readiness probe sees.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         builder.Services.AddSingleton<IHealthCheckPublisher, HealthMetricsPublisher>();
         builder.Services.Configure<HealthCheckPublisherOptions>(options =>
         {

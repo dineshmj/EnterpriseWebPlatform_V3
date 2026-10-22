@@ -45,8 +45,10 @@ if (mfeOrigins.Length == 0)
     throw new InvalidOperationException("MfeOrigins is not configured: the Shell would frame no MFE.");
 var notificationsApiBaseUrl = RequiredSetting.HttpsUrl(builder.Configuration["NotificationsApiBaseUrl"], "NotificationsApiBaseUrl");
 
-// Distributed tracing: W3C trace context across HTTP and Kafka; spans exported
-// over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ Distributed tracing: W3C trace context across HTTP and Kafka; spans exported over
+// │ OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (see ReadMe.txt).
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.AddEwpObservability("shell-bff", tracing => tracing.AddAspNetCoreInstrumentation().AddNpgsql());
 
 // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
@@ -70,11 +72,12 @@ builder.Services.AddSession(options =>
 builder.Services.AddDbContext<MenuDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("MenuDbConnection")));
 
-// Server-side sessions and the Data Protection keys (which encrypt the session and
-// anti-forgery cookies) live in PostgreSQL - EwpBffStateDb, schema shell_bff, used only by
-// this BFF's own database user - not in memory: a restart signs nobody out, several
-// instances share them, and back-channel logout still ends a session. Expired sessions
-// are removed by Duende's clean-up job.
+// ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+// │ Server-side sessions and the Data Protection keys live in PostgreSQL (EwpBffStateDb,
+// │ schema shell_bff, this BFF's own database user) - not in memory: a restart signs
+// │ nobody out, several instances share them, and back-channel logout still ends a
+// │ session. Duende's clean-up job removes expired sessions.
+// └──────────────────────────────────────────────────────────────────────────────────────
 var bffStateDb = builder.Configuration.GetConnectionString("BffStateDbConnection")
     ?? throw new InvalidOperationException("Connection string 'BffStateDbConnection' was not configured.");
 // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
@@ -261,8 +264,10 @@ builder.Services.AddOpenIdConnectAccessTokenManagement ();
 builder.Services.AddAuthorization();
 builder.Services.AddControllers();
 
-// Health endpoints for the orchestrator's probes: /health/live (process working)
-// and /health/ready (dependencies reachable). Anonymous; no internals in the body.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ Health endpoints for the orchestrator's probes: /health/live (process working) and
+// │ /health/ready (menu database reachable). Anonymous; no internals in the body.
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), tags: [HealthEndpoints.LiveTag])
     .AddDbContextCheck<MenuDbContext>("database", tags: [HealthEndpoints.ReadyTag]);
@@ -272,7 +277,9 @@ builder.Services.AddEwpRateLimiting(builder.Configuration, "/bff");
 
 var app = builder.Build();
 
-// One structured log line per request (Serilog), with the caller and the trace ID.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ One structured log line per request (Serilog), with the caller and the trace ID.
+// └──────────────────────────────────────────────────────────────────────────────────────
 app.UseEwpRequestLogging();
 
 if (app.Environment.IsDevelopment ())

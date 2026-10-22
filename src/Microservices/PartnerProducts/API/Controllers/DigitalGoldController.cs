@@ -299,7 +299,9 @@ public sealed class DigitalGoldController(PartnerProductsDbContext db, TimeProvi
     private static decimal? Decimal(System.Text.Json.Nodes.JsonObject? body, string name) =>
         body?[name] is System.Text.Json.Nodes.JsonValue value && value.TryGetValue<decimal>(out var number) ? number : null;
 
-    // The unique indexes are the final word on "once only": a race or a double click loses here, as a 409.
+    // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+    // │ The unique indexes are the final word on "once only": a race or a double click loses here, as a 409.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     private async Task SaveOnceAsync(string conflict, CancellationToken cancellationToken)
     {
         try

@@ -39,7 +39,9 @@ export class OidcService {
         }),
       )
       .catch(error => {
-        // Do not cache a failed discovery: the next request retries it.
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+        // │ Do not cache a failed discovery: the next request retries it.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         this.clientPromise = undefined;
         throw error;
       });
@@ -134,9 +136,11 @@ export class OidcService {
 
     const refresh = this.getClient().then(client => client.refresh(usedRefreshToken));
     this.refreshes.set(usedRefreshToken, refresh);
-    // A success is kept for a minute: a request that loaded the session just before the new
-    // tokens were saved still holds the old refresh token, and must not spend it again.
-    // A failure is forgotten at once, so the next request may try again.
+    // ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+    // │ A success is kept for a minute: a request that loaded the session just before the new
+    // │ tokens were saved still holds the old refresh token, and must not spend it again.
+    // │ A failure is forgotten at once, so the next request may try again.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     void refresh.then(
       () => setTimeout(() => this.refreshes.delete(usedRefreshToken), 60_000),
       () => this.refreshes.delete(usedRefreshToken),

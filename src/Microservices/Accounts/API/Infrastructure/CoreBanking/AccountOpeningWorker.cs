@@ -41,9 +41,11 @@ public sealed class AccountOpeningWorker(
                     }
                     catch (AccountOpeningErrorException ex)
                     {
-                        // Counted as a failed attempt on THAT application (fresh scope: the failed one's
-                        // database context is unusable), so it waits its back-off and the next due
-                        // application gets its turn instead of the same one being picked forever.
+                        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+                        // │ Counted as a failed attempt on THAT application (fresh scope: the failed one's
+                        // │ database context is unusable), so it waits its back-off and the next due
+                        // │ application gets its turn instead of the same one being picked forever.
+                        // └──────────────────────────────────────────────────────────────────────────────────────
                         logger.LogError(ex.InnerException, "Opening the account for application {ApplicationNumber} failed unexpectedly; recorded as a failed attempt.", ex.ApplicationNumber);
                         using var scope = scopeFactory.CreateScope();
                         await scope.ServiceProvider.GetRequiredService<RecordOpeningErrorCommandHandler>().HandleAsync(ex.ApplicationId, ex.InnerException ?? ex, stoppingToken);

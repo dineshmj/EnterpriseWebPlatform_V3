@@ -53,8 +53,10 @@ public sealed class InternalOnboardingApplicationsController(
         }
         catch (DbUpdateException ex) when (IsInboxDuplicate(ex))
         {
-            // Two deliveries of the same message raced; the unique Inbox key let
-            // exactly one of them commit. This one is the duplicate.
+            // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+            // │ Two deliveries of the same message raced; the unique Inbox key let
+            // │ exactly one of them commit. This one is the duplicate.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             result = RecordKycOutcomeResult.Duplicate;
         }
 

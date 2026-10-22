@@ -71,8 +71,10 @@ app.MapPost("/v1/accounts", async (HttpContext http, OpenAccountRequest request,
     if (string.IsNullOrWhiteSpace(idempotencyKey))
         return Results.BadRequest(new { reason = "An Idempotency-Key header is required." });
 
-    // A repeated request returns the account already opened, whatever the behaviour:
-    // the opening happened, only the answer was lost.
+    // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+    // │ A repeated request returns the account already opened, whatever the behaviour:
+    // │ the opening happened, only the answer was lost.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     if (opened.TryGetValue(idempotencyKey, out var existing))
     {
         log.LogInformation("Repeated request (key {Key}): returning account {Bsb} {Account} again.", idempotencyKey, existing.Bsb, Masked(existing.AccountNumber));

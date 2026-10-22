@@ -19,12 +19,14 @@ public sealed class KycCaseRepository(KycDbContext db) : IKycCaseRepository
 
     public async Task<KycCase?> GetForDecisionAsync(long caseId, CancellationToken cancellationToken)
     {
-        // 1. Lock the row (PostgreSQL holds it until the transaction ends); concurrent
-        //    deciders queue here. The version column is the second line of defence.
-        // 2. Load the aggregate with a normal query. Under READ COMMITTED this new
-        //    statement sees everything committed before the lock was granted.
-        //    (Loading via FromSql is avoided: EF Core maps complex-type columns of a
-        //    FromSql result by their default names, not the configured ones.)
+        // ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+        // │ 1. Lock the row (PostgreSQL holds it until the transaction ends); concurrent
+        // │    deciders queue here. The version column is the second line of defence.
+        // │ 2. Load the aggregate with a normal query. Under READ COMMITTED this new
+        // │    statement sees everything committed before the lock was granted.
+        // │    (Loading via FromSql is avoided: EF Core maps complex-type columns of a
+        // │    FromSql result by their default names, not the configured ones.)
+        // └──────────────────────────────────────────────────────────────────────────────────────
         var locked = await db.Database
             .SqlQuery<long>($"SELECT id AS \"Value\" FROM kyc_cases WHERE id = {caseId} FOR UPDATE")
             .ToListAsync(cancellationToken);

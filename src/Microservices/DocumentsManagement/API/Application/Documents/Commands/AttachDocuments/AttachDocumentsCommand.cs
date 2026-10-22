@@ -65,7 +65,9 @@ public sealed class AttachDocumentsCommandHandler(
                 unchanged++;
         }
 
-        // Recorded even when nothing changed, so the message is never re-applied.
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+        // │ Recorded even when nothing changed, so the message is never re-applied.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         inbox.RecordProcessed(command.MessageId, InboxConsumer, now);
         await repository.SaveChangesAsync(cancellationToken);
 

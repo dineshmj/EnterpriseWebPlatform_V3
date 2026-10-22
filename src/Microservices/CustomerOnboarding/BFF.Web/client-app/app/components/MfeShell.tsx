@@ -46,9 +46,11 @@ const EMPTY_WORKSPACE_CONTEXT: WorkspaceContext = {
 // any context item.
 let latestWorkspaceContext: WorkspaceContext = EMPTY_WORKSPACE_CONTEXT;
 
-// The only origin allowed to embed this MFE and exchange protocol messages with
-// it. A static allow-list (set at build time), never document.referrer and
-// never '*': a page that frames the MFE must not become its "trusted parent".
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ The only origin allowed to embed this MFE and exchange protocol messages with
+// │ it. A static allow-list (set at build time), never document.referrer and
+// │ never '*': a page that frames the MFE must not become its "trusted parent".
+// └──────────────────────────────────────────────────────────────────────────────────────
 const SHELL_ORIGIN =
   process.env.NEXT_PUBLIC_SHELL_ORIGIN ?? 'https://shell.dev.localhost:46367';
 

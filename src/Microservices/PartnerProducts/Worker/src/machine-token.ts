@@ -31,7 +31,9 @@ export class MachineToken {
     });
     const body = (await response.json().catch(() => ({}))) as { access_token?: string; expires_in?: number; error?: string };
     if (!response.ok || !body.access_token) {
-      // The activity fails and Temporal retries it: the IDP may be restarting.
+      // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+      // │ The activity fails and Temporal retries it: the IDP may be restarting.
+      // └──────────────────────────────────────────────────────────────────────────────────────
       throw new Error(`The IDP refused the worker's token for ${scope}: HTTP ${response.status} ${body.error ?? ''}`.trim());
     }
     this.cache.set(scope, { token: body.access_token, expiresAt: Date.now() + Math.max(60, body.expires_in ?? 300) * 1000 });

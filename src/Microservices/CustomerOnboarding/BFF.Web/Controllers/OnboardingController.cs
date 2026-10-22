@@ -341,8 +341,10 @@ public sealed class OnboardingController(
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", documentsToken);
         request.Headers.Add("X-Document-Type", documentType);
         request.Headers.Add("X-Business-Reference", businessReference);
-        // IMPORTANT: this POST is deliberately not retried automatically. The current
-        // DM API has no idempotency-key contract, so a retry could create a duplicate file.
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+        // │ IMPORTANT: this POST is deliberately not retried automatically. The current
+        // │ DM API has no idempotency-key contract, so a retry could create a duplicate file.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         using var response = await client.SendAsync(request, cancellationToken);
 
         if (!response.IsSuccessStatusCode)

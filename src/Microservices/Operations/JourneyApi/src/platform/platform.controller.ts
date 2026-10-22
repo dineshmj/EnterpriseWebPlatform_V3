@@ -23,7 +23,7 @@ export class PlatformController {
   @Get('health')
   @Requires(READ)
   async platformHealth() {
-    // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+    // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
     // │ The probes go to each component directly, never through the fault proxy: a cut API
     // │ still shows its own health, and the mark says its callers cannot reach it.
     // └──────────────────────────────────────────────────────────────────────────────────────

@@ -17,7 +17,7 @@ public enum ScreeningRunOutcome
     ProviderUnavailable
 }
 
-// ┌─ :: ARCHITECTURE :: Screening in the background, with back-off ────────────────────────────────
+// ┌─ :: RESILIENCE :: Screening in the background, with back-off ──────────────────────────────────
 // │ Why : The screening provider is external and may be slow or down; the officer must not wait on
 // │       it, and a failure must not lose the case.
 // │ How : A worker picks due cases (SKIP LOCKED, so instances share the work); an unavailable

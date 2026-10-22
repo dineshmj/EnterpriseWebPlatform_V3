@@ -88,7 +88,9 @@ public sealed class InitiatePaymentCommandHandler(
         }
         catch (UniqueConstraintViolationException)
         {
-            // The same Idempotency-Key arrived twice at the same time: the loser answers with the winner's payment.
+            // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+            // │ The same Idempotency-Key arrived twice at the same time: the loser answers with the winner's payment.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             unitOfWork.DiscardChanges();
             var winner = await payments.GetByRefAsync(command.PaymentRef, cancellationToken);
             if (winner is not null)

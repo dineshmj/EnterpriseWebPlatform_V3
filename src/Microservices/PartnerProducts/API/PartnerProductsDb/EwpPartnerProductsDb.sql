@@ -15,6 +15,11 @@
 -- the instruction and every slip is checked against it.
 -- =============================================================================
 
+-- ┌─ DEBT ───────────────────────────────────────────────────────────────────────────────
+-- │ A full reset script, not a migration: running it drops and re-creates every table
+-- │ (the databases are re-created on purpose in the PoC). Production: versioned
+-- │ migrations (production item 8).
+-- └──────────────────────────────────────────────────────────────────────────────────────
 DROP TABLE IF EXISTS outbox_messages CASCADE;
 DROP TABLE IF EXISTS gold_purchases CASCADE;
 DROP TABLE IF EXISTS gold_account_applications CASCADE;

@@ -23,6 +23,11 @@
 -- encrypts its session and anti-forgery cookies (on Windows also encrypted with DPAPI).
 -- =============================================================================
 
+-- ┌─ DEBT ───────────────────────────────────────────────────────────────────────────────
+-- │ A full reset script, not a migration: running it drops and re-creates every BFF's
+-- │ schema, so everybody is signed out (the databases are re-created on purpose in the
+-- │ PoC). Production: versioned migrations (production item 8).
+-- └──────────────────────────────────────────────────────────────────────────────────────
 DO $$
 DECLARE
     b RECORD;

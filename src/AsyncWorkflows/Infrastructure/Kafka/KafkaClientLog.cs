@@ -4,7 +4,7 @@ using Confluent.Kafka;
 
 namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 
-// ┌─ :: ARCHITECTURE :: Kafka client messages through the application's logging ──────────────────
+// ┌─ :: OBSERVABILITY :: Kafka client messages through the application's logging ─────────────────
 // │ Why : Left alone, the Kafka library (librdkafka) prints straight to the console: its lines
 // │       never reach Serilog (no level, no trace, no central log store), and while the broker is
 // │       down every client prints two lines every 2-3 seconds - the real messages drown.
@@ -58,18 +58,18 @@ public static class KafkaClientLogExtensions
     // │ Sends Kafka's library messages and errors to Serilog, instead of Kafka's
     // │ own console.
     // │
-    // │ See the call to `.SetLogHandler` and `SetErrorHandler` below. These subscribe to
-    // │ Kafka's own log and error events, and hands them off to the `KafkaClientLog` instance.
+    // │ See the calls to `.SetLogHandler` and `.SetErrorHandler` below. These subscribe to
+    // │ Kafka's own log and error events, and hand them off to the `KafkaClientLog` instance.
     // │
     // │ The `log.OnLog(message)` and `log.OnError(error)` calls below help log Kafka's
     // │ messages and errors through Serilog, via the `KafkaClientLog` instance, which decides
     // │ whether to log them as Warning or Debug.
-    // │ 
+    // │
     // │ See `KafkaProducer` class to see how this extension method is used when
     // │ building a producer.
     // └──────────────────────────────────────────────────────────────────────────────────────
     public static ProducerBuilder<TKey, TValue> WithClientLog<TKey, TValue>(this ProducerBuilder<TKey, TValue> builder, KafkaClientLog log) =>
         builder
-            .SetLogHandler((_, message) =>log.OnLog(message))
+            .SetLogHandler((_, message) => log.OnLog(message))
             .SetErrorHandler((_, error) => log.OnError(error));
 }

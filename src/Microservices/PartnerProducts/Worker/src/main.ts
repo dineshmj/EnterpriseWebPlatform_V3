@@ -25,8 +25,10 @@ async function main() {
     activities: createActivities(options),
   });
 
-  // The payment-event listener runs beside the worker; until Kafka answers it tries again
-  // every 30 s (the workflows still look at their payments every 5 minutes meanwhile).
+  // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+  // │ The payment-event listener runs beside the worker; until Kafka answers it tries again
+  // │ every 30 s (the workflows still look at their payments every 5 minutes meanwhile).
+  // └──────────────────────────────────────────────────────────────────────────────────────
   const listener = new PaymentEventListener(options);
   void (async () => {
     while (listener.state !== 'running') {
@@ -41,7 +43,7 @@ async function main() {
     }
   })();
 
-  // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+  // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
   // │ Probes for Operations -> Platform Health: live = the process, ready = the worker is
   // │ polling Temporal (the listener's state is shown, but a missing listener only slows
   // │ purchases down to the 5-minute look). Nothing else is served (no data, no actions).

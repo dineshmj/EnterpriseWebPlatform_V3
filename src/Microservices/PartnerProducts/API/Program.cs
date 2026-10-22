@@ -39,7 +39,9 @@ var clientIds = ClientIds.From(builder.Configuration).Require(
     nameof(ClientIds.PartnerProductsJourneyApi), nameof(ClientIds.PartnerProductsWorker), nameof(ClientIds.OperationsJourneyApi));
 builder.Services.AddSingleton(clientIds);
 
-// Traces, Serilog logs and Prometheus metrics (OTLP export when configured).
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ Traces, Serilog logs and Prometheus metrics (OTLP export when configured).
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.AddEwpObservability("partner-products-api", tracing => tracing.AddAspNetCoreInstrumentation().AddNpgsql());
 
 var connectionString = builder.Configuration.GetConnectionString("PartnerProductsDbConnection")
@@ -88,7 +90,7 @@ builder.Services.AddHttpClient<PartnerBankClient>(client => client.Timeout = Tim
     .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
     {
         AllowAutoRedirect = false,
-        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
         // │ An unreachable Partner Bank (PC off, started without -Lan) fails in 5 s, not after
         // │ the whole timeout: the counter hears "not reachable, send again" while the callers
         // │ (Journey API, web BFF) are still waiting - not their own generic time-out.
@@ -165,8 +167,10 @@ builder.Services.AddOptions<DigitalGoldAlertOptions>()
         $"DigitalGold:Alerts needs HandoverMinutes and PaymentDecisionMinutes > 0 and UnpaidOrderMinutes > {DigitalGoldAlertOptions.WorkerCancelsUnpaidWithinMinutes} (whole minutes).")
     .ValidateOnStart();
 
-// live: the process and its Outbox relay are cycling; ready: the database answers - Degraded
-// when Outbox rows wait too long or are parked, or a Form VII or purchase waits too long in one step.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ live: the process and its Outbox relay are cycling; ready: the database answers - Degraded
+// │ when Outbox rows wait too long or are parked, or a Form VII or purchase waits too long in one step.
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), tags: [HealthEndpoints.LiveTag])
     .Add(new HealthCheckRegistration("outbox-relay",
@@ -184,7 +188,9 @@ builder.Services.AddHealthChecks()
 
 var app = builder.Build();
 
-// One structured log line per request (Serilog), with the caller and the trace ID.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ One structured log line per request (Serilog), with the caller and the trace ID.
+// └──────────────────────────────────────────────────────────────────────────────────────
 app.UseEwpRequestLogging();
 
 // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────

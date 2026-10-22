@@ -8,6 +8,11 @@
 
 BEGIN;
 
+-- ┌─ DEBT ───────────────────────────────────────────────────────────────────────────────
+-- │ A full reset script, not a migration: running it drops and re-creates everything (the
+-- │ databases are re-created on purpose in the PoC). Production: versioned migrations
+-- │ (production item 8).
+-- └──────────────────────────────────────────────────────────────────────────────────────
 -- =========================================================
 -- RESET: reverse dependency order
 -- =========================================================

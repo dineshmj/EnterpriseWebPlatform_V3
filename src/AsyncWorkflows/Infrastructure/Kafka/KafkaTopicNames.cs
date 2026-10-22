@@ -11,6 +11,11 @@ namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 public static class KafkaTopicNames
 {
+    // ┌─ CONTRACT ───────────────────────────────────────────────────────────────────────────
+    // │ These names are shared with every producer and subscriber, the Partner Products
+    // │ Worker (Node) and the ACLs in ps/kafka/Setup-KafkaSecurity.ps1. Renaming one here
+    // │ needs the same change there, or the events stop flowing.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     public const string CustomerCreated = "customer.created";
 
     public const string OnboardingApplicationSubmitted =

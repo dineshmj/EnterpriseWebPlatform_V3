@@ -17,7 +17,7 @@ interface PaymentEvent {
   Payload?: { PaymentRef?: string; PaymentNumber?: string; ToBsb?: string; ToAccountNumber?: string };
 }
 
-// ┌─ :: ARCHITECTURE :: Events wake the workflow, polling is only the safety net ──────────────────
+// ┌─ :: RESILIENCE :: Events wake the workflow, polling is only the safety net ────────────────────
 // │ Why : A purchase should be allocated (or cancelled) as soon as its payment has an outcome, without
 // │       a stream of status calls to EWP Payments for every open purchase.
 // │ How : Consumer group partner-products.worker reads payments.payment.events (its own Kafka user,
@@ -62,7 +62,9 @@ export class PaymentEventListener {
         try {
           await this.handle(client, message.value?.toString('utf8'));
         } catch (error) {
-          // Never stop the stream for one message: the workflow's fallback look covers it.
+          // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+          // │ Never stop the stream for one message: the workflow's fallback look covers it.
+          // └──────────────────────────────────────────────────────────────────────────────────────
           console.warn(`Payment event not passed on (the workflow looks again within 5 minutes): ${(error as Error).message}`);
         }
       },

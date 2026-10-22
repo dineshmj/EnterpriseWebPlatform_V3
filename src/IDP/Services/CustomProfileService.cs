@@ -195,6 +195,11 @@ public sealed class CustomProfileService : IProfileService
         // employment profile where available.
         // ------------------------------------------------------------
 
+        // ┌─ CONTRACT ───────────────────────────────────────────────────────────────────────────
+        // │ These claim names (employee_id, lan_id, department, branch, region, clearance_level
+        // │ ...) are read by the BFFs and by every API's ABAC policies; renaming one here breaks
+        // │ their checks.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         var employmentProfile = user.EmploymentProfile;
 
         if (employmentProfile is not null)
@@ -324,6 +329,10 @@ public sealed class CustomProfileService : IProfileService
         AddClaimIfRequested(context, CustomerNumberClaim, customer.CustomerNumber);
     }
 
+    // ┌─ CONTRACT ───────────────────────────────────────────────────────────────────────────
+    // │ customer_number names the customer in every customer token; the customers' channel
+    // │ and the domain APIs' "me" endpoints read it.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     /// <summary>The claim that names the customer in a customer token (EWP's customer number).</summary>
     public const string CustomerNumberClaim = "customer_number";
 

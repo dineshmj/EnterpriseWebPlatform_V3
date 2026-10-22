@@ -141,14 +141,16 @@ public sealed class OnboardingApplication : AggregateRoot
     }
 
     // ------------------------------------------------------------------
-    // Reactions to Customer KYC facts (saga choreography).
-    //
-    // KYC facts arrive asynchronously, at least once, and on different topics,
-    // so they can be repeated or arrive out of order (e.g. "approved" before
-    // "case opened"). Each method is therefore tolerant: it applies the
-    // transition(s) still outstanding and is a no-op when the application is
-    // already at or beyond the state the fact implies. Returns true when the
-    // application changed.
+    // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+    // │ Reactions to Customer KYC facts (saga choreography).
+    // │
+    // │ KYC facts arrive asynchronously, at least once, and on different topics,
+    // │ so they can be repeated or arrive out of order (e.g. "approved" before
+    // │ "case opened"). Each method is therefore tolerant: it applies the
+    // │ transition(s) still outstanding and is a no-op when the application is
+    // │ already at or beyond the state the fact implies. Returns true when the
+    // │ application changed.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     // ------------------------------------------------------------------
 
     /// <summary>KYC opened a case for this application: SUBMITTED → KYC_IN_PROGRESS.</summary>

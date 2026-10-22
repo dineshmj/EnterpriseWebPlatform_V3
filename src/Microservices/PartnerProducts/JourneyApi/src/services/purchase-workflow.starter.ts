@@ -5,7 +5,7 @@ import { JOURNEY_OPTIONS, JourneyOptions } from '../configuration/journey-option
 /** Whether the purchase's follow-up (the Temporal workflow) is running. */
 export type FollowUp = 'STARTED' | 'ALREADY_RUNNING' | 'NOT_STARTED';
 
-// ┌─ :: ARCHITECTURE :: The purchase's follow-up runs as a Temporal workflow ──────────────────────
+// ┌─ :: ARCHITECTURE + RESILIENCE :: The purchase's follow-up runs as a Temporal workflow ─────────
 // │ Why : Paying for gold is a long-running process across three systems (EWP Payments, the payment
 // │       network, the Partner Bank): an approval or a slow network can take hours, and nobody waits
 // │       at the counter. It must survive restarts and never advise or cancel twice.
@@ -34,7 +34,7 @@ export class PurchaseWorkflowStarter implements OnModuleDestroy {
       this.logger.log(`Purchase workflow started for ${purchaseNumber}.`);
       return 'STARTED';
     } catch (error) {
-      // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+      // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
       // │ If the workflow already runs, that is the answer (one per purchase, never two). If
       // │ Temporal cannot be reached, nothing is lost: the purchase stays as it is and the
       // │ screen offers "Continue", which starts it again.

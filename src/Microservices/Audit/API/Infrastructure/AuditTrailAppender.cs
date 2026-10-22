@@ -27,9 +27,14 @@ public sealed class AuditTrailAppender(AuditDbContext db)
     public async Task<AppendResult> AppendAsync(AuditEntry entry, CancellationToken cancellationToken)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        // ┌─ DEBT ───────────────────────────────────────────────────────────────────────────────
+        // │ One global chain: every append waits for this lock, so audit writes are serialised.
+        // │ Accepted for the PoC; a benchmark under realistic load decides whether partitioned
+        // │ chains are needed (production item 14).
+        // └──────────────────────────────────────────────────────────────────────────────────────
         await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock({ChainLockKey})", cancellationToken);
 
-        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
         // │ If this message is already in the trail, skip it - a redelivery never adds a second
         // │ entry.
         // └──────────────────────────────────────────────────────────────────────────────────────

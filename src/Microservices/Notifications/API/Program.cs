@@ -32,7 +32,9 @@ var builder = WebApplication.CreateBuilder(args);
 var clientIds = ClientIds.From(builder.Configuration).Require(nameof(ClientIds.NotificationsSubscriber));
 builder.Services.AddSingleton(clientIds);
 
-// Distributed tracing: W3C trace context across HTTP and Kafka (OTLP export when configured).
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ Distributed tracing: W3C trace context across HTTP and Kafka (OTLP export when configured).
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.AddEwpObservability("notifications-api", tracing => tracing.AddAspNetCoreInstrumentation().AddNpgsql());
 
 builder.Services.AddControllers();
@@ -115,8 +117,11 @@ builder.Services.AddScoped<PublishFromEventHandler>();
 builder.Services.AddScoped<NotificationQueries>();
 builder.Services.AddSingleton<INotificationPusher, SignalRNotificationPusher>();
 
-// SignalR: one instance here. Several instances need a backplane (Redis, or Azure
-// SignalR Service) so a push reaches connections held by any instance.
+// ┌─ DEBT ───────────────────────────────────────────────────────────────────────────────
+// │ SignalR: one instance here. Several instances need a backplane (Redis, or Azure
+// │ SignalR Service) so a push reaches connections held by any instance (production item
+// │ 9).
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.Services.AddSignalR(options =>
 {
     options.EnableDetailedErrors = false;
@@ -149,7 +154,9 @@ builder.Services.AddEwpRateLimiting(builder.Configuration, "/v1", "/internal");
 
 var app = builder.Build();
 
-// One structured log line per request (Serilog), with the caller and the trace ID.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ One structured log line per request (Serilog), with the caller and the trace ID.
+// └──────────────────────────────────────────────────────────────────────────────────────
 app.UseEwpRequestLogging();
 
 // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────

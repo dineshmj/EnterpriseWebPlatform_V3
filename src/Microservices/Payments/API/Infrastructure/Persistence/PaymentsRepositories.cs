@@ -209,7 +209,9 @@ public sealed class StaffMember
 /// </summary>
 public sealed class StaffDirectory(PaymentsDbContext db, TimeProvider clock) : IStaffDirectory
 {
-    // Mappings already written by this process: an unchanged LAN ID costs no database write.
+    // ┌─ PERF ───────────────────────────────────────────────────────────────────────────────
+    // │ Mappings already written by this process: an unchanged LAN ID costs no database write.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     private static readonly ConcurrentDictionary<string, string> Known = new(StringComparer.OrdinalIgnoreCase);
 
     public async Task RememberAsync(string? userId, string? lanId, CancellationToken cancellationToken)

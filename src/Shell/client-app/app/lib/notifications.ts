@@ -61,10 +61,12 @@ export function createNotificationConnection(): HubConnection {
     .build();
 }
 
-// A notification may only name a page path: "/v1/<area>/<page...>", optionally with ONE
-// parameter whose value is a numeric id or an upper-case business reference (letters, digits,
-// hyphens - e.g. APP-20261012-000001). No scheme, host, "//", "..", encoded characters,
-// lower-case text or fragments. The owning BFF's allow-list then accepts only its own shapes.
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ A notification may only name a page path: "/v1/<area>/<page...>", optionally with ONE
+// │ parameter whose value is a numeric id or an upper-case business reference (e.g.
+// │ APP-20261012-000001). No scheme, host, "//", "..", encoded characters, lower-case
+// │ text or fragments. The owning BFF's allow-list then accepts only its own shapes.
+// └──────────────────────────────────────────────────────────────────────────────────────
 const OPENABLE_PATH = /^\/v1\/[a-z0-9-]+(\/[a-z0-9-]+)*\/?(\?[A-Za-z]+=(\d{1,18}|[A-Z0-9][A-Z0-9-]{0,39}))?$/;
 
 /** The first two segments, e.g. "/v1/kyc" - how a path is matched to the microservice that owns it. */

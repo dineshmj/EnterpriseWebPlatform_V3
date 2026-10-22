@@ -92,7 +92,7 @@ public sealed class AccountApplicationOpeningProcessor(
                 return ProcessingOutcome.Processed;
             }
 
-            // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+            // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
             // │ Refused identity, time-out, throttling or a server error is not the message's fault:
             // │ retry in place. Any other 4xx means the message itself is bad: dead-letter it.
             // └──────────────────────────────────────────────────────────────────────────────────────
@@ -129,7 +129,11 @@ public sealed class AccountApplicationOpeningProcessor(
         return await httpClientFactory.CreateClient(HttpClientName).SendAsync(request, cancellationToken);
     }
 
-    // Tolerant reader: only the fields Accounts needs; unknown fields are ignored.
+    // ┌─ CONTRACT ───────────────────────────────────────────────────────────────────────────
+    // │ Tolerant reader of the producer's event envelope (workflow metadata at the top level,
+    // │ the event under "Payload"): only the fields Accounts needs; unknown fields are
+    // │ ignored, so the producer can add fields without breaking this worker.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     private sealed record Envelope(
         Guid MessageId,
         string? EventType,

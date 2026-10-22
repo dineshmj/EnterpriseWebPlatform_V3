@@ -134,7 +134,9 @@ public sealed class KycCase : AggregateRoot
         ArgumentNullException.ThrowIfNull(branchCode);
         ArgumentNullException.ThrowIfNull(applicant);
 
-        // Fail closed: a case without its evidence could only guess which documents to review.
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ Fail closed: a case without its evidence could only guess which documents to review.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         if (identityProofDocumentId == Guid.Empty || taxProofDocumentId == Guid.Empty)
             throw new DomainRuleViolationException("The application's identity proof and tax proof documents are required.");
 

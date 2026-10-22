@@ -6,6 +6,11 @@
 -- The CHECK constraints mirror the AccountApplication and Account aggregates' invariants.
 -- =============================================================================
 
+-- ┌─ DEBT ───────────────────────────────────────────────────────────────────────────────
+-- │ A full reset script, not a migration: running it drops and re-creates every table
+-- │ (the databases are re-created on purpose in the PoC). Production: versioned
+-- │ migrations (production item 8).
+-- └──────────────────────────────────────────────────────────────────────────────────────
 DROP TABLE IF EXISTS funds_holds CASCADE;
 DROP TABLE IF EXISTS accounts CASCADE;
 DROP TABLE IF EXISTS account_applications CASCADE;

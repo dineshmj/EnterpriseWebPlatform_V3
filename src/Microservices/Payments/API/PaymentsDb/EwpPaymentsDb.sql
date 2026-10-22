@@ -7,6 +7,11 @@
 -- The CHECK constraints mirror the Payment and PaymentSaga aggregates' invariants.
 -- =============================================================================
 
+-- ┌─ DEBT ───────────────────────────────────────────────────────────────────────────────
+-- │ A full reset script, not a migration: running it drops and re-creates every table
+-- │ (the databases are re-created on purpose in the PoC). Production: versioned
+-- │ migrations (production item 8).
+-- └──────────────────────────────────────────────────────────────────────────────────────
 DROP TABLE IF EXISTS payment_saga_history CASCADE;
 DROP TABLE IF EXISTS payment_sagas CASCADE;
 DROP TABLE IF EXISTS payments CASCADE;

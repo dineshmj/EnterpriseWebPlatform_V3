@@ -40,7 +40,9 @@ async function bootstrap() {
   app.useGlobalFilters(new ProblemDetailsFilter());
   app.use(overallRateLimit(new RateLimiter()));
 
-  // One log line per request: method, path without the query string, status, duration.
+  // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+  // │ One log line per request: method, path without the query string, status, duration.
+  // └──────────────────────────────────────────────────────────────────────────────────────
   app.use((req: Request, res: Response, next: NextFunction) => {
     const started = Date.now();
     res.on('finish', () => {

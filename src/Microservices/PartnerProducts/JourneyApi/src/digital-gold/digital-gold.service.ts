@@ -108,7 +108,7 @@ export class DigitalGoldService {
     }));
   }
 
-  // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+  // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
   // │ One screen, three contexts, in parallel: the customer (Customer Onboarding), their
   // │ paying accounts (Accounts) and their Digital Gold (Partner Products). If Accounts
   // │ cannot answer, the customer is still shown and the screen says why the accounts are

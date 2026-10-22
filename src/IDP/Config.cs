@@ -7,7 +7,7 @@ using EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.M2M;
 using EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.MFEs;
 using EnterpriseWebPlatform.IdentityServer.ConfigRegistration.MicroserviceApiScopes;
 
-// ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+// ┌─ CONTRACT ───────────────────────────────────────────────────────────────────────────
 // │ The IDP is the source of truth for scope names (ConfigRegistration/MicroserviceApiScopes),
 // │ API resource names / audiences (ConfigRegistration/ApiResources) and client IDs
 // │ (appsettings.json ClientIds). No shared library carries them any more: each component

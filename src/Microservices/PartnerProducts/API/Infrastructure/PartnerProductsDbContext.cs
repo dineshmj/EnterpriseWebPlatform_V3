@@ -18,7 +18,7 @@ public sealed class PartnerProductsDbContext(
 
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
-    // ┌─ :: ARCHITECTURE :: Transactional Outbox (write side) ─────────────────────────────────────────
+    // ┌─ :: RESILIENCE :: Transactional Outbox (write side) ───────────────────────────────────────────
     // │ Why : An event must exist exactly when its change does: the relay publishes only what committed.
     // │ How : The changed aggregates are saved first, then their raised events as Outbox rows - one
     // │       row per save, so the database-assigned sequence keeps the order they were raised in - all
@@ -105,7 +105,7 @@ public sealed class PartnerProductsDbContext(
             e.Property(x => x.SentAt).HasColumnName("sent_at");
             e.Property(x => x.SentByLanId).HasColumnName("sent_by_lan_id").HasMaxLength(50);
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
-            // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+            // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
             // │ Optimistic concurrency: every change raises the version and is saved only if
             // │ nobody changed the row meanwhile - two people sending the same Form VII at once
             // │ get one send and one 409, never two.

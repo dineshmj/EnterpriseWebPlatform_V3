@@ -71,6 +71,11 @@ public static class RateLimitingExtensions
                    limitedPathPrefixes.Any(p => path.StartsWithSegments(p, StringComparison.OrdinalIgnoreCase));
         }
 
+        // ┌─ DEBT ───────────────────────────────────────────────────────────────────────────────
+        // │ Counters live in this instance's memory: with several instances each one has its own
+        // │ budget. Production holds the deployment-wide limit at a gateway or in a shared store
+        // │ (Threat-Model R-14, production item 10).
+        // └──────────────────────────────────────────────────────────────────────────────────────
         services.AddRateLimiter(limiter =>
         {
             limiter.RejectionStatusCode = StatusCodes.Status429TooManyRequests;

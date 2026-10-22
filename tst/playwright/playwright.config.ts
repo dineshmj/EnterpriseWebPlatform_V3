@@ -30,8 +30,10 @@ export default defineConfig({
     channel: 'msedge',
     headless: true,
     viewport: { width: 1600, height: 900 },
-    // Edge trusts the ASP.NET Core development certificate (Windows store); Node.js - used by
-    // the request-only tests - does not, so certificate errors are ignored for those calls.
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Edge trusts the ASP.NET Core development certificate (Windows store); Node.js - used by
+    // │ the request-only tests - does not, so certificate errors are ignored for those calls.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     ignoreHTTPSErrors: true,
     actionTimeout: 15_000,
     navigationTimeout: 30_000,

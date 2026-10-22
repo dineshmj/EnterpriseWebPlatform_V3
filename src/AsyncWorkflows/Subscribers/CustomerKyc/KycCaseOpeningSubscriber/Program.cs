@@ -17,12 +17,17 @@ using EnterpriseWebPlatform.Common.Observability;
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 var builder = Host.CreateApplicationBuilder(args);
 
-// Distributed tracing: each message is processed in a span that continues the
-// producer's trace (Kafka "traceparent" header) and carries it to the API call.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ Distributed tracing: each message is processed in a span that continues the
+// │ producer's trace (Kafka "traceparent" header) and carries it on to the API call.
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.AddEwpObservability("kyc-case-opening-subscriber");
 
-// The shared reliable consume loop (commit after processing, retry in place,
-// dead-letter) with this worker's processor.
+// ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+// │ The shared reliable consume loop with this worker's processor: offset committed only
+// │ after processing, transient failures retried in place, bad messages to its
+// │ dead-letter topic.
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.Services.AddKafkaSubscriber<KycCaseOpeningProcessor, KycCaseOpeningSubscriberOptions>(
     builder.Configuration, KycCaseOpeningSubscriberOptions.SectionName)
     .Validate(s => ServiceAddress.IsHttps(s.KycApiBaseUrl), $"{KycCaseOpeningSubscriberOptions.SectionName}:KycApiBaseUrl must be an absolute https address.");
@@ -51,7 +56,7 @@ builder.Services
     //  - circuit breaker     : opens when half of at least 5 calls in 60 s fail, and
     //                          rejects calls for 30 s, giving the API room to recover
     //  - total timeout       : 60 s for the whole sequence
-    // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+    // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
     // │ Retrying this POST is safe ONLY because the endpoint is idempotent (Inbox / one
     // │ record per message); timeouts, jittered retries and a circuit breaker protect the
     // │ API.
@@ -68,8 +73,10 @@ builder.Services
         options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(60);
     });
 
-// Health endpoints for the orchestrator's probes, served on Health:Urls:
-// live = the consume loop runs; ready = joined the consumer group (Degraded while retrying).
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ Health endpoints for the orchestrator's probes (Health:Urls): live = the consume loop
+// │ runs; ready = joined the consumer group (Degraded while a message is retried).
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.AddWorkerHealthEndpoints();
 
 var host = builder.Build();

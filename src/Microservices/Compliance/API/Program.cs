@@ -39,7 +39,9 @@ var builder = WebApplication.CreateBuilder(args);
 var clientIds = ClientIds.From(builder.Configuration).Require(nameof(ClientIds.ComplianceCaseOpeningSubscriber), nameof(ClientIds.OperationsJourneyApi));
 builder.Services.AddSingleton(clientIds);
 
-// Distributed tracing: W3C trace context across HTTP and Kafka (OTLP export when configured).
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ Distributed tracing: W3C trace context across HTTP and Kafka (OTLP export when configured).
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.AddEwpObservability("compliance-api", tracing => tracing.AddAspNetCoreInstrumentation().AddNpgsql());
 
 builder.Services.AddControllers();
@@ -171,14 +173,16 @@ builder.Services
     .AddHttpClient<IScreeningProvider, ScreeningProviderClient>(ScreeningProviderClient.HttpClientName, (sp, client) =>
         client.BaseAddress = new Uri(sp.GetRequiredService<IOptions<ScreeningProviderOptions>>().Value.BaseUrl))
     .WithoutRedirects()   // a 3xx never moves the call, and its API key, elsewhere
-    // Resilience pipeline around every call to the external provider:
-    //  - attempt timeout : a hung provider is abandoned after 5 s
-    //  - retry           : 2 retries with jittered exponential back-off (screening is a
-    //                      read-only check, so repeating it is safe)
-    //  - circuit breaker : opens when half of at least 3 calls in 30 s fail and then
-    //                      rejects calls for 30 s, so a provider outage is not hammered
-    //  - total timeout   : 20 s for the whole sequence
-    // What still fails leaves the case in SCREENING for a later retry - never a pass.
+    // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+    // │ Resilience pipeline around every call to the external provider:
+    // │  - attempt timeout : a hung provider is abandoned after 5 s
+    // │  - retry           : 2 retries with jittered exponential back-off (screening is a
+    // │                      read-only check, so repeating it is safe)
+    // │  - circuit breaker : opens when half of at least 3 calls in 30 s fail and then
+    // │                      rejects calls for 30 s, so a provider outage is not hammered
+    // │  - total timeout   : 20 s for the whole sequence
+    // │ What still fails leaves the case in SCREENING for a later retry - never a pass.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     .AddStandardResilienceHandler(options =>
     {
         options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(5);
@@ -207,8 +211,10 @@ builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<EnterpriseWebPlatform.Compliance.Api.Controllers.ApiExceptionHandler>();
 
 // ---------------------------------------------------------------- Health
-// live : the process and its two background loops (Outbox relay, screening) are cycling;
-// ready: the database answers; Degraded when Outbox rows or screenings are overdue.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ live : the process and its two background loops (Outbox relay, screening) are cycling;
+// │ ready: the database answers; Degraded when Outbox rows or screenings are overdue.
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), tags: [HealthEndpoints.LiveTag])
     .Add(new HealthCheckRegistration("outbox-relay",
@@ -241,7 +247,9 @@ builder.RequireMfaOutsideDevelopment();   // fail closed: MFA can be off on a de
 
 var app = builder.Build();
 
-// One structured log line per request (Serilog), with the caller and the trace ID.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ One structured log line per request (Serilog), with the caller and the trace ID.
+// └──────────────────────────────────────────────────────────────────────────────────────
 app.UseEwpRequestLogging();
 
 // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────

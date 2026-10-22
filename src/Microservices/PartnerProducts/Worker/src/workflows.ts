@@ -12,7 +12,7 @@ export type GoldPurchaseOutcome = 'ALLOCATED' | 'CANCELLED' | 'REFUSED';
 
 const { purchaseState, paymentOutcome, sendPaymentAdvice, cancelOrder } = proxyActivities<Activities>({
   startToCloseTimeout: '30 seconds',
-  // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+  // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
   // │ The Partner Bank, the IDP or an API may be down for a while: retry with back-off, for
   // │ as long as it takes (the calls are idempotent). Refusals are non-retryable (activities).
   // └──────────────────────────────────────────────────────────────────────────────────────
@@ -31,7 +31,7 @@ const CHECKS_PER_RUN = 240;
 
 const NOT_PAID = ['REJECTED', 'FAILED', 'COMPENSATION_FAILED'];
 
-// ┌─ :: ARCHITECTURE :: The Digital Gold purchase workflow ────────────────────────────────────────
+// ┌─ :: ARCHITECTURE + RESILIENCE :: The Digital Gold purchase workflow ───────────────────────────
 // │ Why : After the counter placed the order and started the payment, the purchase must end in
 // │       exactly one of two ways - gold allocated (the payment advice) or the order cancelled (no
 // │       payment) - however long the payment takes and whatever restarts in between.

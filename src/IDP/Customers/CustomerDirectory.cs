@@ -54,6 +54,10 @@ public sealed class CustomerDirectory(
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<RegistrationCandidate>(cancellationToken);
         }
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+        // │ If Customer Onboarding does not answer (down, or the 10-second timeout), the
+        // │ registration stops with "try again later" - never a half-linked sign-in.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
             logger.LogWarning(ex, "Customer Onboarding could not be asked about an online registration.");

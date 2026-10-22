@@ -77,8 +77,10 @@ function requestNavigationPermission(
       currentOrigin,
     );
 
-    // Preserve the V2 fail-open behavior: if an MFE does not answer,
-    // navigation is not blocked indefinitely.
+    // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+    // │ Fail open, as in V2: if the MFE in the frame does not answer the navigation request
+    // │ in time, navigation goes ahead - a hung application never traps the person.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     window.setTimeout(() => finish(true), NAVIGATION_RESPONSE_TIMEOUT_MS);
   });
 }
@@ -121,9 +123,11 @@ function HomeContent() {
     }
   }, []);
 
-  // The origin of the MFE the Shell itself loaded (from its menu's baseURL). Only that origin
-  // may announce itself as ready: a frame navigated elsewhere keeps the same window, so the
-  // message's source alone proves nothing (CSP frame-src is the second layer).
+  // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+  // │ Only the origin of the MFE the Shell itself loaded (its menu's baseURL) may announce
+  // │ itself as ready: a frame navigated elsewhere keeps the same window, so the message's
+  // │ source alone proves nothing (CSP frame-src is the second layer).
+  // └──────────────────────────────────────────────────────────────────────────────────────
   const expectedFrameOriginRef = useRef<string | null>(null);
 
   // The Shell is only a transport/rendering host for workspace context.

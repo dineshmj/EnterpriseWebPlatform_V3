@@ -9,7 +9,7 @@ public sealed record ConsumedMessage(
     string Value,
     IReadOnlyDictionary<string, string> Headers);
 
-// ┌─ :: ARCHITECTURE :: Transient versus permanent failure ────────────────────────────────────────
+// ┌─ :: RESILIENCE :: Transient versus permanent failure ──────────────────────────────────────────
 // │ Why : Retrying a message that can never succeed blocks the partition; dead-lettering one that
 // │       would succeed in a minute loses work.
 // │ How : A processor answers Processed, ToDeadLetter(reason) for permanent failures (malformed,

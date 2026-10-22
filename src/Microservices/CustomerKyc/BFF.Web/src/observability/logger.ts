@@ -8,7 +8,7 @@ const SHORT: Record<Level, string> = {
   Verbose: 'VRB', Debug: 'DBG', Information: 'INF', Warning: 'WRN', Error: 'ERR', Fatal: 'FTL',
 };
 
-// ┌─ :: ARCHITECTURE :: Same log format as the .NET services ──────────────────────────────────────
+// ┌─ :: OBSERVABILITY :: Same log format as the .NET services ─────────────────────────────────────
 // │ Why : One log pipeline must read every service the same way.
 // │ How : Service name and trace ID on every line, one line per request without the query string,
 // │       JSON outside Development.

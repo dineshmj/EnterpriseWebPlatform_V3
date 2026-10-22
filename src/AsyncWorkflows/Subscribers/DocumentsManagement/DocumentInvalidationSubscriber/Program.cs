@@ -18,11 +18,17 @@ using EnterpriseWebPlatform.Common.Observability;
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 var builder = Host.CreateApplicationBuilder(args);
 
-// Distributed tracing: each message is processed in a span that continues the
-// producer's trace (Kafka "traceparent" header) and carries it to the API call.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ Distributed tracing: each message is processed in a span that continues the
+// │ producer's trace (Kafka "traceparent" header) and carries it on to the API call.
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.AddEwpObservability("document-invalidation-subscriber");
 
-// The shared reliable consume loop (commit after processing, retry in place, dead-letter).
+// ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+// │ The shared reliable consume loop with this worker's processor: offset committed only
+// │ after processing, transient failures retried in place, bad messages to its
+// │ dead-letter topic.
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.Services.AddKafkaSubscriber<DocumentEvidenceProcessor, DocumentInvalidationSubscriberOptions>(
     builder.Configuration, DocumentInvalidationSubscriberOptions.SectionName)
     .Validate(s => ServiceAddress.IsHttps(s.DocumentsManagementApiBaseUrl), $"{DocumentInvalidationSubscriberOptions.SectionName}:DocumentsManagementApiBaseUrl must be an absolute https address.");
@@ -39,12 +45,10 @@ builder.Services
 builder.Services
     .AddHttpClient(DocumentEvidenceProcessor.HttpClientName, (sp, client) =>
         client.BaseAddress = new Uri(sp.GetRequiredService<IOptions<DocumentInvalidationSubscriberOptions>>().Value.DocumentsManagementApiBaseUrl.TrimEnd('/')))
-    // Timeout, jittered retry and circuit breaker; the endpoint is idempotent (Inbox +
-    // invalidation is a no-op the second time), so retrying the POST is safe.
-    // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
-    // │ Retrying this POST is safe ONLY because the endpoint is idempotent (Inbox / one
-    // │ record per message); timeouts, jittered retries and a circuit breaker protect the
-    // │ API.
+    // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+    // │ Retrying this POST is safe ONLY because the endpoint is idempotent (Inbox +
+    // │ invalidation is a no-op the second time); timeouts, jittered retries and a circuit
+    // │ breaker protect the API.
     // └──────────────────────────────────────────────────────────────────────────────────────
     .AddStandardResilienceHandler(options =>
     {
@@ -58,7 +62,10 @@ builder.Services
         options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(60);
     });
 
-// Health endpoints for the orchestrator's probes, served on Health:Urls.
+// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// │ Health endpoints for the orchestrator's probes (Health:Urls): live = the consume loop
+// │ runs; ready = joined the consumer group (Degraded while a message is retried).
+// └──────────────────────────────────────────────────────────────────────────────────────
 builder.AddWorkerHealthEndpoints();
 
 var host = builder.Build();

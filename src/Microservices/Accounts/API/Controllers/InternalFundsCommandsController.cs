@@ -61,8 +61,10 @@ public sealed class InternalFundsCommandsController(FundsCommandHandler handler)
             return ValidationProblem("PaymentNumber, CustomerNumber, Bsb and AccountNumber are required.");
         }
 
-        // A reservation names the initiator's branch: the funds may only be held on an account
-        // of that branch (the payment screen's account search is not the control - this is).
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ A reservation names the initiator's branch: the funds may only be held on an account
+        // │ of that branch (the payment screen's account search is not the control - this is).
+        // └──────────────────────────────────────────────────────────────────────────────────────
         BranchCode? branch = null;
         if (type == FundsCommandType.Reserve && !BranchCode.TryCreate(request.BranchCode, out branch))
             return ValidationProblem("ReserveFunds requires the initiator's BranchCode.");

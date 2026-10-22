@@ -11,7 +11,7 @@ using OpenTelemetry.Metrics;
 
 namespace EnterpriseWebPlatform.Common.Observability;
 
-// ┌─ :: ARCHITECTURE :: Prometheus metrics, including every health check ──────────────────────────
+// ┌─ :: OBSERVABILITY :: Prometheus metrics, including every health check ─────────────────────────
 // │ Why : Dashboards and alerts must see what the readiness probe sees - a parked Outbox, a failed
 // │       compensation - without parsing logs.
 // │ How : /metrics in Prometheus format: HTTP, rate limiting, authentication, resilience, database

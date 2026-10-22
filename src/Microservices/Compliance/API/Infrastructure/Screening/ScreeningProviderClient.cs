@@ -83,7 +83,7 @@ public sealed class ScreeningProviderClient(HttpClient http, IOptions<ScreeningP
             message.Headers.Add("X-Api-Key", options.Value.ApiKey);
             response = await http.SendAsync(message, cancellationToken);
         }
-        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
         // │ If the circuit is open, report the provider as unavailable at once - the case is
         // │ retried later, never decided.
         // └──────────────────────────────────────────────────────────────────────────────────────

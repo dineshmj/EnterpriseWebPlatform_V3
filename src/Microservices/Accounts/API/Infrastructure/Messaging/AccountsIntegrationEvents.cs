@@ -9,7 +9,9 @@ using EnterpriseWebPlatform.Common.Observability;
 
 namespace EnterpriseWebPlatform.Accounts.Api.Infrastructure.Messaging;
 
-// Published contracts (topics accounts.*), in the platform's standard envelope.
+// ┌─ CONTRACT ───────────────────────────────────────────────────────────────────────────
+// │ Published contracts (topics accounts.*), in the platform's standard envelope.
+// └──────────────────────────────────────────────────────────────────────────────────────
 
 public sealed record AccountsIntegrationEventEnvelope<TPayload>(
     Guid MessageId,

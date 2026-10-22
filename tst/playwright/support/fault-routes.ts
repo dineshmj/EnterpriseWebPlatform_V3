@@ -94,8 +94,10 @@ export async function withRoute<T>(operator: ShellPage, api: RoutedApi, state: E
         await controls.open();
         await controls.set(api, 'Open');
       } catch {
-        // The page could not do it (a failed test may have left the operator's window anywhere):
-        // open every route at the proxy itself, so the next test starts clean.
+        // ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+        // │ The page could not do it (a failed test may have left the operator's window anywhere):
+        // │ open every route at the proxy itself, so the next test starts clean.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         await openAllRoutes();
       }
     });
