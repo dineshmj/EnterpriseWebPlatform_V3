@@ -29,15 +29,31 @@ public sealed class KafkaProducer : IKafkaProducer, IDisposable
     {
         var configuration = KafkaClientSecurity.Apply(new ProducerConfig
         {
-            // A publish is acknowledged only when all in-sync replicas have it,
-            // and broker-side de-duplication prevents duplicates and reordering
-            // caused by the producer's own internal retries.
+            // ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+            // │ `Acks = Acks.All` ensures durability: a publish is acknowledged only when all
+            // │ in-sync replicas have it. Combined with `EnableIdempotence = true`, this provides
+            // │ both durability and idempotency:
+            // │ 
+            // │ - EnableIdempotence: broker-side de-duplication prevents duplicates and reordering
+            // │   caused by the producer's own internal retries.
+            // │ - Acks = Acks.All: all in-sync replicas receive the message before acknowledgment.
+            // └──────────────────────────────────────────────────────────────────────────────────────
             Acks = Acks.All,
             EnableIdempotence = true,
             MaxInFlight = 5,
             MessageTimeoutMs = 30_000
         }, options.Value);
 
+        // ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+        // │ A Confluent.Kafka IProducer is a long-lived object that maintains a connection to the
+        // │ broker. This field is initialized once and reused for all publishes. It is
+        // │ thread-safe and can be used concurrently.
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+        // │ The `.WithClientLog` call below hands off Kafka's own library messages and errors
+        // │ to the `KafkaClientLog` instance, which decides whether to log them as Warning
+        // │ or Debug. See the extension method in `KafkaClientLog` class for details.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         _producer = new ProducerBuilder<string, string>(configuration)
             .WithClientLog(new KafkaClientLog(logger, "producer"))
             .Build();
@@ -72,6 +88,10 @@ public sealed class KafkaProducer : IKafkaProducer, IDisposable
             kafkaHeaders.Add(name, System.Text.Encoding.UTF8.GetBytes(value));
         }
 
+        // ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+        // │ The Confluent.Kafka IProducer field of this class writes the message to the broker
+        // │ asynchronously through the `_producer.ProduceAsync()` lambda expression below.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         await CountedAsync(topic, () => _producer.ProduceAsync(
             topic,
             new Message<string, string>

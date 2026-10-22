@@ -53,13 +53,17 @@ public sealed class CachedM2MTokenClient(
             {
                 Content = new FormUrlEncodedContent(new Dictionary<string, string>
                 {
-                    ["grant_type"] = "client_credentials",
+                    ["grant_type"] = "client_credentials",      // RFC 6749 section 4.4, indicates it is an M2M token request
                     ["client_id"] = settings.ClientId,
                     ["client_secret"] = settings.ClientSecret,
                     ["scope"] = settings.Scope
                 })
             };
 
+            // ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+            // │ Exchange client credentials with the IDP for an access token that proves this
+            // │ service's machine identity (M2M authentication).
+            // └──────────────────────────────────────────────────────────────────────────────────────
             using var response = await httpClientFactory
                 .CreateClient(HttpClientName)
                 .SendAsync(request, cancellationToken);

@@ -54,7 +54,22 @@ public sealed class KafkaClientLog(ILogger logger, string client)
 
 public static class KafkaClientLogExtensions
 {
-    /// <summary>Sends the producer's library messages and errors through <paramref name="log"/> instead of the console.</summary>
+    // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+    // │ Sends Kafka's library messages and errors to Serilog, instead of Kafka's
+    // │ own console.
+    // │
+    // │ See the call to `.SetLogHandler` and `SetErrorHandler` below. These subscribe to
+    // │ Kafka's own log and error events, and hands them off to the `KafkaClientLog` instance.
+    // │
+    // │ The `log.OnLog(message)` and `log.OnError(error)` calls below help log Kafka's
+    // │ messages and errors through Serilog, via the `KafkaClientLog` instance, which decides
+    // │ whether to log them as Warning or Debug.
+    // │ 
+    // │ See `KafkaProducer` class to see how this extension method is used when
+    // │ building a producer.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     public static ProducerBuilder<TKey, TValue> WithClientLog<TKey, TValue>(this ProducerBuilder<TKey, TValue> builder, KafkaClientLog log) =>
-        builder.SetLogHandler((_, message) => log.OnLog(message)).SetErrorHandler((_, error) => log.OnError(error));
+        builder
+            .SetLogHandler((_, message) =>log.OnLog(message))
+            .SetErrorHandler((_, error) => log.OnError(error));
 }
