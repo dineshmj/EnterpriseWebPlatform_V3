@@ -703,7 +703,7 @@ Some actions need more than being signed in: a payments officer's approval or re
 
 #### 2.1.6 Customers sign in to their own channel (My EWP, FAPI 2.0)
 
-EWP's customers get their own channel, "My EWP" (being built: A7 + B1). They sign in to the same IDP as the staff, but as a **separate population**: their own table (`customer_logins`), their own sign-in pages (`/Customer/Login`, `/Register`, `/Code`) and their own clients. The client decides which population is looked up. A customer token carries the `customer_number` and nothing organisational (no role, permission or branch), so every staff policy refuses it. A staff member's IDP session does not count for a customer client, and the staff sign-in page never completes a customer client's request (nor the reverse).
+EWP's customers can register for online access and sign in at the IDP (A7 + B1, first part). Their own channel, "My EWP", is planned; its clients are already registered. They sign in to the same IDP as the staff, but as a **separate population**: their own table (`customer_logins`), their own sign-in pages (`/Customer/Login`, `/Register`, `/Code`) and their own clients. The client decides which population is looked up. A customer token carries the `customer_number` and nothing organisational (no role, permission or branch), so every staff policy refuses it. A staff member's IDP session does not count for a customer client, and the staff sign-in page never completes a customer client's request (nor the reverse).
 
 **Online registration.** The customer types their customer number and the e-mail address EWP holds for them. The IDP asks Customer Onboarding as itself: a 60-second token it signs in-process for a pseudo-client that has no secret anywhere, aimed at two internal endpoints that pin it. Only an onboarded customer without online access matches. Whatever the answer, the person sees the same page and the same words; on a miss, no code is sent. A one-time code goes to the mobile on record (simulated: the console, and in Development the page). The customer enters the code and chooses a password (12+ characters). The sign-in is created first, then Customer Onboarding links it to the customer; if that fails, the sign-in is removed again. One online identity per customer.
 
@@ -726,7 +726,7 @@ DPoP versus mutual TLS: the bank-to-bank calls to the Partner Bank keep mutual T
 - FAPI 2.0 client: [SelfServiceWeb.cs](../src/IDP/ConfigRegistration/Clients/Customers/SelfServiceWeb.cs), [ClientKeyStore.cs](../src/IDP/Security/ClientKeyStore.cs), [New-EwpClientKeys.mjs](../ps/pki/New-EwpClientKeys.mjs); DPoP in the exchange: `SenderConstrained` in [TokenExchangeGrantValidator.cs](../src/IDP/Security/TokenExchangeGrantValidator.cs)
 - Automated proof: `tst/dotnet/IDP.Tests` (one-time codes, lockout, password rule)
 
-**Not yet:** the My EWP web and its Journey API (step 1b); an app authenticator or passkeys instead of SMS codes (R-17).
+**Not yet:** the My EWP web (Next.js + light BFF) and its Self-Service Journey API, with the "my accounts" and "my Digital Gold" endpoints - postponed (laptop memory), the IDP side is ready for them; an app authenticator or passkeys instead of SMS codes (R-17).
 
 ### 2.2 Authorization beyond RBAC
 
