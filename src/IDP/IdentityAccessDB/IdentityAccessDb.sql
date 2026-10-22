@@ -1,5 +1,3 @@
--- Test message
-
 -- Enterprise Web Platform V3 - IdentityAccessDb_Australian_Demo.sql
 -- PostgreSQL schema and demonstration seed data.
 -- This version is intentionally aligned with IdentityDbContext.cs.

@@ -1,0 +1,147 @@
+# ┌─ :: ARCHITECTURE + SECURITY :: Container images: built, checked and published by CI only ──────
+# │ Why : An image that runs in an environment must come from a known commit through the same
+# │       checks every time - never from a developer's machine. A vulnerable image must not reach
+# │       the registry at all.
+# │ How : Per image: lint the Dockerfile (hadolint) -> build -> scan the built image (Trivy:
+# │       vulnerabilities with a fix and any secret; HIGH / CRITICAL fails the job) -> only then,
+# │       on main, push to GHCR with an SBOM and BuildKit's SLSA provenance attached. Tags are
+# │       the full commit SHA (what a deployment pins) and the branch name.
+# │       Actions are pinned to commit SHAs (a moved tag cannot change what runs here);
+# │       Dependabot (.github/dependabot.yml) proposes the updates.
+# │ Ref : doc/Containers.md | OWASP A06, A08 | SLSA Build L2 | CIS Docker Benchmark 4.1, 4.10
+# └────────────────────────────────────────────────────────────────────────────────────────────────
+name: Container images
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'Directory.Build.props'
+      - '.dockerignore'
+      - '.github/workflows/container-images.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'Directory.Build.props'
+      - '.dockerignore'
+      - '.github/workflows/container-images.yml'
+  workflow_dispatch:
+
+# SEC: least privilege by default; the job below asks for what it needs.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  # Publish only from main (a push or a manual run), never from a pull request.
+  PUBLISH: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+
+jobs:
+  image:
+    name: ${{ matrix.image }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write        # push to GHCR
+    strategy:
+      fail-fast: false
+      # ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────────
+      # │ First slice: the Payments context. Every other deployable joins this list with its own
+      # │ Dockerfile (doc/Containers.md, "Adding an image").
+      # └──────────────────────────────────────────────────────────────────────────────────────────
+      matrix:
+        include:
+          - image: ewp-payments-api
+            dockerfile: src/Microservices/Payments/API/Dockerfile
+            build-args: ''
+          - image: ewp-payments-bff-web
+            dockerfile: src/Microservices/Payments/BFF.Web/Dockerfile
+            # DEBT: the Shell origin is compiled into the micro front end (see that Dockerfile).
+            build-args: SHELL_ORIGIN=${{ vars.EWP_SHELL_ORIGIN || 'https://shell.dev.localhost:46367' }}
+          - image: ewp-payments-saga-reply-subscriber
+            dockerfile: src/AsyncWorkflows/Subscribers/Payments/PaymentsSagaReplySubscriber/Dockerfile
+            build-args: ''
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Lint the Dockerfile
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
+        with:
+          dockerfile: ${{ matrix.dockerfile }}
+          failure-threshold: warning
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Image name and tags
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
+          tags: |
+            type=sha,format=long
+            type=ref,event=branch
+            type=ref,event=pr
+
+      - name: Build (not published yet)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          build-args: ${{ matrix.build-args }}
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: ${{ matrix.image }}:scan
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+      # ┌─ SEC ────────────────────────────────────────────────────────────────────────────────────
+      # │ The gate: a HIGH or CRITICAL vulnerability that has a fix, or any secret found in a
+      # │ layer, stops the job before anything is published.
+      # └──────────────────────────────────────────────────────────────────────────────────────────
+      - name: Scan the image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}:scan
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
+
+      - name: Sign in to GHCR
+        if: env.PUBLISH == 'true'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Same inputs as the scanned build, so the layers come from the cache: what is pushed is
+      # what was scanned.
+      - name: Publish with SBOM and provenance
+        if: env.PUBLISH == 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          build-args: ${{ matrix.build-args }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          sbom: true
+          provenance: mode=max
+          cache-from: type=gha,scope=${{ matrix.image }}

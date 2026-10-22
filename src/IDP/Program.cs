@@ -5,6 +5,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 using Duende.IdentityServer.EntityFramework.Stores;
 using Npgsql;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 using Serilog;
 
@@ -33,6 +34,14 @@ try
     // │ metrics.
     // └──────────────────────────────────────────────────────────────────────────────────────
     builder.AddEwpObservability("identity-server", tracing => tracing.AddAspNetCoreInstrumentation().AddNpgsql());
+
+    // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+    // │ The IDP's own sign-in counters (user_login, user_login_failure, user_logout, consent_*;
+    // │ Pages/Telemetry.cs) live on a meter named after the assembly. A meter is exported only
+    // │ when it is listed, so it is added here - without it a burst of failed sign-ins would
+    // │ never reach /metrics or an alert.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    builder.Services.ConfigureOpenTelemetryMeterProvider(metrics => metrics.AddMeter(EnterpriseWebPlatform.IdentityServer.Pages.Telemetry.ServiceName));
 
     // PostgreSQL database for identity and authorization data.
     var identityDb = builder.Configuration.GetConnectionString("IdentityDbConnection")

@@ -1,0 +1,23 @@
+# ┌─ :: SECURITY :: Keeping pinned things current ─────────────────────────────────────────────────
+# │ Why : The workflow pins actions to commit SHAs and the Dockerfiles pin exact base image tags.
+# │       Pinning stops silent changes; without updates it would also stop security fixes.
+# │ How : Dependabot proposes a pull request a week per ecosystem; the image workflow builds and
+# │       scans each proposal before it can be merged. NuGet and pnpm stay with the existing
+# │       routine (Scan-Dependencies.ps1, pnpm audit at every export).
+# │ Ref : doc/Containers.md | OWASP A06 Vulnerable and Outdated Components
+# └────────────────────────────────────────────────────────────────────────────────────────────────
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    # Every folder with a Dockerfile (doc/Containers.md, "Adding an image").
+    directories:
+      - /src/Microservices/Payments/API
+      - /src/Microservices/Payments/BFF.Web
+      - /src/AsyncWorkflows/Subscribers/Payments/PaymentsSagaReplySubscriber
+    schedule:
+      interval: weekly

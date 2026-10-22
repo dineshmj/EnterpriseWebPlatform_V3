@@ -1,0 +1,47 @@
+# ┌─ :: SECURITY + ARCHITECTURE :: What a container build may see ──────────────────────────────────
+# │ Why : Every Dockerfile builds from the repository root (the services share src/Common and
+# │       src/AsyncWorkflows). Whatever is in the build context can be copied into an image layer by
+# │       mistake - and an image layer is published to the registry for good.
+# │ How : Development secrets, key material and local build output never enter the context: a
+# │       COPY of a whole project folder then cannot carry them into an image, whatever it says.
+# │       The images are built from source only, so no local bin/obj/node_modules either.
+# │ Ref : doc/Containers.md | OWASP A05 Security Misconfiguration | CWE-798 | CWE-538 |
+# │       Threat-Model R-10
+# └────────────────────────────────────────────────────────────────────────────────────────────────
+
+# ┌─ SEC ────────────────────────────────────────────────────────────────────────────────────────────
+# │ Development settings (passwords, client secrets, API keys) and key material of any kind.
+# └──────────────────────────────────────────────────────────────────────────────────────────────────
+**/appsettings.Development.json
+**/.env
+**/.env.*
+**/*.pem
+**/*.pfx
+**/*.p12
+**/*.key
+**/*.jwk
+**/*.password
+**/keys/
+**/AuditAnchors/
+**/smartzipper.exclude.json
+
+# Local build output and dependencies: the images restore and build their own.
+**/bin/
+**/obj/
+**/node_modules/
+**/.next/
+**/out/
+**/*.tsbuildinfo
+src/Microservices/*/BFF.Web/wwwroot/
+
+# Not part of any image.
+.git/
+.github/
+.vs/
+.vscode/
+**/*.user
+**/*.zip
+doc/
+tst/
+kafka/
+ps/
