@@ -25,12 +25,30 @@ export class PurchaseWorkflowStarter implements OnModuleDestroy {
 
   async ensureStarted(purchaseNumber: string): Promise<FollowUp> {
     try {
+      // ┌─ NOTE ─────────────────────────────────────────────────────────────────────────────
+      // │ The below statement instantiates a Temporal client.
+      // └──────────────────────────────────────────────────────────────────────────────────────  
       const client = new Client({ connection: await this.connect(), namespace: this.options.temporalNamespace });
+
+      // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+      // │ The below statement starts the Temporal workflow, which may take hours. It must
+      // │ survive restarts and never advise or cancel twice. The Journey API only STARTS the
+      // │ workflow - workflow ID gold-purchase-<number>, so a second start is
+      // │ "already running", never a second workflow.
+      // │
+      // │ Its input is the purchase number only: no token, no account number in the workflow's
+      // │ history.
+      // │
+      // │ The Partner Products Worker runs it with its own machine identity. If Temporal cannot
+      // │ be reached, the purchase stays as it is and the screen offers "Continue"
+      // │ (this start again).
+      // └──────────────────────────────────────────────────────────────────────────────────────  
       await client.workflow.start('goldPurchaseWorkflow', {
         workflowId: `gold-purchase-${purchaseNumber}`,
         taskQueue: this.options.temporalTaskQueue,
         args: [{ purchaseNumber }],
       });
+
       this.logger.log(`Purchase workflow started for ${purchaseNumber}.`);
       return 'STARTED';
     } catch (error) {

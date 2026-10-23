@@ -96,10 +96,19 @@ export class DomainApiClient {
     subjectToken: string, scope: string, method: 'GET' | 'POST' | 'DELETE', url: string, what: string,
     body?: string | FormData, contentType?: string, extraHeaders: Record<string, string> = {}, timeoutMs = 15_000,
   ): Promise<T> {
+    // ┌─ SECURITY ─────────────────────────────────────────────────────────────────────────────
+    // │ The Journey API must never act as itself, and a domain API's raw error would leak its
+    // │ internals to the screen. For each call the person's token is exchanged (RFC 8693) for
+    // │ exactly that API's scope; the domain's own refusals (400 / 409, written for the counter)
+    // │ pass through; 401 / 403 become a plain 403, 404 a 404, anything else a 503 "try again"
+    // │ - with timeouts.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     const token = await this.exchange.exchange(subjectToken, scope);
+    
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     let response: Response;
+
     try {
       response = await fetch(url, {
         method,
@@ -122,6 +131,7 @@ export class DomainApiClient {
     if (response.ok) return payload as T;
 
     const detail = payload.detail ?? Object.values(payload.errors ?? {}).flat()[0];
+
     switch (response.status) {
       // 400, and 422 from Documents Management (e.g. a file whose content is not what its type says): the reason passes.
       case 400:
