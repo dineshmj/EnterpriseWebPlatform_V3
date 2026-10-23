@@ -27,11 +27,14 @@ builder.Services.AddSingleton<IKafkaProducer, KafkaProducer>();
 builder.Services.Configure<CustomerOutboxPublisherOptions>(
     builder.Configuration.GetSection(CustomerOutboxPublisherOptions.SectionName));
 
-builder.Services.AddDbContext<CustomerOutboxDbContext>(options =>
-{
-    options.UseNpgsql(
-        builder.Configuration.GetConnectionString("CustomerDbConnection"));
-});
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ Fail closed at start-up: the connection string (with its password) comes from the
+// │ environment outside Development; a missing one stops the relay here, not at its first
+// │ database call.
+// └──────────────────────────────────────────────────────────────────────────────────────
+var connectionString = builder.Configuration.GetConnectionString("CustomerDbConnection")
+    ?? throw new InvalidOperationException("Connection string 'CustomerDbConnection' was not configured.");
+builder.Services.AddDbContext<CustomerOutboxDbContext>(options => options.UseNpgsql(connectionString));
 
 builder.Services.AddScoped<ICustomerOutboxPublisher, CustomerOutboxPublisher>();
 

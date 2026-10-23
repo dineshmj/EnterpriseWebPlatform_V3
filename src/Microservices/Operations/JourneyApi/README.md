@@ -28,7 +28,7 @@ It holds no data. It needs no further token: the readiness probes are open (they
 
 ## The fault proxy (turning an API "off")
 
-In Development every server-to-server call to an EWP API goes through one Toxiproxy process (`ps\toxiproxy\Start-Toxiproxy.ps1`, started by `Start-NodeServices.ps1`; routes in `ps\toxiproxy\toxiproxy.json`, ports 47101-47111): the BFFs, the Journey APIs, the Kafka subscribers, the Shell's notifications relay and the Partner Products Worker point at the route, not at the API (the .NET callers in `appsettings.Development.json`, the Node services in `runnow.bat`). Operations then makes a route:
+In Development every server-to-server call to an EWP API goes through one Toxiproxy process (`ps\toxiproxy\Start-Toxiproxy.ps1`, started on its own like Kafka and Temporal; routes in `ps\toxiproxy\toxiproxy.json`, ports 47101-47111): the BFFs, the Journey APIs, the Kafka subscribers, the Shell's notifications relay and the Partner Products Worker point at the route, not at the API (the .NET callers in `appsettings.Development.json`, the Node services in `runnow.bat`). Operations then makes a route:
 
 | State | What the callers see |
 |---|---|

@@ -5,6 +5,71 @@ import { useEffect } from 'react';
 import { Badge } from './ui/feedback';
 import { shellOrigin } from '../../lib/shell-origin';
 
+export interface WorkspaceContextItem {
+  title: string;
+  value: string | number | boolean;
+}
+
+export interface WorkspaceContext {
+  persistentContext: WorkspaceContextItem[];
+  currentContext: WorkspaceContextItem[];
+  retainedContext: WorkspaceContextItem[];
+}
+
+const EMPTY: WorkspaceContext = { persistentContext: [], currentContext: [], retainedContext: [] };
+
+let latestWorkspaceContext: WorkspaceContext = EMPTY;
+
+// ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+// │ The workspace context, as in the other MFEs: the customer is the root (persistent) and
+// │ the Digital Gold record the current item. Titles match theirs ("Customer Name",
+// │ "Customer Number"), so the Shell keeps one customer across Customer Onboarding,
+// │ Payments and Partner Products. Sent to the Shell's origin only.
+// └──────────────────────────────────────────────────────────────────────────────────────
+function publishWorkspaceContext(context: WorkspaceContext) {
+  latestWorkspaceContext = context;
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({ type: 'BSS_CONTEXT_UPDATE', context }, shellOrigin());
+  }
+}
+
+const sameTitle = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+
+/**
+ * Tell the Shell which customer (root) and record (current) the staff member is on. The same
+ * root keeps the retained context; another customer starts afresh.
+ */
+export function publishSelection(root: WorkspaceContextItem[], current: WorkspaceContextItem[]) {
+  const previous = latestWorkspaceContext;
+  const common = root.filter(item => previous.persistentContext.some(p => sameTitle(p.title, item.title)));
+  const sameRoot = common.length > 0 && common.every(item =>
+    previous.persistentContext.some(p => sameTitle(p.title, item.title) && String(p.value) === String(item.value)));
+
+  if (!sameRoot) {
+    publishWorkspaceContext({ persistentContext: root, currentContext: current, retainedContext: [] });
+    return;
+  }
+
+  const persistentContext = [
+    ...previous.persistentContext.filter(p => !root.some(item => sameTitle(item.title, p.title))),
+    ...root,
+  ];
+  const retainedContext = previous.retainedContext.filter(r => !current.some(item => sameTitle(item.title, r.title)));
+  publishWorkspaceContext({ persistentContext, currentContext: current, retainedContext });
+}
+
+/** On leaving: the current record moves to "retained", so the next page still shows it. */
+function retainCurrentContext() {
+  const current = latestWorkspaceContext.currentContext;
+  if (current.length === 0) return;
+  const titles = new Set(current.map(item => item.title.toLowerCase()));
+  publishWorkspaceContext({
+    persistentContext: latestWorkspaceContext.persistentContext,
+    currentContext: [],
+    retainedContext: [...latestWorkspaceContext.retainedContext.filter(item => !titles.has(item.title.toLowerCase())), ...current],
+  });
+}
+
 /** How often, at most, this application tells the Shell that the person is active here. */
 const ACTIVITY_REPORT_MS = 60_000;
 
@@ -34,8 +99,9 @@ function useReportActivityToShell() {
 }
 
 /**
- * The Shell-MFE protocol, as in the other MFEs: announce readiness (BSS_MFE_READY), and answer
- * the Shell's navigation requests. A Form VII or slip being entered is not saved anywhere until it is recorded -
+ * The Shell-MFE protocol, as in the other MFEs: announce readiness (BSS_MFE_READY), take the
+ * Shell's workspace context (BSS_CONTEXT_HANDOFF), publish the customer (publishSelection) and
+ * answer the Shell's navigation requests. A Form VII or slip being entered is not saved anywhere until it is recorded -
  * leaving the page only drops what the staff member typed, the paper form is still in their hand - so
  * navigation is always allowed at once (no 30-second fail-open wait).
  */
@@ -48,7 +114,13 @@ export function MfeShell({ title, subtitle = 'Partner Products', children }: { t
 
     const handler = (event: MessageEvent) => {
       if (event.source !== parentWindow || event.origin !== shellOrigin()) return;
+      // The Shell hands over the workspace it shows (e.g. the customer picked in Payments).
+      if (event.data?.type === 'BSS_CONTEXT_HANDOFF') {
+        latestWorkspaceContext = (event.data.context ?? EMPTY) as WorkspaceContext;
+        return;
+      }
       if (event.data?.type === 'BSS_NAVIGATION_REQUEST' && event.data.requestId) {
+        retainCurrentContext();
         (event.source as Window).postMessage(
           { type: 'BSS_NAVIGATION_RESPONSE', requestId: event.data.requestId, allowed: true },
           event.origin,

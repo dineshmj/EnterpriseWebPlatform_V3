@@ -13,6 +13,7 @@ using Duende.Bff;
 using OpenTelemetry.Trace;
 
 using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
+using EnterpriseWebPlatform.Common.WebUtilities.Helpers;
 using EnterpriseWebPlatform.Payments.Bff.Web.Configuration;
 using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
@@ -319,6 +320,7 @@ app.Use(async (context, next) =>
     await next();
 });
 
+app.UseEwpNextExportSegmentFiles();   // Next.js 16 export: prefetch files under the name the page asks for
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseRouting();

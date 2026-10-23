@@ -16,8 +16,9 @@
         Partner Products web (Next.js + BFF)  https://ewp-partner.dev.localhost:46384
         Partner Products Worker (Temporal)    health https://localhost:46383/health (needs Temporal on localhost:7233)
 
-    Before them (all services only) it starts the fault proxy, Toxiproxy (ps\toxiproxy\Start-Toxiproxy.ps1):
-    in Development every server-to-server call to an EWP API goes through it, every route open.
+    The fault proxy (Toxiproxy) is NOT started here: like Kafka and Temporal it is platform plumbing
+    that the .NET services use too - start it before the solution with ps\toxiproxy\Start-Toxiproxy.ps1
+    (and stop it there with -Stop). This script only warns when it is not running.
 
     Each web app is started after its Journey API is listening (it calls it).
     To DEBUG one of them: close its window (or Ctrl+C), then run it from VS Code - see ReadMe.txt
@@ -28,7 +29,8 @@
     .\ps\run\Start-NodeServices.ps1 -Only Audit        # only the two Audit services
     .\ps\run\Start-NodeServices.ps1 -Only Operations   # only the two Operations services
     .\ps\run\Start-NodeServices.ps1 -Only PartnerProducts   # only the three Partner Products services
-    .\ps\run\Start-NodeServices.ps1 -Stop              # stop all eight and the fault proxy (the processes listening on their ports)
+    .\ps\run\Start-NodeServices.ps1 -Stop              # stop all eight (the processes listening on their ports) and close
+                                                       # their windows; the fault proxy, Kafka and Temporal keep running
     .\ps\run\Start-NodeServices.ps1 -Restart           # stop, wait until the ports are free, start again (picks up changed code;
                                                        # the web apps rebuild as they start). Works with -Only too.
 #>
@@ -63,7 +65,26 @@ function Get-Listener([int] $port) {
     Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
 }
 
-# The fault proxy's admin port (ps\toxiproxy\toxiproxy.json holds its routes, 47101-47111).
+# The command line each service window is started with (below) - also how -Stop finds that window.
+function Get-WindowCommand([string] $name) { "title $name && runnow.bat" }
+
+# ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+# │ Each service runs in "cmd /k ...", which keeps its window open after the service has
+# │ stopped. So -Stop ends the window's own cmd.exe with its whole process tree (pnpm,
+# │ node); the console window then closes by itself. Found by its exact command line, so
+# │ the Kafka, Temporal and fault proxy windows - and any other console - are never touched.
+# └──────────────────────────────────────────────────────────────────────────────────────
+function Close-ServiceWindow([string] $name) {
+    $command = Get-WindowCommand $name
+    $windows = @(Get-CimInstance Win32_Process -Filter "Name = 'cmd.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -and $_.CommandLine.TrimEnd().EndsWith($command) })   # Windows adds a trailing space
+    foreach ($window in $windows) {
+        & taskkill.exe /PID $window.ProcessId /T /F *> $null
+    }
+    return $windows.Count
+}
+
+# The fault proxy's admin port (ps\toxiproxy\Start-Toxiproxy.ps1 starts it; only checked here).
 $faultProxyPort = 8474
 
 if ($Stop -and $Restart) {
@@ -72,18 +93,17 @@ if ($Stop -and $Restart) {
 }
 
 if ($Stop -or $Restart) {
-    if ($Only -eq 'All') {
-        $listener = Get-Listener $faultProxyPort
-        if ($listener) {
-            Stop-Process -Id $listener.OwningProcess -Force
-            Write-Host "Stopped the fault proxy (port $faultProxyPort)." -ForegroundColor Yellow
-        }
-    }
     foreach ($s in $services) {
         $listener = Get-Listener $s.Port
         if ($listener) {
             Stop-Process -Id $listener.OwningProcess -Force
-            Write-Host "Stopped $($s.Name) (port $($s.Port))." -ForegroundColor Yellow
+        }
+        # Also a window whose service had already ended (e.g. after an error).
+        $closed = Close-ServiceWindow $s.Name
+        if ($listener) {
+            Write-Host "Stopped $($s.Name) (port $($s.Port))$(if ($closed) { ' and closed its window' })." -ForegroundColor Yellow
+        } elseif ($closed) {
+            Write-Host "$($s.Name) was not running; closed its window." -ForegroundColor Yellow
         } else {
             Write-Host "$($s.Name) was not running." -ForegroundColor DarkGray
         }
@@ -94,7 +114,7 @@ if ($Stop -or $Restart) {
     # │ -Restart: wait until every port is free, or the start below would see the old process
     # │ still listening and skip that service - leaving the OLD code running.
     # └──────────────────────────────────────────────────────────────────────────────────────
-    $ports = @($services.Port) + $(if ($Only -eq 'All') { $faultProxyPort } else { @() })
+    $ports = @($services.Port)
     $deadline = (Get-Date).AddSeconds(30)
     while (($ports | Where-Object { Get-Listener $_ }) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
     $stillBusy = @($ports | Where-Object { Get-Listener $_ })
@@ -114,12 +134,13 @@ if (($services.Group -contains 'Audit' -or $services.Group -contains 'Operations
 }
 
 # ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
-# │ The fault proxy first: in Development the callers' settings point at its routes, so
-# │ without it every server-to-server call fails. It only passes bytes on until
-# │ daniel.ops cuts a route (Operations > Simulator & Fault Controls).
+# │ The fault proxy is started on its own (Start-Toxiproxy.ps1), like Kafka and Temporal:
+# │ the .NET services call through it too, and it must not go down when these restart.
+# │ Without it every server-to-server call in Development fails - so say so, loudly.
 # └──────────────────────────────────────────────────────────────────────────────────────
-if ($Only -eq 'All') {
-    & (Join-Path $root 'ps\toxiproxy\Start-Toxiproxy.ps1')
+if (-not (Get-Listener $faultProxyPort)) {
+    Write-Host 'The fault proxy is not running: every call to an API through it will fail. Start it with:' -ForegroundColor Red
+    Write-Host '  .\ps\toxiproxy\Start-Toxiproxy.ps1' -ForegroundColor Red
 }
 
 foreach ($s in $services) {
@@ -142,7 +163,7 @@ foreach ($s in $services) {
 
     $folder = Join-Path $root $s.Folder
     Start-Process -FilePath 'cmd.exe' -WorkingDirectory $folder `
-        -ArgumentList '/k', "title $($s.Name) && runnow.bat"
+        -ArgumentList '/k', (Get-WindowCommand $s.Name)
     Write-Host "Started $($s.Name) in its own window (port $($s.Port))." -ForegroundColor Green
 }
 

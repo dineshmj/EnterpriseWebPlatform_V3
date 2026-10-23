@@ -1,8 +1,10 @@
 # Container images
 
 How EWP's services become container images, and what an image needs from its environment to run.
-First slice: the **Payments** context (API, BFF with its micro front end, saga reply subscriber).
-The other deployables follow the same pattern (see [Adding an image](#adding-an-image)).
+Every image is listed in [.github/container-images.json](../.github/container-images.json): today
+the 8 .NET domain APIs, the Payments BFF, the Outbox publisher, the 8 Kafka subscribers and the
+3 simulators (22 images). Still to come: the IDP, the Shell and the other .NET BFFs, then the
+Node.js services (see [Adding an image](#adding-an-image)).
 
 In short: **CI builds every image from a commit, checks it, and publishes it only if the checks
 pass. An image holds no secret and no environment's settings: each environment supplies settings
@@ -21,6 +23,10 @@ and secrets when the container starts, so one image runs everywhere.**
 
 ## What CI does per image
 
+0. **Which images** (once per run): an image is built when one of the folders listed for it in
+   the manifest changed - its project and every shared project it references. A change to the
+   build itself (the workflow, the manifest, `.dockerignore`, `Directory.Build.props`) or a manual
+   run builds all of them. The run's summary lists the images picked.
 1. **hadolint**: lints the Dockerfile (warnings fail).
 2. **Build** with Buildx (layer cache in GitHub Actions).
 3. **Trivy**: scans the built image for vulnerabilities that have a fix and for secrets. HIGH or
@@ -36,15 +42,34 @@ Pull requests run steps 1-3 and never publish.
   material (`*.pem`, `*.pfx`, `*.jwk`, `keys/`, ...) out of the build context. A `COPY` of a whole
   project folder therefore cannot carry them into an image.
 - Connection strings carry passwords, so they move from `appsettings.json` (which goes into the
-  image) to `appsettings.Development.json`. **Done for Payments** (API and BFF); the other services
+  image) to `appsettings.Development.json`. **Done for every service with an image** (the 9
+  domain APIs, the Payments BFF, the Outbox publisher); the IDP, the Shell and the other BFFs
   follow with their images. A host without a connection string refuses to start.
 - Trivy's secret scanner checks the finished image as a second line of defence.
 
-## Run-time contract (Payments)
+## Run-time contract
 
 Every image runs as UID 1654, listens on 8080, and has `ASPNETCORE_ENVIRONMENT` unset
 (Production). Its files belong to root, so the root file system can be read-only; give it a
-writable `/tmp` (emptyDir).
+writable `/tmp` (emptyDir). Probes: `/health/live` and `/health/ready` on 8080 (workers: their
+`Health__Urls` is set to `http://+:8080` in the image).
+
+**What every image needs:** the settings in its `appsettings.json` that hold local addresses
+(IDP, other APIs, Kafka bootstrap servers), overridden per environment; and the secrets that its
+`appsettings.Development.json` lists under `//Secrets` / `//ConnectionStrings` - always from the
+environment or a secret store. Kafka clients also need the Kafka trust root as a mounted file
+(`Kafka__SslCaLocation`).
+
+**Beyond that:**
+
+| Image | Needs |
+|---|---|
+| `ewp-audit-api` | A write-once volume for the signed checkpoints: `Audit__Anchors__Directory`; the anchor signing key from the secret store |
+| `ewp-documents-management-api` | A volume for the encrypted documents: `DocumentStorage__RootPath`; the key ring (`DocumentStorage__Encryption__*`) from the secret store |
+| `ewp-partner-products-api` | EWP's mTLS client and request-signing certificates and their password files, mounted from the secret store (`PartnerBank__*CertificatePath`, `*PasswordPath`) |
+| `ewp-*-simulator` | Development, test and demo environments only - never deployed to production |
+
+The Payments images in full, as the worked example:
 
 | Image | Probes (8080) | Required from the environment | Mounted files |
 |---|---|---|---|
@@ -93,6 +118,8 @@ the front end: each BFF serves `/ewp-runtime-config.js` from its own `ShellOrigi
    project paths and the `COPY` lines of the shared projects it references (`ProjectReference`).
 2. Move any connection string with a password from `appsettings.json` to
    `appsettings.Development.json`, and record it in this page's run-time contract.
-3. Add the image to the matrix in [container-images.yml](../.github/workflows/container-images.yml)
-   and its folder to [dependabot.yml](../.github/dependabot.yml).
+3. Add the image to [.github/container-images.json](../.github/container-images.json) - its name,
+   Dockerfile and EVERY folder it is built from (its project, each shared project it references,
+   anything else its Dockerfile copies); a missing folder means a change there does not rebuild
+   the image. Add its folder to [dependabot.yml](../.github/dependabot.yml).
 4. Add a "Container image" row to the project README's "Security controls" table.

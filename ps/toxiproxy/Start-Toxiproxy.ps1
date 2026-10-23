@@ -22,23 +22,39 @@
     pinned release (v2.12.0) from GitHub into %LOCALAPPDATA%\EWP\toxiproxy and keeps it only when
     its SHA-256 matches the release's checksums.txt.
 
-    Stop it with Ctrl+C in its window (Start-NodeServices.ps1 -Stop stops it too).
+    Like Kafka and Temporal it is platform plumbing, started on its own - before the .NET solution
+    and the Node.js services, whose calls go through it - and left running while they restart.
+    Stop it with -Stop (its window closes), or Ctrl+C in its window.
 
 .EXAMPLE
     .\ps\toxiproxy\Start-Toxiproxy.ps1 -Install     # once: download, check, then start
     .\ps\toxiproxy\Start-Toxiproxy.ps1
+    .\ps\toxiproxy\Start-Toxiproxy.ps1 -Stop        # stop it (every route opens again at the next start)
 #>
 [CmdletBinding()]
 param(
     [int] $AdminPort = 8474,
     [string] $Executable = (Join-Path $env:LOCALAPPDATA 'EWP\toxiproxy\toxiproxy-server.exe'),
     [int] $TimeoutSeconds = 30,
-    [switch] $Install
+    [switch] $Install,
+    [switch] $Stop
 )
 
 $ErrorActionPreference = 'Stop'
 
 cls;
+
+if ($Stop) {
+    # The process listening on the admin port is the proxy; its window (cmd /c) closes with it.
+    $listener = Get-NetTCPConnection -LocalPort $AdminPort -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($listener) {
+        Stop-Process -Id $listener.OwningProcess -Force
+        Write-Host "Stopped the fault proxy (admin port $AdminPort); its window closes by itself." -ForegroundColor Yellow
+    } else {
+        Write-Host "The fault proxy was not running." -ForegroundColor DarkGray
+    }
+    return
+}
 
 # ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
 # │ A downloaded executable runs on this machine: the version is pinned (never "latest")

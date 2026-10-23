@@ -112,8 +112,29 @@ async function bootstrap() {
     res.send(runtimeConfig);
   });
 
+  // ┌─ PERF ───────────────────────────────────────────────────────────────────────────────
+  // │ Next.js 16 export: a page prefetches "__next.v1.kyc.cases.__PAGE__.txt" but the export
+  // │ writes "__next.v1/kyc/cases/__PAGE__.txt" - every prefetch answered 404. Rewrite to the
+  // │ nested file when the dotted one is missing and the nested one exists (segments of
+  // │ letters, digits, "_" and "-" only; express.static still guards the root). Same rule as
+  // │ Common/WebUtilities/Helpers/NextExportSegmentFiles.cs for the .NET BFFs.
+  // └──────────────────────────────────────────────────────────────────────────────────────
+  const staticRoot = path.resolve(options.staticRoot);
+  app.use((req: express.Request, _res: express.Response, next: express.NextFunction) => {
+    if (req.method === 'GET' || req.method === 'HEAD') {
+      const slash = req.path.lastIndexOf('/');
+      const match = /^__next\.([A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+)\.txt$/.exec(req.path.slice(slash + 1));
+      if (match && !fs.existsSync(path.join(staticRoot, req.path))) {
+        const segments = match[1].split('.');
+        const nested = `${req.path.slice(0, slash + 1)}__next.${segments[0]}/${segments.slice(1).join('/')}.txt`;
+        if (fs.existsSync(path.join(staticRoot, nested))) req.url = nested + req.url.slice(req.path.length);
+      }
+    }
+    next();
+  });
+
   app.use(
-    express.static(path.resolve(options.staticRoot), {
+    express.static(staticRoot, {
       extensions: ['html'],
     })
   );

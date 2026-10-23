@@ -17,11 +17,12 @@
     Does nothing when Temporal already answers. Needs the Temporal CLI once:
         winget install Temporal.TemporalCLI
 
-    Stop it with Ctrl+C in its window. UI: http://localhost:8233
+    Stop it with -Stop (its window closes), or Ctrl+C in its window. UI: http://localhost:8233
 
 .EXAMPLE
     .\ps\temporal\Start-Temporal.ps1
     .\ps\temporal\Start-Temporal.ps1 -InMemory
+    .\ps\temporal\Start-Temporal.ps1 -Stop
 #>
 [CmdletBinding()]
 param(
@@ -29,12 +30,29 @@ param(
     [int] $UiPort = 8233,
     [string] $DbFile = (Join-Path $env:LOCALAPPDATA 'EWP\temporal\ewp-dev.db'),
     [switch] $InMemory,
-    [int] $TimeoutSeconds = 60
+    [int] $TimeoutSeconds = 60,
+    [switch] $Stop
 )
 
 cls;
 
 $ErrorActionPreference = 'Stop'
+
+if ($Stop) {
+    # ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+    # │ The process listening on the frontend port is the dev server; its window (cmd /c)
+    # │ closes with it. The workflows are in the SQLite file, so a running purchase picks up
+    # │ where it was at the next start (a worker may need a moment to reconnect).
+    # └──────────────────────────────────────────────────────────────────────────────────────
+    $listener = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($listener) {
+        Stop-Process -Id $listener.OwningProcess -Force
+        Write-Host "Stopped Temporal (port $Port); its window closes by itself." -ForegroundColor Yellow
+    } else {
+        Write-Host 'Temporal was not running.' -ForegroundColor DarkGray
+    }
+    return
+}
 
 $windowTitle = 'Temporal - started by Start-Temporal.ps1, keep open'
 

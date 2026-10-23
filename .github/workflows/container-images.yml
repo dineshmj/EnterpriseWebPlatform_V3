@@ -20,12 +20,14 @@ on:
       - 'Directory.Build.props'
       - '.dockerignore'
       - '.github/workflows/container-images.yml'
+      - '.github/container-images.json'
   pull_request:
     paths:
       - 'src/**'
       - 'Directory.Build.props'
       - '.dockerignore'
       - '.github/workflows/container-images.yml'
+      - '.github/container-images.json'
   workflow_dispatch:
 
 # SEC: least privilege by default; the job below asks for what it needs.
@@ -42,8 +44,69 @@ env:
   PUBLISH: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
 
 jobs:
+  # ┌─ ARCH + PERF ──────────────────────────────────────────────────────────────────────────────────
+  # │ Only what a commit changed is built: .github/container-images.json lists each image with the
+  # │ folders it is built from (its project and every shared project it references). An image
+  # │ builds when one of its folders changed; a change to the build itself (this workflow, the
+  # │ manifest, .dockerignore, Directory.Build.props) - or a manual run - builds them all.
+  # └────────────────────────────────────────────────────────────────────────────────────────────────
+  changes:
+    name: Which images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+      count: ${{ steps.pick.outputs.count }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Pick the images to build
+        id: pick
+        # SEC: event values reach the script as environment variables, never pasted into it.
+        env:
+          EVENT: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          base=""
+          case "$EVENT" in
+            push) base="$PUSH_BEFORE" ;;
+            pull_request) base="$PR_BASE" ;;
+          esac
+          all=true
+          if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then
+            all=false
+            git diff --name-only "$base" HEAD > changed.txt
+            if grep -q -x -E 'Directory\.Build\.props|\.dockerignore|\.github/workflows/container-images\.yml|\.github/container-images\.json' changed.txt; then
+              all=true
+            fi
+          fi
+          if [ "$all" = true ]; then
+            matrix=$(jq -c '{include: [.images[] | {image, dockerfile}]}' .github/container-images.json)
+          else
+            matrix=$(jq -c --rawfile changed changed.txt '
+              ($changed | split("\n") | map(select(length > 0))) as $files
+              | {include: [.images[]
+                  | select([.paths[] as $p | $files[] | select(startswith($p))] | length > 0)
+                  | {image, dockerfile}]}' .github/container-images.json)
+          fi
+          count=$(jq '.include | length' <<< "$matrix")
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Images to build: $count (all: $all)"
+            jq -r '.include[].image | "- " + .' <<< "$matrix"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   image:
     name: ${{ matrix.image }}
+    needs: changes
+    if: needs.changes.outputs.count != '0'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -51,18 +114,8 @@ jobs:
       packages: write        # push to GHCR
     strategy:
       fail-fast: false
-      # ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────────
-      # │ First slice: the Payments context. Every other deployable joins this list with its own
-      # │ Dockerfile (doc/Containers.md, "Adding an image").
-      # └──────────────────────────────────────────────────────────────────────────────────────────
-      matrix:
-        include:
-          - image: ewp-payments-api
-            dockerfile: src/Microservices/Payments/API/Dockerfile
-          - image: ewp-payments-bff-web
-            dockerfile: src/Microservices/Payments/BFF.Web/Dockerfile
-          - image: ewp-payments-saga-reply-subscriber
-            dockerfile: src/AsyncWorkflows/Subscribers/Payments/PaymentsSagaReplySubscriber/Dockerfile
+      # The images in .github/container-images.json whose folders this commit changed.
+      matrix: ${{ fromJSON(needs.changes.outputs.matrix) }}
 
     steps:
       - name: Check out

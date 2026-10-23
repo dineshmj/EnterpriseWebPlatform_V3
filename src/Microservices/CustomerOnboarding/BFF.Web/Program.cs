@@ -20,6 +20,7 @@ using EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.Configu
 using EnterpriseWebPlatform.BSS.Microservices.CustomerOnboarding.Bff.Web.Services;
 using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
+using EnterpriseWebPlatform.Common.WebUtilities.Helpers;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 
 // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
@@ -351,6 +352,7 @@ app.Use(async (context, next) =>
     await next();
 });
 
+app.UseEwpNextExportSegmentFiles();   // Next.js 16 export: prefetch files under the name the page asks for
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseRouting();

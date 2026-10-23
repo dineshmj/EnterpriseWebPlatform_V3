@@ -2,7 +2,7 @@
 
 import { Coins, FileSignature, ReceiptText, Search, UserRound } from 'lucide-react';
 import { FormEvent, useCallback, useEffect, useState } from 'react';
-import { formatAmount, formatTime, MfeShell, signInAgain } from '@/app/components/MfeShell';
+import { formatAmount, formatTime, MfeShell, publishSelection, signInAgain } from '@/app/components/MfeShell';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/app/components/ui/card';
 import { DescriptionList, Table, Td, Th } from '@/app/components/ui/data';
@@ -74,6 +74,24 @@ export default function DigitalGoldPage() {
     setBusy(false);
     if (loaded) { setCustomer(loaded); setMatches(null); }
   };
+
+  // The customer on screen becomes the Shell's workspace root; their Digital Gold account (or
+  // its application while it is not open yet) is the current item.
+  const customerNumber = customer?.customerNumber;
+  const customerName = customer?.name;
+  const application = customer?.digitalGold.application ?? null;
+  const goldRecord = application?.partnerAccountNumber ?? application?.number;
+  const goldStatus = application ? applicationLabel[application.status] ?? application.status : undefined;
+  useEffect(() => {
+    if (!customerNumber || !customerName) return;
+    publishSelection(
+      [{ title: 'Customer Name', value: customerName }, { title: 'Customer Number', value: customerNumber }],
+      goldRecord
+        ? [{ title: application?.partnerAccountNumber ? 'Digital Gold Account' : 'Digital Gold Application', value: goldRecord },
+           { title: 'Digital Gold Status', value: goldStatus ?? '' }]
+        : [],
+    );
+  }, [customerNumber, customerName, goldRecord, goldStatus, application?.partnerAccountNumber]);
 
   const recorded = async (message: string) => {
     setNotice(message);
@@ -271,7 +289,7 @@ function CustomerPanel({ customer, onRecorded, onError }: {
             )}
             {active.status === 'OPENED' && (
               <div className="mt-4 flex flex-wrap items-center gap-3">
-                <Button variant="secondary" onClick={() => viewAtPartner(active.number)} disabled={opening}>
+                <Button variant="partner" onClick={() => viewAtPartner(active.number)} disabled={opening}>
                   {opening ? 'Opening…' : 'View at the Partner Bank ↗'}
                 </Button>
                 <span className="text-[13px] text-ink-muted">Opens the Partner Bank&apos;s own read-only page for this account in a new tab - once, for you.</span>

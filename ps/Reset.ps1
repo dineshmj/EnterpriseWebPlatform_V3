@@ -311,7 +311,7 @@ if ($consoles.Count -gt 0) {
         Write-Host ("  - {0,-28} {1} (PID {2}){3}" -f $console.What, $name, $console.Id, $title)
     }
     Write-Host ''
-    Write-Host 'Tip: stop debugging in Visual Studio (Shift+F5), run .\ps\run\Start-NodeServices.ps1 -Stop (it stops the fault proxy too),'
+    Write-Host 'Tip: stop debugging in Visual Studio (Shift+F5), run .\ps\run\Start-NodeServices.ps1 -Stop and .\ps\toxiproxy\Start-Toxiproxy.ps1 -Stop,'
     Write-Host '     and close the Kafka window (Ctrl+C, then Y). Options 2 and 4 to 7 start Kafka again themselves.'
     Write-Host 'Nothing changed.'
     exit 1

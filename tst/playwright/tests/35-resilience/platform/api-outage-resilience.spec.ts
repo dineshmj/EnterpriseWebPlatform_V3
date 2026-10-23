@@ -18,7 +18,7 @@ import type { ShellPage } from '../../../support/pages/ShellPage';
  *    timeout and the screen says so, instead of spinning for ever; open again, the list is back.
  * Doc: Operations Journey API README ("The fault proxy"), Features 1.7.4.
  *
- * Needs the fault proxy (Start-NodeServices.ps1 starts it) and Development settings (the saga's
+ * Needs the fault proxy (ps	oxiproxyStart-Toxiproxy.ps1 starts it) and Development settings (the saga's
  * 10-second reply timer, 3 attempts; the subscribers' 10-second retry ceiling).
  */
 test.describe('Platform API outage - resilience', () => {

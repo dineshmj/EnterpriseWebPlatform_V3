@@ -16,9 +16,28 @@ updates:
   - package-ecosystem: docker
     # Every folder with a Dockerfile (doc/Containers.md, "Adding an image").
     directories:
+      - /src/AsyncWorkflows/Publishers/CustomerOnboarding/CustomerOutboxPublisher
+      - /src/AsyncWorkflows/Subscribers/Accounts/AccountApplicationOpeningSubscriber
+      - /src/AsyncWorkflows/Subscribers/Accounts/AccountsCommandSubscriber
+      - /src/AsyncWorkflows/Subscribers/Compliance/ComplianceCaseOpeningSubscriber
+      - /src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber
+      - /src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber
+      - /src/AsyncWorkflows/Subscribers/DocumentsManagement/DocumentInvalidationSubscriber
+      - /src/AsyncWorkflows/Subscribers/Notifications/NotificationsSubscriber
+      - /src/AsyncWorkflows/Subscribers/Payments/PaymentsSagaReplySubscriber
+      - /src/Microservices/Accounts/API
+      - /src/Microservices/Audit/API
+      - /src/Microservices/Compliance/API
+      - /src/Microservices/CustomerKyc/API
+      - /src/Microservices/CustomerOnboarding/API
+      - /src/Microservices/DocumentsManagement/API
+      - /src/Microservices/Notifications/API
+      - /src/Microservices/PartnerProducts/API
       - /src/Microservices/Payments/API
       - /src/Microservices/Payments/BFF.Web
-      - /src/AsyncWorkflows/Subscribers/Payments/PaymentsSagaReplySubscriber
+      - /src/Simulators/CoreBankingSimulator
+      - /src/Simulators/PaymentNetworkSimulator
+      - /src/Simulators/ScreeningProviderSimulator
     schedule:
       interval: weekly
     # ┌─ ARCH ─────────────────────────────────────────────────────────────────────────────────────

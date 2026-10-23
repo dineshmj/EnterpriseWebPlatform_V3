@@ -23,6 +23,7 @@
 **/*.password
 **/keys/
 **/AuditAnchors/
+src/Microservices/DocumentsManagement/API/DocumentStorage/
 **/smartzipper.exclude.json
 
 # Local build output and dependencies: the images restore and build their own.

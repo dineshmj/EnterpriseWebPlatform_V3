@@ -25,6 +25,7 @@ Sending Form VII to the Partner Bank (which opens the account) is step 7; until 
 - **The scan** travels in the server action (at most 6 MB per action, 5 MB per scan) and on to the Journey API as multipart; only the known fields and one file are passed on.
 - **Sessions** in PostgreSQL (`EwpBffStateDb`, schema `partner_products_bff`, user `ewp_partner_products_web`): the SHA-256 of the session cookie (never the cookie) and the tokens encrypted with AES-256-GCM (`PARTNER_PRODUCTS_WEB_SESSION_KEY`, not in the database). 30 minutes sliding.
 - **Sign-in** like every MFE: silently from the Shell's frame (authorization code + PKCE), front- and back-channel logout.
+- **The Shell's workspace**: the customer opened here becomes the workspace root (`Customer Name`, `Customer Number` - the same titles as Customer Onboarding and Payments, so the Shell keeps one customer across them) and the Digital Gold account, or its application until it is open, the current item (`publishSelection` in [MfeShell.tsx](app/components/MfeShell.tsx)).
 
 ## First run
 

@@ -13,6 +13,8 @@ export const buttonVariants = cva(
         ghost: 'text-ink-muted hover:bg-subtle hover:text-ink',
         danger: 'bg-danger-700 text-white shadow-sm hover:bg-danger-600',
         'danger-outline': 'border border-danger-200 bg-surface text-danger-700 hover:bg-danger-50',
+        /** Leads to the Partner Bank: its green and serif face (globals.css), not EWP's brand. */
+        partner: 'bg-partner font-partner text-white shadow-sm hover:bg-partner-dark',
       },
       size: {
         sm: 'h-8 px-3 text-xs',

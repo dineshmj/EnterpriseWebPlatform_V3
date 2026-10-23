@@ -2,3 +2,13 @@
 
 /* Platform design tokens (brand, typography, radii) - shared by every front end. */
 @import "../../../../Common/DesignSystem/ewp-theme.css";
+
+/* The Partner Bank's own look (its partner.css: green, sand, a serif face), ONLY on what leads to
+   the Partner Bank - so the staff member sees before the click that it opens the partner's page.
+   The rest of this page stays EWP's: the two must never be mistaken for each other. */
+@theme {
+  --color-partner: #0b6e4f;
+  --color-partner-dark: #08523b;
+  --color-partner-sand: #f6f1e7;
+  --font-partner: Georgia, "Times New Roman", serif;
+}

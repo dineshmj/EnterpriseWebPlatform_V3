@@ -1,0 +1,214 @@
+{
+  "images": [
+    {
+      "image": "ewp-account-application-opening-subscriber",
+      "dockerfile": "src/AsyncWorkflows/Subscribers/Accounts/AccountApplicationOpeningSubscriber/Dockerfile",
+      "paths": [
+        "src/AsyncWorkflows/Infrastructure/Kafka/",
+        "src/AsyncWorkflows/Infrastructure/Subscribers/",
+        "src/AsyncWorkflows/Subscribers/Accounts/AccountApplicationOpeningSubscriber/",
+        "src/Common/Observability/"
+      ]
+    },
+    {
+      "image": "ewp-accounts-api",
+      "dockerfile": "src/Microservices/Accounts/API/Dockerfile",
+      "paths": [
+        "src/AsyncWorkflows/Infrastructure/Kafka/",
+        "src/Common/Observability/",
+        "src/Common/WebUtilities/",
+        "src/Microservices/Accounts/API/"
+      ]
+    },
+    {
+      "image": "ewp-accounts-command-subscriber",
+      "dockerfile": "src/AsyncWorkflows/Subscribers/Accounts/AccountsCommandSubscriber/Dockerfile",
+      "paths": [
+        "src/AsyncWorkflows/Infrastructure/Kafka/",
+        "src/AsyncWorkflows/Infrastructure/Subscribers/",
+        "src/AsyncWorkflows/Subscribers/Accounts/AccountsCommandSubscriber/",
+        "src/Common/Observability/"
+      ]
+    },
+    {
+      "image": "ewp-audit-api",
+      "dockerfile": "src/Microservices/Audit/API/Dockerfile",
+      "paths": [
+        "src/AsyncWorkflows/Infrastructure/Kafka/",
+        "src/AsyncWorkflows/Infrastructure/Subscribers/",
+        "src/Common/Observability/",
+        "src/Common/WebUtilities/",
+        "src/Microservices/Audit/API/"
+      ]
+    },
+    {
+      "image": "ewp-compliance-api",
+      "dockerfile": "src/Microservices/Compliance/API/Dockerfile",
+      "paths": [
+        "src/AsyncWorkflows/Infrastructure/Kafka/",
+        "src/Common/Observability/",
+        "src/Common/WebUtilities/",
+        "src/Microservices/Compliance/API/"
+      ]
+    },
+    {
+      "image": "ewp-compliance-case-opening-subscriber",
+      "dockerfile": "src/AsyncWorkflows/Subscribers/Compliance/ComplianceCaseOpeningSubscriber/Dockerfile",
+      "paths": [
+        "src/AsyncWorkflows/Infrastructure/Kafka/",
+        "src/AsyncWorkflows/Infrastructure/Subscribers/",
+        "src/AsyncWorkflows/Subscribers/Compliance/ComplianceCaseOpeningSubscriber/",
+        "src/Common/Observability/"
+      ]
+    },
+    {
+      "image": "ewp-core-banking-simulator",
+      "dockerfile": "src/Simulators/CoreBankingSimulator/Dockerfile",
+      "paths": [
+        "src/Simulators/CoreBankingSimulator/"
+      ]
+    },
+    {
+      "image": "ewp-customer-kyc-api",
+      "dockerfile": "src/Microservices/CustomerKyc/API/Dockerfile",
+      "paths": [
+        "src/AsyncWorkflows/Infrastructure/Kafka/",
+        "src/Common/Observability/",
+        "src/Common/WebUtilities/",
+        "src/Microservices/CustomerKyc/API/"
+      ]
+    },
+    {
+      "image": "ewp-customer-onboarding-api",
+      "dockerfile": "src/Microservices/CustomerOnboarding/API/Dockerfile",
+      "paths": [
+        "src/Common/Observability/",
+        "src/Common/WebUtilities/",
+        "src/Microservices/CustomerOnboarding/API/"
+      ]
+    },
+    {
+      "image": "ewp-customer-outbox-publisher",
+      "dockerfile": "src/AsyncWorkflows/Publishers/CustomerOnboarding/CustomerOutboxPublisher/Dockerfile",
+      "paths": [
+        "src/AsyncWorkflows/Contracts/",
+        "src/AsyncWorkflows/Infrastructure/Kafka/",
+        "src/AsyncWorkflows/Publishers/CustomerOnboarding/CustomerOutboxPublisher/",
+        "src/Common/Observability/"
+      ]
+    },
+    {
+      "image": "ewp-document-invalidation-subscriber",
+      "dockerfile": "src/AsyncWorkflows/Subscribers/DocumentsManagement/DocumentInvalidationSubscriber/Dockerfile",
+      "paths": [
+        "src/AsyncWorkflows/Infrastructure/Kafka/",
+        "src/AsyncWorkflows/Infrastructure/Subscribers/",
+        "src/AsyncWorkflows/Subscribers/DocumentsManagement/DocumentInvalidationSubscriber/",
+        "src/Common/Observability/"
+      ]
+    },
+    {
+      "image": "ewp-documents-management-api",
+      "dockerfile": "src/Microservices/DocumentsManagement/API/Dockerfile",
+      "paths": [
+        "src/Common/Observability/",
+        "src/Common/WebUtilities/",
+        "src/Microservices/DocumentsManagement/API/"
+      ]
+    },
+    {
+      "image": "ewp-kyc-case-opening-subscriber",
+      "dockerfile": "src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/Dockerfile",
+      "paths": [
+        "src/AsyncWorkflows/Infrastructure/Kafka/",
+        "src/AsyncWorkflows/Infrastructure/Subscribers/",
+        "src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/",
+        "src/Common/Observability/"
+      ]
+    },
+    {
+      "image": "ewp-notifications-api",
+      "dockerfile": "src/Microservices/Notifications/API/Dockerfile",
+      "paths": [
+        "src/Common/Observability/",
+        "src/Common/WebUtilities/",
+        "src/Microservices/Notifications/API/"
+      ]
+    },
+    {
+      "image": "ewp-notifications-subscriber",
+      "dockerfile": "src/AsyncWorkflows/Subscribers/Notifications/NotificationsSubscriber/Dockerfile",
+      "paths": [
+        "src/AsyncWorkflows/Infrastructure/Kafka/",
+        "src/AsyncWorkflows/Infrastructure/Subscribers/",
+        "src/AsyncWorkflows/Subscribers/Notifications/NotificationsSubscriber/",
+        "src/Common/Observability/"
+      ]
+    },
+    {
+      "image": "ewp-onboarding-outcome-subscriber",
+      "dockerfile": "src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/Dockerfile",
+      "paths": [
+        "src/AsyncWorkflows/Infrastructure/Kafka/",
+        "src/AsyncWorkflows/Infrastructure/Subscribers/",
+        "src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber/",
+        "src/Common/Observability/"
+      ]
+    },
+    {
+      "image": "ewp-partner-products-api",
+      "dockerfile": "src/Microservices/PartnerProducts/API/Dockerfile",
+      "paths": [
+        "src/AsyncWorkflows/Infrastructure/Kafka/",
+        "src/Common/Observability/",
+        "src/Common/WebUtilities/",
+        "src/Microservices/PartnerProducts/API/"
+      ]
+    },
+    {
+      "image": "ewp-payment-network-simulator",
+      "dockerfile": "src/Simulators/PaymentNetworkSimulator/Dockerfile",
+      "paths": [
+        "src/Simulators/PaymentNetworkSimulator/"
+      ]
+    },
+    {
+      "image": "ewp-payments-api",
+      "dockerfile": "src/Microservices/Payments/API/Dockerfile",
+      "paths": [
+        "src/AsyncWorkflows/Infrastructure/Kafka/",
+        "src/Common/Observability/",
+        "src/Common/WebUtilities/",
+        "src/Microservices/Payments/API/"
+      ]
+    },
+    {
+      "image": "ewp-payments-bff-web",
+      "dockerfile": "src/Microservices/Payments/BFF.Web/Dockerfile",
+      "paths": [
+        "src/Common/DesignSystem/",
+        "src/Common/Observability/",
+        "src/Common/WebUtilities/",
+        "src/Microservices/Payments/BFF.Web/",
+        "src/Microservices/Payments/BFF.Web/client-app/"
+      ]
+    },
+    {
+      "image": "ewp-payments-saga-reply-subscriber",
+      "dockerfile": "src/AsyncWorkflows/Subscribers/Payments/PaymentsSagaReplySubscriber/Dockerfile",
+      "paths": [
+        "src/AsyncWorkflows/Infrastructure/Kafka/",
+        "src/AsyncWorkflows/Infrastructure/Subscribers/",
+        "src/AsyncWorkflows/Subscribers/Payments/PaymentsSagaReplySubscriber/",
+        "src/Common/Observability/"
+      ]
+    },
+    {
+      "image": "ewp-screening-provider-simulator",
+      "dockerfile": "src/Simulators/ScreeningProviderSimulator/Dockerfile",
+      "paths": [
+        "src/Simulators/ScreeningProviderSimulator/"
+      ]
+    }
+  ]
+}

@@ -68,6 +68,18 @@ What the platform is, how it is designed and what each component must do are doc
 	   Required after every clone: the exports (each BFF's wwwroot, the Shell's wwwroot) are build output and are
 	   not in Git - without this step the BFFs have no pages to serve.
 
+	   ONE COMMAND for everything outside Visual Studio (Kafka, Temporal, the fault proxy, then the Node.js
+	   services - it waits for the .NET solution before the last part; start it in Visual Studio when asked):
+			.\ps\run\Start-Non-DotNet-Services.ps1          (-Restart: stop all four, start again;  -Stop: stop all four)
+	   Or step by step, as below (6b, Kafka as in section 6a, 8).
+
+	6b. Fault proxy (Toxiproxy) - once per session, in its own window, before Visual Studio:
+			.\ps\toxiproxy\Start-Toxiproxy.ps1      (install it once: .\ps\toxiproxy\Start-Toxiproxy.ps1 -Install,
+			                                         v2.12.0, SHA-256 checked; stop it: -Stop)
+	   In Development every server-to-server call to an API goes through it, so without it the BFFs, Journey APIs
+	   and subscribers cannot reach their APIs. Like Kafka and Temporal it keeps running while the services restart.
+	   daniel.ops can cut an API's route on Operations -> Simulator & Fault Controls.
+
 	7. Visual Studio - open EnterpriseWebPlatform.BSS.slnx, choose the multi-project launch profile ("New Profile",
 	   EnterpriseWebPlatform.BSS.slnLaunch) and Start. It builds and starts the IDP, every API, BFF, worker and
 	   simulator in their own console windows (list: section 6a).
@@ -77,11 +89,8 @@ What the platform is, how it is designed and what each component must do are doc
 			.\ps\temporal\Start-Temporal.ps1      (its own window; workflows kept in %LOCALAPPDATA%\EWP\temporal)
 	   then:
 			.\ps\run\Start-NodeServices.ps1
-	   It first starts the fault proxy (Toxiproxy, its own window): in Development every server-to-server call to an
-	   API goes through it, so without it the BFFs, Journey APIs and subscribers cannot reach their APIs. Install it
-	   once: .\ps\toxiproxy\Start-Toxiproxy.ps1 -Install (v2.12.0, SHA-256 checked). Then it opens the
-	   Node.js services in their own windows (each builds on its first run). daniel.ops can cut an API's route on
-	   Operations -> Simulator & Fault Controls.
+	   It opens the Node.js services in their own windows (each builds on its first run); it warns when the fault
+	   proxy (6b) is not running. -Restart restarts them on changed code; -Stop stops them and closes their windows.
 
 	9. Browse to https://shell.dev.localhost:46367 and sign in. The demo users, their roles and the password convention
 	   are in src\IDP\doc\IDP-Requirements.md (section 6). A quick smoke test:
