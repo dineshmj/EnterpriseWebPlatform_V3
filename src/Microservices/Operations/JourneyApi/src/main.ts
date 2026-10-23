@@ -1,4 +1,3 @@
-import * as fs from 'node:fs';
 import { NestFactory } from '@nestjs/core';
 import type { NextFunction, Request, Response } from 'express';
 import { AppModule } from './app.module';
@@ -22,7 +21,8 @@ async function bootstrap() {
   const options = loadOptions();
 
   const app = await NestFactory.create(AppModule, {
-    httpsOptions: { pfx: fs.readFileSync(options.tlsPfxPath), passphrase: options.tlsPfxPassword },
+    // HTTPS with the development certificate, or plain HTTP behind the platform's TLS (listener-tls.ts).
+    httpsOptions: options.tls,
   });
 
   // A JSON API for one server-side caller: no browser should ever render or frame it.

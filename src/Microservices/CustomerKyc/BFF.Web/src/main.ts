@@ -17,7 +17,7 @@ import { traceMiddleware } from './observability/trace-context';
 // │       .NET ones.
 // │ How : Server-side session in PostgreSQL behind a __Host- cookie (HttpOnly, Secure,
 // │       SameSite=Lax, 30 minutes rolling); strict CSP by hash; nosniff; framed only by the Shell;
-// │       HTTPS only.
+// │       HTTPS only (its own certificate, or the ingress's with KYC_BFF_TRUSTED_PROXIES).
 // │ Ref : Features 2.1.1, 2.3 | BFF pattern | OWASP A05, A07 | ASVS V3
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 async function bootstrap() {
@@ -31,12 +31,30 @@ async function bootstrap() {
   const options = loadOptions();
   const logger = new EwpLogger('customer-kyc-bff');
 
+  // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+  // │ Plain HTTP (TLS at the ingress) only together with the ingress's addresses: express sees
+  // │ HTTPS only through their X-Forwarded-Proto, and express-session sets the Secure session
+  // │ cookie only then - without them no sign-in could ever complete.
+  // └──────────────────────────────────────────────────────────────────────────────────────
+  if (!options.tls && !options.trustProxy) {
+    throw new Error('KYC_BFF_PLAIN_HTTP=true needs KYC_BFF_TRUSTED_PROXIES (the ingress that ends TLS); the KYC BFF refuses to start.');
+  }
+
   const app = await NestFactory.create(AppModule, {
-    httpsOptions: createHttpsOptions(
-      options.tlsPfxPath,
-      options.tlsPfxPassword
-    ),
+    // HTTPS with the development certificate, or plain HTTP behind the ingress (listener-tls.ts).
+    httpsOptions: options.tls,
     logger,
+  });
+
+  // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+  // │ Forwarded headers only from the ingress, one hop (trusted-proxies.ts); the Host header
+  // │ is never taken from X-Forwarded-Host (express would use it for req.hostname).
+  // └──────────────────────────────────────────────────────────────────────────────────────
+  const http = app.getHttpAdapter().getInstance() as express.Express;
+  if (options.trustProxy) http.set('trust proxy', options.trustProxy);
+  app.use((req: express.Request, _res: express.Response, next: express.NextFunction) => {
+    delete req.headers['x-forwarded-host'];
+    next();
   });
 
   // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
@@ -53,7 +71,6 @@ async function bootstrap() {
   // │ Probes and the Prometheus scrape, like the .NET components: anonymous, no session, no
   // │ internals in the body. Live: the process answers. Ready: the session database answers too.
   // └──────────────────────────────────────────────────────────────────────────────────────
-  const http = app.getHttpAdapter().getInstance() as express.Express;
   http.get('/health/live', (_req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.json({ status: 'Healthy', checks: [{ name: 'self', status: 'Healthy' }] });
@@ -175,26 +192,7 @@ async function bootstrap() {
 
   await app.listen(options.port, '0.0.0.0');
 
-  logger.log(`Customer KYC BFF listening on https://kyc.dev.localhost:${options.port}`, 'Bootstrap');
-}
-
-function createHttpsOptions(pfxPath?: string, pfxPassword?: string) {
-  if (!pfxPath) {
-    throw new Error(
-      'KYC_BFF_TLS_PFX_PATH must be configured because the KYC BFF is embedded by the HTTPS Shell.'
-    );
-  }
-
-  const resolved = path.resolve(pfxPath);
-
-  if (!fs.existsSync(resolved)) {
-    throw new Error(`KYC BFF TLS PFX file was not found: ${resolved}`);
-  }
-
-  return {
-    pfx: fs.readFileSync(resolved),
-    passphrase: pfxPassword,
-  };
+  logger.log(`Customer KYC BFF listening on port ${options.port} (${options.tls ? 'https' : 'plain http behind the ingress'})`, 'Bootstrap');
 }
 
 void bootstrap();

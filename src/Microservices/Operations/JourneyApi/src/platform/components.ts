@@ -17,9 +17,9 @@ export const components: PlatformComponent[] = [
   { name: 'Compliance BFF', group: 'Front ends', readiness: 'https://compliance.dev.localhost:46399/health/ready' },
   { name: 'Accounts BFF', group: 'Front ends', readiness: 'https://accounts.dev.localhost:45456/health/ready' },
   { name: 'Payments BFF', group: 'Front ends', readiness: 'https://payments.dev.localhost:46388/health/ready' },
-  { name: 'Audit web', group: 'Front ends', readiness: 'https://audit.dev.localhost:46380/' },
-  { name: 'Operations web', group: 'Front ends', readiness: 'https://operations.dev.localhost:46381/' },
-  { name: 'Partner Products web', group: 'Front ends', readiness: 'https://ewp-partner.dev.localhost:46384/' },
+  { name: 'Audit web', group: 'Front ends', readiness: 'https://audit.dev.localhost:46380/health/ready' },
+  { name: 'Operations web', group: 'Front ends', readiness: 'https://operations.dev.localhost:46381/health/ready' },
+  { name: 'Partner Products web', group: 'Front ends', readiness: 'https://ewp-partner.dev.localhost:46384/health/ready' },
 
   { name: 'Customer Onboarding API', group: 'Domain APIs', readiness: 'https://customer-api.dev.localhost:46363/health/ready' },
   { name: 'Customer KYC API', group: 'Domain APIs', readiness: 'https://kyc-api.dev.localhost:46305/health/ready' },

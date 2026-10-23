@@ -1,3 +1,5 @@
+import { listenerTls, type ListenerTls } from './listener-tls';
+
 /**
  * Configuration of the Audit Journey API - environment variables only (runnow.bat sets the
  * development values). A missing value stops the start-up: no secret and no security setting
@@ -21,8 +23,8 @@ export interface JourneyOptions {
   auditApiBaseUrl: string;
   paymentsApiBaseUrl: string;
 
-  tlsPfxPath: string;
-  tlsPfxPassword: string;
+  /** The listener's certificate; undefined = plain HTTP behind the platform's TLS (listener-tls.ts). */
+  tls: ListenerTls | undefined;
 }
 
 export const JOURNEY_OPTIONS = 'AUDIT_JOURNEY_OPTIONS';
@@ -51,7 +53,6 @@ export function loadOptions(): JourneyOptions {
     clientSecret: required('AUDIT_JOURNEY_CLIENT_SECRET'),
     auditApiBaseUrl: required('AUDIT_API_BASE_URL').replace(/\/$/, ''),
     paymentsApiBaseUrl: required('PAYMENTS_API_BASE_URL').replace(/\/$/, ''),
-    tlsPfxPath: required('AUDIT_JOURNEY_TLS_PFX_PATH'),
-    tlsPfxPassword: required('AUDIT_JOURNEY_TLS_PFX_PASSWORD'),
+    tls: listenerTls('AUDIT_JOURNEY', 'Audit Journey API'),
   };
 }

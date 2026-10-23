@@ -1,5 +1,5 @@
-import * as fs from 'node:fs';
-import { createServer } from 'node:https';
+import { createServer as createHttpServer, type RequestListener } from 'node:http';
+import { createServer as createHttpsServer } from 'node:https';
 import { NativeConnection, Worker } from '@temporalio/worker';
 import { createActivities } from './activities';
 import { loadOptions } from './config';
@@ -48,14 +48,16 @@ async function main() {
   // │ polling Temporal (the listener's state is shown, but a missing listener only slows
   // │ purchases down to the 5-minute look). Nothing else is served (no data, no actions).
   // └──────────────────────────────────────────────────────────────────────────────────────
-  createServer({ pfx: fs.readFileSync(options.tlsPfxPath), passphrase: options.tlsPfxPassword }, (req, res) => {
+  const probe: RequestListener = (req, res) => {
     const ready = worker.getState() === 'RUNNING';
     const status = req.url === '/health/live' ? 200 : req.url === '/health/ready' || req.url === '/health' ? (ready ? 200 : 503) : 404;
     res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
     res.end(status === 404 ? '{}' : JSON.stringify({ status: status === 200 ? 'Healthy' : 'Unhealthy', worker: worker.getState(), paymentEvents: listener.state }));
-  }).listen(options.healthPort, '0.0.0.0');
+  };
+  // HTTPS with the development certificate, or plain HTTP behind the platform's TLS (listener-tls.ts).
+  (options.tls ? createHttpsServer(options.tls, probe) : createHttpServer(probe)).listen(options.healthPort, '0.0.0.0');
 
-  console.log(`Partner Products Worker polling ${options.temporalAddress} (${options.temporalNamespace}), task queue ${options.taskQueue}; health https://localhost:${options.healthPort}/health`);
+  console.log(`Partner Products Worker polling ${options.temporalAddress} (${options.temporalNamespace}), task queue ${options.taskQueue}; health ${options.tls ? 'https' : 'http'}://localhost:${options.healthPort}/health`);
   await worker.run();
   await listener.stop();
 }

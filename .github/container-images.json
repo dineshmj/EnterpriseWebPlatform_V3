@@ -53,6 +53,21 @@
       ]
     },
     {
+      "image": "ewp-audit-bff-web",
+      "dockerfile": "src/Microservices/Audit/BFF.Web/Dockerfile",
+      "paths": [
+        "src/Common/DesignSystem/",
+        "src/Microservices/Audit/BFF.Web/"
+      ]
+    },
+    {
+      "image": "ewp-audit-journey-api",
+      "dockerfile": "src/Microservices/Audit/JourneyApi/Dockerfile",
+      "paths": [
+        "src/Microservices/Audit/JourneyApi/"
+      ]
+    },
+    {
       "image": "ewp-compliance-api",
       "dockerfile": "src/Microservices/Compliance/API/Dockerfile",
       "paths": [
@@ -98,6 +113,14 @@
         "src/Common/Observability/",
         "src/Common/WebUtilities/",
         "src/Microservices/CustomerKyc/API/"
+      ]
+    },
+    {
+      "image": "ewp-customer-kyc-bff-web",
+      "dockerfile": "src/Microservices/CustomerKyc/BFF.Web/Dockerfile",
+      "paths": [
+        "src/Common/DesignSystem/",
+        "src/Microservices/CustomerKyc/BFF.Web/"
       ]
     },
     {
@@ -199,6 +222,21 @@
       ]
     },
     {
+      "image": "ewp-operations-bff-web",
+      "dockerfile": "src/Microservices/Operations/BFF.Web/Dockerfile",
+      "paths": [
+        "src/Common/DesignSystem/",
+        "src/Microservices/Operations/BFF.Web/"
+      ]
+    },
+    {
+      "image": "ewp-operations-journey-api",
+      "dockerfile": "src/Microservices/Operations/JourneyApi/Dockerfile",
+      "paths": [
+        "src/Microservices/Operations/JourneyApi/"
+      ]
+    },
+    {
       "image": "ewp-partner-products-api",
       "dockerfile": "src/Microservices/PartnerProducts/API/Dockerfile",
       "paths": [
@@ -206,6 +244,28 @@
         "src/Common/Observability/",
         "src/Common/WebUtilities/",
         "src/Microservices/PartnerProducts/API/"
+      ]
+    },
+    {
+      "image": "ewp-partner-products-bff-web",
+      "dockerfile": "src/Microservices/PartnerProducts/BFF.Web/Dockerfile",
+      "paths": [
+        "src/Common/DesignSystem/",
+        "src/Microservices/PartnerProducts/BFF.Web/"
+      ]
+    },
+    {
+      "image": "ewp-partner-products-journey-api",
+      "dockerfile": "src/Microservices/PartnerProducts/JourneyApi/Dockerfile",
+      "paths": [
+        "src/Microservices/PartnerProducts/JourneyApi/"
+      ]
+    },
+    {
+      "image": "ewp-partner-products-worker",
+      "dockerfile": "src/Microservices/PartnerProducts/Worker/Dockerfile",
+      "paths": [
+        "src/Microservices/PartnerProducts/Worker/"
       ]
     },
     {

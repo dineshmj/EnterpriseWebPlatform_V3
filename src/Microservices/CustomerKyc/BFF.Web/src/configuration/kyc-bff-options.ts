@@ -1,6 +1,10 @@
+import { listenerTls, type ListenerTls } from './listener-tls';
+import { trustedProxies } from '../security/trusted-proxies';
+
 // ┌─ :: SECURITY :: Fail-closed configuration ─────────────────────────────────────────────────────
 // │ Why : A BFF running without its secret, session key or audience would be silently insecure.
-// │ How : Every required setting is read once at start-up; a missing one stops the BFF.
+// │ How : Every required setting is read once at start-up; a missing one stops the BFF. Addresses
+// │       have no development defaults either: a container must not quietly call localhost.
 // │ Ref : Features 1.6.5 | OWASP A05
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 export interface KycBffOptions {
@@ -16,8 +20,10 @@ export interface KycBffOptions {
   sessionKey: Buffer;
   /** EwpBffStateDb as ewp_kyc_bff (schema kyc_bff). */
   databaseUrl: string;
-  tlsPfxPath?: string;
-  tlsPfxPassword?: string;
+  /** The listener's certificate; undefined = plain HTTP behind the platform's TLS (listener-tls.ts). */
+  tls: ListenerTls | undefined;
+  /** Express "trust proxy": the ingress's addresses, one hop; undefined = forwarded headers ignored. */
+  trustProxy: ((address: string, hop: number) => boolean) | undefined;
   staticRoot: string;
   shellOrigin: string;
   documentsManagementApiBaseUrl: string;
@@ -38,20 +44,19 @@ function required(name: string): string {
 export function loadOptions(): KycBffOptions {
   return {
     port: Number(process.env.KYC_BFF_PORT ?? '33800'),
-    authority: process.env.KYC_IDP_AUTHORITY ?? 'https://idp.dev.localhost:46392',
-    clientId: process.env.KYC_BFF_CLIENT_ID ?? 'CustomerKYC.Microservice.BFF.ClientID',
+    authority: required('KYC_IDP_AUTHORITY'),
+    clientId: required('KYC_BFF_CLIENT_ID'),
     clientSecret: required('KYC_BFF_CLIENT_SECRET'),
-    callbackUrl: process.env.KYC_BFF_CALLBACK_URL ?? 'https://kyc.dev.localhost:33800/api/auth/callback',
-    postLogoutRedirectUri: process.env.KYC_BFF_POST_LOGOUT_REDIRECT_URI ?? 'https://kyc.dev.localhost:33800/signout-callback-oidc',
-    apiBaseUrl: process.env.KYC_API_BASE_URL ?? 'https://kyc-api.dev.localhost:46305',
+    callbackUrl: required('KYC_BFF_CALLBACK_URL'),
+    postLogoutRedirectUri: required('KYC_BFF_POST_LOGOUT_REDIRECT_URI'),
+    apiBaseUrl: required('KYC_API_BASE_URL'),
     sessionSecret: required('KYC_BFF_SESSION_SECRET'),
     sessionKey: Buffer.from(required('KYC_BFF_SESSION_KEY'), 'base64'),
     databaseUrl: required('KYC_BFF_DATABASE_URL'),
-    tlsPfxPath: process.env.KYC_BFF_TLS_PFX_PATH,
-    tlsPfxPassword: process.env.KYC_BFF_TLS_PFX_PASSWORD,
+    tls: listenerTls('KYC_BFF', 'KYC BFF'),
+    trustProxy: trustedProxies(process.env.KYC_BFF_TRUSTED_PROXIES),
     staticRoot: process.env.KYC_BFF_STATIC_ROOT ?? 'client-app/out',
-    shellOrigin: process.env.KYC_BFF_SHELL_ORIGIN ?? 'https://shell.dev.localhost:46367',
-    documentsManagementApiBaseUrl:
-      process.env.KYC_DOCUMENTS_MANAGEMENT_API_BASE_URL ?? 'https://documents-management-api.dev.localhost:49486',
+    shellOrigin: required('KYC_BFF_SHELL_ORIGIN'),
+    documentsManagementApiBaseUrl: required('KYC_DOCUMENTS_MANAGEMENT_API_BASE_URL'),
   };
 }

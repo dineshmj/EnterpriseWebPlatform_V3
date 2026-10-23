@@ -21,7 +21,11 @@
 **/*.key
 **/*.jwk
 **/*.password
+**/*.crt
+**/certs/
 **/keys/
+# Local start scripts: they set development secrets as environment variables.
+**/runnow.bat
 **/AuditAnchors/
 src/Microservices/DocumentsManagement/API/DocumentStorage/
 **/smartzipper.exclude.json
@@ -32,7 +36,9 @@ src/Microservices/DocumentsManagement/API/DocumentStorage/
 **/node_modules/
 **/.next/
 **/out/
+**/dist/
 **/*.tsbuildinfo
+**/*.backup
 src/Microservices/*/BFF.Web/wwwroot/
 src/Shell/wwwroot/
 

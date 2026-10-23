@@ -52,6 +52,8 @@ set "KYC_BFF_CLIENT_SECRET=3ac91ab3-7ba0-4727-b4f7-36120bec10c5"
 
 set "KYC_BFF_CALLBACK_URL=https://kyc.dev.localhost:33800/api/auth/callback"
 set "KYC_BFF_POST_LOGOUT_REDIRECT_URI=https://kyc.dev.localhost:33800/signout-callback-oidc"
+REM Must equal ClientBaseUrls:Shell in src\IDP\appsettings.json and ShellOrigin in the Shell.
+set "KYC_BFF_SHELL_ORIGIN=https://shell.dev.localhost:46367"
 
 REM Development: the API addresses below go through the fault proxy (ps\toxiproxy\toxiproxy.json,
 REM ports 47101-47111) so operations can cut them; elsewhere use each API's own address.

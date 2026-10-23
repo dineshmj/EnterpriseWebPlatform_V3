@@ -1,10 +1,10 @@
 # Container images
 
 How EWP's services become container images, and what an image needs from its environment to run.
-Every image is listed in [.github/container-images.json](../.github/container-images.json): today
-the 8 .NET domain APIs, the IDP, the Shell, the 4 .NET BFFs, the Outbox publisher, the 8 Kafka
-subscribers and the 3 simulators (27 images). Still to come: the Node.js services (see
-[Adding an image](#adding-an-image)).
+Every image is listed in [.github/container-images.json](../.github/container-images.json): the 8
+.NET domain APIs, the IDP, the Shell, the 4 .NET BFFs, the Outbox publisher, the 8 Kafka
+subscribers, the 3 simulators, and the 8 Node.js services - the KYC BFF, the Audit, Operations
+and Partner Products web BFFs and Journey APIs, and the Partner Products Worker (35 images).
 
 In short: **CI builds every image from a commit, checks it, and publishes it only if the checks
 pass. An image holds no secret and no environment's settings: each environment supplies settings
@@ -17,7 +17,8 @@ and secrets when the container starts, so one image runs everywhere.**
 | 1 | Images are built **only in GitHub Actions** ([container-images.yml](../.github/workflows/container-images.yml)) and published to GHCR (`ghcr.io/<owner>/ewp-<service>`); nothing is built on a developer's machine | An image that runs somewhere must come from a known commit through the same checks. (The development laptop also has no memory to spare for Docker.) |
 | 2 | One multi-stage **Dockerfile** per deployable, next to its project; build context = repository root | Services share `src/Common` and `src/AsyncWorkflows`; .NET and Node images follow one reviewable pattern |
 | 3 | .NET runtime: `mcr.microsoft.com/dotnet/aspnet:<version>-noble-chiseled-extra` | Chiseled = no shell, no package manager, non-root user `app` (UID 1654). `-extra` adds ICU and time zones (amounts formatted in en-AU). Workers use the ASP.NET runtime too: they serve `/health/*` and `/metrics` from Kestrel |
-| 4 | Plain **HTTP on 8080** inside the container; TLS at the platform (ingress for browsers, service mesh mTLS between pods) - the same line as Temporal (Threat-Model R-16) | Certificates and their rotation belong to the platform, not to 30 images |
+| 3a | Node runtime: `node:<version>-bookworm-slim` with npm, npx, corepack and yarn **removed**; the non-root user `node` (UID 1000); production dependencies only, from the committed lockfile | Node has no chiseled image with exact version tags (distroless has moving tags only, see the digest gap below). Without a package manager nothing can be installed into a running container, and npm's own dependencies are not there to be vulnerable |
+| 4 | Plain **HTTP on 8080** inside the container; TLS at the platform (ingress for browsers, service mesh mTLS between pods) - the same line as Temporal (Threat-Model R-16). The Node services turn it on with `<PREFIX>_PLAIN_HTTP=true` (set in their images); without it they need their development certificate, and both set refuse to start | Certificates and their rotation belong to the platform, not to 35 images; a missing setting must not quietly open plain HTTP |
 | 5 | Settings and secrets **only from the environment** at run time (`Section__Key` variables, or files mounted from a secret store) | The same image runs in every environment; a secret in a layer stays in the registry for good |
 | 6 | Exact base image tags and actions pinned to commit SHAs; **Dependabot** proposes updates weekly ([dependabot.yml](../.github/dependabot.yml)) | Nothing changes silently, and security fixes still arrive |
 
@@ -38,9 +39,12 @@ Pull requests run steps 1-3 and never publish.
 
 ## Keeping secrets out of images
 
-- [.dockerignore](../.dockerignore) keeps every `appsettings.Development.json`, `.env*`, and all key
-  material (`*.pem`, `*.pfx`, `*.jwk`, `keys/`, ...) out of the build context. A `COPY` of a whole
+- [.dockerignore](../.dockerignore) keeps every `appsettings.Development.json`, `.env*`, every
+  `runnow.bat` (they set the Node services' development secrets), and all key material (`*.pem`,
+  `*.pfx`, `*.crt`, `*.jwk`, `keys/`, `certs/`, ...) out of the build context. A `COPY` of a whole
   project folder therefore cannot carry them into an image.
+- The Node services read every setting from environment variables already (`runnow.bat` sets the
+  development values); none has a default for a secret or an address.
 - Connection strings carry passwords, so they move from `appsettings.json` (which goes into the
   image) to `appsettings.Development.json`. **Done for every .NET service** (the domain
   APIs, the IDP, the Shell, the 4 BFFs, the Outbox publisher). A host without a connection string
@@ -49,16 +53,22 @@ Pull requests run steps 1-3 and never publish.
 
 ## Run-time contract
 
-Every image runs as UID 1654, listens on 8080, and has `ASPNETCORE_ENVIRONMENT` unset
-(Production). Its files belong to root, so the root file system can be read-only; give it a
-writable `/tmp` (emptyDir). Probes: `/health/live` and `/health/ready` on 8080 (workers: their
-`Health__Urls` is set to `http://+:8080` in the image).
+Every .NET image runs as UID 1654, listens on 8080, and has `ASPNETCORE_ENVIRONMENT` unset
+(Production); every Node image runs as UID 1000 with `NODE_ENV=production`. Their files belong to
+root, so the root file system can be read-only; give it a writable `/tmp` (emptyDir). Probes:
+`/health/live` and `/health/ready` on 8080 (.NET workers: their `Health__Urls` is set to
+`http://+:8080` in the image; the Partner Products Worker: `PARTNER_PRODUCTS_WORKER_HEALTH_PORT`).
+The Next.js BFFs answer both probes in `server.mjs` once the app is prepared; they do not check
+the session database. (They use no Next.js feature that writes a cache at run time - ISR, image
+optimisation; one that did would need an emptyDir at `.next/cache`.)
 
 **What every image needs:** the settings in its `appsettings.json` that hold local addresses
 (IDP, other APIs, Kafka bootstrap servers), overridden per environment; and the secrets that its
 `appsettings.Development.json` lists under `//Secrets` / `//ConnectionStrings` - always from the
 environment or a secret store. Kafka clients also need the Kafka trust root as a mounted file
-(`Kafka__SslCaLocation`).
+(`Kafka__SslCaLocation`). A Node image needs the variables its `runnow.bat` sets (the development
+values are there), except `<PREFIX>_PORT`, `<PREFIX>_PLAIN_HTTP` and `<PREFIX>_TLS_PFX_*`, which the
+image sets or does not use.
 
 **Beyond that:**
 
@@ -69,6 +79,9 @@ environment or a secret store. Kafka clients also need the Kafka trust root as a
 | `ewp-audit-api` | A write-once volume for the signed checkpoints: `Audit__Anchors__Directory`; the anchor signing key from the secret store |
 | `ewp-documents-management-api` | A volume for the encrypted documents: `DocumentStorage__RootPath`; the key ring (`DocumentStorage__Encryption__*`) from the secret store |
 | `ewp-partner-products-api` | EWP's mTLS client and request-signing certificates and their password files, mounted from the secret store (`PartnerBank__*CertificatePath`, `*PasswordPath`) |
+| `ewp-customer-kyc-bff-web` | `KYC_BFF_TRUSTED_PROXIES` - the ingress's addresses; without it the BFF refuses to start on plain HTTP (see below). Secrets: `KYC_BFF_CLIENT_SECRET`, `KYC_BFF_SESSION_SECRET`, `KYC_BFF_SESSION_KEY`, `KYC_BFF_DATABASE_URL` |
+| `ewp-audit-bff-web`, `ewp-operations-bff-web`, `ewp-partner-products-bff-web` | `<PREFIX>_TRUSTED_PROXIES` (`AUDIT_WEB_`, `OPERATIONS_WEB_`, `PARTNER_PRODUCTS_WEB_`) for the client address; `<PREFIX>_PUBLIC_ORIGIN` - the https address the browser uses (redirect URIs). Secrets: `<PREFIX>_CLIENT_SECRET`, `<PREFIX>_SESSION_KEY`, `<PREFIX>_DATABASE_URL` |
+| `ewp-partner-products-worker` | Temporal (`TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`); the Kafka trust root as a mounted file -> `KAFKA_SSL_CA_LOCATION`. Secrets: `PARTNER_PRODUCTS_WORKER_CLIENT_SECRET`, `PARTNER_PRODUCTS_WORKER_KAFKA_PASSWORD` |
 | `ewp-*-simulator` | Development, test and demo environments only - never deployed to production |
 
 The Payments images in full, as the worked example:
@@ -83,7 +96,9 @@ The Payments images in full, as the worked example:
 `Observability__Metrics__Enabled=true`, and only where the scraper alone can reach it.
 
 The IDP's and the APIs' certificates must be trusted by the containers: either issued by a public
-CA, or the private root added to the image's trust store by the platform.
+CA, or the private root added to the image's trust store by the platform. Node does not read the
+operating system's trust store: give the Node images a private root as a mounted file in
+`NODE_EXTRA_CA_CERTS`.
 
 ### Behind the ingress
 
@@ -95,6 +110,21 @@ headers **only from the ingress**: list its addresses as `ForwardedHeaders__Know
 forwarded header is trusted (local runs). The Host header is never taken from a forwarded header;
 `AllowedHosts` checks the one the ingress passes on
 ([ProxyForwardedHeaders.cs](../src/Common/WebUtilities/Security/ProxyForwardedHeaders.cs)).
+
+The Node BFFs follow the same rule with `<PREFIX>_TRUSTED_PROXIES` (IPs or CIDRs, comma-separated,
+one hop; nothing listed = no forwarded header is trusted):
+
+- **KYC BFF**: express's `trust proxy` is limited to those addresses
+  ([trusted-proxies.ts](../src/Microservices/CustomerKyc/BFF.Web/src/security/trusted-proxies.ts)).
+  It is **required** with plain HTTP: only the ingress's `X-Forwarded-Proto` makes express see
+  HTTPS, and express-session sets the `Secure` session cookie only then. `X-Forwarded-Host` is
+  always dropped.
+- **Next.js BFFs**: `server.mjs` keeps `X-Forwarded-For` / `-Proto` only from those addresses and
+  drops `X-Forwarded-Host` / `-Port` always
+  ([forwarded-headers.mjs](../src/Microservices/Audit/BFF.Web/forwarded-headers.mjs)). They build
+  their redirect URIs from `<PREFIX>_PUBLIC_ORIGIN`, not from the request, so the list is
+  optional - but the ingress must pass the original Host header on: Next.js checks a server
+  action's `Origin` against it.
 
 ### The micro front ends' Shell origin
 
@@ -110,16 +140,22 @@ the front end: each BFF serves `/ewp-runtime-config.js` from its own `ShellOrigi
 
 | Gap | Effect | Planned fix |
 |---|---|---|
-| The KYC BFF (NestJS) listens on HTTPS with its own certificate, and express is not told to trust the ingress (`trust proxy`) | Its container needs a certificate, or its `Secure` session cookie is not set behind a TLS-ending ingress | With its image: plain HTTP behind the ingress, `trust proxy` limited to the ingress's addresses (like `ForwardedHeaders`) |
 | The BFF validates that API addresses are `https`, but the API containers listen on HTTP | Pod-to-pod calls need TLS from the platform | Choose at deployment: mesh mTLS with https service addresses, or Kestrel TLS from a mounted certificate (`ASPNETCORE_URLS=https://+:8443`, `ASPNETCORE_Kestrel__Certificates__Default__Path`); no code change either way |
-| Base images are pinned by tag, not by digest | A re-pushed tag could change an image between two builds | Pin `@sha256:` digests (Dependabot keeps them current) |
+| Base images are pinned by tag, not by digest | A re-pushed tag could change an image between two builds | Pin `@sha256:` digests (Dependabot keeps them current); then the Node images can move to distroless Node (`gcr.io/distroless/nodejs<major>-debian<n>:nonroot`: no shell, like chiseled) |
+| Operations -> Platform Health probes a fixed list of development addresses ([components.ts](../src/Microservices/Operations/JourneyApi/src/platform/components.ts)) | Deployed, it reports every component as down | Make the list deployment data (a setting or a mounted file), like the Shell's menu |
+| The Next.js BFFs' readiness does not check their session database (the KYC BFF's does) | A BFF whose database is down still receives traffic; the sign-in fails | A readiness check that pings PostgreSQL |
+| The Partner Products Worker's Kafka client uses a prebuilt librdkafka binding fetched at install; it has not yet run in a container | A missing system library would show only at start-up | First deployment: start the worker image against Kafka and Temporal |
 
 ## Adding an image
 
-1. Copy the closest Dockerfile (API / BFF with client-app / worker / Node service). Change the
-   project paths and the `COPY` lines of the shared projects it references (`ProjectReference`).
+1. Copy the closest Dockerfile (.NET: API / BFF with client-app / worker; Node: Next.js BFF -
+   Audit web, NestJS service - Audit Journey API, NestJS BFF with a static export - KYC BFF).
+   Change the project paths and the `COPY` lines of the shared projects it references
+   (`ProjectReference`; for Node, `src/Common/DesignSystem` when its CSS imports the tokens).
 2. Move any connection string with a password from `appsettings.json` to
-   `appsettings.Development.json`, and record it in this page's run-time contract.
+   `appsettings.Development.json`, and record it in this page's run-time contract. A Node service
+   takes `<PREFIX>_PLAIN_HTTP` (copy `listener-tls.ts`) and, if browsers reach it,
+   `<PREFIX>_TRUSTED_PROXIES`.
 3. Add the image to [.github/container-images.json](../.github/container-images.json) - its name,
    Dockerfile and EVERY folder it is built from (its project, each shared project it references,
    anything else its Dockerfile copies); a missing folder means a change there does not rebuild

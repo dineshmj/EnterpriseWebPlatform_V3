@@ -1,3 +1,5 @@
+import { listenerTls, type ListenerTls } from './listener-tls';
+
 /**
  * Configuration of the Partner Products Journey API - environment variables only (runnow.bat sets
  * the development values). Fail closed: a missing or misspelt value stops the start-up; no secret
@@ -35,8 +37,8 @@ export interface JourneyOptions {
   temporalNamespace: string;
   temporalTaskQueue: string;
 
-  tlsPfxPath: string;
-  tlsPfxPassword: string;
+  /** The listener's certificate; undefined = plain HTTP behind the platform's TLS (listener-tls.ts). */
+  tls: ListenerTls | undefined;
 }
 
 export const JOURNEY_OPTIONS = 'PARTNER_PRODUCTS_JOURNEY_OPTIONS';
@@ -89,7 +91,6 @@ export function loadOptions(): JourneyOptions {
     temporalAddress: required('TEMPORAL_ADDRESS'),
     temporalNamespace: required('TEMPORAL_NAMESPACE'),
     temporalTaskQueue: required('PARTNER_PRODUCTS_TEMPORAL_TASK_QUEUE'),
-    tlsPfxPath: required('PARTNER_PRODUCTS_JOURNEY_TLS_PFX_PATH'),
-    tlsPfxPassword: required('PARTNER_PRODUCTS_JOURNEY_TLS_PFX_PASSWORD'),
+    tls: listenerTls('PARTNER_PRODUCTS_JOURNEY', 'Partner Products Journey API'),
   };
 }

@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { listenerTls, type ListenerTls } from './listener-tls';
 
 /**
  * Configuration of the Partner Products Worker - environment variables only (runnow.bat sets the
@@ -34,10 +35,9 @@ export interface WorkerOptions {
   settlementBsb: string;
   settlementAccountNumber: string;
 
-  /** The health probe (Operations -> Platform Health): https, the development certificate. */
+  /** The health probe (Operations -> Platform Health): https with the development certificate, or plain HTTP behind the platform's TLS (listener-tls.ts). */
   healthPort: number;
-  tlsPfxPath: string;
-  tlsPfxPassword: string;
+  tls: ListenerTls | undefined;
 }
 
 function required(name: string): string {
@@ -89,7 +89,6 @@ export function loadOptions(): WorkerOptions {
     settlementBsb: required('PARTNER_PRODUCTS_SETTLEMENT_BSB'),
     settlementAccountNumber: required('PARTNER_PRODUCTS_SETTLEMENT_ACCOUNT_NUMBER'),
     healthPort: Number(required('PARTNER_PRODUCTS_WORKER_HEALTH_PORT')),
-    tlsPfxPath: required('PARTNER_PRODUCTS_WORKER_TLS_PFX_PATH'),
-    tlsPfxPassword: required('PARTNER_PRODUCTS_WORKER_TLS_PFX_PASSWORD'),
+    tls: listenerTls('PARTNER_PRODUCTS_WORKER', 'Partner Products Worker'),
   };
 }

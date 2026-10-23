@@ -1,3 +1,5 @@
+import { listenerTls, type ListenerTls } from './listener-tls';
+
 /**
  * Configuration of the Operations Journey API - environment variables only (runnow.bat sets the
  * development values). Fail closed: a missing or misspelt value stops the start-up, and outside
@@ -49,8 +51,8 @@ export interface JourneyOptions {
   complianceApiBaseUrl: string;
   partnerProductsApiBaseUrl: string;
 
-  tlsPfxPath: string;
-  tlsPfxPassword: string;
+  /** The listener's certificate; undefined = plain HTTP behind the platform's TLS (listener-tls.ts). */
+  tls: ListenerTls | undefined;
 }
 
 export const JOURNEY_OPTIONS = 'OPERATIONS_JOURNEY_OPTIONS';
@@ -150,8 +152,7 @@ export function loadOptions(): JourneyOptions {
     accountsApiBaseUrl: required('OPERATIONS_JOURNEY_ACCOUNTS_API').replace(/\/$/, ''),
     complianceApiBaseUrl: required('OPERATIONS_JOURNEY_COMPLIANCE_API').replace(/\/$/, ''),
     partnerProductsApiBaseUrl: required('OPERATIONS_JOURNEY_PARTNER_PRODUCTS_API').replace(/\/$/, ''),
-    tlsPfxPath: required('OPERATIONS_JOURNEY_TLS_PFX_PATH'),
-    tlsPfxPassword: required('OPERATIONS_JOURNEY_TLS_PFX_PASSWORD'),
+    tls: listenerTls('OPERATIONS_JOURNEY', 'Operations Journey API'),
   };
   if (options.faultControlsEnabled) {
     options.faultProxyAdminUrl = loopbackUrl('OPERATIONS_FAULT_PROXY_ADMIN_URL');

@@ -29,14 +29,22 @@ updates:
       - /src/Microservices/Accounts/API
       - /src/Microservices/Accounts/BFF.Web
       - /src/Microservices/Audit/API
+      - /src/Microservices/Audit/BFF.Web
+      - /src/Microservices/Audit/JourneyApi
       - /src/Microservices/Compliance/API
       - /src/Microservices/Compliance/BFF.Web
       - /src/Microservices/CustomerKyc/API
+      - /src/Microservices/CustomerKyc/BFF.Web
       - /src/Microservices/CustomerOnboarding/API
       - /src/Microservices/CustomerOnboarding/BFF.Web
       - /src/Microservices/DocumentsManagement/API
       - /src/Microservices/Notifications/API
+      - /src/Microservices/Operations/BFF.Web
+      - /src/Microservices/Operations/JourneyApi
       - /src/Microservices/PartnerProducts/API
+      - /src/Microservices/PartnerProducts/BFF.Web
+      - /src/Microservices/PartnerProducts/JourneyApi
+      - /src/Microservices/PartnerProducts/Worker
       - /src/Microservices/Payments/API
       - /src/Microservices/Payments/BFF.Web
       - /src/Shell
