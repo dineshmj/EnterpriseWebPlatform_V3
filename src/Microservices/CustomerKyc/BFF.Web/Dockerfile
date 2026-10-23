@@ -15,7 +15,7 @@
 # │ Ref : doc/Containers.md | Features 2.1.1, 2.3 | OWASP A05, A06, A08
 # └────────────────────────────────────────────────────────────────────────────────────────────────
 
-FROM node:24.21.0-bookworm-slim AS client
+FROM node:24.22.1-bookworm-slim AS client
 ARG PNPM_VERSION=12.11.2
 # ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────────────────
 # │ No environment's settings in the export: the MFE reads the Shell origin at run time from
@@ -41,7 +41,7 @@ RUN pnpm install --frozen-lockfile
 COPY src/Microservices/CustomerKyc/BFF.Web/client-app/ ./
 RUN pnpm run build
 
-FROM node:24.21.0-bookworm-slim AS build
+FROM node:24.22.1-bookworm-slim AS build
 ARG PNPM_VERSION=12.11.2
 RUN npm install --global "pnpm@${PNPM_VERSION}"
 WORKDIR /app/src/Microservices/CustomerKyc/BFF.Web
@@ -54,7 +54,7 @@ COPY src/Microservices/CustomerKyc/BFF.Web/nest-cli.json src/Microservices/Custo
 COPY src/Microservices/CustomerKyc/BFF.Web/src/ ./src/
 RUN pnpm run build
 
-FROM node:24.21.0-bookworm-slim AS deps
+FROM node:24.22.1-bookworm-slim AS deps
 ARG PNPM_VERSION=12.11.2
 RUN npm install --global "pnpm@${PNPM_VERSION}"
 WORKDIR /app/src/Microservices/CustomerKyc/BFF.Web
@@ -64,7 +64,16 @@ COPY src/Microservices/CustomerKyc/BFF.Web/package.json \
 # Production dependencies only: no compiler or type definitions in the running image.
 RUN pnpm install --frozen-lockfile --prod
 
-FROM node:24.21.0-bookworm-slim AS runtime
+FROM node:24.22.1-bookworm-slim AS runtime
+# ┌─ SEC ────────────────────────────────────────────────────────────────────────────────────────────
+# │ Debian security updates at build time: the official Node image is rebuilt only from time to
+# │ time, so a fixed Debian package (e.g. perl-base, DLA-4821-1) can lag behind it and Trivy fails
+# │ the build. Upgrading here takes every published fix on each rebuild; apt lists are removed so
+# │ the layer stays small. Trade-off: the OS layer follows Debian, not only the pinned tag.
+# └──────────────────────────────────────────────────────────────────────────────────────────────────
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/*
 # ┌─ SEC ────────────────────────────────────────────────────────────────────────────────────────────
 # │ No package manager in the running image: nothing can be installed into a running container,
 # │ and npm's own dependencies are not there to be vulnerable.
