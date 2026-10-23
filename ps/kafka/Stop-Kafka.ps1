@@ -41,7 +41,13 @@ else {
         $p = Get-Process -Id $id -ErrorAction SilentlyContinue
         if ($p) {
             Write-Host "Stopping $($p.ProcessName) (PID $id, started $($p.StartTime))"
-            Stop-Process -Id $id -Force
+            # ┌─ NOTE ───────────────────────────────────────────────────────────────────────
+            # │ The list is taken up front, and stopping one process can end another on it
+            # │ (the broker's own child): one that is already gone is what we wanted - not an
+            # │ error that aborts the stop half-way.
+            # └──────────────────────────────────────────────────────────────────────────────
+            try { Stop-Process -Id $id -Force -ErrorAction Stop }
+            catch [Microsoft.PowerShell.Commands.ProcessCommandException] { Write-Host "  (PID $id had already ended)" -ForegroundColor DarkGray }
         }
     }
 
