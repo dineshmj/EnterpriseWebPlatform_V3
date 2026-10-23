@@ -34,6 +34,7 @@ src/Microservices/DocumentsManagement/API/DocumentStorage/
 **/out/
 **/*.tsbuildinfo
 src/Microservices/*/BFF.Web/wwwroot/
+src/Shell/wwwroot/
 
 # Not part of any image.
 .git/

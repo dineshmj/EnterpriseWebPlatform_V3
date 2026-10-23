@@ -21,6 +21,17 @@
       ]
     },
     {
+      "image": "ewp-accounts-bff-web",
+      "dockerfile": "src/Microservices/Accounts/BFF.Web/Dockerfile",
+      "paths": [
+        "src/Common/DesignSystem/",
+        "src/Common/Observability/",
+        "src/Common/WebUtilities/",
+        "src/Microservices/Accounts/BFF.Web/",
+        "src/Microservices/Accounts/BFF.Web/client-app/"
+      ]
+    },
+    {
       "image": "ewp-accounts-command-subscriber",
       "dockerfile": "src/AsyncWorkflows/Subscribers/Accounts/AccountsCommandSubscriber/Dockerfile",
       "paths": [
@@ -49,6 +60,17 @@
         "src/Common/Observability/",
         "src/Common/WebUtilities/",
         "src/Microservices/Compliance/API/"
+      ]
+    },
+    {
+      "image": "ewp-compliance-bff-web",
+      "dockerfile": "src/Microservices/Compliance/BFF.Web/Dockerfile",
+      "paths": [
+        "src/Common/DesignSystem/",
+        "src/Common/Observability/",
+        "src/Common/WebUtilities/",
+        "src/Microservices/Compliance/BFF.Web/",
+        "src/Microservices/Compliance/BFF.Web/client-app/"
       ]
     },
     {
@@ -88,6 +110,17 @@
       ]
     },
     {
+      "image": "ewp-customer-onboarding-bff-web",
+      "dockerfile": "src/Microservices/CustomerOnboarding/BFF.Web/Dockerfile",
+      "paths": [
+        "src/Common/DesignSystem/",
+        "src/Common/Observability/",
+        "src/Common/WebUtilities/",
+        "src/Microservices/CustomerOnboarding/BFF.Web/",
+        "src/Microservices/CustomerOnboarding/BFF.Web/client-app/"
+      ]
+    },
+    {
       "image": "ewp-customer-outbox-publisher",
       "dockerfile": "src/AsyncWorkflows/Publishers/CustomerOnboarding/CustomerOutboxPublisher/Dockerfile",
       "paths": [
@@ -114,6 +147,16 @@
         "src/Common/Observability/",
         "src/Common/WebUtilities/",
         "src/Microservices/DocumentsManagement/API/"
+      ]
+    },
+    {
+      "image": "ewp-idp",
+      "dockerfile": "src/IDP/Dockerfile",
+      "paths": [
+        "src/Common/DesignSystem/",
+        "src/Common/Observability/",
+        "src/Common/WebUtilities/",
+        "src/IDP/"
       ]
     },
     {
@@ -208,6 +251,16 @@
       "dockerfile": "src/Simulators/ScreeningProviderSimulator/Dockerfile",
       "paths": [
         "src/Simulators/ScreeningProviderSimulator/"
+      ]
+    },
+    {
+      "image": "ewp-shell",
+      "dockerfile": "src/Shell/Dockerfile",
+      "paths": [
+        "src/Common/Observability/",
+        "src/Common/WebUtilities/",
+        "src/Shell/",
+        "src/Shell/client-app/"
       ]
     }
   ]

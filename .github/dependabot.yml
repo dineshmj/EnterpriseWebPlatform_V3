@@ -25,16 +25,21 @@ updates:
       - /src/AsyncWorkflows/Subscribers/DocumentsManagement/DocumentInvalidationSubscriber
       - /src/AsyncWorkflows/Subscribers/Notifications/NotificationsSubscriber
       - /src/AsyncWorkflows/Subscribers/Payments/PaymentsSagaReplySubscriber
+      - /src/IDP
       - /src/Microservices/Accounts/API
+      - /src/Microservices/Accounts/BFF.Web
       - /src/Microservices/Audit/API
       - /src/Microservices/Compliance/API
+      - /src/Microservices/Compliance/BFF.Web
       - /src/Microservices/CustomerKyc/API
       - /src/Microservices/CustomerOnboarding/API
+      - /src/Microservices/CustomerOnboarding/BFF.Web
       - /src/Microservices/DocumentsManagement/API
       - /src/Microservices/Notifications/API
       - /src/Microservices/PartnerProducts/API
       - /src/Microservices/Payments/API
       - /src/Microservices/Payments/BFF.Web
+      - /src/Shell
       - /src/Simulators/CoreBankingSimulator
       - /src/Simulators/PaymentNetworkSimulator
       - /src/Simulators/ScreeningProviderSimulator

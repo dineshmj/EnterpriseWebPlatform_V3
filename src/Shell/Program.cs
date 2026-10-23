@@ -70,8 +70,16 @@ builder.Services.AddSession(options =>
     options.Cookie.IsEssential = true;
 });
 
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ No password in appsettings.json (it goes into the container image): Development reads
+// │ the menu database's connection string from appsettings.Development.json, everywhere
+// │ else from the environment. Missing = the Shell does not start (not a failure at the
+// │ first menu request).
+// └──────────────────────────────────────────────────────────────────────────────────────
+var menuDb = builder.Configuration.GetConnectionString("MenuDbConnection")
+    ?? throw new InvalidOperationException("Connection string 'MenuDbConnection' was not configured.");
 builder.Services.AddDbContext<MenuDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("MenuDbConnection")));
+    options.UseNpgsql(menuDb));
 
 // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
 // │ Server-side sessions and the Data Protection keys live in PostgreSQL (EwpBffStateDb,

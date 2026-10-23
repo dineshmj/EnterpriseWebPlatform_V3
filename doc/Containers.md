@@ -2,9 +2,9 @@
 
 How EWP's services become container images, and what an image needs from its environment to run.
 Every image is listed in [.github/container-images.json](../.github/container-images.json): today
-the 8 .NET domain APIs, the Payments BFF, the Outbox publisher, the 8 Kafka subscribers and the
-3 simulators (22 images). Still to come: the IDP, the Shell and the other .NET BFFs, then the
-Node.js services (see [Adding an image](#adding-an-image)).
+the 8 .NET domain APIs, the IDP, the Shell, the 4 .NET BFFs, the Outbox publisher, the 8 Kafka
+subscribers and the 3 simulators (27 images). Still to come: the Node.js services (see
+[Adding an image](#adding-an-image)).
 
 In short: **CI builds every image from a commit, checks it, and publishes it only if the checks
 pass. An image holds no secret and no environment's settings: each environment supplies settings
@@ -42,9 +42,9 @@ Pull requests run steps 1-3 and never publish.
   material (`*.pem`, `*.pfx`, `*.jwk`, `keys/`, ...) out of the build context. A `COPY` of a whole
   project folder therefore cannot carry them into an image.
 - Connection strings carry passwords, so they move from `appsettings.json` (which goes into the
-  image) to `appsettings.Development.json`. **Done for every service with an image** (the 9
-  domain APIs, the Payments BFF, the Outbox publisher); the IDP, the Shell and the other BFFs
-  follow with their images. A host without a connection string refuses to start.
+  image) to `appsettings.Development.json`. **Done for every .NET service** (the domain
+  APIs, the IDP, the Shell, the 4 BFFs, the Outbox publisher). A host without a connection string
+  refuses to start.
 - Trivy's secret scanner checks the finished image as a second line of defence.
 
 ## Run-time contract
@@ -64,6 +64,8 @@ environment or a secret store. Kafka clients also need the Kafka trust root as a
 
 | Image | Needs |
 |---|---|
+| `ewp-idp` | The token-signing certificate (PFX) mounted from the secret store: `SigningCredential__CertificatePath`, `SigningCredential__CertificatePassword` (no developer key outside Development - it refuses to start); each private_key_jwt client's PUBLIC key file: `ClientKeys__<client id>` (e.g. `ClientKeys__SelfService.Web.ClientID`); every confidential client's secret: `ClientSecrets__<client id>`; `ClientBaseUrls__*` (the web clients' public https addresses, for their redirect URIs). The issuer is the address the browser uses (`https` from the ingress, see below) |
+| `ewp-shell` | `MfeOrigins__*` (the MFEs the Shell may frame) and `NotificationsApiBaseUrl`, all https. The menu database holds each MFE's address (`EwpBssShellDb.sql` seeds the development ones): a deployment loads its own addresses into that data - it is not an image setting |
 | `ewp-audit-api` | A write-once volume for the signed checkpoints: `Audit__Anchors__Directory`; the anchor signing key from the secret store |
 | `ewp-documents-management-api` | A volume for the encrypted documents: `DocumentStorage__RootPath`; the key ring (`DocumentStorage__Encryption__*`) from the secret store |
 | `ewp-partner-products-api` | EWP's mTLS client and request-signing certificates and their password files, mounted from the secret store (`PartnerBank__*CertificatePath`, `*PasswordPath`) |
