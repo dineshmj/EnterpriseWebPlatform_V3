@@ -1,0 +1,54 @@
+{{- /*
+┌─ :: SECURITY :: One certificate per Service, from EWP's private CA ─────────────────────────────
+│ Why : The BFFs and workers insist on https addresses for the APIs (doc/Containers.md, known
+│       gaps), so every pod-to-pod call is TLS, verified against the private root - without a
+│       service mesh or a code change.
+│ How : cert-manager issues an ECDSA P-256 certificate for the Service's names (short, namespace,
+│       svc, cluster.local), 90 days, renewed 30 days before; a new key on every renewal.
+│       Node services also get the PKCS#12 keystore they load (<PREFIX>_TLS_PFX_PATH).
+│       DEBT: Kestrel and Node read the files at start-up only - a renewed certificate is used
+│       after the next restart (a deploy, or a reloader); 30 days' margin covers the demo.
+│ Ref : doc/Kubernetes.md | OWASP A02 | NIST SP 800-52r2
+└────────────────────────────────────────────────────────────────────────────────────────────────
+*/ -}}
+{{- $root := . -}}
+{{- $g := .Values.global -}}
+{{- range $name, $c := (include "ewp.enabled" . | fromYaml) }}
+{{- if eq (include "ewp.listener" $c) "https" }}
+{{- $ctx := dict "root" $root "name" $name }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $name }}-tls
+  labels:
+    {{- include "ewp.labels" $ctx | nindent 4 }}
+spec:
+  secretName: {{ $name }}-tls
+  duration: 2160h
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - server auth
+    - digital signature
+  dnsNames:
+    - {{ $name }}
+    - {{ $name }}.{{ $root.Release.Namespace }}
+    - {{ $name }}.{{ $root.Release.Namespace }}.svc
+    - {{ $name }}.{{ $root.Release.Namespace }}.svc.cluster.local
+  issuerRef:
+    {{- toYaml $g.tls.issuerRef | nindent 4 }}
+  {{- if eq $c.stack "node" }}
+  keystores:
+    pkcs12:
+      create: true
+      profile: Modern2023
+      passwordSecretRef:
+        name: {{ $g.tls.keystorePasswordSecret }}
+        key: password
+  {{- end }}
+{{- end }}
+{{- end }}

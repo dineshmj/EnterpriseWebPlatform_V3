@@ -1,0 +1,29 @@
+{{- $root := . -}}
+{{- range $name, $c := (include "ewp.enabled" . | fromYaml) }}
+{{- $ctx := dict "root" $root "name" $name -}}
+{{- $listener := include "ewp.listener" $c }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "ewp.labels" $ctx | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "ewp.selector" $ctx | nindent 4 }}
+  ports:
+    {{- if eq $listener "https" }}
+    # Callers use https://<name> (443); the pod listens on 8443 (non-root).
+    - name: https
+      port: 443
+      targetPort: https
+      appProtocol: https
+    {{- else }}
+    # A .NET Kafka worker: probes and Platform Health only.
+    - name: http
+      port: 8080
+      targetPort: http
+    {{- end }}
+{{- end }}

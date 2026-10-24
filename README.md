@@ -65,6 +65,9 @@ Each document has one purpose. A fact is written in exactly one place; other doc
 | [AI Architect Reviews](doc/AI-Architect-Reviews) | The external reviewers' verdicts (Microsoft, Google, xAI) of 12-, 13- and 14-OCT-2026, kept as received, and the response to every finding |
 | [BSS Requirements](doc/Requirements/BSS-Requirements.md) | What the Banking Services System must do, in Gherkin: happy paths and boundary situations per business capability, tagged (@happy-path, @boundary, @security, @resilience, @sod, @compensation, @smoke); with the [smoke test cases](doc/Requirements/Smoke-Test-Cases.md) |
 | [Design conversations](doc/Arch-Design-Visualizations) | Step-by-step conversations between the parts: delegated token exchange, circuit breaker with back-off, the mutual-TLS handshake, the Partner Bank integration (mutual TLS + PAR, signed instructions, the staff-view handoff), and the Temporal workflow of a Digital Gold purchase (waiting, a worker crash, every ending) |
+| [Container images](doc/Containers.md) | How every service becomes an image in CI, and what an image needs from its environment (the run-time contract) |
+| [CI gates](doc/CI.md) | What every pull request and push to main must pass, and the branch protection |
+| [Kubernetes deployment](doc/Kubernetes.md) | The Helm charts (`deploy/helm`): what a cluster needs first, TLS between pods, network rules, every secret an environment creates |
 | [Checklists](doc/Checklists/README.md) | One checklist per deployable tier (IDP, Shell, MFE SPAs and BFFs, Journey and domain APIs, Outbox publishers, subscribers, Kafka, PostgreSQL users and grants): what is true today, and what is open |
 
 ### Per component (`doc/Requirements/`)

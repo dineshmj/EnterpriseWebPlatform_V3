@@ -1,0 +1,40 @@
+# ┌─ :: ARCHITECTURE :: The quarterly cloud demo (short-lived, torn down after each run) ─────────
+# │ Why : A demo shows the whole platform at the lowest cost: one instance each, simulators on,
+# │       the Operations screen allowed to switch them (environment Test, MFA on).
+# │ How : Only what differs from values.yaml. The addresses marked <set by the pipeline> come
+# │       from Terraform's outputs at install time (--set), never committed.
+# │ Ref : doc/Kubernetes.md
+# └────────────────────────────────────────────────────────────────────────────────────────────────
+
+global:
+  # <set by the pipeline>: --set global.domain=... --set global.image.tag=<commit SHA>
+  domain: demo.ewp.example
+  image:
+    tag: "0000000000000000000000000000000000000000"
+
+  replicas: 1
+  environment: Test
+
+  gateway:
+    parentRefs:
+      - name: ewp-gateway
+        namespace: gateway-system
+        sectionName: https
+
+  forwardedHeaders:
+    # <set by the pipeline>: the Gateway pods' subnet.
+    knownNetworks: ["10.224.0.0/16"]
+
+  kafka:
+    # <set by the pipeline>
+    bootstrapServers: kafka.ewp-infra.svc:9093
+
+  temporal:
+    # <set by the pipeline>
+    address: temporal-frontend.ewp-infra.svc:7233
+
+  partnerBank:
+    # <set by the pipeline>: the Partner Bank's own chart and host names.
+    tokenEndpoint: https://partner-auth.demo.ewp.example:47411/connect/token
+    apiBaseUrl: https://partner-api.demo.ewp.example:47403
+    staffViewUrl: https://partner-products.demo.ewp.example:47402/StaffView

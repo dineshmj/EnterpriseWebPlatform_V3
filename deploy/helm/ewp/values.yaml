@@ -1,0 +1,748 @@
+# ┌─ :: ARCHITECTURE + SECURITY :: EWP's deployment, as data ─────────────────────────────────────
+# │ Why : One place says, per component, what differs: its settings, who may call it, which
+# │       secrets it reads. Everything else (security context, TLS, probes) is the same for all
+# │       and lives in the templates. An environment overrides only global values and the odd
+# │       component (values-<environment>.yaml).
+# │ How : components.<key>: the key is the Service name and the image name without "ewp-".
+# │         stack        dotnet | node            role  web | worker (.NET workers: http 8080)
+# │         public.host  <host>.<global.domain> through the Gateway (browser-facing only)
+# │         allowFrom    the components that may connect (NetworkPolicy)
+# │         env          plain settings; values are templates ({{ include "ewp.public" ... }})
+# │         secretEnv    keys read from the Secret "<global.secretPrefix><key>" (same names)
+# │         secretRefs   NAME: {secret, key} - a key of a shared Secret
+# │         secretFiles  {name, secret, mountPath} - a Secret mounted as files
+# │       SEC: no value here is a secret. Secrets exist only in the cluster (doc/Kubernetes.md
+# │       lists every one); a missing key stops the pod with that key's name.
+# │ Ref : doc/Kubernetes.md | doc/Containers.md (run-time contract)
+# └────────────────────────────────────────────────────────────────────────────────────────────────
+
+global:
+  # The public DNS zone: the browser reaches <component public.host>.<domain>. Required.
+  domain: ""
+
+  image:
+    registry: ghcr.io/dineshmj
+    # The full commit SHA the images were built from (doc/Containers.md, decision 1). Required.
+    tag: ""
+    pullPolicy: IfNotPresent
+    pullSecrets: []
+
+  # Instances per component unless the component says otherwise.
+  replicas: 2
+
+  # The Secret holding a component's own secret settings: <secretPrefix><component key>.
+  secretPrefix: ewp-
+
+  # Requests sized for the services at rest; no CPU limit (throttling hurts latency more than
+  # it protects), a memory limit so a leak restarts one pod instead of starving a node.
+  resources:
+    requests:
+      cpu: 25m
+      memory: 128Mi
+    limits:
+      memory: 384Mi
+
+  storageClassName: ""
+
+  tls:
+    # The private CA that signs every Service's certificate (deploy/helm/ewp-cluster).
+    issuerRef:
+      group: cert-manager.io
+      kind: ClusterIssuer
+      name: ewp-internal-ca
+    # Secret (key "password") protecting the Node services' PKCS#12 keystores.
+    keystorePasswordSecret: ewp-tls-keystore-password
+
+  trust:
+    # ConfigMaps (key ca.crt) made by trust-manager (deploy/helm/ewp-cluster).
+    caBundle: ewp-internal-ca
+    fullBundle: ewp-trust-bundle
+
+  gateway:
+    enabled: true
+    # The environment's Gateway listener that ends the browser's TLS, e.g.
+    #   - name: ewp-gateway
+    #     namespace: gateway-system
+    #     sectionName: https
+    parentRefs: []
+    # The Gateway's pods' namespace: the only place public components accept connections from.
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: gateway-system
+
+  # SEC: the Gateway's pod network (CIDRs). Only these may set X-Forwarded-For / -Proto
+  # (doc/Containers.md, "Behind the ingress"). Empty = no forwarded header is trusted.
+  forwardedHeaders:
+    knownNetworks: []
+
+  networkPolicies:
+    enabled: true
+
+  # SEC: step-up with the authenticator code. Outside Development the Operations Journey API
+  # refuses to start without it; the IDP and the APIs get the same value.
+  mfa:
+    enabled: true
+
+  # The certificate that encrypts the IDP's, the Shell's and the .NET BFFs' Data Protection
+  # key rings at rest: Secret with keys certificate.pfx and password.
+  dataProtection:
+    secret: ewp-data-protection
+
+  kafka:
+    # SASL_SSL listener(s), comma-separated. Required.
+    bootstrapServers: ""
+    # ConfigMap with the Kafka trust root (key ca.crt).
+    caConfigMap: ewp-kafka-trust
+
+  temporal:
+    address: ""
+    namespace: default
+
+  # The Screening Provider, Core Banking and Payment Network simulators. Never in production.
+  simulators:
+    enabled: true
+
+  # The Operations Journey API's environment (Development, Test, UAT, Production): Test allows
+  # the simulator switch, UAT and Production do not.
+  environment: Production
+
+  # Platform Health's order on screen (templates/operations-platform.yaml).
+  platformHealth:
+    order:
+      - idp
+      - shell
+      - customer-onboarding-bff-web
+      - customer-kyc-bff-web
+      - compliance-bff-web
+      - accounts-bff-web
+      - payments-bff-web
+      - audit-bff-web
+      - operations-bff-web
+      - partner-products-bff-web
+      - customer-onboarding-api
+      - customer-kyc-api
+      - documents-management-api
+      - compliance-api
+      - accounts-api
+      - payments-api
+      - notifications-api
+      - audit-api
+      - partner-products-api
+      - audit-journey-api
+      - operations-journey-api
+      - partner-products-journey-api
+      - customer-outbox-publisher
+      - kyc-case-opening-subscriber
+      - onboarding-outcome-subscriber
+      - compliance-case-opening-subscriber
+      - document-invalidation-subscriber
+      - account-application-opening-subscriber
+      - notifications-subscriber
+      - accounts-command-subscriber
+      - payments-saga-reply-subscriber
+      - partner-products-worker
+      - screening-provider-simulator
+      - core-banking-simulator
+      - payment-network-simulator
+
+  # The Partner Bank (its own chart and namespace, deploy/helm in its repository). EWP's
+  # Partner Products API calls it with mutual TLS on these addresses.
+  partnerBank:
+    tokenEndpoint: ""
+    apiBaseUrl: ""
+    staffViewUrl: ""
+
+components:
+
+  # ── Identity ─────────────────────────────────────────────────────────────────────────────────
+  idp:
+    stack: dotnet
+    role: web
+    public: {host: idp}
+    mfa: true
+    dataProtection: true
+    allowFrom: []
+    platformHealth: {name: IDP, group: Identity}
+    env:
+      ClientBaseUrls__Shell: '{{ include "ewp.public" (list . "shell") }}'
+      ClientBaseUrls__CustomerOnboardingWeb: '{{ include "ewp.public" (list . "customer-onboarding-bff-web") }}'
+      ClientBaseUrls__CustomerKycWeb: '{{ include "ewp.public" (list . "customer-kyc-bff-web") }}'
+      ClientBaseUrls__ComplianceWeb: '{{ include "ewp.public" (list . "compliance-bff-web") }}'
+      ClientBaseUrls__AccountsWeb: '{{ include "ewp.public" (list . "accounts-bff-web") }}'
+      ClientBaseUrls__PaymentsWeb: '{{ include "ewp.public" (list . "payments-bff-web") }}'
+      ClientBaseUrls__AuditWeb: '{{ include "ewp.public" (list . "audit-bff-web") }}'
+      ClientBaseUrls__OperationsWeb: '{{ include "ewp.public" (list . "operations-bff-web") }}'
+      ClientBaseUrls__PartnerProductsWeb: '{{ include "ewp.public" (list . "partner-products-bff-web") }}'
+      # The customers' self-service channel (not deployed yet); its clients are registered.
+      ClientBaseUrls__SelfServiceWeb: 'https://my.{{ .Values.global.domain }}'
+      ClientKeys__SelfService.Web.ClientID: /etc/ewp/idp-client-keys/SelfService.Web.ClientID.jwk
+      ClientKeys__SelfService.JourneyApi.ClientID: /etc/ewp/idp-client-keys/SelfService.JourneyApi.ClientID.jwk
+      CustomerSignIn__CustomerOnboardingApiBaseUrl: '{{ include "ewp.internal" (list . "customer-onboarding-api") }}'
+      SigningCredential__CertificatePath: /etc/ewp/idp-signing/signing.pfx
+    secretEnv:
+      - ConnectionStrings__IdentityDbConnection
+      - SigningCredential__CertificatePassword
+      - ClientSecrets__BSS.Shell.BFF.ClientID
+      - ClientSecrets__CustomerOnboarding.Microservice.BFF.ClientID
+      - ClientSecrets__CustomerKYC.Microservice.BFF.ClientID
+      - ClientSecrets__Compliance.Microservice.BFF.ClientID
+      - ClientSecrets__Accounts.Microservice.BFF.ClientID
+      - ClientSecrets__Payments.Microservice.BFF.ClientID
+      - ClientSecrets__Audit.Microservice.Web.ClientID
+      - ClientSecrets__Audit.JourneyApi.ClientID
+      - ClientSecrets__Operations.Microservice.Web.ClientID
+      - ClientSecrets__Operations.JourneyApi.ClientID
+      - ClientSecrets__PartnerProducts.Microservice.Web.ClientID
+      - ClientSecrets__PartnerProducts.JourneyApi.ClientID
+      - ClientSecrets__PartnerProducts.Worker.M2M.ClientID
+      - ClientSecrets__CustomerKyc.CaseOpeningSubscriber.To.CustomerKycApi.M2M.ClientID
+      - ClientSecrets__CustomerOnboarding.OutcomeSubscriber.To.CustomerOnboardingApi.M2M.ClientID
+      - ClientSecrets__Compliance.CaseOpeningSubscriber.To.ComplianceApi.M2M.ClientID
+      - ClientSecrets__DocumentsManagement.InvalidationSubscriber.To.DocumentsManagementApi.M2M.ClientID
+      - ClientSecrets__Accounts.ApplicationOpeningSubscriber.To.AccountsApi.M2M.ClientID
+      - ClientSecrets__Notifications.Subscriber.To.NotificationsApi.M2M.ClientID
+      - ClientSecrets__Accounts.CommandSubscriber.To.AccountsApi.M2M.ClientID
+      - ClientSecrets__Payments.SagaReplySubscriber.To.PaymentsApi.M2M.ClientID
+    secretFiles:
+      # The token-signing certificate (signing.pfx); its password is in secretEnv.
+      - {name: signing, secret: ewp-idp-signing, mountPath: /etc/ewp/idp-signing}
+      # The private_key_jwt clients' PUBLIC keys (<client id>.jwk).
+      - {name: client-keys, secret: ewp-idp-client-keys, mountPath: /etc/ewp/idp-client-keys}
+
+  # ── Front ends ───────────────────────────────────────────────────────────────────────────────
+  shell:
+    stack: dotnet
+    role: web
+    public: {host: shell}
+    dataProtection: true
+    platformHealth: {name: Shell, group: Front ends}
+    env:
+      Oidc__Authority: '{{ include "ewp.public" (list . "idp") }}'
+      ShellOrigin: '{{ include "ewp.public" (list . "shell") }}'
+      MfeOrigins__CustomerOnboarding: '{{ include "ewp.public" (list . "customer-onboarding-bff-web") }}'
+      MfeOrigins__CustomerKyc: '{{ include "ewp.public" (list . "customer-kyc-bff-web") }}'
+      MfeOrigins__Compliance: '{{ include "ewp.public" (list . "compliance-bff-web") }}'
+      MfeOrigins__Accounts: '{{ include "ewp.public" (list . "accounts-bff-web") }}'
+      MfeOrigins__Payments: '{{ include "ewp.public" (list . "payments-bff-web") }}'
+      MfeOrigins__Audit: '{{ include "ewp.public" (list . "audit-bff-web") }}'
+      MfeOrigins__Operations: '{{ include "ewp.public" (list . "operations-bff-web") }}'
+      MfeOrigins__PartnerProducts: '{{ include "ewp.public" (list . "partner-products-bff-web") }}'
+      NotificationsApiBaseUrl: '{{ include "ewp.internal" (list . "notifications-api") }}'
+    secretEnv:
+      - ConnectionStrings__MenuDbConnection
+      - ConnectionStrings__BffStateDbConnection
+      - Oidc__ClientSecret
+
+  customer-onboarding-bff-web:
+    stack: dotnet
+    role: web
+    public: {host: customer}
+    dataProtection: true
+    platformHealth: {name: Customer Onboarding BFF, group: Front ends}
+    env:
+      Oidc__Authority: '{{ include "ewp.public" (list . "idp") }}'
+      ShellOrigin: '{{ include "ewp.public" (list . "shell") }}'
+      CustomerOnboardingBff__SpaBaseUrl: '{{ include "ewp.public" (list . "customer-onboarding-bff-web") }}'
+      CustomerOnboardingBff__IdentityServerAuthority: '{{ include "ewp.public" (list . "idp") }}'
+      CustomerOnboardingBff__CustomerOnboardingApiBaseUrl: '{{ include "ewp.internal" (list . "customer-onboarding-api") }}'
+      CustomerOnboardingBff__DocumentsManagementApiBaseUrl: '{{ include "ewp.internal" (list . "documents-management-api") }}'
+    secretEnv:
+      - ConnectionStrings__BffStateDbConnection
+      - Oidc__ClientSecret
+
+  customer-kyc-bff-web:
+    stack: node
+    role: web
+    public: {host: kyc}
+    node: {prefix: KYC_BFF, trustedProxiesVar: KYC_BFF_TRUSTED_PROXIES}
+    platformHealth: {name: Customer KYC BFF, group: Front ends}
+    env:
+      KYC_IDP_AUTHORITY: '{{ include "ewp.public" (list . "idp") }}'
+      KYC_BFF_CLIENT_ID: CustomerKYC.Microservice.BFF.ClientID
+      KYC_BFF_CALLBACK_URL: '{{ include "ewp.public" (list . "customer-kyc-bff-web") }}/api/auth/callback'
+      KYC_BFF_POST_LOGOUT_REDIRECT_URI: '{{ include "ewp.public" (list . "customer-kyc-bff-web") }}/signout-callback-oidc'
+      KYC_BFF_SHELL_ORIGIN: '{{ include "ewp.public" (list . "shell") }}'
+      KYC_API_BASE_URL: '{{ include "ewp.internal" (list . "customer-kyc-api") }}'
+      KYC_DOCUMENTS_MANAGEMENT_API_BASE_URL: '{{ include "ewp.internal" (list . "documents-management-api") }}'
+    secretEnv:
+      - KYC_BFF_CLIENT_SECRET
+      - KYC_BFF_SESSION_SECRET
+      - KYC_BFF_SESSION_KEY
+      - KYC_BFF_DATABASE_URL
+
+  compliance-bff-web:
+    stack: dotnet
+    role: web
+    public: {host: compliance}
+    dataProtection: true
+    platformHealth: {name: Compliance BFF, group: Front ends}
+    env:
+      Oidc__Authority: '{{ include "ewp.public" (list . "idp") }}'
+      ShellOrigin: '{{ include "ewp.public" (list . "shell") }}'
+      ComplianceBff__ComplianceApiBaseUrl: '{{ include "ewp.internal" (list . "compliance-api") }}'
+    secretEnv:
+      - ConnectionStrings__BffStateDbConnection
+      - Oidc__ClientSecret
+
+  accounts-bff-web:
+    stack: dotnet
+    role: web
+    public: {host: accounts}
+    dataProtection: true
+    platformHealth: {name: Accounts BFF, group: Front ends}
+    env:
+      Oidc__Authority: '{{ include "ewp.public" (list . "idp") }}'
+      ShellOrigin: '{{ include "ewp.public" (list . "shell") }}'
+      AccountsBff__AccountsApiBaseUrl: '{{ include "ewp.internal" (list . "accounts-api") }}'
+    secretEnv:
+      - ConnectionStrings__BffStateDbConnection
+      - Oidc__ClientSecret
+
+  payments-bff-web:
+    stack: dotnet
+    role: web
+    public: {host: payments}
+    dataProtection: true
+    platformHealth: {name: Payments BFF, group: Front ends}
+    env:
+      Oidc__Authority: '{{ include "ewp.public" (list . "idp") }}'
+      ShellOrigin: '{{ include "ewp.public" (list . "shell") }}'
+      PaymentsBff__PaymentsApiBaseUrl: '{{ include "ewp.internal" (list . "payments-api") }}'
+      PaymentsBff__AccountsApiBaseUrl: '{{ include "ewp.internal" (list . "accounts-api") }}'
+    secretEnv:
+      - ConnectionStrings__BffStateDbConnection
+      - Oidc__ClientSecret
+
+  audit-bff-web:
+    stack: node
+    role: web
+    public: {host: audit}
+    node: {prefix: AUDIT_WEB, trustedProxiesVar: AUDIT_WEB_TRUSTED_PROXIES}
+    platformHealth: {name: Audit web, group: Front ends}
+    env:
+      AUDIT_WEB_PUBLIC_ORIGIN: '{{ include "ewp.public" (list . "audit-bff-web") }}'
+      AUDIT_WEB_SHELL_ORIGIN: '{{ include "ewp.public" (list . "shell") }}'
+      AUDIT_WEB_IDP_AUTHORITY: '{{ include "ewp.public" (list . "idp") }}'
+      AUDIT_WEB_CLIENT_ID: Audit.Microservice.Web.ClientID
+      AUDIT_JOURNEY_API_BASE_URL: '{{ include "ewp.internal" (list . "audit-journey-api") }}'
+    secretEnv:
+      - AUDIT_WEB_CLIENT_SECRET
+      - AUDIT_WEB_SESSION_KEY
+      - AUDIT_WEB_DATABASE_URL
+
+  operations-bff-web:
+    stack: node
+    role: web
+    public: {host: operations}
+    node: {prefix: OPERATIONS_WEB, trustedProxiesVar: OPERATIONS_WEB_TRUSTED_PROXIES}
+    platformHealth: {name: Operations web, group: Front ends}
+    env:
+      OPERATIONS_WEB_PUBLIC_ORIGIN: '{{ include "ewp.public" (list . "operations-bff-web") }}'
+      OPERATIONS_WEB_SHELL_ORIGIN: '{{ include "ewp.public" (list . "shell") }}'
+      OPERATIONS_WEB_IDP_AUTHORITY: '{{ include "ewp.public" (list . "idp") }}'
+      OPERATIONS_WEB_CLIENT_ID: Operations.Microservice.Web.ClientID
+      OPERATIONS_JOURNEY_API_BASE_URL: '{{ include "ewp.internal" (list . "operations-journey-api") }}'
+    secretEnv:
+      - OPERATIONS_WEB_CLIENT_SECRET
+      - OPERATIONS_WEB_SESSION_KEY
+      - OPERATIONS_WEB_DATABASE_URL
+
+  partner-products-bff-web:
+    stack: node
+    role: web
+    public: {host: ewp-partner}
+    node: {prefix: PARTNER_PRODUCTS_WEB, trustedProxiesVar: PARTNER_PRODUCTS_WEB_TRUSTED_PROXIES}
+    platformHealth: {name: Partner Products web, group: Front ends}
+    env:
+      PARTNER_PRODUCTS_WEB_PUBLIC_ORIGIN: '{{ include "ewp.public" (list . "partner-products-bff-web") }}'
+      PARTNER_PRODUCTS_WEB_SHELL_ORIGIN: '{{ include "ewp.public" (list . "shell") }}'
+      PARTNER_PRODUCTS_WEB_IDP_AUTHORITY: '{{ include "ewp.public" (list . "idp") }}'
+      PARTNER_PRODUCTS_WEB_CLIENT_ID: PartnerProducts.Microservice.Web.ClientID
+      PARTNER_PRODUCTS_JOURNEY_API_BASE_URL: '{{ include "ewp.internal" (list . "partner-products-journey-api") }}'
+    secretEnv:
+      - PARTNER_PRODUCTS_WEB_CLIENT_SECRET
+      - PARTNER_PRODUCTS_WEB_SESSION_KEY
+      - PARTNER_PRODUCTS_WEB_DATABASE_URL
+
+  # ── Domain APIs ──────────────────────────────────────────────────────────────────────────────
+  customer-onboarding-api:
+    stack: dotnet
+    role: web
+    allowFrom: [idp, customer-onboarding-bff-web, onboarding-outcome-subscriber, partner-products-journey-api]
+    platformHealth: {name: Customer Onboarding API, group: Domain APIs}
+    env:
+      Authentication__Authority: '{{ include "ewp.public" (list . "idp") }}'
+    secretEnv:
+      - ConnectionStrings__CustomerDbConnection
+
+  customer-kyc-api:
+    stack: dotnet
+    role: web
+    mfa: true
+    kafka: {}
+    allowFrom: [customer-kyc-bff-web, kyc-case-opening-subscriber]
+    platformHealth: {name: Customer KYC API, group: Domain APIs}
+    env:
+      Authentication__Authority: '{{ include "ewp.public" (list . "idp") }}'
+    secretEnv:
+      - ConnectionStrings__KycDbConnection
+      - Kafka__SaslPassword
+
+  documents-management-api:
+    stack: dotnet
+    role: web
+    # One instance while the documents are on a ReadWriteOnce volume.
+    replicas: 1
+    persistence: {mountPath: /var/lib/ewp/documents, size: 1Gi}
+    allowFrom: [customer-onboarding-bff-web, customer-kyc-bff-web, document-invalidation-subscriber, partner-products-journey-api]
+    platformHealth: {name: Documents Management API, group: Domain APIs}
+    env:
+      Authentication__Authority: '{{ include "ewp.public" (list . "idp") }}'
+      DocumentStorage__RootPath: /var/lib/ewp/documents
+      # The key ring's current key; the key itself is DocumentStorage__Encryption__Keys__<id>.
+      DocumentStorage__Encryption__CurrentKeyId: key-1
+    secretEnv:
+      - ConnectionStrings__DocumentsManagementDbConnection
+      - DocumentStorage__Encryption__Keys__key-1
+
+  compliance-api:
+    stack: dotnet
+    role: web
+    mfa: true
+    kafka: {}
+    allowFrom: [compliance-bff-web, compliance-case-opening-subscriber]
+    platformHealth: {name: Compliance API, group: Domain APIs}
+    env:
+      Authentication__Authority: '{{ include "ewp.public" (list . "idp") }}'
+      ScreeningProvider__BaseUrl: '{{ include "ewp.internal" (list . "screening-provider-simulator") }}'
+      ScreeningProvider__PermittedHosts__0: screening-provider-simulator
+    secretEnv:
+      - ConnectionStrings__ComplianceDbConnection
+      - Kafka__SaslPassword
+      - ScreeningProvider__ApiKey
+
+  accounts-api:
+    stack: dotnet
+    role: web
+    mfa: true
+    kafka: {}
+    allowFrom: [accounts-bff-web, payments-bff-web, account-application-opening-subscriber, accounts-command-subscriber, partner-products-journey-api]
+    platformHealth: {name: Accounts API, group: Domain APIs}
+    env:
+      Authentication__Authority: '{{ include "ewp.public" (list . "idp") }}'
+      CoreBanking__BaseUrl: '{{ include "ewp.internal" (list . "core-banking-simulator") }}'
+      CoreBanking__PermittedHosts__0: core-banking-simulator
+    secretEnv:
+      - ConnectionStrings__AccountsDbConnection
+      - Kafka__SaslPassword
+      - CoreBanking__ApiKey
+
+  payments-api:
+    stack: dotnet
+    role: web
+    mfa: true
+    kafka: {}
+    allowFrom: [payments-bff-web, payments-saga-reply-subscriber, audit-journey-api, partner-products-journey-api, partner-products-worker]
+    platformHealth: {name: Payments API, group: Domain APIs}
+    env:
+      Authentication__Authority: '{{ include "ewp.public" (list . "idp") }}'
+      PaymentNetwork__BaseUrl: '{{ include "ewp.internal" (list . "payment-network-simulator") }}'
+      PaymentNetwork__PermittedHosts__0: payment-network-simulator
+    secretEnv:
+      - ConnectionStrings__PaymentsDbConnection
+      - Kafka__SaslPassword
+      - PaymentNetwork__ApiKey
+
+  notifications-api:
+    stack: dotnet
+    role: web
+    # SignalR without a backplane: a push reaches only the browsers on the instance that got the
+    # event (doc/Containers.md, known gaps) - one instance until a backplane is added.
+    replicas: 1
+    allowFrom: [shell, notifications-subscriber]
+    platformHealth: {name: Notifications API, group: Domain APIs}
+    env:
+      Authentication__Authority: '{{ include "ewp.public" (list . "idp") }}'
+    secretEnv:
+      - ConnectionStrings__NotificationsDbConnection
+
+  audit-api:
+    stack: dotnet
+    role: web
+    kafka: {}
+    # One instance while the signed checkpoints are on a ReadWriteOnce volume.
+    replicas: 1
+    persistence: {mountPath: /var/lib/ewp/audit-anchors, size: 1Gi}
+    allowFrom: [audit-journey-api]
+    platformHealth: {name: Audit API, group: Domain APIs}
+    env:
+      Authentication__Authority: '{{ include "ewp.public" (list . "idp") }}'
+      Audit__Anchors__Directory: /var/lib/ewp/audit-anchors
+      Audit__Anchors__KeyId: anchor-1
+    secretEnv:
+      - ConnectionStrings__AuditDbConnection
+      - Kafka__SaslPassword
+      - Audit__Anchors__SigningKey
+
+  partner-products-api:
+    stack: dotnet
+    role: web
+    mfa: true
+    kafka: {}
+    allowFrom: [partner-products-journey-api, partner-products-worker]
+    platformHealth: {name: Partner Products API, group: Domain APIs}
+    env:
+      Authentication__Authority: '{{ include "ewp.public" (list . "idp") }}'
+      PartnerBank__TokenEndpoint: '{{ required "global.partnerBank.tokenEndpoint is required" .Values.global.partnerBank.tokenEndpoint }}'
+      PartnerBank__ApiBaseUrl: '{{ required "global.partnerBank.apiBaseUrl is required" .Values.global.partnerBank.apiBaseUrl }}'
+      PartnerBank__StaffViewUrl: '{{ required "global.partnerBank.staffViewUrl is required" .Values.global.partnerBank.staffViewUrl }}'
+      # SEC: the only hosts the API may call - exactly the three addresses' hosts.
+      PartnerBank__PermittedHosts__0: '{{ (urlParse .Values.global.partnerBank.tokenEndpoint).hostname }}'
+      PartnerBank__PermittedHosts__1: '{{ (urlParse .Values.global.partnerBank.apiBaseUrl).hostname }}'
+      PartnerBank__PermittedHosts__2: '{{ (urlParse .Values.global.partnerBank.staffViewUrl).hostname }}'
+      PartnerBank__ClientCertificatePath: /etc/ewp/partner-pki/ewp-partner-client.pfx
+      PartnerBank__ClientCertificatePasswordPath: /etc/ewp/partner-pki/ewp-partner-client.pfx.password
+      PartnerBank__SigningCertificatePath: /etc/ewp/partner-pki/ewp-request-signing.pfx
+      PartnerBank__SigningCertificatePasswordPath: /etc/ewp/partner-pki/ewp-request-signing.pfx.password
+      PartnerBank__TrustRootPath: /etc/ewp/partner-pki/ewp-trust-root.cer
+    secretEnv:
+      - ConnectionStrings__PartnerProductsDbConnection
+      - Kafka__SaslPassword
+    secretFiles:
+      # EWP's mTLS client and request-signing certificates, their password files, the trust root.
+      - {name: partner-pki, secret: ewp-partner-pki, mountPath: /etc/ewp/partner-pki}
+
+  # ── Journey APIs ─────────────────────────────────────────────────────────────────────────────
+  audit-journey-api:
+    stack: node
+    role: web
+    node: {prefix: AUDIT_JOURNEY}
+    allowFrom: [audit-bff-web]
+    platformHealth: {name: Audit Journey API, group: Journey APIs}
+    env:
+      AUDIT_JOURNEY_PUBLIC_ORIGIN: '{{ include "ewp.internal" (list . "audit-journey-api") }}'
+      AUDIT_JOURNEY_IDP_AUTHORITY: '{{ include "ewp.public" (list . "idp") }}'
+      AUDIT_JOURNEY_AUDIENCE: audit-journey-api
+      AUDIT_JOURNEY_CALLER_CLIENT_ID: Audit.Microservice.Web.ClientID
+      AUDIT_JOURNEY_CLIENT_ID: Audit.JourneyApi.ClientID
+      AUDIT_API_BASE_URL: '{{ include "ewp.internal" (list . "audit-api") }}'
+      PAYMENTS_API_BASE_URL: '{{ include "ewp.internal" (list . "payments-api") }}'
+    secretEnv:
+      - AUDIT_JOURNEY_CLIENT_SECRET
+
+  operations-journey-api:
+    stack: node
+    role: web
+    node: {prefix: OPERATIONS_JOURNEY}
+    platformMap: true
+    allowFrom: [operations-bff-web]
+    platformHealth: {name: Operations Journey API, group: Journey APIs}
+    env:
+      OPERATIONS_JOURNEY_ENVIRONMENT: '{{ .Values.global.environment }}'
+      OPERATIONS_JOURNEY_PUBLIC_ORIGIN: '{{ include "ewp.internal" (list . "operations-journey-api") }}'
+      OPERATIONS_JOURNEY_IDP_AUTHORITY: '{{ include "ewp.public" (list . "idp") }}'
+      OPERATIONS_JOURNEY_AUDIENCE: operations-journey-api
+      OPERATIONS_JOURNEY_CALLER_CLIENT_ID: Operations.Microservice.Web.ClientID
+      OPERATIONS_JOURNEY_CLIENT_ID: Operations.JourneyApi.ClientID
+      OPERATIONS_JOURNEY_ACCOUNTS_API: '{{ include "ewp.internal" (list . "accounts-api") }}'
+      OPERATIONS_JOURNEY_COMPLIANCE_API: '{{ include "ewp.internal" (list . "compliance-api") }}'
+      OPERATIONS_JOURNEY_PARTNER_PRODUCTS_API: '{{ include "ewp.internal" (list . "partner-products-api") }}'
+      OPERATIONS_JOURNEY_PLATFORM_FILE: /etc/ewp/platform/platform.json
+      # SEC: the simulator switch only where the Journey API allows it (Development, Test).
+      OPERATIONS_SIMULATOR_CONTROLS_ENABLED: '{{ and .Values.global.simulators.enabled (eq .Values.global.environment "Test") }}'
+      OPERATIONS_SIMULATOR_AUTO_REVERT_MINUTES: "15"
+      # The fault proxy (Toxiproxy) runs on a developer's machine only.
+      OPERATIONS_FAULT_CONTROLS_ENABLED: "false"
+      OPERATIONS_MFA_ENABLED: '{{ .Values.global.mfa.enabled }}'
+      OPERATIONS_MFA_MAX_AGE_MINUTES: "15"
+    secretEnv:
+      - OPERATIONS_JOURNEY_CLIENT_SECRET
+
+  partner-products-journey-api:
+    stack: node
+    role: web
+    node: {prefix: PARTNER_PRODUCTS_JOURNEY}
+    allowFrom: [partner-products-bff-web]
+    platformHealth: {name: Partner Products Journey API, group: Journey APIs}
+    env:
+      PARTNER_PRODUCTS_JOURNEY_ENVIRONMENT: '{{ .Values.global.environment }}'
+      PARTNER_PRODUCTS_JOURNEY_PUBLIC_ORIGIN: '{{ include "ewp.internal" (list . "partner-products-journey-api") }}'
+      PARTNER_PRODUCTS_JOURNEY_IDP_AUTHORITY: '{{ include "ewp.public" (list . "idp") }}'
+      PARTNER_PRODUCTS_JOURNEY_AUDIENCE: partner-products-journey-api
+      PARTNER_PRODUCTS_JOURNEY_CALLER_CLIENT_ID: PartnerProducts.Microservice.Web.ClientID
+      PARTNER_PRODUCTS_JOURNEY_CLIENT_ID: PartnerProducts.JourneyApi.ClientID
+      PARTNER_PRODUCTS_API_BASE_URL: '{{ include "ewp.internal" (list . "partner-products-api") }}'
+      CUSTOMER_ONBOARDING_API_BASE_URL: '{{ include "ewp.internal" (list . "customer-onboarding-api") }}'
+      ACCOUNTS_API_BASE_URL: '{{ include "ewp.internal" (list . "accounts-api") }}'
+      DOCUMENTS_MANAGEMENT_API_BASE_URL: '{{ include "ewp.internal" (list . "documents-management-api") }}'
+      PAYMENTS_API_BASE_URL: '{{ include "ewp.internal" (list . "payments-api") }}'
+      TEMPORAL_ADDRESS: '{{ required "global.temporal.address is required" .Values.global.temporal.address }}'
+      TEMPORAL_NAMESPACE: '{{ .Values.global.temporal.namespace }}'
+      PARTNER_PRODUCTS_TEMPORAL_TASK_QUEUE: partner-products
+    secretEnv:
+      - PARTNER_PRODUCTS_JOURNEY_CLIENT_SECRET
+
+  # ── Workers ──────────────────────────────────────────────────────────────────────────────────
+  customer-outbox-publisher:
+    stack: dotnet
+    role: worker
+    kafka: {}
+    platformHealth: {name: CustomerOutboxPublisher, group: Workers}
+    secretEnv:
+      - ConnectionStrings__CustomerDbConnection
+      - Kafka__SaslPassword
+
+  kyc-case-opening-subscriber:
+    stack: dotnet
+    role: worker
+    kafka: {}
+    platformHealth: {name: KycCaseOpeningSubscriber, group: Workers}
+    env:
+      KycCaseOpeningSubscriber__IdentityServerAuthority: '{{ include "ewp.public" (list . "idp") }}'
+      KycCaseOpeningSubscriber__KycApiBaseUrl: '{{ include "ewp.internal" (list . "customer-kyc-api") }}'
+    secretEnv:
+      - Kafka__SaslPassword
+      - KycCaseOpeningSubscriber__ClientSecret
+
+  onboarding-outcome-subscriber:
+    stack: dotnet
+    role: worker
+    kafka: {}
+    platformHealth: {name: OnboardingOutcomeSubscriber, group: Workers}
+    env:
+      OnboardingOutcomeSubscriber__IdentityServerAuthority: '{{ include "ewp.public" (list . "idp") }}'
+      OnboardingOutcomeSubscriber__CustomerOnboardingApiBaseUrl: '{{ include "ewp.internal" (list . "customer-onboarding-api") }}'
+    secretEnv:
+      - Kafka__SaslPassword
+      - OnboardingOutcomeSubscriber__ClientSecret
+
+  compliance-case-opening-subscriber:
+    stack: dotnet
+    role: worker
+    kafka: {}
+    platformHealth: {name: ComplianceCaseOpeningSubscriber, group: Workers}
+    env:
+      ComplianceCaseOpeningSubscriber__IdentityServerAuthority: '{{ include "ewp.public" (list . "idp") }}'
+      ComplianceCaseOpeningSubscriber__ComplianceApiBaseUrl: '{{ include "ewp.internal" (list . "compliance-api") }}'
+    secretEnv:
+      - Kafka__SaslPassword
+      - ComplianceCaseOpeningSubscriber__ClientSecret
+
+  document-invalidation-subscriber:
+    stack: dotnet
+    role: worker
+    kafka: {}
+    platformHealth: {name: DocumentInvalidationSubscriber, group: Workers}
+    env:
+      DocumentInvalidationSubscriber__IdentityServerAuthority: '{{ include "ewp.public" (list . "idp") }}'
+      DocumentInvalidationSubscriber__DocumentsManagementApiBaseUrl: '{{ include "ewp.internal" (list . "documents-management-api") }}'
+    secretEnv:
+      - Kafka__SaslPassword
+      - DocumentInvalidationSubscriber__ClientSecret
+
+  account-application-opening-subscriber:
+    stack: dotnet
+    role: worker
+    kafka: {}
+    platformHealth: {name: AccountApplicationOpeningSubscriber, group: Workers}
+    env:
+      AccountApplicationOpeningSubscriber__IdentityServerAuthority: '{{ include "ewp.public" (list . "idp") }}'
+      AccountApplicationOpeningSubscriber__AccountsApiBaseUrl: '{{ include "ewp.internal" (list . "accounts-api") }}'
+    secretEnv:
+      - Kafka__SaslPassword
+      - AccountApplicationOpeningSubscriber__ClientSecret
+
+  notifications-subscriber:
+    stack: dotnet
+    role: worker
+    kafka: {}
+    platformHealth: {name: NotificationsSubscriber, group: Workers}
+    env:
+      NotificationsSubscriber__IdentityServerAuthority: '{{ include "ewp.public" (list . "idp") }}'
+      NotificationsSubscriber__NotificationsApiBaseUrl: '{{ include "ewp.internal" (list . "notifications-api") }}'
+    secretEnv:
+      - Kafka__SaslPassword
+      - NotificationsSubscriber__ClientSecret
+
+  accounts-command-subscriber:
+    stack: dotnet
+    role: worker
+    kafka: {}
+    platformHealth: {name: AccountsCommandSubscriber, group: Workers}
+    env:
+      AccountsCommandSubscriber__IdentityServerAuthority: '{{ include "ewp.public" (list . "idp") }}'
+      AccountsCommandSubscriber__AccountsApiBaseUrl: '{{ include "ewp.internal" (list . "accounts-api") }}'
+    secretEnv:
+      - Kafka__SaslPassword
+      - AccountsCommandSubscriber__ClientSecret
+
+  payments-saga-reply-subscriber:
+    stack: dotnet
+    role: worker
+    kafka: {}
+    platformHealth: {name: PaymentsSagaReplySubscriber, group: Workers}
+    env:
+      PaymentsSagaReplySubscriber__IdentityServerAuthority: '{{ include "ewp.public" (list . "idp") }}'
+      PaymentsSagaReplySubscriber__PaymentsApiBaseUrl: '{{ include "ewp.internal" (list . "payments-api") }}'
+    secretEnv:
+      - Kafka__SaslPassword
+      - PaymentsSagaReplySubscriber__ClientSecret
+
+  partner-products-worker:
+    stack: node
+    role: worker
+    node: {prefix: PARTNER_PRODUCTS_WORKER, portVar: PARTNER_PRODUCTS_WORKER_HEALTH_PORT}
+    kafka: {bootstrapVar: KAFKA_BOOTSTRAP_SERVERS, caVar: KAFKA_SSL_CA_LOCATION}
+    platformHealth: {name: Partner Products Worker (Temporal), group: Workers}
+    env:
+      TEMPORAL_ADDRESS: '{{ required "global.temporal.address is required" .Values.global.temporal.address }}'
+      TEMPORAL_NAMESPACE: '{{ .Values.global.temporal.namespace }}'
+      PARTNER_PRODUCTS_TEMPORAL_TASK_QUEUE: partner-products
+      PARTNER_PRODUCTS_WORKER_IDP_AUTHORITY: '{{ include "ewp.public" (list . "idp") }}'
+      PARTNER_PRODUCTS_WORKER_CLIENT_ID: PartnerProducts.Worker.M2M.ClientID
+      PARTNER_PRODUCTS_API_BASE_URL: '{{ include "ewp.internal" (list . "partner-products-api") }}'
+      PAYMENTS_API_BASE_URL: '{{ include "ewp.internal" (list . "payments-api") }}'
+      PARTNER_PRODUCTS_WORKER_KAFKA_USERNAME: ewp-partner-products-worker
+      # The Partner Bank's settlement account (where a gold order's payment goes).
+      PARTNER_PRODUCTS_SETTLEMENT_BSB: "182-512"
+      PARTNER_PRODUCTS_SETTLEMENT_ACCOUNT_NUMBER: "961234567"
+    secretEnv:
+      - PARTNER_PRODUCTS_WORKER_CLIENT_SECRET
+      - PARTNER_PRODUCTS_WORKER_KAFKA_PASSWORD
+
+  # ── Simulators (development, test and demo only: global.simulators.enabled) ──────────────────
+  screening-provider-simulator:
+    stack: dotnet
+    role: web
+    simulator: true
+    simulatorKey: screening-provider
+    probes: {live: /health, ready: /health}
+    allowFrom: [compliance-api]
+    platformHealth: {name: Screening Provider (simulator), group: Simulators}
+    secretEnv:
+      # Equal to the Compliance API's ScreeningProvider__ApiKey.
+      - Simulator__ApiKey
+
+  core-banking-simulator:
+    stack: dotnet
+    role: web
+    simulator: true
+    simulatorKey: core-banking
+    probes: {live: /health, ready: /health}
+    allowFrom: [accounts-api]
+    platformHealth: {name: Core Banking (simulator), group: Simulators}
+    secretEnv:
+      # Equal to the Accounts API's CoreBanking__ApiKey.
+      - Simulator__ApiKey
+
+  payment-network-simulator:
+    stack: dotnet
+    role: web
+    simulator: true
+    simulatorKey: payment-network
+    probes: {live: /health, ready: /health}
+    allowFrom: [payments-api]
+    platformHealth: {name: Payment Network (simulator), group: Simulators}
+    secretEnv:
+      # Equal to the Payments API's PaymentNetwork__ApiKey.
+      - Simulator__ApiKey

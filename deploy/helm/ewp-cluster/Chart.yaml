@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ewp-cluster
+description: Once per cluster - EWP's private CA for TLS between pods, and the trust bundles every EWP pod reads.
+type: application
+version: 0.1.0
+appVersion: "1"

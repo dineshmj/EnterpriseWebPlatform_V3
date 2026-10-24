@@ -1,0 +1,33 @@
+# ┌─ :: ARCHITECTURE + SECURITY :: What a cluster needs before EWP can be installed ──────────────
+# │ Why : TLS between pods needs one private CA that every EWP pod trusts. The CA and the bundles
+# │       are cluster-wide objects with their own lifetime (a CA outlives many EWP releases), so
+# │       they live in this chart, installed once per cluster - not in the EWP chart.
+# │ How : cert-manager: a self-signed issuer makes the root (a Certificate with isCA, its key in
+# │       cert-manager's namespace); a CA ClusterIssuer signs every EWP Service's certificate.
+# │       trust-manager copies the root into a ConfigMap in every EWP namespace, twice:
+# │       - caBundle: the private root alone (Gateway -> pod validation, Node's NODE_EXTRA_CA_CERTS)
+# │       - fullBundle: the public roots + the private root (.NET's SSL_CERT_FILE replaces the
+# │         system store, and the pods also call public https addresses - the IDP via the gateway)
+# │       Needs: cert-manager and trust-manager installed (trust namespace = cert-manager's).
+# │ Ref : doc/Kubernetes.md | OWASP A02 | NIST SP 800-57 (key lifetimes)
+# └────────────────────────────────────────────────────────────────────────────────────────────────
+
+# The namespace cert-manager and trust-manager run in; trust-manager reads sources only there.
+trustNamespace: cert-manager
+
+ca:
+  # The ClusterIssuer the EWP chart names in global.tls.issuerRef.
+  issuerName: ewp-internal-ca
+  commonName: EWP internal CA
+  # SEC: 5 years for the root, rotated by re-issuing it (every Service certificate follows).
+  duration: 43800h
+  renewBefore: 8760h
+
+bundles:
+  # ConfigMap names (key ca.crt) made in every namespace labelled below.
+  caBundle: ewp-internal-ca
+  fullBundle: ewp-trust-bundle
+  # SEC: only namespaces that run EWP get the bundles.
+  namespaceSelector:
+    matchLabels:
+      ewp.dev/trust: "true"

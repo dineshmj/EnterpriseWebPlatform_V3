@@ -1,0 +1,40 @@
+{{- /*
+┌─ :: ARCHITECTURE + OBSERVABILITY :: Platform Health's list, from the same components ──────────
+│ Why : The Operations Journey API asks every component's readiness (Platform Health) from a
+│       file (OPERATIONS_JOURNEY_PLATFORM_FILE). Written by hand, that list would drift from
+│       what is deployed; built here, it names exactly the Services this release created.
+│ How : global.platformHealth.order gives the screen's order; each listed component's
+│       platformHealth gives its name and group, its readiness address is its Service address
+│       + its readiness path. The simulators' addresses come from their simulatorKey. Same
+│       format and checks as config/platform.development.json (the Journey API validates it).
+│ Ref : doc/Kubernetes.md | src/Microservices/Operations/JourneyApi/src/platform/components.ts
+└────────────────────────────────────────────────────────────────────────────────────────────────
+*/ -}}
+{{- define "ewp.platformMap" -}}
+{{- $root := . -}}
+{{- $enabled := include "ewp.enabled" . | fromYaml -}}
+{{- $components := list -}}
+{{- $simulators := dict -}}
+{{- range $name := .Values.global.platformHealth.order -}}
+{{- if hasKey $enabled $name -}}
+{{- $c := index $enabled $name -}}
+{{- $ready := (($c.probes | default dict).ready) | default "/health/ready" -}}
+{{- $components = append $components (dict "name" $c.platformHealth.name "group" $c.platformHealth.group "readiness" (printf "%s%s" (include "ewp.internal" (list $root $name)) $ready)) -}}
+{{- with $c.simulatorKey -}}
+{{- $_ := set $simulators . (include "ewp.internal" (list $root $name)) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- toPrettyJson (dict "components" $components "simulators" $simulators) -}}
+{{- end -}}
+{{- if hasKey (include "ewp.enabled" . | fromYaml) "operations-journey-api" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: operations-platform
+  labels:
+    {{- include "ewp.labels" (dict "root" . "name" "operations-journey-api") | nindent 4 }}
+data:
+  platform.json: |
+    {{- include "ewp.platformMap" . | nindent 4 }}
+{{- end }}

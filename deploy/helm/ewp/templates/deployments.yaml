@@ -1,0 +1,281 @@
+{{- $root := . -}}
+{{- $g := .Values.global -}}
+{{- range $name, $c := (include "ewp.enabled" . | fromYaml) }}
+{{- $ctx := dict "root" $root "name" $name -}}
+{{- $listener := include "ewp.listener" $c -}}
+{{- $port := ternary 8443 8080 (eq $listener "https") -}}
+{{- $uid := ternary 1654 65532 (eq $c.stack "dotnet") -}}
+{{- $probeHost := $name -}}
+{{- if $c.public }}{{ $probeHost = include "ewp.publicHost" (list $root $name) }}{{ end -}}
+{{- $probes := $c.probes | default dict }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "ewp.labels" $ctx | nindent 4 }}
+spec:
+  replicas: {{ include "ewp.replicas" (dict "root" $root "c" $c) }}
+  revisionHistoryLimit: 3
+  {{- if $c.persistence }}
+  # One volume (ReadWriteOnce): the old pod lets go of it before the new one starts.
+  strategy:
+    type: Recreate
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "ewp.selector" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ewp.labels" $ctx | nindent 8 }}
+      {{- if $c.platformMap }}
+      annotations:
+        # A changed platform list restarts the Operations Journey API (it reads the file at start-up).
+        checksum/platform: {{ include "ewp.platformMap" $root | sha256sum }}
+      {{- end }}
+    spec:
+      # ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+      # │ Least privilege for every pod: no Kubernetes API token (no service calls the API),
+      # │ non-root with the image's own user, the runtime's default seccomp profile, no
+      # │ service-link variables (the services find each other by name, not by injected env).
+      # └──────────────────────────────────────────────────────────────────────────────────────
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: {{ $uid }}
+        runAsGroup: {{ $uid }}
+        fsGroup: {{ $uid }}
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with $g.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if gt (int (include "ewp.replicas" (dict "root" $root "c" $c))) 1 }}
+      # PERF + RESIL: instances spread over nodes and zones where the cluster has them.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "ewp.selector" $ctx | nindent 14 }}
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "ewp.selector" $ctx | nindent 14 }}
+      {{- end }}
+      containers:
+        - name: {{ $name }}
+          image: {{ include "ewp.image" $ctx }}
+          imagePullPolicy: {{ $g.image.pullPolicy }}
+          ports:
+            - name: {{ $listener }}
+              containerPort: {{ $port }}
+              protocol: TCP
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            {{- if eq $c.stack "dotnet" }}
+            {{- if eq $listener "https" }}
+            # ┌─ SEC ────────────────────────────────────────────────────────────────────────
+            # │ TLS between pods: Kestrel serves the Service's certificate (cert-manager, PEM)
+            # │ on 8443; ASPNETCORE_URLS replaces the image's plain-HTTP port.
+            # └──────────────────────────────────────────────────────────────────────────────
+            - name: ASPNETCORE_URLS
+              value: https://+:8443
+            - name: Kestrel__Certificates__Default__Path
+              value: /etc/ewp/tls/tls.crt
+            - name: Kestrel__Certificates__Default__KeyPath
+              value: /etc/ewp/tls/tls.key
+            - name: AllowedHosts
+              value: {{ $probeHost }}{{ if $c.public }};{{ $name }}{{ end }}
+            {{- end }}
+            # The public roots + EWP's private root (deploy/helm/ewp-cluster).
+            - name: SSL_CERT_FILE
+              value: /etc/ewp/trust/ca.crt
+            {{- if $c.public }}
+            {{- range $i, $n := $g.forwardedHeaders.knownNetworks }}
+            - name: ForwardedHeaders__KnownNetworks__{{ $i }}
+              value: {{ $n | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if $c.mfa }}
+            - name: Mfa__Enabled
+              value: {{ $g.mfa.enabled | quote }}
+            {{- end }}
+            {{- if $c.dataProtection }}
+            - name: DataProtection__CertificatePath
+              value: /etc/ewp/data-protection/certificate.pfx
+            - name: DataProtection__CertificatePassword
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $g.dataProtection.secret }}
+                  key: password
+            {{- end }}
+            {{- else }}
+            # ┌─ SEC ────────────────────────────────────────────────────────────────────────
+            # │ TLS between pods: the Node listener serves the Service's certificate (the PKCS#12
+            # │ keystore cert-manager writes); <PREFIX>_PLAIN_HTTP=false overrides the image, and
+            # │ the listener refuses to start without the certificate.
+            # └──────────────────────────────────────────────────────────────────────────────
+            - name: {{ $c.node.prefix }}_PLAIN_HTTP
+              value: "false"
+            - name: {{ $c.node.portVar | default (printf "%s_PORT" $c.node.prefix) }}
+              value: "8443"
+            - name: {{ $c.node.prefix }}_TLS_PFX_PATH
+              value: /etc/ewp/tls/keystore.p12
+            - name: {{ $c.node.prefix }}_TLS_PFX_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $g.tls.keystorePasswordSecret }}
+                  key: password
+            # Node keeps its own public roots and adds EWP's private root.
+            - name: NODE_EXTRA_CA_CERTS
+              value: /etc/ewp/tls/ca.crt
+            {{- if and $c.public $c.node.trustedProxiesVar }}
+            - name: {{ $c.node.trustedProxiesVar }}
+              value: {{ join "," $g.forwardedHeaders.knownNetworks | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if hasKey $c "kafka" }}
+            - name: {{ $c.kafka.bootstrapVar | default "Kafka__BootstrapServers" }}
+              value: {{ required "global.kafka.bootstrapServers is required" $g.kafka.bootstrapServers | quote }}
+            - name: {{ $c.kafka.caVar | default "Kafka__SslCaLocation" }}
+              value: /etc/ewp/kafka/ca.crt
+            {{- end }}
+            {{- range $k, $v := $c.env }}
+            - name: {{ $k }}
+              value: {{ tpl (toString $v) $root | quote }}
+            {{- end }}
+            {{- range $c.secretEnv }}
+            - name: {{ . }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ewp.secretName" $ctx }}
+                  key: {{ . }}
+            {{- end }}
+            {{- range $k, $ref := $c.secretRefs }}
+            - name: {{ $k }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $ref.secret }}
+                  key: {{ $ref.key }}
+            {{- end }}
+          {{- $scheme := upper $listener }}
+          {{- $live := $probes.live | default "/health/live" }}
+          {{- $ready := $probes.ready | default "/health/ready" }}
+          # RESIL: start-up gets up to 2.5 minutes (migrations, Kafka and IDP first contact);
+          # after that a hung process is restarted and an instance without its database stops
+          # receiving traffic (doc/Containers.md, "When PostgreSQL is unreachable").
+          # The Host header: AllowedHosts would refuse the pod IP the kubelet sends otherwise.
+          startupProbe:
+            httpGet:
+              {{- include "ewp.probeGet" (dict "path" $live "port" $listener "scheme" $scheme "host" $probeHost) | nindent 14 }}
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              {{- include "ewp.probeGet" (dict "path" $live "port" $listener "scheme" $scheme "host" $probeHost) | nindent 14 }}
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              {{- include "ewp.probeGet" (dict "path" $ready "port" $listener "scheme" $scheme "host" $probeHost) | nindent 14 }}
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml (mergeOverwrite (deepCopy $g.resources) ($c.resources | default dict)) | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- if eq $listener "https" }}
+            - name: tls
+              mountPath: /etc/ewp/tls
+              readOnly: true
+            {{- end }}
+            {{- if eq $c.stack "dotnet" }}
+            - name: trust
+              mountPath: /etc/ewp/trust
+              readOnly: true
+            {{- end }}
+            {{- if hasKey $c "kafka" }}
+            - name: kafka-trust
+              mountPath: /etc/ewp/kafka
+              readOnly: true
+            {{- end }}
+            {{- if $c.dataProtection }}
+            - name: data-protection
+              mountPath: /etc/ewp/data-protection
+              readOnly: true
+            {{- end }}
+            {{- if $c.platformMap }}
+            - name: platform
+              mountPath: /etc/ewp/platform
+              readOnly: true
+            {{- end }}
+            {{- range $c.secretFiles }}
+            - name: {{ .name }}
+              mountPath: {{ .mountPath }}
+              readOnly: true
+            {{- end }}
+            {{- if $c.persistence }}
+            - name: data
+              mountPath: {{ $c.persistence.mountPath }}
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+        {{- if eq $listener "https" }}
+        - name: tls
+          secret:
+            secretName: {{ $name }}-tls
+        {{- end }}
+        {{- if eq $c.stack "dotnet" }}
+        - name: trust
+          configMap:
+            name: {{ $g.trust.fullBundle }}
+        {{- end }}
+        {{- if hasKey $c "kafka" }}
+        - name: kafka-trust
+          configMap:
+            name: {{ $g.kafka.caConfigMap }}
+            items:
+              - key: ca.crt
+                path: ca.crt
+        {{- end }}
+        {{- if $c.dataProtection }}
+        - name: data-protection
+          secret:
+            secretName: {{ $g.dataProtection.secret }}
+            items:
+              - key: certificate.pfx
+                path: certificate.pfx
+        {{- end }}
+        {{- if $c.platformMap }}
+        - name: platform
+          configMap:
+            name: operations-platform
+        {{- end }}
+        {{- range $c.secretFiles }}
+        - name: {{ .name }}
+          secret:
+            secretName: {{ .secret }}
+        {{- end }}
+        {{- if $c.persistence }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ $name }}-data
+        {{- end }}
+{{- end }}
