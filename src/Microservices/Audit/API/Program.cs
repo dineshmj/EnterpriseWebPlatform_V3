@@ -14,6 +14,7 @@ using EnterpriseWebPlatform.Audit.Api.Infrastructure;
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Subscribers;
 using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
+using EnterpriseWebPlatform.Common.WebUtilities.Resilience;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 
 // ┌─ :: ARCHITECTURE + SECURITY :: Audit API: a resource server ───────────────────────────────────
@@ -42,7 +43,7 @@ builder.AddEwpObservability("audit-api", tracing => tracing.AddAspNetCoreInstrum
 
 var connectionString = builder.Configuration.GetConnectionString("AuditDbConnection")
     ?? throw new InvalidOperationException("Connection string 'AuditDbConnection' was not configured.");
-builder.Services.AddDbContext<AuditDbContext>(o => o.UseNpgsql(connectionString));
+builder.Services.AddDbContext<AuditDbContext>(o => o.UseNpgsql(DependencyOutage.FailFast(connectionString)));
 
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<AuditTrailAppender>();
@@ -146,6 +147,11 @@ app.UseEwpRequestLogging();
 // │ exception text reaches the caller; the details are logged under the same traceId.
 // └──────────────────────────────────────────────────────────────────────────────────────
 app.UseExceptionHandler();
+// ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+// │ A dependency unavailable (database, IDP): 503 + Retry-After at once - a page that retries itself, or
+// │ Problem Details for a call - instead of a white frame (Common.WebUtilities/Resilience).
+// └──────────────────────────────────────────────────────────────────────────────────────
+app.UseEwpOutageAnswer();
 if (!app.Environment.IsDevelopment())
     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
     // │ HSTS outside Development only: browsers then refuse plain HTTP for this host (in

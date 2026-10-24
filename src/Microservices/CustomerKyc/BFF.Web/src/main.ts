@@ -1,4 +1,4 @@
-import { NestFactory } from '@nestjs/core';
+import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import session from 'express-session';
 import * as express from 'express';
@@ -11,6 +11,7 @@ import { sessionStore } from './auth/session-store';
 import { EwpLogger, requestLogging } from './observability/logger';
 import { healthStatus, metricsEndpoint, requestMetrics } from './observability/metrics';
 import { traceMiddleware } from './observability/trace-context';
+import { answerOutage, OUTAGE_STYLESHEET_PATH, OutageExceptionFilter, outageStylesheetRoute } from './resilience/outage';
 
 // ┌─ :: ARCHITECTURE + SECURITY :: KYC BFF (NestJS): Backend-for-Frontend ─────────────────────────
 // │ Why : The officer's browser must never hold a token, and the BFF must be as hardened as the
@@ -156,6 +157,9 @@ async function bootstrap() {
     })
   );
 
+  // The outage page's stylesheet: before the session, so it is served during an outage too.
+  app.use(OUTAGE_STYLESHEET_PATH, outageStylesheetRoute);
+
   app.use(
     session({
       // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
@@ -182,6 +186,13 @@ async function bootstrap() {
       },
     })
   );
+  // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+  // │ Right after the session: a session store that cannot reach the database is answered
+  // │ with 503 + Retry-After, not Express's bare 500 page; the controllers' sign-in and calls get
+  // │ the same answer when the database or the IDP is unavailable (outage.ts).
+  // └──────────────────────────────────────────────────────────────────────────────────────
+  app.use(answerOutage(logger));
+  app.useGlobalFilters(new OutageExceptionFilter(logger, app.get(HttpAdapterHost).httpAdapter));
 
   app.useGlobalPipes(
     new ValidationPipe({

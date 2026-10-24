@@ -16,6 +16,7 @@ using EnterpriseWebPlatform.Accounts.Bff.Web.Configuration;
 using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.Common.WebUtilities.Helpers;
+using EnterpriseWebPlatform.Common.WebUtilities.Resilience;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 
 // =============================================================================
@@ -101,7 +102,7 @@ builder.Services.AddBff()
     // │ Server-side sessions: the cookie is only a reference, so back-channel logout can end
     // │ the session and the tokens never ride in the cookie.
     // └──────────────────────────────────────────────────────────────────────────────────────
-    .AddEntityFrameworkServerSideSessions(options => options.UseNpgsql(bffStateDb))
+    .AddEntityFrameworkServerSideSessions(options => options.UseNpgsql(DependencyOutage.FailFast(bffStateDb)))
     .AddSessionCleanupBackgroundProcess();
 builder.Services.AddOpenIdConnectAccessTokenManagement();
 
@@ -270,6 +271,11 @@ app.UseEwpForwardedHeaders();
 // │ One structured log line per request (Serilog), with the caller and the trace ID.
 // └──────────────────────────────────────────────────────────────────────────────────────
 app.UseEwpRequestLogging();
+// ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+// │ A dependency unavailable (database, IDP): 503 + Retry-After at once - a page that retries itself, or
+// │ Problem Details for a call - instead of a white frame (Common.WebUtilities/Resilience).
+// └──────────────────────────────────────────────────────────────────────────────────────
+app.UseEwpOutageAnswer();
 
 if (!app.Environment.IsDevelopment())
 {

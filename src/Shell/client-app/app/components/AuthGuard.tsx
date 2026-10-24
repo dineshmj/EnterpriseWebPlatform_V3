@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '../hooks/useAuth';
+import { UNAVAILABLE_RETRY_SECONDS } from '../lib/auth';
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -19,7 +20,18 @@ interface AuthGuardProps {
  * Automatically redirects to login if user is not authenticated
  */
 export function AuthGuard({ children, loadingComponent }: AuthGuardProps) {
-  const { isAuthenticated, isLoading } = useAuth(true);
+  const { isAuthenticated, isLoading, isUnavailable } = useAuth(true);
+
+  // The BFF answered 503: say so, and keep asking (useAuth) - not a white page, not a sign-in loop.
+  if (isUnavailable) {
+    return (
+      <div className="auth-loading" role="alert">
+        <p className="auth-loading-text">
+          EWP is temporarily unavailable. Trying again in {UNAVAILABLE_RETRY_SECONDS} seconds...
+        </p>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

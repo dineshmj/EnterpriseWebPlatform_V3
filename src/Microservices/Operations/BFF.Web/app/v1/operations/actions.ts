@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { config, SESSION_COOKIE } from '@/lib/server/config';
 import { exchangeForJourneyApi, freshAccessToken } from '@/lib/server/oidc';
 import { readSession, updateSession } from '@/lib/server/session-store';
+import { isDependencyUnavailable, OUTAGE_MESSAGE } from '@/lib/server/outage';
 import {
   BEHAVIOURS, ROUTE_STATES, type ActionResult, type Behaviour, type ContextParkedMessages, type FaultRoute, type PlatformHealth, type RouteState, type SimulatorState,
 } from '@/lib/operations-types';
@@ -69,7 +70,14 @@ async function callJourney<T>(
 ): Promise<ActionResult<T>> {
   const cookieStore = await cookies();
   const cookieValue = cookieStore.get(SESSION_COOKIE)?.value;
-  const session = await readSession(cookieValue);
+  // RESIL: a dependency unavailable (database, IDP) -> the usual error on the screen, not a sign-out (outage.ts).
+  let session: Awaited<ReturnType<typeof readSession>>;
+  try {
+    session = await readSession(cookieValue);
+  } catch (error) {
+    if (isDependencyUnavailable(error)) return { ok: false, error: OUTAGE_MESSAGE };
+    throw error;
+  }
   if (!session || !cookieValue) return { ok: false, signedOut: true, error: 'Your session has ended.' };
 
   let journeyToken: string;
@@ -78,7 +86,8 @@ async function callJourney<T>(
     if (refreshed) await updateSession(cookieValue, refreshed);
     // The person's token -> a delegated token for the Journey API (act = this BFF).
     journeyToken = await exchangeForJourneyApi(token, scope);
-  } catch {
+  } catch (error) {
+    if (isDependencyUnavailable(error)) return { ok: false, error: OUTAGE_MESSAGE };
     return { ok: false, signedOut: true, error: 'Your sign-in could not be renewed.' };
   }
 

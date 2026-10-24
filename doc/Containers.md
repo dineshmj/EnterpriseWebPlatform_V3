@@ -144,6 +144,27 @@ one hop; nothing listed = no forwarded header is trusted):
   optional - but the ingress must pass the original Host header on: Next.js checks a server
   action's `Origin` against it.
 
+### When PostgreSQL (or the IDP) is unreachable
+
+Sessions, key rings and every domain record are in PostgreSQL, and every sign-in goes through the
+IDP (whose own database is PostgreSQL too), so while they are unreachable nothing signed-in can be
+served - by design. What the platform guarantees is a quick, plain answer:
+
+- Every connection gives up after **5 s** (Npgsql `Timeout`, `pg` `connectionTimeoutMillis`); a
+  connection string that sets its own `Timeout` keeps it.
+- Every web host (IDP, Shell, .NET BFFs and APIs: [DependencyOutage.cs](../src/Common/WebUtilities/Resilience/DependencyOutage.cs);
+  the Next.js BFFs: `lib/server/outage.ts`; the KYC BFF: `src/resilience/outage.ts`)
+  answers **503 + Retry-After: 15** when the database, the sign-in against the IDP, or an HTTP
+  dependency (unreachable, timing out, 502-504) fails - a page that reloads itself for a page load (also inside the
+  Shell's frame), Problem Details for a call. The Next.js BFFs' server actions return
+  "temporarily unavailable" to the screen. The Shell shows "temporarily unavailable" and asks again
+  every 15 s instead of sending the person to sign in.
+- Readiness reports the database (`/health/ready`), so with several instances the ingress stops
+  routing to an instance that cannot reach it.
+
+Production keeps the outage short with a highly available PostgreSQL (e.g. zone-redundant HA with
+automatic failover); the answers above cover the minutes until then.
+
 ### The micro front ends' Shell origin
 
 The Shell origin is the only window an MFE exchanges messages with. It is **not** compiled into

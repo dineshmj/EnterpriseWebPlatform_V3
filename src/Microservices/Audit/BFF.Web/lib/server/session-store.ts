@@ -30,7 +30,8 @@ let pool: Pool | undefined;
 // │ Ref : Features 2.3.4 | ASVS V3.2, V6.2 | OWASP Session Management Cheat Sheet
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 function db(): Pool {
-  pool ??= new Pool({ connectionString: config.databaseUrl, max: 5 });
+  // RESIL: give up connecting after 5 s - an outage is answered at once (outage.ts), not after a hang.
+  pool ??= new Pool({ connectionString: config.databaseUrl, max: 5, connectionTimeoutMillis: 5000 });
   return pool;
 }
 

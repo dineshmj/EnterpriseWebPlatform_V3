@@ -18,6 +18,7 @@ using EnterpriseWebPlatform.BSS.BFFWeb.Data;
 using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.Common.WebUtilities.Helpers;
+using EnterpriseWebPlatform.Common.WebUtilities.Resilience;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 
 // ┌─ :: ARCHITECTURE + SECURITY :: Shell BFF: a business-neutral host behind a BFF ────────────────
@@ -78,7 +79,7 @@ builder.Services.AddSession(options =>
 var menuDb = builder.Configuration.GetConnectionString("MenuDbConnection")
     ?? throw new InvalidOperationException("Connection string 'MenuDbConnection' was not configured.");
 builder.Services.AddDbContext<MenuDbContext>(options =>
-    options.UseNpgsql(menuDb));
+    options.UseNpgsql(DependencyOutage.FailFast(menuDb)));
 
 // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
 // │ Server-side sessions and the Data Protection keys live in PostgreSQL (EwpBffStateDb,
@@ -106,7 +107,7 @@ builder.Services.AddBff()
     // │ be revoked (back-channel logout) and survives a restart. Otherwise the tokens ride
     // │ inside the cookie and cannot be revoked.
     // └──────────────────────────────────────────────────────────────────────────────────────
-    .AddEntityFrameworkServerSideSessions(options => options.UseNpgsql(bffStateDb))
+    .AddEntityFrameworkServerSideSessions(options => options.UseNpgsql(DependencyOutage.FailFast(bffStateDb)))
     .AddSessionCleanupBackgroundProcess()
     // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
     // │ Remote APIs: the BFF proxies calls to the microservices and adds the person's token -
@@ -305,6 +306,13 @@ else
 {
 	app.UseHsts ();
 }
+
+// ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+// │ A dependency unavailable (database, IDP): 503 + Retry-After at once - a page that retries itself, or
+// │ Problem Details for a call - instead of a white frame (Common.WebUtilities/Resilience).
+// │ AFTER the developer exception page: the inner handler sees the error first.
+// └──────────────────────────────────────────────────────────────────────────────────────
+app.UseEwpOutageAnswer();
 
 // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
 // │ Session middleware in the pipeline - the counterpart of AddSession above.

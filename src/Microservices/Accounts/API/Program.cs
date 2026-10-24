@@ -18,6 +18,7 @@ using EnterpriseWebPlatform.Accounts.Api.Infrastructure.Persistence;
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
+using EnterpriseWebPlatform.Common.WebUtilities.Resilience;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 
 // ┌─ :: ARCHITECTURE + SECURITY :: Accounts API: a resource server ────────────────────────────────
@@ -48,7 +49,7 @@ builder.Services.AddControllers();
 
 var connectionString = builder.Configuration.GetConnectionString("AccountsDbConnection")
     ?? throw new InvalidOperationException("Connection string 'AccountsDbConnection' was not configured.");
-builder.Services.AddDbContext<AccountsDbContext>(o => o.UseNpgsql(connectionString));
+builder.Services.AddDbContext<AccountsDbContext>(o => o.UseNpgsql(DependencyOutage.FailFast(connectionString)));
 
 // ---------------------------------------------------------------- Authentication
 var authority = builder.Configuration["Authentication:Authority"]
@@ -293,6 +294,11 @@ app.UseEwpRequestLogging();
 // │ exception text reaches the caller; the details are logged under the same traceId.
 // └──────────────────────────────────────────────────────────────────────────────────────
 app.UseExceptionHandler();
+// ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+// │ A dependency unavailable (database, IDP): 503 + Retry-After at once - a page that retries itself, or
+// │ Problem Details for a call - instead of a white frame (Common.WebUtilities/Resilience).
+// └──────────────────────────────────────────────────────────────────────────────────────
+app.UseEwpOutageAnswer();
 if (!app.Environment.IsDevelopment())
     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
     // │ HSTS outside Development only: browsers then refuse plain HTTP for this host (in

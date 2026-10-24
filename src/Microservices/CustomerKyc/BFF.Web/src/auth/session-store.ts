@@ -118,7 +118,8 @@ let store: PostgresSessionStore | undefined;
 export function sessionStore(databaseUrl?: string, key?: Buffer): PostgresSessionStore {
   if (!store) {
     if (!databaseUrl || !key) throw new Error('The session store is not configured.');
-    const pool = new Pool({ connectionString: databaseUrl, max: 10 });
+    // RESIL: give up connecting after 5 s - an outage is answered at once (resilience/outage.ts), not after a hang.
+    const pool = new Pool({ connectionString: databaseUrl, max: 10, connectionTimeoutMillis: 5000 });
     // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
     // │ An idle connection dropped by the server must not crash the process; the pool reconnects.
     // └──────────────────────────────────────────────────────────────────────────────────────
