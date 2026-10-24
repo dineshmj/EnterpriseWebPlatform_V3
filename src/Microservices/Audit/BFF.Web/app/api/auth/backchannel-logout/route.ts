@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { config } from '@/lib/server/config';
 import { deleteSessionsOf } from '@/lib/server/session-store';
-import { withDatabaseOutageAnswer } from '@/lib/server/outage';
+import { withOutageAnswer } from '@/lib/server/outage';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,5 +39,5 @@ async function handlePost(request: NextRequest) {
   }
 }
 
-// RESIL: database unreachable -> 503 + Retry-After instead of an error page (outage.ts).
-export const POST = withDatabaseOutageAnswer(handlePost);
+// RESIL: a dependency unavailable (database, IDP) -> 503 + Retry-After instead of an error page (outage.ts).
+export const POST = withOutageAnswer(handlePost);

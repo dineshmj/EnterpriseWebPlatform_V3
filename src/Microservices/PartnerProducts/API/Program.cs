@@ -49,7 +49,7 @@ var connectionString = builder.Configuration.GetConnectionString("PartnerProduct
     ?? throw new InvalidOperationException("Connection string 'PartnerProductsDbConnection' was not configured.");
 // The DbContext writes each change's events to the Outbox; who acted comes from the request's token.
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddDbContext<PartnerProductsDbContext>(o => o.UseNpgsql(DatabaseOutage.FailFast(connectionString)));
+builder.Services.AddDbContext<PartnerProductsDbContext>(o => o.UseNpgsql(DependencyOutage.FailFast(connectionString)));
 
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddControllers();
@@ -200,10 +200,10 @@ app.UseEwpRequestLogging();
 // └──────────────────────────────────────────────────────────────────────────────────────
 app.UseExceptionHandler();
 // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
-// │ Database unreachable: 503 + Retry-After at once - a page that retries itself, or
+// │ A dependency unavailable (database, IDP): 503 + Retry-After at once - a page that retries itself, or
 // │ Problem Details for a call - instead of a white frame (Common.WebUtilities/Resilience).
 // └──────────────────────────────────────────────────────────────────────────────────────
-app.UseEwpDatabaseOutageAnswer();
+app.UseEwpOutageAnswer();
 if (!app.Environment.IsDevelopment())
     app.UseHsts();
 app.UseHttpsRedirection();

@@ -49,7 +49,7 @@ builder.Services.AddControllers();
 
 var connectionString = builder.Configuration.GetConnectionString("KycDbConnection")
     ?? throw new InvalidOperationException("Connection string 'KycDbConnection' was not configured.");
-builder.Services.AddDbContext<KycDbContext>(o => o.UseNpgsql(DatabaseOutage.FailFast(connectionString)));
+builder.Services.AddDbContext<KycDbContext>(o => o.UseNpgsql(DependencyOutage.FailFast(connectionString)));
 
 var authority = builder.Configuration["Authentication:Authority"]
     ?? throw new InvalidOperationException("Authentication:Authority was not configured.");
@@ -200,10 +200,10 @@ app.UseEwpRequestLogging();
 // └──────────────────────────────────────────────────────────────────────────────────────
 app.UseExceptionHandler();
 // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
-// │ Database unreachable: 503 + Retry-After at once - a page that retries itself, or
+// │ A dependency unavailable (database, IDP): 503 + Retry-After at once - a page that retries itself, or
 // │ Problem Details for a call - instead of a white frame (Common.WebUtilities/Resilience).
 // └──────────────────────────────────────────────────────────────────────────────────────
-app.UseEwpDatabaseOutageAnswer();
+app.UseEwpOutageAnswer();
 if (!app.Environment.IsDevelopment())
     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
     // │ HSTS outside Development only: browsers then refuse plain HTTP for this host (in

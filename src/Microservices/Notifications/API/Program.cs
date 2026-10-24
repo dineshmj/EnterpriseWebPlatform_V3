@@ -42,7 +42,7 @@ builder.Services.AddControllers();
 
 var connectionString = builder.Configuration.GetConnectionString("NotificationsDbConnection")
     ?? throw new InvalidOperationException("Connection string 'NotificationsDbConnection' was not configured.");
-builder.Services.AddDbContext<NotificationsDbContext>(o => o.UseNpgsql(DatabaseOutage.FailFast(connectionString)));
+builder.Services.AddDbContext<NotificationsDbContext>(o => o.UseNpgsql(DependencyOutage.FailFast(connectionString)));
 
 // ---------------------------------------------------------------- Authentication
 // One scheme for REST and the hub: the Shell BFF proxies both and adds the person's
@@ -166,10 +166,10 @@ app.UseEwpRequestLogging();
 // └──────────────────────────────────────────────────────────────────────────────────────
 app.UseExceptionHandler();
 // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
-// │ Database unreachable: 503 + Retry-After at once - a page that retries itself, or
+// │ A dependency unavailable (database, IDP): 503 + Retry-After at once - a page that retries itself, or
 // │ Problem Details for a call - instead of a white frame (Common.WebUtilities/Resilience).
 // └──────────────────────────────────────────────────────────────────────────────────────
-app.UseEwpDatabaseOutageAnswer();
+app.UseEwpOutageAnswer();
 if (!app.Environment.IsDevelopment())
     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
     // │ HSTS outside Development only: browsers then refuse plain HTTP for this host (in

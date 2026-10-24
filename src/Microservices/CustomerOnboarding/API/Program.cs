@@ -94,7 +94,7 @@ var connectionString =
         "Connection string 'CustomerDbConnection' was not configured.");
 
 builder.Services.AddDbContext<CustomerDbContext>(options =>
-    options.UseNpgsql(DatabaseOutage.FailFast(connectionString)));
+    options.UseNpgsql(DependencyOutage.FailFast(connectionString)));
 
 builder.Services.AddCustomerOnboardingPersistence();
 builder.Services.AddCustomerOnboardingApplication();
@@ -287,10 +287,10 @@ else
 // └──────────────────────────────────────────────────────────────────────────────────────
 app.UseExceptionHandler();
 // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
-// │ Database unreachable: 503 + Retry-After at once - a page that retries itself, or
+// │ A dependency unavailable (database, IDP): 503 + Retry-After at once - a page that retries itself, or
 // │ Problem Details for a call - instead of a white frame (Common.WebUtilities/Resilience).
 // └──────────────────────────────────────────────────────────────────────────────────────
-app.UseEwpDatabaseOutageAnswer();
+app.UseEwpOutageAnswer();
 
 app.UseHttpsRedirection();
 app.UseAuthentication();

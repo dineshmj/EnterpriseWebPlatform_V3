@@ -454,14 +454,16 @@ $auditedProjects = [ordered]@{
 }
 
 $seriousFindings = @()
+# The name column fits the longest project name (plus two spaces), so the results line up.
+$nameWidth = ($auditedProjects.Keys | ForEach-Object { $_.Length } | Measure-Object -Maximum).Maximum + 2
 foreach ($project in $auditedProjects.GetEnumerator()) {
     if (-not (Test-Path -LiteralPath (Join-Path $project.Value "node_modules") -PathType Container)) {
-        Write-Host ("  {0,-38} not installed - skipped" -f $project.Key) -ForegroundColor DarkGray
+        Write-Host ("  " + $project.Key.PadRight($nameWidth) + "not installed - skipped") -ForegroundColor DarkGray
         continue
     }
     $audit = Test-PnpmAudit -Directory $project.Value
     $colour = if ($audit.Serious) { "Yellow" } elseif ($audit.Result -eq 'clean') { "Green" } else { "Gray" }
-    Write-Host ("  {0,-38} {1} {2}" -f $project.Key, $audit.Result, $audit.Detail) -ForegroundColor $colour
+    Write-Host ("  " + $project.Key.PadRight($nameWidth) + "$($audit.Result) $($audit.Detail)".TrimEnd()) -ForegroundColor $colour
     if ($audit.Serious) { $seriousFindings += $project.Key }
 }
 

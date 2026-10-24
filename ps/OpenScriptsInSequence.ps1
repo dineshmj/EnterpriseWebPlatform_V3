@@ -18,3 +18,6 @@ foreach ($File in $ScriptFiles) {
 }
 
 cls;
+
+# Stop-Service postgresql-x64-18
+# Start-Service postgresql-x64-18

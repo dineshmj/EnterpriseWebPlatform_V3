@@ -3,7 +3,7 @@ import { AUTH_STATE_COOKIE } from '@/lib/server/config';
 import { authorizationRequest } from '@/lib/server/oidc';
 import { STEP_UP_DONE_PATH } from '@/lib/server/return-url';
 import { encrypt } from '@/lib/server/session-store';
-import { withDatabaseOutageAnswer } from '@/lib/server/outage';
+import { withOutageAnswer } from '@/lib/server/outage';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,5 +29,5 @@ async function handleGet(request: NextRequest) {
   return response;
 }
 
-// RESIL: database unreachable -> 503 + Retry-After instead of an error page (outage.ts).
-export const GET = withDatabaseOutageAnswer(handleGet);
+// RESIL: a dependency unavailable (database, IDP) -> 503 + Retry-After instead of an error page (outage.ts).
+export const GET = withOutageAnswer(handleGet);

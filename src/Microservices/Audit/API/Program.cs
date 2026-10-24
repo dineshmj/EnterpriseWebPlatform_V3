@@ -43,7 +43,7 @@ builder.AddEwpObservability("audit-api", tracing => tracing.AddAspNetCoreInstrum
 
 var connectionString = builder.Configuration.GetConnectionString("AuditDbConnection")
     ?? throw new InvalidOperationException("Connection string 'AuditDbConnection' was not configured.");
-builder.Services.AddDbContext<AuditDbContext>(o => o.UseNpgsql(DatabaseOutage.FailFast(connectionString)));
+builder.Services.AddDbContext<AuditDbContext>(o => o.UseNpgsql(DependencyOutage.FailFast(connectionString)));
 
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<AuditTrailAppender>();
@@ -148,10 +148,10 @@ app.UseEwpRequestLogging();
 // └──────────────────────────────────────────────────────────────────────────────────────
 app.UseExceptionHandler();
 // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
-// │ Database unreachable: 503 + Retry-After at once - a page that retries itself, or
+// │ A dependency unavailable (database, IDP): 503 + Retry-After at once - a page that retries itself, or
 // │ Problem Details for a call - instead of a white frame (Common.WebUtilities/Resilience).
 // └──────────────────────────────────────────────────────────────────────────────────────
-app.UseEwpDatabaseOutageAnswer();
+app.UseEwpOutageAnswer();
 if (!app.Environment.IsDevelopment())
     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
     // │ HSTS outside Development only: browsers then refuse plain HTTP for this host (in

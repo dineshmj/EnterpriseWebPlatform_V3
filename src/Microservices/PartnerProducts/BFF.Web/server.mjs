@@ -52,6 +52,23 @@ const probeDatabase = new pg.Pool({ connectionString: databaseUrl, max: 1, conne
 probeDatabase.on('error', () => {});
 const probeHeaders = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
 
+// The outage page's stylesheet (lib/server/outage.ts links it): served here, before
+// Next.js, so it needs nothing else. The CSP allows stylesheets from 'self' only, no inline style.
+// The same rules as Common.WebUtilities/Resilience/DependencyOutage.cs.
+const outageStylesheet = `:root { color-scheme: light dark; }
+body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f4f6f8; color: #1f2933;
+       font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 32rem; margin: 1.5rem; padding: 2rem 2.25rem; background: #fff; border-radius: 12px;
+       border-top: 4px solid #d97706; box-shadow: 0 1px 3px rgba(0, 0, 0, .08), 0 8px 24px rgba(0, 0, 0, .06); }
+h1 { margin: 0 0 .75rem; font-size: 1.35rem; font-weight: 600; }
+p { margin: .5rem 0; line-height: 1.5; }
+.ref { font-size: .8rem; color: #6b7280; }
+@media (prefers-color-scheme: dark) {
+  body { background: #111827; color: #e5e7eb; }
+  main { background: #1f2937; box-shadow: none; }
+  .ref { color: #9ca3af; }
+}`;
+
 async function answerReadiness(res) {
   try {
     await probeDatabase.query('SELECT 1');
@@ -67,6 +84,11 @@ const onRequest = (req, res) => {
   if (req.method === 'GET' && req.url === '/health/live') {
     res.writeHead(200, probeHeaders);
     res.end('{"status":"Healthy"}');
+    return;
+  }
+  if (req.method === 'GET' && req.url === '/ewp-outage.css') {
+    res.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8', 'Cache-Control': 'public, max-age=86400', 'X-Content-Type-Options': 'nosniff' });
+    res.end(outageStylesheet);
     return;
   }
   if (req.method === 'GET' && req.url === '/health/ready') {

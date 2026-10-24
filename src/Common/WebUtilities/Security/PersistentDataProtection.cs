@@ -66,7 +66,7 @@ public static class PersistentDataProtectionExtensions
         this WebApplicationBuilder builder, string connectionString, string schema, string applicationName)
     {
         builder.Services.AddSingleton(new DataProtectionKeysSchema(schema));
-        builder.Services.AddDbContext<DataProtectionKeysContext>(o => o.UseNpgsql(DatabaseOutage.FailFast(connectionString)));
+        builder.Services.AddDbContext<DataProtectionKeysContext>(o => o.UseNpgsql(DependencyOutage.FailFast(connectionString)));
 
         var dataProtection = builder.Services.AddDataProtection()
             .SetApplicationName(applicationName)

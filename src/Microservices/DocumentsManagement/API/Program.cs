@@ -87,7 +87,7 @@ var connectionString =
         "Connection string 'DocumentsManagementDbConnection' was not configured.");
 
 builder.Services.AddDbContext<DocumentsManagementDbContext>(options =>
-    options.UseNpgsql(DatabaseOutage.FailFast(connectionString)));
+    options.UseNpgsql(DependencyOutage.FailFast(connectionString)));
 
 builder.Services.AddDocumentsManagementPersistence();
 builder.Services.AddDocumentsManagementApplication();
@@ -239,10 +239,10 @@ else
 // └──────────────────────────────────────────────────────────────────────────────────────
 app.UseExceptionHandler();
 // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
-// │ Database unreachable: 503 + Retry-After at once - a page that retries itself, or
+// │ A dependency unavailable (database, IDP): 503 + Retry-After at once - a page that retries itself, or
 // │ Problem Details for a call - instead of a white frame (Common.WebUtilities/Resilience).
 // └──────────────────────────────────────────────────────────────────────────────────────
-app.UseEwpDatabaseOutageAnswer();
+app.UseEwpOutageAnswer();
 
 app.UseHttpsRedirection();
 app.UseAuthentication();

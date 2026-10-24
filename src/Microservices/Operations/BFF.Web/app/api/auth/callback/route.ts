@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { AUTH_STATE_COOKIE, config, SESSION_COOKIE, SESSION_IDLE_MINUTES } from '@/lib/server/config';
 import { oidcClient, PendingSignIn, toSession } from '@/lib/server/oidc';
 import { createSession, decrypt, removeExpiredSessions } from '@/lib/server/session-store';
-import { withDatabaseOutageAnswer } from '@/lib/server/outage';
+import { withOutageAnswer } from '@/lib/server/outage';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,5 +52,5 @@ function signedOut(message: string) {
   return response;
 }
 
-// RESIL: database unreachable -> 503 + Retry-After instead of an error page (outage.ts).
-export const GET = withDatabaseOutageAnswer(handleGet);
+// RESIL: a dependency unavailable (database, IDP) -> 503 + Retry-After instead of an error page (outage.ts).
+export const GET = withOutageAnswer(handleGet);

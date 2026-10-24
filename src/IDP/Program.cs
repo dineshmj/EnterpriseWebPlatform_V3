@@ -48,7 +48,7 @@ try
     // PostgreSQL database for identity and authorization data.
     var identityDb = builder.Configuration.GetConnectionString("IdentityDbConnection")
         ?? throw new InvalidOperationException("Connection string 'IdentityDbConnection' was not configured.");
-    builder.Services.AddDbContext<IdentityDbContext>(options => options.UseNpgsql(DatabaseOutage.FailFast(identityDb)));
+    builder.Services.AddDbContext<IdentityDbContext>(options => options.UseNpgsql(DependencyOutage.FailFast(identityDb)));
 
     // The IDP's Data Protection keys (its cookies, and the encrypted columns of the operational
     // store below) live in EwpIdentityAccessDb, schema identity_server, encrypted at rest:
@@ -169,7 +169,7 @@ try
         // └──────────────────────────────────────────────────────────────────────────────────────
         .AddOperationalStore(options =>
         {
-            options.ConfigureDbContext = db => db.UseNpgsql(DatabaseOutage.FailFast(identityDb));
+            options.ConfigureDbContext = db => db.UseNpgsql(DependencyOutage.FailFast(identityDb));
             options.DefaultSchema = "identity_server";
             options.EnableTokenCleanup = true;
             options.TokenCleanupInterval = 3600;
@@ -225,10 +225,10 @@ try
     }
 
     // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
-    // │ Database unreachable: 503 + Retry-After at once - a page that retries itself, or
+    // │ A dependency unavailable (database, IDP): 503 + Retry-After at once - a page that retries itself, or
     // │ Problem Details for a call - instead of a white frame (Common.WebUtilities/Resilience).
     // └──────────────────────────────────────────────────────────────────────────────────────
-    app.UseEwpDatabaseOutageAnswer();
+    app.UseEwpOutageAnswer();
 
     app.UseHttpsRedirection();
     app.UseStaticFiles();

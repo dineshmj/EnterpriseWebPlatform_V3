@@ -103,7 +103,7 @@ builder.Services.AddBff()
     // │ Server-side sessions: the cookie is only a reference, so back-channel logout can end
     // │ the session and the tokens never ride in the cookie.
     // └──────────────────────────────────────────────────────────────────────────────────────
-    .AddEntityFrameworkServerSideSessions(options => options.UseNpgsql(DatabaseOutage.FailFast(bffStateDb)))
+    .AddEntityFrameworkServerSideSessions(options => options.UseNpgsql(DependencyOutage.FailFast(bffStateDb)))
     .AddSessionCleanupBackgroundProcess();
 builder.Services.AddOpenIdConnectAccessTokenManagement();
 
@@ -280,10 +280,10 @@ app.UseEwpForwardedHeaders();
 // └──────────────────────────────────────────────────────────────────────────────────────
 app.UseEwpRequestLogging();
 // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
-// │ Database unreachable: 503 + Retry-After at once - a page that retries itself, or
+// │ A dependency unavailable (database, IDP): 503 + Retry-After at once - a page that retries itself, or
 // │ Problem Details for a call - instead of a white frame (Common.WebUtilities/Resilience).
 // └──────────────────────────────────────────────────────────────────────────────────────
-app.UseEwpDatabaseOutageAnswer();
+app.UseEwpOutageAnswer();
 
 if (!app.Environment.IsDevelopment())
 {

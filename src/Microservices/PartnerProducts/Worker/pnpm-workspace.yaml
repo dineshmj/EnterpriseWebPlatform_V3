@@ -6,3 +6,7 @@ allowBuilds:
   protobufjs: false
   '@swc/core': false
   '@confluentinc/kafka-javascript': true
+
+# Fixed versions of vulnerable transitive packages (pnpm audit); only the vulnerable versions are rewritten.
+overrides:
+  fast-uri@>=3.0.0 <3.1.9: ^3.1.9
