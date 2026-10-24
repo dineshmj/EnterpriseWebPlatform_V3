@@ -39,6 +39,7 @@ the Kubernetes Secrets it reads, and a missing one stops the pod with that name.
 | A CNI that enforces **NetworkPolicy** (Azure CNI with Cilium on AKS) | K6 |
 | The namespace labelled `ewp.dev/trust=true` | trust-manager copies the bundles only there |
 | PostgreSQL with the 12 databases and their users (`db/`), Kafka (SASL_SSL, the users and ACLs of `kafka/`), Temporal | The chart deploys EWP's services, not their infrastructure |
+| The **Partner Bank**, from its own chart in its own namespace ([its doc/Kubernetes.md](https://github.com/dineshmj/EnterpriseWebPlatform_V3_PartnerBank/blob/main/doc/Kubernetes.md)): TLS passed through at the same Gateway (four TLS listeners in Passthrough mode), the home PC's port numbers on `partner-auth`, `partner-api`, `partner-products` `.<domain>` | `global.partnerBank`: EWP calls it like any outside client, through the Gateway, with its client certificate |
 
 ## Installing
 
@@ -111,6 +112,5 @@ that each required value still stops a render. Nothing here needs a cluster or D
 | No egress NetworkPolicy | A compromised pod can open connections out of the namespace | With the environment's addresses (PostgreSQL, Kafka, Temporal, the Partner Bank, the Gateway's public IP) at the Terraform step |
 | TLS between pods is server-authenticated, not mutual | A caller proves who it is with its token (every API checks it), not with a certificate | Accepted (Threat-Model R-9); a mesh with mTLS remains the production option |
 | PostgreSQL schemas and users, Kafka users and ACLs, Temporal are not deployed by the chart | An environment prepares them first | The Terraform step (managed PostgreSQL + a schema Job running the full scripts; Kafka and Temporal) |
-| The Partner Bank has no chart yet | `global.partnerBank` points at nothing in a cluster | Its own chart in its repository (TLS passthrough; its internal port and health endpoints first - its Containers.md, known gaps) |
 | The Audit API's checkpoints and the Documents Management API's documents are on ReadWriteOnce volumes | One instance each | A ReadWriteMany class (Azure Files) or object storage, then more instances |
 | The Notifications API pushes over SignalR without a backplane | One instance ([Containers.md](Containers.md), known gaps) | Redis or Azure SignalR Service |
