@@ -1,0 +1,33 @@
+{{- /*
+┌─ :: ARCHITECTURE + RESILIENCE :: Files that must outlive a pod ────────────────────────────────
+│ Why : The Audit API's signed checkpoints (write-once anchor of the audit chain) and the
+│       Documents Management API's encrypted documents are files, not database rows.
+│ How : One claim each, kept when the release is uninstalled (helm.sh/resource-policy: keep) -
+│       a teardown deletes them on purpose, never by accident. ReadWriteOnce = one instance
+│       (replicas 1, Recreate); several instances need a ReadWriteMany class (e.g. Azure Files).
+│ Ref : doc/Kubernetes.md | Threat-Model (audit anchor, document encryption)
+└────────────────────────────────────────────────────────────────────────────────────────────────
+*/ -}}
+{{- $root := . -}}
+{{- range $name, $c := (include "ewp.enabled" . | fromYaml) }}
+{{- with $c.persistence }}
+{{- $ctx := dict "root" $root "name" $name }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $name }}-data
+  labels:
+    {{- include "ewp.labels" $ctx | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: [{{ .accessMode | default "ReadWriteOnce" }}]
+  {{- with (.storageClassName | default $root.Values.global.storageClassName) }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .size }}
+{{- end }}
+{{- end }}

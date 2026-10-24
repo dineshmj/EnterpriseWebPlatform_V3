@@ -1,0 +1,7 @@
+apiVersion: v2
+name: ewp
+description: Enterprise Web Platform V3 - the 35 services (domain APIs, IDP, Shell, BFFs, Journey APIs, Kafka workers, simulators) in one namespace.
+type: application
+version: 0.1.0
+appVersion: "3"
+kubeVersion: ">= 1.34.0-0"

@@ -1,0 +1,19 @@
+{{- $root := . -}}
+{{- range $name, $c := (include "ewp.enabled" . | fromYaml) }}
+{{- if gt (int (include "ewp.replicas" (dict "root" $root "c" $c))) 1 }}
+{{- $ctx := dict "root" $root "name" $name }}
+---
+# RESIL: a node drain or upgrade takes at most one instance away at a time.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "ewp.labels" $ctx | nindent 4 }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      {{- include "ewp.selector" $ctx | nindent 6 }}
+{{- end }}
+{{- end }}

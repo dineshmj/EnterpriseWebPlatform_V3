@@ -1,0 +1,34 @@
+# The private root alone: the Gateway validates the pods with it (BackendTLSPolicy), Node adds
+# it to its own roots (NODE_EXTRA_CA_CERTS).
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: {{ .Values.bundles.caBundle }}
+spec:
+  sources:
+    - secret:
+        name: {{ .Values.ca.issuerName }}
+        key: ca.crt
+  target:
+    configMap:
+      key: ca.crt
+    namespaceSelector:
+      {{- toYaml .Values.bundles.namespaceSelector | nindent 6 }}
+---
+# The public roots + the private root: .NET's SSL_CERT_FILE replaces the system store, and the
+# pods also call public https addresses (the IDP through the gateway).
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: {{ .Values.bundles.fullBundle }}
+spec:
+  sources:
+    - useDefaultCAs: true
+    - secret:
+        name: {{ .Values.ca.issuerName }}
+        key: ca.crt
+  target:
+    configMap:
+      key: ca.crt
+    namespaceSelector:
+      {{- toYaml .Values.bundles.namespaceSelector | nindent 6 }}

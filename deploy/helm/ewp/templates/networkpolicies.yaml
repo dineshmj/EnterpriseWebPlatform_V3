@@ -1,0 +1,69 @@
+{{- /*
+┌─ :: SECURITY :: Who may open a connection to whom ─────────────────────────────────────────────
+│ Why : A token is the main gate, but a compromised pod should not even reach an API it never
+│       calls (defence in depth; the Partner Bank's private ports work the same way).
+│ How : Every EWP pod refuses incoming connections by default. Each component then admits only
+│       the components listed in its allowFrom, the gateway (public components), and the
+│       Operations Journey API (it asks every component's readiness for Platform Health).
+│       DEBT: outgoing traffic is not limited yet (PostgreSQL, Kafka, Temporal, the IDP through
+│       the gateway and the Partner Bank are outside the namespace; their addresses are the
+│       environment's) - an egress policy belongs with those addresses (Terraform step).
+│       The kubelet's probes come from the node; CNIs admit them (Azure CNI / Cilium do).
+│ Ref : doc/Kubernetes.md | OWASP A01, A05 | NIST SP 800-204 (microservice security)
+└────────────────────────────────────────────────────────────────────────────────────────────────
+*/ -}}
+{{- if .Values.global.networkPolicies.enabled }}
+{{- $root := . -}}
+{{- $g := .Values.global -}}
+{{- $enabled := include "ewp.enabled" . | fromYaml -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ewp-default-deny-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: ewp
+      app.kubernetes.io/instance: {{ $root.Release.Name }}
+  policyTypes: ["Ingress"]
+{{- range $name, $c := $enabled }}
+{{- $ctx := dict "root" $root "name" $name }}
+{{- $listener := include "ewp.listener" $c }}
+{{- $callers := $c.allowFrom | default list }}
+{{- if and (hasKey $enabled "operations-journey-api") (ne $name "operations-journey-api") }}
+{{- $callers = append $callers "operations-journey-api" }}
+{{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "ewp.labels" $ctx | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "ewp.selector" $ctx | nindent 6 }}
+  policyTypes: ["Ingress"]
+  ingress:
+    {{- if $callers }}
+    - from:
+        {{- range (uniq $callers) }}
+        {{- if hasKey $enabled . }}
+        - podSelector:
+            matchLabels:
+              {{- include "ewp.selector" (dict "root" $root "name" .) | nindent 14 }}
+        {{- end }}
+        {{- end }}
+      ports:
+        - port: {{ $listener }}
+    {{- end }}
+    {{- if $c.public }}
+    - from:
+        - namespaceSelector:
+            {{- toYaml $g.gateway.namespaceSelector | nindent 12 }}
+      ports:
+        - port: {{ $listener }}
+    {{- end }}
+{{- end }}
+{{- end }}

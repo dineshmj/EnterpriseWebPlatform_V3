@@ -1,0 +1,58 @@
+{{- /*
+┌─ :: ARCHITECTURE + SECURITY :: The browser's way in ───────────────────────────────────────────
+│ Why : Only the IDP, the Shell and the micro front ends' BFFs face the browser; everything else
+│       has no route from outside the cluster.
+│ How : Gateway API (the successor of Ingress; ingress-nginx is retired): the environment's
+│       Gateway ends the browser's TLS with the public certificate (global.gateway.parentRefs),
+│       and one HTTPRoute per public component sends <host>.<domain> to its Service. The Gateway
+│       opens a NEW TLS connection to the pod and checks its certificate against EWP's private
+│       root (BackendTLSPolicy) - no plain HTTP on the pod network. The Gateway passes the
+│       original Host on (Next.js checks a server action's Origin against it) and sets
+│       X-Forwarded-For / -Proto, which the services trust only from global.forwardedHeaders.
+│ Ref : doc/Kubernetes.md | doc/Containers.md ("Behind the ingress") | OWASP A02, A05
+└────────────────────────────────────────────────────────────────────────────────────────────────
+*/ -}}
+{{- $root := . -}}
+{{- $g := .Values.global -}}
+{{- if $g.gateway.enabled }}
+{{- range $name, $c := (include "ewp.enabled" . | fromYaml) }}
+{{- if $c.public }}
+{{- $ctx := dict "root" $root "name" $name }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "ewp.labels" $ctx | nindent 4 }}
+spec:
+  parentRefs:
+    {{- required "global.gateway.parentRefs is required when the gateway is enabled" $g.gateway.parentRefs | toYaml | nindent 4 }}
+  hostnames:
+    - {{ include "ewp.publicHost" (list $root $name) }}
+  rules:
+    - backendRefs:
+        - name: {{ $name }}
+          port: 443
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "ewp.labels" $ctx | nindent 4 }}
+spec:
+  targetRefs:
+    - group: ""
+      kind: Service
+      name: {{ $name }}
+      sectionName: https
+  validation:
+    caCertificateRefs:
+      - group: ""
+        kind: ConfigMap
+        name: {{ $g.trust.caBundle }}
+    hostname: {{ $name }}.{{ $root.Release.Namespace }}.svc.cluster.local
+{{- end }}
+{{- end }}
+{{- end }}
