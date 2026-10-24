@@ -15,7 +15,7 @@
 # │ Ref : doc/Containers.md | Features 2.3.3, 2.4.5 | OWASP A05, A08
 # └────────────────────────────────────────────────────────────────────────────────────────────────
 
-FROM node:24.22.1-bookworm-slim AS client
+FROM node:24.22.1-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea AS client
 ARG PNPM_VERSION=12.11.2
 
 # ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────────────────
@@ -42,7 +42,7 @@ RUN pnpm install --frozen-lockfile
 COPY src/Microservices/Compliance/BFF.Web/client-app/ ./
 RUN pnpm run build
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0.402-noble AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.402-noble@sha256:747cbade5bfd918a175ac32f8f1d931edec2c7d0d5397a3de72eaef1ac1f66d2 AS build
 WORKDIR /src
 
 # Restore from the project files alone (layer reused until a project file changes).
@@ -61,7 +61,7 @@ RUN dotnet publish src/Microservices/Compliance/BFF.Web/EnterpriseWebPlatform.Co
         --configuration Release --runtime linux-x64 --self-contained false --no-restore \
         --output /app -p:UseAppHost=false
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.13-noble-chiseled-extra AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.13-noble-chiseled-extra@sha256:9e3919aff68057f3e45125c5255a71d3b5f40364e45ede883348688851b9f0df AS runtime
 WORKDIR /app
 
 # Owned by root: the "app" user reads and runs the files but cannot change them.

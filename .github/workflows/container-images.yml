@@ -3,7 +3,8 @@
 # │       checks every time - never from a developer's machine. A vulnerable image must not reach
 # │       the registry at all.
 # │ How : Per image: lint the Dockerfile (hadolint) -> build -> scan the built image (Trivy:
-# │       vulnerabilities with a fix and any secret; HIGH / CRITICAL fails the job) -> only then,
+# │       vulnerabilities with a fix and any secret; HIGH / CRITICAL fails the job; the report
+# │       goes to the run summary) -> load native modules where the manifest asks -> only then,
 # │       on main, push to GHCR with an SBOM and BuildKit's SLSA provenance attached. Tags are
 # │       the full commit SHA (what a deployment pins) and the branch name.
 # │       Actions are pinned to commit SHAs (a moved tag cannot change what runs here);
@@ -87,13 +88,13 @@ jobs:
             fi
           fi
           if [ "$all" = true ]; then
-            matrix=$(jq -c '{include: [.images[] | {image, dockerfile}]}' .github/container-images.json)
+            matrix=$(jq -c '{include: [.images[] | {image, dockerfile, smoke}]}' .github/container-images.json)
           else
             matrix=$(jq -c --rawfile changed changed.txt '
               ($changed | split("\n") | map(select(length > 0))) as $files
               | {include: [.images[]
                   | select([.paths[] as $p | $files[] | select(startswith($p))] | length > 0)
-                  | {image, dockerfile}]}' .github/container-images.json)
+                  | {image, dockerfile, smoke}]}' .github/container-images.json)
           fi
           count=$(jq '.include | length' <<< "$matrix")
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
@@ -159,6 +160,7 @@ jobs:
       # │ layer, stops the job before anything is published.
       # └──────────────────────────────────────────────────────────────────────────────────────────
       - name: Scan the image
+        id: scan
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ matrix.image }}:scan
@@ -167,6 +169,45 @@ jobs:
           ignore-unfixed: true
           exit-code: '1'
           format: table
+          output: trivy-report.txt
+
+      # ┌─ OBS ────────────────────────────────────────────────────────────────────────────────────
+      # │ The scan result on the run's summary page, passed or failed - readable without opening
+      # │ the job log. Trivy prints only the findings it gates on (HIGH / CRITICAL with a fix,
+      # │ secrets), so a passing image shows its scanned targets with zero counts.
+      # └──────────────────────────────────────────────────────────────────────────────────────────
+      - name: Scan result to the summary
+        if: always() && steps.scan.outcome != 'skipped'
+        env:
+          IMAGE: ${{ matrix.image }}
+          OUTCOME: ${{ steps.scan.outcome }}
+        run: |
+          {
+            echo "### $IMAGE - scan $OUTCOME"
+            echo '<details><summary>Trivy report</summary>'
+            echo
+            echo '```text'
+            if [ -s trivy-report.txt ]; then cat trivy-report.txt; else echo '(no report written)'; fi
+            echo '```'
+            echo '</details>'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -s trivy-report.txt ]; then cat trivy-report.txt; fi
+
+      # ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────────
+      # │ Images with native modules (the manifest's "smoke" snippet, Node images only) load them
+      # │ inside the built image: a distroless runtime has only the libraries Node itself needs, so
+      # │ a binding that wants another one fails here instead of at the first start in an
+      # │ environment. No network, read-only file system, the image's own non-root user.
+      # └──────────────────────────────────────────────────────────────────────────────────────────
+      - name: Smoke check
+        if: matrix.smoke
+        # SEC: the snippet reaches the shell as an environment variable, never pasted into it.
+        env:
+          IMAGE: ${{ matrix.image }}
+          SMOKE: ${{ matrix.smoke }}
+        run: |
+          docker run --rm --network none --read-only \
+            --entrypoint /nodejs/bin/node "$IMAGE:scan" -e "$SMOKE"
 
       - name: Sign in to GHCR
         if: env.PUBLISH == 'true'

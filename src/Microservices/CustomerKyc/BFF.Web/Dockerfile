@@ -8,14 +8,14 @@
 # │       client secret, session key or certificate.
 # │ How : Four stages. (1) Node builds the Next.js static export from its lockfile. (2) Node
 # │       compiles the NestJS BFF. (3) A second install takes its production dependencies only.
-# │       (4) A slim Node runtime without npm, npx, corepack or yarn runs dist/main.js as the
-# │       non-root "node" user on plain HTTP 8080 (KYC_BFF_PLAIN_HTTP=true) and serves the export;
+# │       (4) A distroless Node runtime (no shell, no package manager) runs dist/main.js as the
+# │       non-root user 65532 on plain HTTP 8080 (KYC_BFF_PLAIN_HTTP=true) and serves the export;
 # │       TLS ends at the ingress, which KYC_BFF_TRUSTED_PROXIES must name (the BFF refuses to
 # │       start without it). Secrets and every address come from the environment at run time.
 # │ Ref : doc/Containers.md | Features 2.1.1, 2.3 | OWASP A05, A06, A08
 # └────────────────────────────────────────────────────────────────────────────────────────────────
 
-FROM node:24.22.1-bookworm-slim AS client
+FROM node:24.22.1-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea AS client
 ARG PNPM_VERSION=12.11.2
 # ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────────────────
 # │ No environment's settings in the export: the MFE reads the Shell origin at run time from
@@ -41,7 +41,7 @@ RUN pnpm install --frozen-lockfile
 COPY src/Microservices/CustomerKyc/BFF.Web/client-app/ ./
 RUN pnpm run build
 
-FROM node:24.22.1-bookworm-slim AS build
+FROM node:24.22.1-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea AS build
 ARG PNPM_VERSION=12.11.2
 RUN npm install --global "pnpm@${PNPM_VERSION}"
 WORKDIR /app/src/Microservices/CustomerKyc/BFF.Web
@@ -54,7 +54,7 @@ COPY src/Microservices/CustomerKyc/BFF.Web/nest-cli.json src/Microservices/Custo
 COPY src/Microservices/CustomerKyc/BFF.Web/src/ ./src/
 RUN pnpm run build
 
-FROM node:24.22.1-bookworm-slim AS deps
+FROM node:24.22.1-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea AS deps
 ARG PNPM_VERSION=12.11.2
 RUN npm install --global "pnpm@${PNPM_VERSION}"
 WORKDIR /app/src/Microservices/CustomerKyc/BFF.Web
@@ -64,22 +64,15 @@ COPY src/Microservices/CustomerKyc/BFF.Web/package.json \
 # Production dependencies only: no compiler or type definitions in the running image.
 RUN pnpm install --frozen-lockfile --prod
 
-FROM node:24.22.1-bookworm-slim AS runtime
+FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:78f07ef1b5ea71ad7c055df15d0dd8997f2d288f9158623c4d4ae3d765b7d50d AS runtime
 # ┌─ SEC ────────────────────────────────────────────────────────────────────────────────────────────
-# │ Debian security updates at build time: the official Node image is rebuilt only from time to
-# │ time, so a fixed Debian package (e.g. perl-base, DLA-4821-1) can lag behind it and Trivy fails
-# │ the build. Upgrading here takes every published fix on each rebuild; apt lists are removed so
-# │ the layer stays small. Trade-off: the OS layer follows Debian, not only the pinned tag.
+# │ Distroless Node: the Node runtime and the few Debian libraries it needs - no shell, no package
+# │ manager (no apt, npm, npx, corepack or yarn), like the chiseled .NET images. Nothing can be
+# │ installed into or run through a shell in a running container. Its user "nonroot" (65532).
+# │ The image is rebuilt with every Debian fix; the digest pin above is moved forward by
+# │ Dependabot, and the scan in CI gates each move. Native modules are built in the trixie stages
+# │ above, the same Debian 13 the runtime is made from.
 # └──────────────────────────────────────────────────────────────────────────────────────────────────
-RUN apt-get update \
- && apt-get upgrade -y --no-install-recommends \
- && rm -rf /var/lib/apt/lists/*
-# ┌─ SEC ────────────────────────────────────────────────────────────────────────────────────────────
-# │ No package manager in the running image: nothing can be installed into a running container,
-# │ and npm's own dependencies are not there to be vulnerable.
-# └──────────────────────────────────────────────────────────────────────────────────────────────────
-RUN rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
-           /usr/local/bin/yarn /usr/local/bin/yarnpkg /opt/yarn-*
 
 ENV NODE_ENV=production \
     KYC_BFF_PLAIN_HTTP=true \
@@ -87,15 +80,15 @@ ENV NODE_ENV=production \
     KYC_BFF_STATIC_ROOT=/app/src/Microservices/CustomerKyc/BFF.Web/client-app/out
 
 WORKDIR /app/src/Microservices/CustomerKyc/BFF.Web
-# Owned by root: the "node" user reads and runs the files but cannot change them.
+# Owned by root: the "nonroot" user reads and runs the files but cannot change them.
 COPY --from=deps /app/src/Microservices/CustomerKyc/BFF.Web/node_modules/ ./node_modules/
 COPY --from=build /app/src/Microservices/CustomerKyc/BFF.Web/dist/ ./dist/
 COPY --from=build /app/src/Microservices/CustomerKyc/BFF.Web/package.json ./
 COPY --from=client /app/src/Microservices/CustomerKyc/BFF.Web/client-app/out/ ./client-app/out/
 
 EXPOSE 8080
-# The image's "node" user, by number (1000), so Kubernetes runAsNonRoot can verify it.
-USER 1000
+# The image's "nonroot" user, by number (65532), so Kubernetes runAsNonRoot can verify it.
+USER 65532
 
 # No HEALTHCHECK: the orchestrator probes /health/*, as for the .NET images.
-ENTRYPOINT ["node", "dist/main.js"]
+ENTRYPOINT ["/nodejs/bin/node", "dist/main.js"]

@@ -17,10 +17,10 @@ and secrets when the container starts, so one image runs everywhere.**
 | 1 | Images are built **only in GitHub Actions** ([container-images.yml](../.github/workflows/container-images.yml)) and published to GHCR (`ghcr.io/<owner>/ewp-<service>`); nothing is built on a developer's machine | An image that runs somewhere must come from a known commit through the same checks. (The development laptop also has no memory to spare for Docker.) |
 | 2 | One multi-stage **Dockerfile** per deployable, next to its project; build context = repository root | Services share `src/Common` and `src/AsyncWorkflows`; .NET and Node images follow one reviewable pattern |
 | 3 | .NET runtime: `mcr.microsoft.com/dotnet/aspnet:<version>-noble-chiseled-extra` | Chiseled = no shell, no package manager, non-root user `app` (UID 1654). `-extra` adds ICU and time zones (amounts formatted in en-AU). Workers use the ASP.NET runtime too: they serve `/health/*` and `/metrics` from Kestrel |
-| 3a | Node runtime: `node:<version>-bookworm-slim` with the published Debian security updates applied at build time (`apt-get upgrade`) and npm, npx, corepack and yarn **removed**; the non-root user `node` (UID 1000); production dependencies only, from the committed lockfile | Node has no chiseled image with exact version tags (distroless has moving tags only, see the digest gap below). Without a package manager nothing can be installed into a running container, and npm's own dependencies are not there to be vulnerable. The official Node image is rebuilt only from time to time, so a Debian fix can lag behind it (perl-base, DLA-4821-1, failed the first Node scan); the upgrade takes every published fix on each rebuild |
+| 3a | Node runtime: **distroless** `gcr.io/distroless/nodejs24-debian13:nonroot`, pinned by digest - Node and the few Debian libraries it needs, no shell, no package manager (no apt, npm, npx, corepack or yarn); the non-root user `nonroot` (UID 65532); production dependencies only, from the committed lockfile. The build stages use `node:<version>-trixie-slim` (the same Debian 13), so native modules are built against the libraries the runtime has | The Node counterpart of chiseled: nothing can be installed into, or run through a shell in, a running container. Distroless is rebuilt with each Debian fix, so a fix does not wait for the official Node image (perl-base, DLA-4821-1, failed the first Node scan on `bookworm-slim`). Its tags move (`nonroot`, no exact Node version), which the digest pin makes safe: the Node patch level is the one in the pinned digest. The Debian 12 distroless Node 24 image has not been updated since February 2026 (its versions are tagged `deprecated-public-image-*`) |
 | 4 | Plain **HTTP on 8080** inside the container; TLS at the platform (ingress for browsers, service mesh mTLS between pods) - the same line as Temporal (Threat-Model R-16). The Node services turn it on with `<PREFIX>_PLAIN_HTTP=true` (set in their images); without it they need their development certificate, and both set refuse to start | Certificates and their rotation belong to the platform, not to 35 images; a missing setting must not quietly open plain HTTP |
 | 5 | Settings and secrets **only from the environment** at run time (`Section__Key` variables, or files mounted from a secret store) | The same image runs in every environment; a secret in a layer stays in the registry for good |
-| 6 | Exact base image tags and actions pinned to commit SHAs; **Dependabot** proposes updates weekly ([dependabot.yml](../.github/dependabot.yml)) | Nothing changes silently, and security fixes still arrive |
+| 6 | Base images pinned by **tag and digest** (`image:tag@sha256:...`), actions pinned to commit SHAs; **Dependabot** proposes updates weekly - all base image moves in one pull request ([dependabot.yml](../.github/dependabot.yml)) | A re-pushed tag cannot change an image between two builds; nothing changes silently, security fixes still arrive, and all 35 images stay on the same bases |
 
 ## What CI does per image
 
@@ -31,11 +31,28 @@ and secrets when the container starts, so one image runs everywhere.**
 1. **hadolint**: lints the Dockerfile (warnings fail).
 2. **Build** with Buildx (layer cache in GitHub Actions).
 3. **Trivy**: scans the built image for vulnerabilities that have a fix and for secrets. HIGH or
-   CRITICAL fails the job, and nothing is published.
-4. On `main` only: **push** to GHCR with an **SBOM** and BuildKit's **SLSA provenance** attached.
+   CRITICAL fails the job, and nothing is published. The report goes to the run's summary page
+   (passed or failed), so it can be read without opening the job log.
+4. **Smoke check** (images with a `smoke` entry in the manifest - today the Partner Products
+   Worker): loads the native modules inside the built image, without network and with a
+   read-only file system, so a library the distroless runtime lacks fails the job.
+5. On `main` only: **push** to GHCR with an **SBOM** and BuildKit's **SLSA provenance** attached.
    Tags are the full commit SHA (a deployment pins this one) and the branch name.
 
-Pull requests run steps 1-3 and never publish.
+Pull requests run steps 1-4 and never publish.
+
+## Registry retention
+
+[ghcr-retention.yml](../.github/workflows/ghcr-retention.yml) runs every Monday (and by hand) and
+keeps, per image, the newest **10** versions with a commit tag plus the one tagged `main`
+([ghcr-retention.sh](../.github/scripts/ghcr-retention.sh)). An older version is deleted together
+with the manifests its index lists - the platform image and its SBOM / provenance attestation,
+which GHCR shows as **untagged** versions - except a manifest that a kept image lists too (a build
+from the cache can reuse one). An untagged version is never deleted on its own. A manual run is a
+dry run unless `dry_run` is switched off, and `keep` can be raised (at least 3). The run's summary
+lists, per image, how many were kept and deleted. A deleted version can be restored for 30 days
+from the package's settings. A deployment that still pins an older commit SHA must move forward
+before its image ages out.
 
 ## Keeping secrets out of images
 
@@ -54,7 +71,7 @@ Pull requests run steps 1-3 and never publish.
 ## Run-time contract
 
 Every .NET image runs as UID 1654, listens on 8080, and has `ASPNETCORE_ENVIRONMENT` unset
-(Production); every Node image runs as UID 1000 with `NODE_ENV=production`. Their files belong to
+(Production); every Node image runs as UID 65532 with `NODE_ENV=production`. Their files belong to
 root, so the root file system can be read-only; give it a writable `/tmp` (emptyDir). Probes:
 `/health/live` and `/health/ready` on 8080 (.NET workers: their `Health__Urls` is set to
 `http://+:8080` in the image; the Partner Products Worker: `PARTNER_PRODUCTS_WORKER_HEALTH_PORT`).
@@ -141,10 +158,11 @@ the front end: each BFF serves `/ewp-runtime-config.js` from its own `ShellOrigi
 | Gap | Effect | Planned fix |
 |---|---|---|
 | The BFF validates that API addresses are `https`, but the API containers listen on HTTP | Pod-to-pod calls need TLS from the platform | Choose at deployment: mesh mTLS with https service addresses, or Kestrel TLS from a mounted certificate (`ASPNETCORE_URLS=https://+:8443`, `ASPNETCORE_Kestrel__Certificates__Default__Path`); no code change either way |
-| Base images are pinned by tag, not by digest | A re-pushed tag could change an image between two builds | Pin `@sha256:` digests (Dependabot keeps them current); then the Node images can move to distroless Node (`gcr.io/distroless/nodejs<major>-debian<n>:nonroot`: no shell, like chiseled) |
+| The Dockerfile front end (`# syntax=docker/dockerfile:1.7`) is pinned by tag only | A re-pushed front-end tag could change how a Dockerfile is read | Pin it by digest too, once Dependabot (or a weekly check) can move that pin |
+| The distroless runtime's Node patch level is set by its digest, the build stages' by their tag (`24.22.1`) | Build and runtime can be one Node patch apart for a week | Accepted: same major and Debian release; the smoke check loads the native modules in the runtime |
 | Operations -> Platform Health probes a fixed list of development addresses ([components.ts](../src/Microservices/Operations/JourneyApi/src/platform/components.ts)) | Deployed, it reports every component as down | Make the list deployment data (a setting or a mounted file), like the Shell's menu |
 | The Next.js BFFs' readiness does not check their session database (the KYC BFF's does) | A BFF whose database is down still receives traffic; the sign-in fails | A readiness check that pings PostgreSQL |
-| The Partner Products Worker's Kafka client uses a prebuilt librdkafka binding fetched at install; it has not yet run in a container | A missing system library would show only at start-up | First deployment: start the worker image against Kafka and Temporal |
+| The Partner Products Worker's Kafka client uses a prebuilt librdkafka binding fetched at install; CI loads it (and Temporal's native core) in the image, but the image has not yet connected to Kafka or Temporal | A TLS or SASL problem inside the container would show only at start-up | First deployment: start the worker image against Kafka and Temporal |
 
 ## Adding an image
 
@@ -152,6 +170,7 @@ the front end: each BFF serves `/ewp-runtime-config.js` from its own `ShellOrigi
    Audit web, NestJS service - Audit Journey API, NestJS BFF with a static export - KYC BFF).
    Change the project paths and the `COPY` lines of the shared projects it references
    (`ProjectReference`; for Node, `src/Common/DesignSystem` when its CSS imports the tokens).
+   Keep the `FROM` lines exactly as copied (tag and digest), so every image has the same bases.
 2. Move any connection string with a password from `appsettings.json` to
    `appsettings.Development.json`, and record it in this page's run-time contract. A Node service
    takes `<PREFIX>_PLAIN_HTTP` (copy `listener-tls.ts`) and, if browsers reach it,
@@ -159,5 +178,6 @@ the front end: each BFF serves `/ewp-runtime-config.js` from its own `ShellOrigi
 3. Add the image to [.github/container-images.json](../.github/container-images.json) - its name,
    Dockerfile and EVERY folder it is built from (its project, each shared project it references,
    anything else its Dockerfile copies); a missing folder means a change there does not rebuild
-   the image. Add its folder to [dependabot.yml](../.github/dependabot.yml).
+   the image. A Node image with native modules also gets a `smoke` entry (a `node -e` snippet that
+   requires them). Add its folder to [dependabot.yml](../.github/dependabot.yml).
 4. Add a "Container image" row to the project README's "Security controls" table.

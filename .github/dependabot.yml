@@ -1,9 +1,9 @@
 # ┌─ :: SECURITY :: Keeping pinned things current ─────────────────────────────────────────────────
-# │ Why : The workflow pins actions to commit SHAs and the Dockerfiles pin exact base image tags.
-# │       Pinning stops silent changes; without updates it would also stop security fixes.
-# │ How : Dependabot proposes a pull request a week per ecosystem; the image workflow builds and
-# │       scans each proposal before it can be merged. NuGet and pnpm stay with the existing
-# │       routine (Scan-Dependencies.ps1, pnpm audit at every export).
+# │ Why : The workflow pins actions to commit SHAs and the Dockerfiles pin base images by tag AND
+# │       digest. Pinning stops silent changes; without updates it would also stop security fixes.
+# │ How : Dependabot proposes a pull request a week per ecosystem (all base images in one); the
+# │       image workflow builds and scans each proposal before it can be merged. NuGet and pnpm
+# │       stay with the existing routine (Scan-Dependencies.ps1, pnpm audit at every export).
 # │ Ref : doc/Containers.md | OWASP A06 Vulnerable and Outdated Components
 # └────────────────────────────────────────────────────────────────────────────────────────────────
 version: 2
@@ -61,3 +61,11 @@ updates:
     ignore:
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
+    # ┌─ ARCH ─────────────────────────────────────────────────────────────────────────────────────
+    # │ One pull request for every base image move: the 35 Dockerfiles share four base images,
+    # │ and a digest moves whenever its publisher rebuilds (distroless: with each Debian fix).
+    # │ One PR, built and scanned as a whole, keeps all images on the same base.
+    # └────────────────────────────────────────────────────────────────────────────────────────────
+    groups:
+      base-images:
+        patterns: ['*']

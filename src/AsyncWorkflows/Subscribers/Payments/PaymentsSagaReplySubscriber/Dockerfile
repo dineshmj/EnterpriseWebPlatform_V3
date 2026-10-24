@@ -15,7 +15,7 @@
 # │ Ref : doc/Containers.md | Features 2.4.6 | OWASP A05, A08 | Threat-Model R-10
 # └────────────────────────────────────────────────────────────────────────────────────────────────
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0.402-noble AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.402-noble@sha256:747cbade5bfd918a175ac32f8f1d931edec2c7d0d5397a3de72eaef1ac1f66d2 AS build
 WORKDIR /src
 
 # Restore from the project files alone (layer reused until a project file changes).
@@ -34,7 +34,7 @@ RUN dotnet publish src/AsyncWorkflows/Subscribers/Payments/PaymentsSagaReplySubs
         --configuration Release --runtime linux-x64 --self-contained false --no-restore \
         --output /app -p:UseAppHost=false
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.13-noble-chiseled-extra AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.13-noble-chiseled-extra@sha256:9e3919aff68057f3e45125c5255a71d3b5f40364e45ede883348688851b9f0df AS runtime
 WORKDIR /app
 
 # Owned by root: the "app" user reads and runs the files but cannot change them.

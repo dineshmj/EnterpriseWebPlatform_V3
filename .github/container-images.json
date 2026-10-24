@@ -266,7 +266,8 @@
       "dockerfile": "src/Microservices/PartnerProducts/Worker/Dockerfile",
       "paths": [
         "src/Microservices/PartnerProducts/Worker/"
-      ]
+      ],
+      "smoke": "require('@confluentinc/kafka-javascript'); require('@temporalio/worker');"
     },
     {
       "image": "ewp-payment-network-simulator",
