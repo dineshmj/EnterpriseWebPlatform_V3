@@ -13,6 +13,7 @@ using Duende.Bff;
 using Npgsql;
 using OpenTelemetry.Trace;
 
+using EnterpriseWebPlatform.BSS.BFFWeb.Configuration;
 using EnterpriseWebPlatform.BSS.BFFWeb.Data;
 using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
@@ -39,11 +40,9 @@ var builder = WebApplication.CreateBuilder(args);
 var oidcAuthority = RequiredSetting.HttpsUrl(builder.Configuration["Oidc:Authority"], "Oidc:Authority");
 var oidcClientId = RequiredSetting.Text(builder.Configuration["Oidc:ClientId"], "Oidc:ClientId");
 var shellPublicOrigin = RequiredSetting.HttpsUrl(builder.Configuration["ShellOrigin"], "ShellOrigin");
-var mfeOrigins = builder.Configuration.GetSection("MfeOrigins").GetChildren()
-    .Select(mfe => RequiredSetting.HttpsUrl(mfe.Value, $"MfeOrigins:{mfe.Key}"))
-    .ToArray();
-if (mfeOrigins.Length == 0)
-    throw new InvalidOperationException("MfeOrigins is not configured: the Shell would frame no MFE.");
+// The MFEs' addresses by key: the CSP frames them and the menu links to them (MfeOrigins.cs).
+var mfeOrigins = MfeOrigins.From(builder.Configuration);
+builder.Services.AddSingleton(mfeOrigins);
 var notificationsApiBaseUrl = RequiredSetting.HttpsUrl(builder.Configuration["NotificationsApiBaseUrl"], "NotificationsApiBaseUrl");
 
 // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
@@ -364,7 +363,7 @@ var shellCsp = ContentSecurityPolicy.Build(
         // 'self': the step-up overlay ends on the Shell's own /step-up-done.html.
         "'self'",
         // The MFEs (configuration: MfeOrigins) and the IDP.
-        .. mfeOrigins.Select(ContentSecurityPolicy.Origin),
+        .. mfeOrigins.All.Select(ContentSecurityPolicy.Origin),
         ContentSecurityPolicy.Origin(oidcAuthority)
     ]);
 // Security:CspReportOnly = true reports violations in the browser console instead of blocking.

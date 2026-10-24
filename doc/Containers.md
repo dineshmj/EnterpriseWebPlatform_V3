@@ -75,8 +75,8 @@ Every .NET image runs as UID 1654, listens on 8080, and has `ASPNETCORE_ENVIRONM
 root, so the root file system can be read-only; give it a writable `/tmp` (emptyDir). Probes:
 `/health/live` and `/health/ready` on 8080 (.NET workers: their `Health__Urls` is set to
 `http://+:8080` in the image; the Partner Products Worker: `PARTNER_PRODUCTS_WORKER_HEALTH_PORT`).
-The Next.js BFFs answer both probes in `server.mjs` once the app is prepared; they do not check
-the session database. (They use no Next.js feature that writes a cache at run time - ISR, image
+The Next.js BFFs answer both probes in `server.mjs` once the app is prepared; readiness also asks
+their session database (`SELECT 1`, 2 s, its own one-connection pool), like the KYC BFF. (They use no Next.js feature that writes a cache at run time - ISR, image
 optimisation; one that did would need an emptyDir at `.next/cache`.)
 
 **What every image needs:** the settings in its `appsettings.json` that hold local addresses
@@ -92,13 +92,14 @@ image sets or does not use.
 | Image | Needs |
 |---|---|
 | `ewp-idp` | The token-signing certificate (PFX) mounted from the secret store: `SigningCredential__CertificatePath`, `SigningCredential__CertificatePassword` (no developer key outside Development - it refuses to start); each private_key_jwt client's PUBLIC key file: `ClientKeys__<client id>` (e.g. `ClientKeys__SelfService.Web.ClientID`); every confidential client's secret: `ClientSecrets__<client id>`; `ClientBaseUrls__*` (the web clients' public https addresses, for their redirect URIs). The issuer is the address the browser uses (`https` from the ingress, see below) |
-| `ewp-shell` | `MfeOrigins__*` (the MFEs the Shell may frame) and `NotificationsApiBaseUrl`, all https. The menu database holds each MFE's address (`EwpBssShellDb.sql` seeds the development ones): a deployment loads its own addresses into that data - it is not an image setting |
+| `ewp-shell` | `MfeOrigins__*` (the MFEs the Shell may frame and its menu links to, by key) and `NotificationsApiBaseUrl`, all https. The menu database names each MFE by key only (`microservices.mfe_key`), so the same menu data serves every environment; a key without an `MfeOrigins` entry is left out of the menu |
 | `ewp-audit-api` | A write-once volume for the signed checkpoints: `Audit__Anchors__Directory`; the anchor signing key from the secret store |
 | `ewp-documents-management-api` | A volume for the encrypted documents: `DocumentStorage__RootPath`; the key ring (`DocumentStorage__Encryption__*`) from the secret store |
 | `ewp-partner-products-api` | EWP's mTLS client and request-signing certificates and their password files, mounted from the secret store (`PartnerBank__*CertificatePath`, `*PasswordPath`) |
 | `ewp-customer-kyc-bff-web` | `KYC_BFF_TRUSTED_PROXIES` - the ingress's addresses; without it the BFF refuses to start on plain HTTP (see below). Secrets: `KYC_BFF_CLIENT_SECRET`, `KYC_BFF_SESSION_SECRET`, `KYC_BFF_SESSION_KEY`, `KYC_BFF_DATABASE_URL` |
 | `ewp-audit-bff-web`, `ewp-operations-bff-web`, `ewp-partner-products-bff-web` | `<PREFIX>_TRUSTED_PROXIES` (`AUDIT_WEB_`, `OPERATIONS_WEB_`, `PARTNER_PRODUCTS_WEB_`) for the client address; `<PREFIX>_PUBLIC_ORIGIN` - the https address the browser uses (redirect URIs). Secrets: `<PREFIX>_CLIENT_SECRET`, `<PREFIX>_SESSION_KEY`, `<PREFIX>_DATABASE_URL` |
 | `ewp-partner-products-worker` | Temporal (`TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`); the Kafka trust root as a mounted file -> `KAFKA_SSL_CA_LOCATION`. Secrets: `PARTNER_PRODUCTS_WORKER_CLIENT_SECRET`, `PARTNER_PRODUCTS_WORKER_KAFKA_PASSWORD` |
+| `ewp-operations-journey-api` | `OPERATIONS_JOURNEY_PLATFORM_FILE`: a mounted file (ConfigMap) listing every component's readiness address and the simulators' addresses - the cluster's own; the development one is `config/platform.development.json`, which is not in the image |
 | `ewp-*-simulator` | Development, test and demo environments only - never deployed to production |
 
 The Payments images in full, as the worked example:
@@ -160,9 +161,8 @@ the front end: each BFF serves `/ewp-runtime-config.js` from its own `ShellOrigi
 | The BFF validates that API addresses are `https`, but the API containers listen on HTTP | Pod-to-pod calls need TLS from the platform | Choose at deployment: mesh mTLS with https service addresses, or Kestrel TLS from a mounted certificate (`ASPNETCORE_URLS=https://+:8443`, `ASPNETCORE_Kestrel__Certificates__Default__Path`); no code change either way |
 | The Dockerfile front end (`# syntax=docker/dockerfile:1.7`) is pinned by tag only | A re-pushed front-end tag could change how a Dockerfile is read | Pin it by digest too, once Dependabot (or a weekly check) can move that pin |
 | The distroless runtime's Node patch level is set by its digest, the build stages' by their tag (`24.22.1`) | Build and runtime can be one Node patch apart for a week | Accepted: same major and Debian release; the smoke check loads the native modules in the runtime |
-| Operations -> Platform Health probes a fixed list of development addresses ([components.ts](../src/Microservices/Operations/JourneyApi/src/platform/components.ts)) | Deployed, it reports every component as down | Make the list deployment data (a setting or a mounted file), like the Shell's menu |
-| The Next.js BFFs' readiness does not check their session database (the KYC BFF's does) | A BFF whose database is down still receives traffic; the sign-in fails | A readiness check that pings PostgreSQL |
 | The Partner Products Worker's Kafka client uses a prebuilt librdkafka binding fetched at install; CI loads it (and Temporal's native core) in the image, but the image has not yet connected to Kafka or Temporal | A TLS or SASL problem inside the container would show only at start-up | First deployment: start the worker image against Kafka and Temporal |
+| The Notifications API pushes over SignalR without a backplane | With several instances, a push reaches only the browsers connected to the instance that received the event | Run ONE replica until a backplane (Redis, or Azure SignalR Service) is added; every other service may run several (the IDP's replay cache, the BFF sessions and Data Protection keys, the Outbox relays and workers are shared or locked in PostgreSQL) |
 
 ## Adding an image
 

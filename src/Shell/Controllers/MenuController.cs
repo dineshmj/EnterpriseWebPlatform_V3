@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+using EnterpriseWebPlatform.BSS.BFFWeb.Configuration;
 using EnterpriseWebPlatform.BSS.BFFWeb.Data;
 using EnterpriseWebPlatform.BSS.BFFWeb.Data.Entities;
 
@@ -20,10 +21,14 @@ namespace EnterpriseWebPlatform.BSS.BFFWeb.Controllers;
 public class MenuController : ControllerBase
 {
     private readonly IMenuRepository _menuRepository;
+    private readonly MfeOrigins _mfeOrigins;
+    private readonly ILogger<MenuController> _logger;
 
-    public MenuController(IMenuRepository menuRepository)
+    public MenuController(IMenuRepository menuRepository, MfeOrigins mfeOrigins, ILogger<MenuController> logger)
     {
         _menuRepository = menuRepository;
+        _mfeOrigins = mfeOrigins;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -40,18 +45,26 @@ public class MenuController : ControllerBase
             userRoles,
             HttpContext.RequestAborted);
 
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ The address comes from configuration (MfeOrigins), never from the database. A menu
+        // │ entry whose key has no address in this environment is left out (and logged): the
+        // │ browser is never sent to an MFE the Shell's CSP would not frame.
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        var microservices = menuDetails
+            .GroupBy(menu => new
+            {
+                menu.Microservice,
+                menu.MfeKey
+            })
+            .ToList();
         var response = new MenuResponse
         {
-            Microservices = menuDetails
-                .GroupBy(menu => new
-                {
-                    menu.Microservice,
-                    menu.BaseURL
-                })
+            Microservices = microservices
+                .Where(microserviceGroup => HasAddress(microserviceGroup.Key.Microservice, microserviceGroup.Key.MfeKey))
                 .Select(microserviceGroup => new EnterpriseWebPlatform.BSS.BFFWeb.Data.Entities.MicroserviceDto
                 {
                     Name = microserviceGroup.Key.Microservice,
-                    BaseURL = microserviceGroup.Key.BaseURL,
+                    BaseURL = OriginOf(microserviceGroup.Key.MfeKey),
                     ManagementAreas = microserviceGroup
                         .GroupBy(menu => menu.ManagementAreaName)
                         .Select(managementAreaGroup => new ManagementAreaDto
@@ -73,4 +86,16 @@ public class MenuController : ControllerBase
 
         return Ok(response);
     }
+
+    private bool HasAddress(string microservice, string mfeKey)
+    {
+        if (_mfeOrigins.TryGet(mfeKey, out _))
+            return true;
+        _logger.LogWarning(
+            "Menu: {Microservice} names MFE key {MfeKey}, which has no address in MfeOrigins - left out of the menu.",
+            microservice, mfeKey);
+        return false;
+    }
+
+    private string OriginOf(string mfeKey) => _mfeOrigins.TryGet(mfeKey, out var origin) ? origin : string.Empty;
 }

@@ -1,55 +1,14 @@
-/**
- * Every deployable part of EWP V3 and its readiness probe (ReadMe.txt sections 3 and 9a; the same
- * list as tst/playwright/support/services.ts). Probed server-side only: the screen never sees a URL.
- */
+import { readFileSync } from 'node:fs';
+
+export const componentGroups = ['Front ends', 'Identity', 'Domain APIs', 'Journey APIs', 'Workers', 'Simulators'] as const;
+export type ComponentGroup = (typeof componentGroups)[number];
+
+/** A deployable part of EWP and its readiness probe. Probed server-side only: the screen never sees a URL. */
 export interface PlatformComponent {
   name: string;
-  group: 'Front ends' | 'Identity' | 'Domain APIs' | 'Journey APIs' | 'Workers' | 'Simulators';
+  group: ComponentGroup;
   readiness: string;
 }
-
-export const components: PlatformComponent[] = [
-  { name: 'IDP', group: 'Identity', readiness: 'https://idp.dev.localhost:46392/health/ready' },
-
-  { name: 'Shell', group: 'Front ends', readiness: 'https://shell.dev.localhost:46367/health/ready' },
-  { name: 'Customer Onboarding BFF', group: 'Front ends', readiness: 'https://customer.dev.localhost:46311/health/ready' },
-  { name: 'Customer KYC BFF', group: 'Front ends', readiness: 'https://kyc.dev.localhost:33800/health/ready' },
-  { name: 'Compliance BFF', group: 'Front ends', readiness: 'https://compliance.dev.localhost:46399/health/ready' },
-  { name: 'Accounts BFF', group: 'Front ends', readiness: 'https://accounts.dev.localhost:45456/health/ready' },
-  { name: 'Payments BFF', group: 'Front ends', readiness: 'https://payments.dev.localhost:46388/health/ready' },
-  { name: 'Audit web', group: 'Front ends', readiness: 'https://audit.dev.localhost:46380/health/ready' },
-  { name: 'Operations web', group: 'Front ends', readiness: 'https://operations.dev.localhost:46381/health/ready' },
-  { name: 'Partner Products web', group: 'Front ends', readiness: 'https://ewp-partner.dev.localhost:46384/health/ready' },
-
-  { name: 'Customer Onboarding API', group: 'Domain APIs', readiness: 'https://customer-api.dev.localhost:46363/health/ready' },
-  { name: 'Customer KYC API', group: 'Domain APIs', readiness: 'https://kyc-api.dev.localhost:46305/health/ready' },
-  { name: 'Documents Management API', group: 'Domain APIs', readiness: 'https://documents-management-api.dev.localhost:49486/health/ready' },
-  { name: 'Compliance API', group: 'Domain APIs', readiness: 'https://compliance-api.dev.localhost:46306/health/ready' },
-  { name: 'Accounts API', group: 'Domain APIs', readiness: 'https://accounts-api.dev.localhost:48486/health/ready' },
-  { name: 'Payments API', group: 'Domain APIs', readiness: 'https://payments-api.dev.localhost:44488/health/ready' },
-  { name: 'Notifications API', group: 'Domain APIs', readiness: 'https://notifications-api.dev.localhost:46377/health/ready' },
-  { name: 'Audit API', group: 'Domain APIs', readiness: 'https://audit-api.dev.localhost:46378/health/ready' },
-  { name: 'Partner Products API', group: 'Domain APIs', readiness: 'https://partner-products-api.dev.localhost:46387/health/ready' },
-
-  { name: 'Audit Journey API', group: 'Journey APIs', readiness: 'https://audit-journey.dev.localhost:46379/health/ready' },
-  { name: 'Operations Journey API', group: 'Journey APIs', readiness: 'https://operations-journey.dev.localhost:46382/health/ready' },
-  { name: 'Partner Products Journey API', group: 'Journey APIs', readiness: 'https://partner-products-journey.dev.localhost:46385/health/ready' },
-
-  { name: 'CustomerOutboxPublisher', group: 'Workers', readiness: 'http://localhost:5101/health/ready' },
-  { name: 'KycCaseOpeningSubscriber', group: 'Workers', readiness: 'http://localhost:5102/health/ready' },
-  { name: 'OnboardingOutcomeSubscriber', group: 'Workers', readiness: 'http://localhost:5103/health/ready' },
-  { name: 'ComplianceCaseOpeningSubscriber', group: 'Workers', readiness: 'http://localhost:5104/health/ready' },
-  { name: 'DocumentInvalidationSubscriber', group: 'Workers', readiness: 'http://localhost:5105/health/ready' },
-  { name: 'AccountApplicationOpeningSubscriber', group: 'Workers', readiness: 'http://localhost:5106/health/ready' },
-  { name: 'NotificationsSubscriber', group: 'Workers', readiness: 'http://localhost:5107/health/ready' },
-  { name: 'AccountsCommandSubscriber', group: 'Workers', readiness: 'http://localhost:5108/health/ready' },
-  { name: 'PaymentsSagaReplySubscriber', group: 'Workers', readiness: 'http://localhost:5109/health/ready' },
-  { name: 'Partner Products Worker (Temporal)', group: 'Workers', readiness: 'https://localhost:46383/health/ready' },
-
-  { name: 'Screening Provider (simulator)', group: 'Simulators', readiness: 'https://localhost:46366/health' },
-  { name: 'Core Banking (simulator)', group: 'Simulators', readiness: 'https://localhost:46376/health' },
-  { name: 'Payment Network (simulator)', group: 'Simulators', readiness: 'https://localhost:46386/health' },
-];
 
 export const behaviours = ['Healthy', 'Slow', 'Failing', 'Down', 'Refusing', 'LosingAnswers'] as const;
 export type Behaviour = (typeof behaviours)[number];
@@ -60,11 +19,87 @@ const common: readonly Behaviour[] = ['Healthy', 'Slow', 'Failing', 'Down', 'Ref
  * The simulators whose behaviour can be switched (PUT /admin/behaviour, loopback callers only),
  * each with the behaviours it knows. LosingAnswers (the payment goes out, every answer is lost)
  * is the Payment Network's only: the case its status enquiry - reconciliation - exists for.
+ * Their addresses come from the platform map (below), like every other address.
  */
 export const simulators = [
-  { key: 'screening-provider', name: 'Screening Provider', baseUrl: 'https://localhost:46366', affects: 'Compliance screening', behaviours: common },
-  { key: 'core-banking', name: 'Core Banking', baseUrl: 'https://localhost:46376', affects: 'Account opening', behaviours: common },
-  { key: 'payment-network', name: 'Payment Network', baseUrl: 'https://localhost:46386', affects: 'Sending payments', behaviours: [...common, 'LosingAnswers'] as readonly Behaviour[] },
+  { key: 'screening-provider', name: 'Screening Provider', affects: 'Compliance screening', behaviours: common },
+  { key: 'core-banking', name: 'Core Banking', affects: 'Account opening', behaviours: common },
+  { key: 'payment-network', name: 'Payment Network', affects: 'Sending payments', behaviours: [...common, 'LosingAnswers'] as readonly Behaviour[] },
 ] as const;
 
 export type SimulatorKey = (typeof simulators)[number]['key'];
+
+/** What this deployment consists of: every component's readiness probe, and each simulator's address. */
+export interface PlatformMap {
+  components: PlatformComponent[];
+  simulatorBaseUrls: Record<SimulatorKey, string>;
+}
+
+// ┌─ :: ARCHITECTURE + SECURITY :: The platform map is deployment data ────────────────────────────
+// │ Why : Which components exist, and where, differs per environment (laptop: *.dev.localhost and
+// │       fixed ports; a cluster: service names). Compiled in, a deployed Platform Health would
+// │       probe laptop addresses and report everything down.
+// │ How : A JSON file named by OPERATIONS_JOURNEY_PLATFORM_FILE - development: the committed
+// │       config/platform.development.json (runnow.bat); a cluster: a mounted ConfigMap. Read once
+// │       at start-up and checked: known groups, unique names, absolute http(s) addresses without
+// │       credentials, and every simulator's address while the simulator switch is on. A missing
+// │       or malformed file stops the start-up - no silent empty dashboard.
+// │       The file is an operator's, not a user's: the addresses are probed server-side only and
+// │       never leave this API.
+// │ Ref : doc/Containers.md (run-time contract) | Features 1.7.4 | OWASP A05
+// └────────────────────────────────────────────────────────────────────────────────────────────────
+export function loadPlatformMap(variable: string, path: string, simulatorsRequired: boolean): PlatformMap {
+  const fail = (problem: string): never => {
+    throw new Error(`${variable} (${path}): ${problem}; the Operations Journey API refuses to start.`);
+  };
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(path, 'utf8'));
+  } catch (error) {
+    return fail(`cannot be read as JSON (${(error as Error).message})`);
+  }
+  const map = raw as { components?: unknown; simulators?: unknown };
+
+  if (!Array.isArray(map.components) || map.components.length === 0) fail('"components" must be a non-empty list');
+  const names = new Set<string>();
+  const components = (map.components as unknown[]).map((entry, index) => {
+    const c = entry as Partial<PlatformComponent>;
+    if (typeof c.name !== 'string' || c.name.trim().length === 0) fail(`component ${index + 1} has no name`);
+    if (names.has(c.name!)) fail(`component "${c.name}" is listed twice`);
+    names.add(c.name!);
+    if (!componentGroups.includes(c.group as ComponentGroup)) fail(`component "${c.name}" has an unknown group "${c.group}" (one of ${componentGroups.join(', ')})`);
+    return { name: c.name!, group: c.group as ComponentGroup, readiness: address(c.readiness, `component "${c.name}"`, fail) };
+  });
+
+  const configured = (map.simulators ?? {}) as Record<string, unknown>;
+  for (const key of Object.keys(configured)) {
+    if (!simulators.some((s) => s.key === key)) fail(`unknown simulator "${key}" (one of ${simulators.map((s) => s.key).join(', ')})`);
+  }
+  const simulatorBaseUrls = {} as Record<SimulatorKey, string>;
+  for (const simulator of simulators) {
+    const value = configured[simulator.key];
+    if (value === undefined) {
+      if (simulatorsRequired) fail(`simulator "${simulator.key}" has no address, and the simulator switch is on`);
+      continue;
+    }
+    simulatorBaseUrls[simulator.key] = address(value, `simulator "${simulator.key}"`, fail).replace(/\/$/, '');
+  }
+
+  return { components, simulatorBaseUrls };
+}
+
+/** An absolute http(s) address without credentials, query or fragment. */
+function address(value: unknown, what: string, fail: (problem: string) => never): string {
+  if (typeof value !== 'string') return fail(`${what} has no address`);
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return fail(`${what}: "${value}" is not an absolute address`);
+  }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+    return fail(`${what}: "${value}" must be http(s), without credentials, query or fragment`);
+  }
+  return value;
+}

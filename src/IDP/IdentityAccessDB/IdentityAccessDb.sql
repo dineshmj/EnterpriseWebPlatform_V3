@@ -915,6 +915,18 @@ CREATE TABLE identity_server.data_protection_keys (
     CONSTRAINT "PK_data_protection_keys" PRIMARY KEY (id)
 );
 
+-- One-time proofs already used (DPoP proofs, private_key_jwt client assertions), shared by every
+-- IDP instance (Security/DatabaseReplayCache.cs). Only a SHA-256 of the proof's jti is kept, until
+-- the proof expires.
+CREATE TABLE identity_server.replay_cache (
+    purpose TEXT NOT NULL,
+    handle_hash CHAR(64) NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    CONSTRAINT pk_replay_cache PRIMARY KEY (purpose, handle_hash)
+);
+
+CREATE INDEX ix_replay_cache_expires_at ON identity_server.replay_cache (expires_at);
+
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ewp_idp') THEN
