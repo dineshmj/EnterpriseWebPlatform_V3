@@ -5,6 +5,7 @@ import { createServer as createHttpServer } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import { readFileSync } from 'node:fs';
 import next from 'next';
+import pg from 'pg';
 import { forwardedHeaders } from './forwarded-headers.mjs';
 
 // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
@@ -36,17 +37,40 @@ const app = next({ dev });
 const handle = app.getRequestHandler();
 await app.prepare();
 
-// ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
+// ┌─ OBS + RESIL ────────────────────────────────────────────────────────────────────────
 // │ Probes for the orchestrator and Operations -> Platform Health, answered before Next.js:
-// │ anonymous, no session, nothing internal in the body. Ready = the app is prepared (the
-// │ server listens only after that); the session database is checked by the first sign-in.
+// │ anonymous, no session, nothing internal in the body - the same answers as the .NET
+// │ components and the KYC BFF. Live = the process answers (the server listens only once the
+// │ app is prepared). Ready = the session database answers too (SELECT 1 on a pool of its own,
+// │ one connection, 2 s): an instance that cannot keep a session gets no traffic, instead of
+// │ failing every sign-in.
 // └──────────────────────────────────────────────────────────────────────────────────────
-const probes = new Set(['/health/live', '/health/ready']);
+const databaseUrl = process.env.OPERATIONS_WEB_DATABASE_URL?.trim();
+if (!databaseUrl) throw new Error('OPERATIONS_WEB_DATABASE_URL is not set (see runnow.bat).');
+const probeDatabase = new pg.Pool({ connectionString: databaseUrl, max: 1, connectionTimeoutMillis: 2000, query_timeout: 2000 });
+// A dropped idle connection is not fatal: the next probe opens a new one.
+probeDatabase.on('error', () => {});
+const probeHeaders = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
+
+async function answerReadiness(res) {
+  try {
+    await probeDatabase.query('SELECT 1');
+    res.writeHead(200, probeHeaders);
+    res.end(JSON.stringify({ status: 'Healthy', checks: [{ name: 'session-database', status: 'Healthy' }] }));
+  } catch {
+    res.writeHead(503, probeHeaders);
+    res.end(JSON.stringify({ status: 'Unhealthy', checks: [{ name: 'session-database', status: 'Unhealthy', description: 'The session database is not reachable.' }] }));
+  }
+}
 
 const onRequest = (req, res) => {
-  if (req.method === 'GET' && probes.has(req.url)) {
-    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+  if (req.method === 'GET' && req.url === '/health/live') {
+    res.writeHead(200, probeHeaders);
     res.end('{"status":"Healthy"}');
+    return;
+  }
+  if (req.method === 'GET' && req.url === '/health/ready') {
+    void answerReadiness(res);
     return;
   }
   sanitizeForwardedHeaders(req);

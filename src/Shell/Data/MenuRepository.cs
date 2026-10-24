@@ -19,7 +19,7 @@ public sealed class MenuRepository : IMenuRepository
     private const string MenuSqlQuery = """
         SELECT
             ms.name              AS "Microservice",
-            ms.base_url          AS "BaseURL",
+            ms.mfe_key           AS "MfeKey",
             ma.name              AS "ManagementAreaName",
             mi.task_name         AS "TaskName",
             mi.url_relative_path AS "UrlRelativePath",

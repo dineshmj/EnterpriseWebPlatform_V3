@@ -1,3 +1,4 @@
+import { loadPlatformMap, type PlatformMap } from '../platform/components';
 import { listenerTls, type ListenerTls } from './listener-tls';
 
 /**
@@ -50,6 +51,9 @@ export interface JourneyOptions {
   accountsApiBaseUrl: string;
   complianceApiBaseUrl: string;
   partnerProductsApiBaseUrl: string;
+
+  /** What Platform Health probes, and where the simulators are: deployment data (components.ts). */
+  platform: PlatformMap;
 
   /** The listener's certificate; undefined = plain HTTP behind the platform's TLS (listener-tls.ts). */
   tls: ListenerTls | undefined;
@@ -152,6 +156,9 @@ export function loadOptions(): JourneyOptions {
     accountsApiBaseUrl: required('OPERATIONS_JOURNEY_ACCOUNTS_API').replace(/\/$/, ''),
     complianceApiBaseUrl: required('OPERATIONS_JOURNEY_COMPLIANCE_API').replace(/\/$/, ''),
     partnerProductsApiBaseUrl: required('OPERATIONS_JOURNEY_PARTNER_PRODUCTS_API').replace(/\/$/, ''),
+    // The simulators' addresses are required only while their switch is on.
+    platform: loadPlatformMap('OPERATIONS_JOURNEY_PLATFORM_FILE', required('OPERATIONS_JOURNEY_PLATFORM_FILE'),
+      flag('OPERATIONS_SIMULATOR_CONTROLS_ENABLED')),
     tls: listenerTls('OPERATIONS_JOURNEY', 'Operations Journey API'),
   };
   if (options.faultControlsEnabled) {

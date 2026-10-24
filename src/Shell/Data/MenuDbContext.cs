@@ -25,8 +25,8 @@ public sealed class MenuDbContext : DbContext
             entity.Property(e => e.Microservice)
                 .HasColumnName("Microservice");
 
-            entity.Property(e => e.BaseURL)
-                .HasColumnName("BaseURL");
+            entity.Property(e => e.MfeKey)
+                .HasColumnName("MfeKey");
 
             entity.Property(e => e.ManagementAreaName)
                 .HasColumnName("ManagementAreaName");

@@ -1,6 +1,6 @@
 import { Inject, Injectable, NotFoundException, OnModuleDestroy, ServiceUnavailableException } from '@nestjs/common';
 import { JOURNEY_OPTIONS, JourneyOptions } from '../configuration/journey-options';
-import { Behaviour, components, PlatformComponent, SimulatorKey, simulators } from './components';
+import { Behaviour, PlatformComponent, SimulatorKey, simulators } from './components';
 
 export type HealthStatus = 'Healthy' | 'Degraded' | 'Unhealthy' | 'Unreachable';
 
@@ -18,8 +18,10 @@ export interface ComponentHealth {
  */
 @Injectable()
 export class HealthProbeService {
+  constructor(@Inject(JOURNEY_OPTIONS) private readonly options: JourneyOptions) {}
+
   async probeAll(extra: PlatformComponent[] = []): Promise<{ checkedAt: string; components: ComponentHealth[] }> {
-    const results = await Promise.all([...components, ...extra].map(async (component) => {
+    const results = await Promise.all([...this.options.platform.components, ...extra].map(async (component) => {
       const started = Date.now();
       try {
         const response = await fetch(component.readiness, { signal: AbortSignal.timeout(3000), redirect: 'manual' });
@@ -89,7 +91,7 @@ export class SimulatorService implements OnModuleDestroy {
     return Promise.all(simulators.map(async (simulator) => {
       let behaviour: SimulatorState['behaviour'] = 'Unknown';
       try {
-        const response = await fetch(`${simulator.baseUrl}/admin/behaviour`, { signal: AbortSignal.timeout(3000) });
+        const response = await fetch(`${this.options.platform.simulatorBaseUrls[simulator.key]}/admin/behaviour`, { signal: AbortSignal.timeout(3000) });
         if (response.ok) behaviour = ((await response.json()) as { behaviour?: Behaviour }).behaviour ?? 'Unknown';
       } catch {
         behaviour = 'Unknown';
@@ -107,14 +109,14 @@ export class SimulatorService implements OnModuleDestroy {
     const simulator = simulators.find((s) => s.key === key);
     if (!simulator) throw new NotFoundException('Unknown simulator.');
 
-    await this.send(simulator.baseUrl, behaviour);
+    await this.send(this.options.platform.simulatorBaseUrls[simulator.key], behaviour);
     this.clearRevert(key);
 
     if (behaviour !== 'Healthy') {
       const at = new Date(Date.now() + this.options.simulatorAutoRevertMinutes * 60_000);
       const timer = setTimeout(() => {
         this.reverts.delete(key);
-        this.send(simulator.baseUrl, 'Healthy')
+        this.send(this.options.platform.simulatorBaseUrls[simulator.key], 'Healthy')
           .then(() => console.log(`SIMULATOR ${simulator.name} back to Healthy (automatic, after ${this.options.simulatorAutoRevertMinutes} min).`))
           .catch((error: Error) => console.error(`SIMULATOR ${simulator.name}: the automatic return to Healthy failed: ${error.message}`));
       }, at.getTime() - Date.now());

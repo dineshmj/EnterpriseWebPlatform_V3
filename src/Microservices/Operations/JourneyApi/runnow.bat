@@ -42,6 +42,9 @@ REM ports 47101-47111) so operations can cut them; elsewhere use each API's own 
 set "OPERATIONS_JOURNEY_ACCOUNTS_API=https://accounts-api.dev.localhost:47105"
 set "OPERATIONS_JOURNEY_COMPLIANCE_API=https://compliance-api.dev.localhost:47104"
 set "OPERATIONS_JOURNEY_PARTNER_PRODUCTS_API=https://partner-products-api.dev.localhost:47109"
+REM Platform Health's list (every component's readiness probe) and the simulators' addresses:
+REM deployment data. Development = the laptop's addresses; a cluster mounts its own file.
+set "OPERATIONS_JOURNEY_PLATFORM_FILE=%~dp0config\platform.development.json"
 
 REM DEVELOPMENT ONLY: the simulators' behaviour switch (never set outside Development / test).
 set "OPERATIONS_SIMULATOR_CONTROLS_ENABLED=true"

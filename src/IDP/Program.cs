@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 using Duende.IdentityServer.EntityFramework.Stores;
+using Duende.IdentityServer.Services;
 using Npgsql;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
@@ -91,11 +92,11 @@ try
         http.Timeout = TimeSpan.FromSeconds(10);
     });
 
-    // ┌─ SEC + DEBT ─────────────────────────────────────────────────────────────────────────
-    // │ DPoP proofs are accepted once (RFC 9449 jti replay check): Duende's replay cache
-    // │ lives in IDistributedCache - in memory for this single instance; production with
-    // │ several IDP instances needs a shared one (Redis), or a proof could be replayed at
-    // │ another instance within its minute (Threat-Model R-14).
+    // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+    // │ Duende's throttling services for flows EWP does not use (CIBA, device flow) take an
+    // │ IDistributedCache. The one-time-proof checks (DPoP, private_key_jwt) do NOT use it:
+    // │ their replay cache is in the database, shared by every instance (DatabaseReplayCache,
+    // │ registered after AddIdentityServer below).
     // └──────────────────────────────────────────────────────────────────────────────────────
     builder.Services.AddDistributedMemoryCache();
 
@@ -184,6 +185,13 @@ try
         // private_key_jwt (RFC 7523): clients that sign an assertion with their own key - no secret.
         .AddJwtBearerClientAuthentication()
         .AddSigningCredential(builder);
+
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ DPoP proofs and client assertions are accepted once across ALL IDP instances: the
+    // │ replay cache is in the database (replaces Duende's in-memory default - registered
+    // │ last, so it wins).
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    builder.Services.AddScoped<IReplayCache, DatabaseReplayCache>();
 
     // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
     // │ Health endpoints for the orchestrator's probes: /health/live (process working) and
