@@ -997,8 +997,12 @@ One script checks every .NET and npm dependency of the solution against publishe
 **Where to look at:**
 
 - [Scan-Dependencies.ps1](../ps/build/Scan-Dependencies.ps1)
+- CI gates on every pull request - build, unit tests, NuGet and pnpm vulnerability checks; `main`
+  only through pull requests with a green "CI result": [doc/CI.md](CI.md), [ci.yml](../.github/workflows/ci.yml)
+- Container images scanned (vulnerabilities and secrets) before publishing, with SBOM and SLSA
+  provenance attached: [doc/Containers.md](Containers.md)
 
-**Not yet:** wiring into a CI pipeline, SAST, secret scanning, SBOM and artifact signing.
+**Not yet:** SAST, and signing the images (they carry provenance attestations, not signatures).
 
 ---
 

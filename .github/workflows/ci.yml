@@ -1,0 +1,213 @@
+# ┌─ :: ARCHITECTURE + SECURITY :: CI gates - what every change to main must pass ─────────────────
+# │ Why : A change reaches main - and from there an image and an environment - only when it
+# │       builds, its tests pass and it brings in no known-vulnerable dependency. Checked by CI
+# │       from the commit itself, never "it worked on my machine".
+# │ How : .NET: restore -> vulnerable-package check (HIGH / CRITICAL fails) -> Release build of
+# │       the solution -> unit tests (tst/dotnet/EwpTests.slnx).
+# │       Node: every project under src with a package.json, from its committed lockfile ->
+# │       type check (Next.js route types generated first) -> pnpm audit of the production
+# │       dependencies (HIGH / CRITICAL fails) -> its tests, if it has any (Jest against the
+# │       real WireMock jar, pinned and checksum-verified).
+# │       "CI result" sums them up: it is the ONE check branch protection requires. No path
+# │       filter, so it reports on every commit (a required check that never runs would block).
+# │       Actions are pinned to commit SHAs; the job token can only read.
+# │ Ref : doc/CI.md | OWASP A06, A08 | SLSA Build L2
+# └────────────────────────────────────────────────────────────────────────────────────────────────
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# SEC: the jobs only read the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_SDK_VERSION: '10.0.402'
+  NODE_VERSION: '24.22.1'
+  PNPM_VERSION: '12.11.2'
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+  NEXT_TELEMETRY_DISABLED: '1'
+
+jobs:
+  dotnet:
+    name: .NET build, packages and unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
+
+      - name: Restore
+        run: dotnet restore EnterpriseWebPlatform.BSS.slnx
+
+      # ┌─ SEC ────────────────────────────────────────────────────────────────────────────────────
+      # │ Every NuGet package the solution deploys, transitive ones included, against the GitHub
+      # │ Advisory Database. HIGH or CRITICAL fails; lower ones are listed on the summary.
+      # │ (The test projects' packages are not deployed and are not gated.)
+      # └──────────────────────────────────────────────────────────────────────────────────────────
+      - name: Vulnerable packages
+        run: |
+          set -euo pipefail
+          dotnet list EnterpriseWebPlatform.BSS.slnx package --vulnerable --include-transitive --format json > vulnerable.json
+          jq -r '[.projects[] | .path as $p | .frameworks[]?
+                   | (.topLevelPackages[]?, .transitivePackages[]?)
+                   | select(.vulnerabilities) | .vulnerabilities[]? as $v
+                   | {package: (.id + " " + .resolvedVersion), severity: $v.severity, url: $v.advisoryurl}]
+                 | unique | .[] | "| \(.package) | \(.severity) | \(.url) |"' vulnerable.json > findings.md
+          {
+            echo "### .NET vulnerable packages: $(wc -l < findings.md)"
+            if [ -s findings.md ]; then
+              echo '| Package | Severity | Advisory |'
+              echo '| --- | --- | --- |'
+              cat findings.md
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat findings.md
+          if grep -q -E '\| (High|Critical) \|' findings.md; then
+            echo "::error::A HIGH or CRITICAL vulnerability in a NuGet package - see the summary."
+            exit 1
+          fi
+
+      - name: Build (Release)
+        run: dotnet build EnterpriseWebPlatform.BSS.slnx --configuration Release --no-restore
+
+      - name: Unit tests
+        run: dotnet test tst/dotnet/EwpTests.slnx --configuration Release --logger "console;verbosity=normal"
+
+  # ┌─ ARCH ─────────────────────────────────────────────────────────────────────────────────────────
+  # │ The Node projects are found, not listed: a new project under src is checked from its first
+  # │ commit. A project is a Next.js app when it has a next.config.*; it has tests when its
+  # │ package.json has a "test" script.
+  # └────────────────────────────────────────────────────────────────────────────────────────────────
+  node-projects:
+    name: Find the Node projects
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.find.outputs.matrix }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Find them
+        id: find
+        run: |
+          set -euo pipefail
+          matrix=$(git ls-files 'src/**/package.json' \
+            | while read -r file; do
+                dir=$(dirname "$file")
+                next=false; ls "$dir"/next.config.* >/dev/null 2>&1 && next=true
+                tests=$(jq -r 'if .scripts.test then "true" else "false" end' "$file")
+                jq -n -c --arg dir "$dir" --argjson next "$next" --argjson tests "$tests" '{dir: $dir, next: $next, tests: $tests}'
+              done | jq -s -c '{include: .}')
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Node projects: $(jq '.include | length' <<< "$matrix")"
+            jq -r '.include[] | "- " + .dir + (if .next then " (Next.js)" else "" end) + (if .tests then " (tests)" else "" end)' <<< "$matrix"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  node:
+    name: ${{ matrix.dir }}
+    needs: node-projects
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.node-projects.outputs.matrix) }}
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Set up pnpm
+        run: npm install --global "pnpm@${PNPM_VERSION}"
+
+      # SEC: exactly the committed lockfile (with its overrides and install-script rules);
+      # the job fails instead of resolving anything new.
+      - name: Install from the lockfile
+        run: pnpm install --frozen-lockfile
+
+      # The committed next-env.d.ts imports .next/types, which only a build or typegen writes.
+      - name: Generate Next.js route types
+        if: matrix.next
+        run: pnpm exec next typegen
+
+      - name: Type check
+        run: pnpm run type-check
+
+      # ┌─ SEC ────────────────────────────────────────────────────────────────────────────────────
+      # │ What is deployed: production dependencies only. Build tooling stays with the local
+      # │ routine (Scan-Dependencies.ps1 reports it as warnings).
+      # └──────────────────────────────────────────────────────────────────────────────────────────
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level high
+
+      # ┌─ SEC ────────────────────────────────────────────────────────────────────────────────────
+      # │ The pinned WireMock release (as ps/wiremock/Install-WireMock.ps1), kept only when its
+      # │ SHA-256 is the one recorded here - Maven Central's published value for 3.13.2.
+      # └──────────────────────────────────────────────────────────────────────────────────────────
+      - name: Get WireMock
+        if: matrix.tests
+        env:
+          WIREMOCK_VERSION: '3.13.2'
+          WIREMOCK_SHA256: 'd097b19bd483c5038479b13a5c71e9faf8f2f5106584f0c120a7770ab0bdb367'
+        run: |
+          set -euo pipefail
+          jar="$RUNNER_TEMP/wiremock-standalone-$WIREMOCK_VERSION.jar"
+          curl -fsSL -o "$jar" "https://repo1.maven.org/maven2/org/wiremock/wiremock-standalone/$WIREMOCK_VERSION/wiremock-standalone-$WIREMOCK_VERSION.jar"
+          echo "$WIREMOCK_SHA256  $jar" | sha256sum --check --strict
+          echo "WIREMOCK_JAR=$jar" >> "$GITHUB_ENV"
+
+      - name: Tests
+        if: matrix.tests
+        run: pnpm test
+
+  # ┌─ ARCH ─────────────────────────────────────────────────────────────────────────────────────────
+  # │ The single required check: green only when every job above succeeded. Runs even when one
+  # │ failed or was skipped, so branch protection always gets an answer.
+  # └────────────────────────────────────────────────────────────────────────────────────────────────
+  result:
+    name: CI result
+    needs: [dotnet, node-projects, node]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: All gates passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: $RESULTS"
+          for result in $RESULTS; do
+            if [ "$result" != "success" ]; then
+              echo "::error::A CI gate did not pass ($RESULTS)."
+              exit 1
+            fi
+          done
