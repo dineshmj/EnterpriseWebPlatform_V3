@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { config } from '@/lib/server/config';
 import { deleteSessionsOf } from '@/lib/server/session-store';
+import { withDatabaseOutageAnswer } from '@/lib/server/outage';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +13,7 @@ let jwks: ReturnType<typeof createRemoteJWKSet> | undefined;
  * issued by the IDP for this client, carry the back-channel logout event and no nonce; then
  * every session of that IDP session (sid) - or of that person (sub) - ends.
  */
-export async function POST(request: NextRequest) {
+async function handlePost(request: NextRequest) {
   const form = await request.formData();
   const logoutToken = form.get('logout_token');
   if (typeof logoutToken !== 'string') return new NextResponse(null, { status: 400 });
@@ -37,3 +38,6 @@ export async function POST(request: NextRequest) {
     return new NextResponse(null, { status: 400 });
   }
 }
+
+// RESIL: database unreachable -> 503 + Retry-After instead of an error page (outage.ts).
+export const POST = withDatabaseOutageAnswer(handlePost);

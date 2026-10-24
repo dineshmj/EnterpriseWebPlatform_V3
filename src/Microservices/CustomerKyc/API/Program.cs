@@ -10,6 +10,7 @@ using OpenTelemetry.Trace;
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
+using EnterpriseWebPlatform.Common.WebUtilities.Resilience;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.CustomerKyc.Api.Application.Abstractions;
 using EnterpriseWebPlatform.CustomerKyc.Api.Application.Commands.AssignKycCase;
@@ -48,7 +49,7 @@ builder.Services.AddControllers();
 
 var connectionString = builder.Configuration.GetConnectionString("KycDbConnection")
     ?? throw new InvalidOperationException("Connection string 'KycDbConnection' was not configured.");
-builder.Services.AddDbContext<KycDbContext>(o => o.UseNpgsql(connectionString));
+builder.Services.AddDbContext<KycDbContext>(o => o.UseNpgsql(DatabaseOutage.FailFast(connectionString)));
 
 var authority = builder.Configuration["Authentication:Authority"]
     ?? throw new InvalidOperationException("Authentication:Authority was not configured.");
@@ -198,6 +199,11 @@ app.UseEwpRequestLogging();
 // │ exception text reaches the caller; the details are logged under the same traceId.
 // └──────────────────────────────────────────────────────────────────────────────────────
 app.UseExceptionHandler();
+// ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+// │ Database unreachable: 503 + Retry-After at once - a page that retries itself, or
+// │ Problem Details for a call - instead of a white frame (Common.WebUtilities/Resilience).
+// └──────────────────────────────────────────────────────────────────────────────────────
+app.UseEwpDatabaseOutageAnswer();
 if (!app.Environment.IsDevelopment())
     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
     // │ HSTS outside Development only: browsers then refuse plain HTTP for this host (in

@@ -3,6 +3,7 @@ import { AUTH_STATE_COOKIE } from '@/lib/server/config';
 import { authorizationRequest } from '@/lib/server/oidc';
 import { STEP_UP_DONE_PATH } from '@/lib/server/return-url';
 import { encrypt } from '@/lib/server/session-store';
+import { withDatabaseOutageAnswer } from '@/lib/server/outage';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +19,7 @@ export const dynamic = 'force-dynamic';
  * window when the page runs outside the Shell. The IDP asks only for a fresh authenticator code, and
  * the new session's tokens carry a new auth_time - which the token exchange keeps for the Journey API.
  */
-export async function GET(request: NextRequest) {
+async function handleGet(request: NextRequest) {
   const done = request.nextUrl.searchParams.get('in') === 'shell' ? `${STEP_UP_DONE_PATH}?in=shell` : STEP_UP_DONE_PATH;
   const { url, pending } = await authorizationRequest(done, false, true);
   const response = NextResponse.redirect(url);
@@ -27,3 +28,6 @@ export async function GET(request: NextRequest) {
   });
   return response;
 }
+
+// RESIL: database unreachable -> 503 + Retry-After instead of an error page (outage.ts).
+export const GET = withDatabaseOutageAnswer(handleGet);

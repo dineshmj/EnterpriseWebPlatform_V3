@@ -11,6 +11,7 @@ using OpenTelemetry.Trace;
 
 using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
+using EnterpriseWebPlatform.Common.WebUtilities.Resilience;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.CustomerOnboarding.API.Authorization;
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Persistence;
@@ -93,7 +94,7 @@ var connectionString =
         "Connection string 'CustomerDbConnection' was not configured.");
 
 builder.Services.AddDbContext<CustomerDbContext>(options =>
-    options.UseNpgsql(connectionString));
+    options.UseNpgsql(DatabaseOutage.FailFast(connectionString)));
 
 builder.Services.AddCustomerOnboardingPersistence();
 builder.Services.AddCustomerOnboardingApplication();
@@ -285,6 +286,11 @@ else
 // │ exception text reaches the caller; the details are logged under the same traceId.
 // └──────────────────────────────────────────────────────────────────────────────────────
 app.UseExceptionHandler();
+// ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+// │ Database unreachable: 503 + Retry-After at once - a page that retries itself, or
+// │ Problem Details for a call - instead of a white frame (Common.WebUtilities/Resilience).
+// └──────────────────────────────────────────────────────────────────────────────────────
+app.UseEwpDatabaseOutageAnswer();
 
 app.UseHttpsRedirection();
 app.UseAuthentication();

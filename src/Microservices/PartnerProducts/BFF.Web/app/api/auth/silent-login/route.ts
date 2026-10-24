@@ -3,6 +3,7 @@ import { AUTH_STATE_COOKIE, config, SESSION_COOKIE } from '@/lib/server/config';
 import { authorizationRequest } from '@/lib/server/oidc';
 import { safeReturnUrl } from '@/lib/server/return-url';
 import { encrypt, readSession } from '@/lib/server/session-store';
+import { withDatabaseOutageAnswer } from '@/lib/server/outage';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +12,7 @@ export const dynamic = 'force-dynamic';
  * session goes straight to the page; otherwise a silent sign-in (prompt=none) against the IDP's
  * SSO session. The return URL is allow-listed.
  */
-export async function GET(request: NextRequest) {
+async function handleGet(request: NextRequest) {
   const returnUrl = safeReturnUrl(request.nextUrl.searchParams.get('returnUrl'));
 
   if (await readSession(request.cookies.get(SESSION_COOKIE)?.value)) {
@@ -25,3 +26,6 @@ export async function GET(request: NextRequest) {
   });
   return response;
 }
+
+// RESIL: database unreachable -> 503 + Retry-After instead of an error page (outage.ts).
+export const GET = withDatabaseOutageAnswer(handleGet);

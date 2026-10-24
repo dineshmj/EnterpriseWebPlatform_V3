@@ -7,7 +7,12 @@ export interface AuthState {
   isAuthenticated: boolean;
   user: BffUser[] | null;
   isLoading: boolean;
+  /** The BFF answered 503 (e.g. its database is unreachable): not "signed out" - wait and ask again. */
+  isUnavailable?: boolean;
 }
+
+/** Seconds before asking again after a 503 (the BFF's Retry-After). */
+export const UNAVAILABLE_RETRY_SECONDS = 15;
 
 /*
  * Check if user is authenticated by calling BFF user endpoint
@@ -24,6 +29,14 @@ export async function checkAuthentication(): Promise<AuthState> {
         'X-CSRF': '1',
       },
     });
+
+    // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+    // │ 503 = the BFF cannot reach its session database: the person is NOT signed out, so no
+    // │ redirect to sign-in (which would only meet the same outage at the IDP).
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    if (response.status === 503) {
+      return { isAuthenticated: false, user: null, isLoading: false, isUnavailable: true };
+    }
 
     if (response.ok) {
       const claims = await response.json();

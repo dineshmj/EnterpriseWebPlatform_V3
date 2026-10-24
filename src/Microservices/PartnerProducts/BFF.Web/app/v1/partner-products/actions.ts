@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { config, SESSION_COOKIE } from '@/lib/server/config';
 import { exchangeForJourneyApi, freshAccessToken } from '@/lib/server/oidc';
 import { readSession, updateSession } from '@/lib/server/session-store';
+import { isDatabaseUnavailable, OUTAGE_MESSAGE } from '@/lib/server/outage';
 import type { ActionResult, CustomerAtCounter, CustomerMatch, GoldApplication, GoldPurchase, PurchaseProgress } from '@/lib/partner-products-types';
 
 /*
@@ -115,7 +116,14 @@ async function callJourney<T>(
 ): Promise<ActionResult<T>> {
   const cookieStore = await cookies();
   const cookieValue = cookieStore.get(SESSION_COOKIE)?.value;
-  const session = await readSession(cookieValue, { slide });
+  // RESIL: database unreachable -> the usual error on the screen, not a sign-out (outage.ts).
+  let session: Awaited<ReturnType<typeof readSession>>;
+  try {
+    session = await readSession(cookieValue, { slide });
+  } catch (error) {
+    if (isDatabaseUnavailable(error)) return { ok: false, error: OUTAGE_MESSAGE };
+    throw error;
+  }
   if (!session || !cookieValue) return { ok: false, signedOut: true, error: 'Your session has ended.' };
 
   let journeyToken: string;
@@ -124,7 +132,8 @@ async function callJourney<T>(
     if (refreshed) await updateSession(cookieValue, refreshed);
     // The person's token -> a delegated token for the Journey API (act = this BFF).
     journeyToken = await exchangeForJourneyApi(token, scope);
-  } catch {
+  } catch (error) {
+    if (isDatabaseUnavailable(error)) return { ok: false, error: OUTAGE_MESSAGE };
     return { ok: false, signedOut: true, error: 'Your sign-in could not be renewed.' };
   }
 

@@ -12,6 +12,7 @@ using Serilog;
 
 using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
+using EnterpriseWebPlatform.Common.WebUtilities.Resilience;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.IdentityServer.Customers;
 using EnterpriseWebPlatform.IdentityServer.Data;
@@ -47,7 +48,7 @@ try
     // PostgreSQL database for identity and authorization data.
     var identityDb = builder.Configuration.GetConnectionString("IdentityDbConnection")
         ?? throw new InvalidOperationException("Connection string 'IdentityDbConnection' was not configured.");
-    builder.Services.AddDbContext<IdentityDbContext>(options => options.UseNpgsql(identityDb));
+    builder.Services.AddDbContext<IdentityDbContext>(options => options.UseNpgsql(DatabaseOutage.FailFast(identityDb)));
 
     // The IDP's Data Protection keys (its cookies, and the encrypted columns of the operational
     // store below) live in EwpIdentityAccessDb, schema identity_server, encrypted at rest:
@@ -168,7 +169,7 @@ try
         // └──────────────────────────────────────────────────────────────────────────────────────
         .AddOperationalStore(options =>
         {
-            options.ConfigureDbContext = db => db.UseNpgsql(identityDb);
+            options.ConfigureDbContext = db => db.UseNpgsql(DatabaseOutage.FailFast(identityDb));
             options.DefaultSchema = "identity_server";
             options.EnableTokenCleanup = true;
             options.TokenCleanupInterval = 3600;
@@ -222,6 +223,12 @@ try
         app.UseExceptionHandler("/Error");
         app.UseHsts();
     }
+
+    // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+    // │ Database unreachable: 503 + Retry-After at once - a page that retries itself, or
+    // │ Problem Details for a call - instead of a white frame (Common.WebUtilities/Resilience).
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    app.UseEwpDatabaseOutageAnswer();
 
     app.UseHttpsRedirection();
     app.UseStaticFiles();

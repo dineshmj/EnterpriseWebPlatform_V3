@@ -11,6 +11,7 @@ using OpenTelemetry.Trace;
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
+using EnterpriseWebPlatform.Common.WebUtilities.Resilience;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.Payments.Api.Application.Abstractions;
 using EnterpriseWebPlatform.Payments.Api.Application.Commands;
@@ -51,7 +52,7 @@ builder.Services.AddControllers();
 
 var connectionString = builder.Configuration.GetConnectionString("PaymentsDbConnection")
     ?? throw new InvalidOperationException("Connection string 'PaymentsDbConnection' was not configured.");
-builder.Services.AddDbContext<PaymentsDbContext>(o => o.UseNpgsql(connectionString));
+builder.Services.AddDbContext<PaymentsDbContext>(o => o.UseNpgsql(DatabaseOutage.FailFast(connectionString)));
 
 // ---------------------------------------------------------------- Authentication
 var authority = builder.Configuration["Authentication:Authority"]
@@ -309,6 +310,11 @@ app.UseEwpRequestLogging();
 // │ exception text reaches the caller; the details are logged under the same traceId.
 // └──────────────────────────────────────────────────────────────────────────────────────
 app.UseExceptionHandler();
+// ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+// │ Database unreachable: 503 + Retry-After at once - a page that retries itself, or
+// │ Problem Details for a call - instead of a white frame (Common.WebUtilities/Resilience).
+// └──────────────────────────────────────────────────────────────────────────────────────
+app.UseEwpDatabaseOutageAnswer();
 if (!app.Environment.IsDevelopment())
     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
     // │ HSTS outside Development only: browsers then refuse plain HTTP for this host (in

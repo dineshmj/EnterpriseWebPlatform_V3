@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { AUTH_STATE_COOKIE, config, SESSION_COOKIE, SESSION_IDLE_MINUTES } from '@/lib/server/config';
 import { oidcClient, PendingSignIn, toSession } from '@/lib/server/oidc';
 import { createSession, decrypt, removeExpiredSessions } from '@/lib/server/session-store';
+import { withDatabaseOutageAnswer } from '@/lib/server/outage';
 
 export const dynamic = 'force-dynamic';
 
 /** The IDP's answer: validates state, nonce and PKCE (openid-client), then starts the session. */
-export async function GET(request: NextRequest) {
+async function handleGet(request: NextRequest) {
   const sealed = request.cookies.get(AUTH_STATE_COOKIE)?.value;
   let pending: PendingSignIn;
   try {
@@ -50,3 +51,6 @@ function signedOut(message: string) {
   response.cookies.delete(AUTH_STATE_COOKIE);
   return response;
 }
+
+// RESIL: database unreachable -> 503 + Retry-After instead of an error page (outage.ts).
+export const GET = withDatabaseOutageAnswer(handleGet);

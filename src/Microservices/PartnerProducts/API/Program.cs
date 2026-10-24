@@ -9,6 +9,7 @@ using OpenTelemetry.Trace;
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
+using EnterpriseWebPlatform.Common.WebUtilities.Resilience;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.PartnerProducts.Api.Authorization;
 using EnterpriseWebPlatform.PartnerProducts.Api.Controllers;
@@ -48,7 +49,7 @@ var connectionString = builder.Configuration.GetConnectionString("PartnerProduct
     ?? throw new InvalidOperationException("Connection string 'PartnerProductsDbConnection' was not configured.");
 // The DbContext writes each change's events to the Outbox; who acted comes from the request's token.
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddDbContext<PartnerProductsDbContext>(o => o.UseNpgsql(connectionString));
+builder.Services.AddDbContext<PartnerProductsDbContext>(o => o.UseNpgsql(DatabaseOutage.FailFast(connectionString)));
 
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddControllers();
@@ -198,6 +199,11 @@ app.UseEwpRequestLogging();
 // │ exception text reaches the caller; the details are logged under the same traceId.
 // └──────────────────────────────────────────────────────────────────────────────────────
 app.UseExceptionHandler();
+// ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+// │ Database unreachable: 503 + Retry-After at once - a page that retries itself, or
+// │ Problem Details for a call - instead of a white frame (Common.WebUtilities/Resilience).
+// └──────────────────────────────────────────────────────────────────────────────────────
+app.UseEwpDatabaseOutageAnswer();
 if (!app.Environment.IsDevelopment())
     app.UseHsts();
 app.UseHttpsRedirection();

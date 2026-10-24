@@ -11,6 +11,7 @@ using OpenTelemetry.Trace;
 
 using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
+using EnterpriseWebPlatform.Common.WebUtilities.Resilience;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.DocumentsManagement.API.Authorization;
 using EnterpriseWebPlatform.DocumentsManagement.Application.Abstractions.Storage;
@@ -86,7 +87,7 @@ var connectionString =
         "Connection string 'DocumentsManagementDbConnection' was not configured.");
 
 builder.Services.AddDbContext<DocumentsManagementDbContext>(options =>
-    options.UseNpgsql(connectionString));
+    options.UseNpgsql(DatabaseOutage.FailFast(connectionString)));
 
 builder.Services.AddDocumentsManagementPersistence();
 builder.Services.AddDocumentsManagementApplication();
@@ -237,6 +238,11 @@ else
 // │ exception text reaches the caller; the details are logged under the same traceId.
 // └──────────────────────────────────────────────────────────────────────────────────────
 app.UseExceptionHandler();
+// ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+// │ Database unreachable: 503 + Retry-After at once - a page that retries itself, or
+// │ Problem Details for a call - instead of a white frame (Common.WebUtilities/Resilience).
+// └──────────────────────────────────────────────────────────────────────────────────────
+app.UseEwpDatabaseOutageAnswer();
 
 app.UseHttpsRedirection();
 app.UseAuthentication();

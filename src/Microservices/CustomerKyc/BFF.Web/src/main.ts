@@ -11,6 +11,7 @@ import { sessionStore } from './auth/session-store';
 import { EwpLogger, requestLogging } from './observability/logger';
 import { healthStatus, metricsEndpoint, requestMetrics } from './observability/metrics';
 import { traceMiddleware } from './observability/trace-context';
+import { answerDatabaseOutage } from './resilience/database-outage';
 
 // ┌─ :: ARCHITECTURE + SECURITY :: KYC BFF (NestJS): Backend-for-Frontend ─────────────────────────
 // │ Why : The officer's browser must never hold a token, and the BFF must be as hardened as the
@@ -182,6 +183,11 @@ async function bootstrap() {
       },
     })
   );
+  // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+  // │ Right after the session: a session store that cannot reach the database is answered
+  // │ with 503 + Retry-After, not Express's bare 500 page (database-outage.ts).
+  // └──────────────────────────────────────────────────────────────────────────────────────
+  app.use(answerDatabaseOutage(logger));
 
   app.useGlobalPipes(
     new ValidationPipe({
