@@ -119,7 +119,9 @@ jobs:
           fi
           if [ -z "$started" ]; then
             started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            az group update --name "$group" --set "tags.ewp-demo-started=$started" "tags.ewp-demo-region=$TF_VAR_location" --output none
+            # NOTE: the tags API (Merge keeps the other tags), as Demo down removes them.
+            az tag update --resource-id "$(az group show --name "$group" --query id -o tsv)" --operation Merge \
+              --tags "ewp-demo-started=$started" "ewp-demo-region=$TF_VAR_location" --output none
           fi
           echo "TF_VAR_started_at=$started" >> "$GITHUB_ENV"
           echo "Demo started $started in $TF_VAR_location (the watchdog removes it 6 hours later)."
@@ -138,6 +140,19 @@ jobs:
 
       - name: terraform apply
         run: terraform apply -auto-approve
+
+      # ┌─ RESIL ────────────────────────────────────────────────────────────────────────────────
+      # │ The Azure CLI keeps the GitHub OIDC token it signed in with, and Entra ID accepts that
+      # │ assertion for 5 minutes only. Terraform fetches a fresh one itself; the CLI does not.
+      # │ After a 15-20 minute apply every new token (kubelogin's for AKS) failed with
+      # │ AADSTS700024 (first run, 25-OCT-2026). Signing in again here gives it a fresh one.
+      # └────────────────────────────────────────────────────────────────────────────────────────
+      - name: Sign in to Azure again (fresh token after the long apply)
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Read Terraform's outputs
         run: |

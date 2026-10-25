@@ -99,6 +99,15 @@ jobs:
       - name: terraform destroy
         run: terraform destroy -auto-approve
 
+      # RESIL: the CLI's 5-minute GitHub token has expired by now (demo-up.yml, same step).
+      - name: Sign in to Azure again (fresh token after the long destroy)
+        if: always()
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
       # ┌─ SEC ──────────────────────────────────────────────────────────────────────────────────
       # │ Trust, but verify: Terraform removes only what its state lists. Whatever is left is
       # │ deleted here (a few passes: some resources need others gone first), and the run fails
@@ -131,10 +140,19 @@ jobs:
           if [ "$left" -eq 1 ]; then echo "::error::Cleaned up, but Terraform should have removed these (see above)."; exit 1; fi
           echo "$group is empty; no demo records in the zones."
 
+      # NOTE: "az group update --remove tags.x" fails on current Azure CLI versions
+      # ("properties_to_remove", first run 25-OCT-2026). The tags API deletes by key and value.
       - name: Remove the start stamp
         run: |
-          az group update --name "$TF_VAR_demo_resource_group" --remove tags.ewp-demo-started --output none
-          az group update --name "$TF_VAR_demo_resource_group" --remove tags.ewp-demo-region --output none
+          group="$TF_VAR_demo_resource_group"
+          group_id="$(az group show --name "$group" --query id -o tsv)"
+          for key in ewp-demo-started ewp-demo-region; do
+            value="$(az group show --name "$group" --query "tags.\"$key\"" -o tsv)"
+            if [ -n "$value" ]; then
+              az tag update --resource-id "$group_id" --operation Delete --tags "$key=$value" --output none
+              echo "removed tag $key"
+            fi
+          done
 
       - name: Summary
         if: always()
