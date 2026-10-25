@@ -299,6 +299,15 @@ switch ($Phase) {
         'super.users'                          = 'User:admin;User:ANONYMOUS'
         # Topics are created explicitly; a mistyped name must fail, not create a topic.
         'auto.create.topics.enable'            = 'false'
+        # ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+        # │ DEVELOPMENT (Windows): the log cleaner (compaction of __consumer_offsets) renames
+        # │ segment files that are still open; Windows refuses, Kafka marks the whole log folder
+        # │ as failed and SHUTS THE BROKER DOWN - again at every start, because the half-done
+        # │ .cleaned / .swap files stay (KAFKA-1194). Off here: offsets are not compacted, which a
+        # │ development broker does not need (Reset level 7 wipes the logs). Deprecated in Kafka 4
+        # │ (always on from 5.0) - a Kafka 5 upgrade on Windows needs another answer (WSL / Docker).
+        # └──────────────────────────────────────────────────────────────────────────────────────
+        'log.cleaner.enable'                   = 'false'
     }
     foreach ($key in $settings.Keys) { $lines = Set-Property $lines $key $settings[$key] }
     # The SASL_PLAINTEXT listener's login from an earlier -Phase Secure is no longer used.
