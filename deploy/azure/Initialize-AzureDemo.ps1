@@ -1,7 +1,8 @@
 ﻿<#
 .SYNOPSIS
-    Prepares an Azure subscription for EWP's cloud demo (step 5): the two resource groups, the
-    Terraform state store, the GitHub Actions identity (OIDC, no secret) and a budget alert.
+    Prepares an Azure subscription for EWP's cloud demo (steps 5 and 6): the two resource groups,
+    the Terraform state store, the GitHub Actions identity (OIDC, no secret), the two domains' DNS
+    zones and a budget alert.
 
 .DESCRIPTION
     Run ONCE by a person who is Owner of the subscription (or Contributor + Role Based Access
@@ -24,6 +25,10 @@
             id-ewp-github-demo  User-assigned managed identity that GitHub Actions signs in as.
                                 One federated credential: only workflow jobs of
                                 <repository> running in the GitHub environment <environment>.
+            <EWP domain>        Public DNS zones of the two domains (-EwpDomain, -PartnerBankDomain).
+            <Partner domain>    Apex CAA record (only Let's Encrypt may issue certificates) and a
+                                CanNotDelete lock on the SOA record set (the zone cannot be deleted;
+                                its records can). A re-created zone gets NEW name servers.
         rg-ewp-demo         THROW-AWAY. Always exists; a demo fills it, the teardown empties it.
 
     What the identity may do (and nothing else - no rights on the subscription):
@@ -31,6 +36,8 @@
         rg-ewp-demo         Contributor; Role Based Access Control Administrator limited by a
                             condition to a short list of roles, given to managed identities only
         tfstate container   Storage Blob Data Contributor (read and write the state blobs)
+        each DNS zone       Custom role "EWP Demo DNS Record Writer": A and CNAME records only
+                            (no NS, CAA or SOA records, no zone settings, no zone delete)
 
     Also: registers the resource providers the demo uses (the identity cannot: that is a
     subscription right), and a monthly budget on the subscription that e-mails at 50, 80 and 100%
@@ -47,6 +54,15 @@
 .PARAMETER BudgetAmount
     Monthly budget in the BILLING CURRENCY of the subscription (INR for an Indian account: 420
     means Rs 420, not USD 420). Required, so the amount is always a conscious choice.
+
+.PARAMETER EwpDomain
+    EWP's registered domain (e.g. ewp-demo.example), lower case, without a trailing dot. The
+    browser reaches EWP at <host>.<EwpDomain>. Give it together with -PartnerBankDomain, on every
+    run: without them the DNS step is skipped (existing zones are kept, never deleted).
+
+.PARAMETER PartnerBankDomain
+    The Partner Bank's registered domain, a DIFFERENT registrable domain from -EwpDomain (two
+    organisations, so two sites to the browser).
 
 .PARAMETER Location
     Azure region of the resource groups and the state store. Default australiaeast.
@@ -68,11 +84,16 @@
     Name of the state storage account, if the generated one is taken (3-24 lower-case letters and digits).
 
 .PARAMETER Remove
-    Undo everything above: budget, role assignments, lock, both resource groups (the Terraform
-    state goes with them). Asks first. Providers stay registered (free).
+    Undo everything above: budget, role assignments, the custom DNS role, locks, both resource
+    groups (the Terraform state and the DNS zones go with them). Asks first. Providers stay
+    registered (free).
 
 .EXAMPLE
     .\deploy\azure\Initialize-AzureDemo.ps1 -AlertEmail you@example.com -BudgetAmount 420
+
+.EXAMPLE
+    .\deploy\azure\Initialize-AzureDemo.ps1 -AlertEmail you@example.com -BudgetAmount 420 `
+        -EwpDomain ewp-demo.example -PartnerBankDomain partnerbank-demo.example
 
 .EXAMPLE
     .\deploy\azure\Initialize-AzureDemo.ps1 -Remove
@@ -88,6 +109,14 @@ param(
     [Parameter(Mandatory, ParameterSetName = 'Create')]
     [ValidateRange(1, 10000000)]
     [int]$BudgetAmount,
+
+    [Parameter(ParameterSetName = 'Create')]
+    [ValidatePattern('^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')]
+    [string]$EwpDomain,
+
+    [Parameter(ParameterSetName = 'Create')]
+    [ValidatePattern('^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')]
+    [string]$PartnerBankDomain,
 
     [string]$Location = 'australiaeast',
 
@@ -120,6 +149,19 @@ $stateContainerName = 'tfstate'
 $budgetName = 'ewp-demo-monthly'
 $federatedCredentialName = 'github-' + $GitHubEnvironment
 $stateLockName = 'ewp-keep-terraform-state'
+$dnsRoleName = 'EWP Demo DNS Record Writer'
+$dnsLockName = 'ewp-keep-dns-zone'
+$certificateAuthority = 'letsencrypt.org'     # step 7: cert-manager + Let's Encrypt
+
+# NOTE: ValidatePattern ignores case; DNS does too, but the comparisons below and the zone names
+# do not. Only a given value is re-assigned: the pattern stays on the variable and refuses "".
+if ($EwpDomain) { $EwpDomain = $EwpDomain.ToLowerInvariant() }
+if ($PartnerBankDomain) { $PartnerBankDomain = $PartnerBankDomain.ToLowerInvariant() }
+if ([bool]$EwpDomain -ne [bool]$PartnerBankDomain) { throw 'Give -EwpDomain and -PartnerBankDomain together (or neither).' }
+if ($EwpDomain -and ($EwpDomain -eq $PartnerBankDomain -or $EwpDomain.EndsWith(".$PartnerBankDomain") -or $PartnerBankDomain.EndsWith(".$EwpDomain"))) {
+    # NOTE: a sub-domain of the other would be the same site to the browser (decision A8).
+    throw '-EwpDomain and -PartnerBankDomain must be two different registrable domains, neither inside the other.'
+}
 
 # ┌─ :: SECURITY :: The roles the demo identity may hand out ────────────────────────────────────
 # │ Why : Terraform must create a few role assignments (the cluster's identity on its subnet, the
@@ -192,8 +234,10 @@ function Get-RoleDefinitionId([string]$RoleName) {
     return $id
 }
 
-function Set-RoleAssignment([string]$PrincipalId, [string]$RoleName, [string]$Scope, [string]$Condition) {
-    $roleId = Get-RoleDefinitionId $RoleName
+function Set-RoleAssignment([string]$PrincipalId, [string]$RoleName, [string]$Scope, [string]$Condition, [string]$RoleId) {
+    # NOTE: a custom role assignable only below the subscription is not found by name there; its
+    # caller passes the id.
+    $roleId = if ($RoleId) { $RoleId } else { Get-RoleDefinitionId $RoleName }
     $existing = @(Invoke-Az role assignment list --scope $Scope --fill-principal-name false) |
         Where-Object { $_.principalId -eq $PrincipalId -and $_.scope -eq $Scope -and $_.roleDefinitionId -like "*/$roleId" }
 
@@ -218,12 +262,12 @@ function Set-RoleAssignment([string]$PrincipalId, [string]$RoleName, [string]$Sc
         $arguments += @('--condition', "@$conditionFile", '--condition-version', '2.0')
     }
     try {
-        # RESIL: a new managed identity can take a minute to reach every Entra replica.
+        # RESIL: a new managed identity (or a new custom role) can take a minute to reach every replica.
         for ($attempt = 1; ; $attempt++) {
             try { Invoke-Az @arguments | Out-Null; break }
             catch {
                 if ($attempt -ge 6) { throw }
-                Write-Host "  waiting for the identity to replicate ($attempt/5)..."
+                Write-Host "  waiting for the identity or role to replicate ($attempt/5)..."
                 Start-Sleep -Seconds 15
             }
         }
@@ -263,8 +307,9 @@ $budgetUrl = "https://management.azure.com$subscriptionScope/providers/Microsoft
 
 # ── Remove ─────────────────────────────────────────────────────────────────────────────────────
 if ($Remove) {
-    $target = "budget $budgetName, resource groups $FoundationResourceGroup (Terraform state, identity) and $DemoResourceGroup with everything in them"
+    $target = "budget $budgetName, role '$dnsRoleName', resource groups $FoundationResourceGroup (Terraform state, identity, DNS zones - re-created zones get NEW name servers) and $DemoResourceGroup with everything in them"
     if (-not $PSCmdlet.ShouldProcess($target, 'Delete')) { return }
+    $foundationGroupScope = "$subscriptionScope/resourceGroups/$FoundationResourceGroup"
 
     Write-Step 'Budget'
     if (Get-AzOrNull rest --method get --url $budgetUrl) { Invoke-Az rest --method delete --url $budgetUrl | Out-Null }
@@ -277,6 +322,18 @@ if ($Remove) {
         @(Invoke-Az role assignment list --all --fill-principal-name false) |
             Where-Object { $_.principalId -eq $identity.principalId } |
             ForEach-Object { Invoke-Az role assignment delete --ids $_.id | Out-Null; Write-Host "  removed $($_.roleDefinitionName) on $($_.scope)" }
+    }
+
+    Write-Step "Custom role '$dnsRoleName'"
+    # NOTE: a role definition outlives the group it is assignable in; delete it once unassigned.
+    $dnsRole = @(Get-AzOrNull role definition list --name $dnsRoleName --custom-role-only true --scope $foundationGroupScope) | Select-Object -First 1
+    if ($dnsRole) { Invoke-Az role definition delete --name $dnsRole.name --scope $foundationGroupScope | Out-Null; Write-Host '  removed' }
+
+    Write-Step 'DNS zone locks'
+    foreach ($zone in @(Get-AzOrNull network dns zone list --resource-group $FoundationResourceGroup)) {
+        if (-not $zone) { continue }
+        $lockUrl = "https://management.azure.com$($zone.id)/SOA/@/providers/Microsoft.Authorization/locks/$dnsLockName" + '?api-version=2016-09-01'
+        if (Get-AzOrNull rest --method get --url $lockUrl) { Invoke-Az rest --method delete --url $lockUrl | Out-Null; Write-Host "  removed $($zone.name)" }
     }
 
     Write-Step 'Lock and resource groups'
@@ -309,7 +366,7 @@ foreach ($provider in $resourceProviders) {
 # │ Why : The workflow identity gets rights on resource groups, not on the subscription. A group
 # │       it may create and delete would need subscription rights; so both groups exist before
 # │       it ever runs, and the demo only fills and empties rg-ewp-demo.
-# │ How : rg-ewp-foundation holds what must outlive a demo (state, identity; later the DNS zones);
+# │ How : rg-ewp-foundation holds what must outlive a demo (state, identity, DNS zones);
 # │       the identity has no management rights there at all. rg-ewp-demo holds everything else.
 # │ Ref : doc/Azure.md A2, A3 | Azure Well-Architected, Security: SE:05 identity and access
 # └────────────────────────────────────────────────────────────────────────────────────────────────
@@ -462,7 +519,101 @@ Set-RoleAssignment $identity.principalId 'Role Based Access Control Administrato
 Write-Host "  on $StateStorageAccountName/$stateContainerName"
 Set-RoleAssignment $identity.principalId 'Storage Blob Data Contributor' $stateContainerScope
 
-# ── 6. Budget alert ────────────────────────────────────────────────────────────────────────────
+# ── 6. DNS zones ───────────────────────────────────────────────────────────────────────────────
+# ┌─ :: ARCHITECTURE :: Two domains, permanent zones, records per demo ───────────────────────────
+# │ Why : EWP and the Partner Bank are two organisations: on two registrable domains the browser
+# │       treats them as two sites (cookies, SameSite, CORS), as in production. A zone's name
+# │       servers are fixed when it is created and are set by hand at the registrar, so the zones
+# │       must outlive every demo; the gateway's address changes with every demo.
+# │ How : The zones live in rg-ewp-foundation. Step 7's Terraform writes the A / CNAME records to
+# │       the demo's gateway and its destroy removes them. Nothing in the cluster gets DNS rights
+# │       (no external-dns); Let's Encrypt validates over HTTP-01.
+# │ Ref : doc/Azure.md A8, A9 | Azure DNS "Delegate a domain to Azure DNS"
+# └────────────────────────────────────────────────────────────────────────────────────────────────
+# ┌─ :: SECURITY :: What the demo identity may do in the zones ───────────────────────────────────
+# │ Why : DNS Zone Contributor would let a stolen token delete a zone (new name servers: the
+# │       domain is dark until the registrar is changed), delegate a sub-domain to someone else's
+# │       name servers (NS), or allow any certificate authority (CAA).
+# │ How : A custom role, assignable only in rg-ewp-foundation and assigned per zone: read the
+# │       zone, write and delete A and CNAME records. The apex CAA record (only Let's Encrypt may
+# │       issue) is the owner's, set here. A CanNotDelete lock on the SOA record set stops a zone
+# │       delete by anyone (Azure would have to delete the SOA with it) but, unlike a zone lock,
+# │       leaves records deletable for terraform destroy.
+# │ Ref : doc/Azure.md A9 | Azure DNS "Protecting DNS zones and records" | RFC 8659 (CAA)
+# └────────────────────────────────────────────────────────────────────────────────────────────────
+Write-Step 'DNS zones'
+$dnsZones = @()
+if (-not $EwpDomain) {
+    Write-Host '  skipped (no -EwpDomain / -PartnerBankDomain; existing zones are kept)'
+}
+else {
+    $dnsRoleDefinition = [ordered]@{
+        Name             = $dnsRoleName
+        IsCustom         = $true
+        Description      = 'EWP cloud demo: writes the demo''s A and CNAME records. No NS, CAA or SOA records, no zone settings, no zone delete.'
+        Actions          = @('Microsoft.Network/dnsZones/read', 'Microsoft.Network/dnsZones/A/*', 'Microsoft.Network/dnsZones/CNAME/*')
+        NotActions       = @()
+        AssignableScopes = @($foundationScope)
+    }
+    $dnsRole = @(Get-AzOrNull role definition list --name $dnsRoleName --custom-role-only true --scope $foundationScope) | Select-Object -First 1
+    $wantedActions = ($dnsRoleDefinition.Actions | Sort-Object) -join ','
+    $currentActions = if ($dnsRole) { (@($dnsRole.permissions[0].actions) | Sort-Object) -join ',' } else { '' }
+    if ($dnsRole -and $currentActions -eq $wantedActions -and (@($dnsRole.assignableScopes) -join ',') -eq $foundationScope) {
+        Write-Host "  ok      role '$dnsRoleName'"
+    }
+    else {
+        $roleJson = if ($dnsRole) {
+            # NOTE: the documented way to change a custom role: edit the definition "list" returned.
+            $dnsRole.permissions[0].actions = $dnsRoleDefinition.Actions
+            $dnsRole.assignableScopes = $dnsRoleDefinition.AssignableScopes
+            $dnsRole.description = $dnsRoleDefinition.Description
+            $dnsRole | ConvertTo-Json -Depth 6
+        }
+        else { $dnsRoleDefinition | ConvertTo-Json -Depth 4 }
+        $roleFile = Write-TempFile $roleJson
+        try {
+            if ($dnsRole) { $dnsRole = Invoke-Az role definition update --role-definition "@$roleFile"; Write-Host "  updated role '$dnsRoleName'" }
+            else { $dnsRole = Invoke-Az role definition create --role-definition "@$roleFile"; Write-Host "  created role '$dnsRoleName'" }
+        }
+        finally { Remove-Item $roleFile -ErrorAction SilentlyContinue }
+    }
+
+    foreach ($domain in @($EwpDomain, $PartnerBankDomain)) {
+        $purpose = if ($domain -eq $EwpDomain) { 'dns-ewp' } else { 'dns-partner-bank' }
+        $zone = Get-AzOrNull network dns zone show --name $domain --resource-group $FoundationResourceGroup
+        if (-not $zone) {
+            $zone = Invoke-Az network dns zone create --name $domain --resource-group $FoundationResourceGroup --tags "ewp-purpose=$purpose"
+            Write-Host "  created zone $domain"
+        }
+        else { Write-Host "  ok      zone $domain" }
+
+        # SEC: only Let's Encrypt may issue certificates for the domain and its sub-domains (no
+        # issuewild record, so "issue" covers wildcards too). The identity cannot change CAA.
+        $caa = Get-AzOrNull network dns record-set caa show --resource-group $FoundationResourceGroup --zone-name $domain --name '@'
+        if (-not (@($caa.caaRecords) | Where-Object { $_.tag -eq 'issue' -and $_.value -eq $certificateAuthority })) {
+            Invoke-Az network dns record-set caa add-record --resource-group $FoundationResourceGroup --zone-name $domain `
+                --record-set-name '@' --flags 0 --tag issue --value $certificateAuthority | Out-Null
+            Write-Host "          CAA issue $certificateAuthority added"
+        }
+        foreach ($other in @($caa.caaRecords | Where-Object { $_ -and -not ($_.tag -eq 'issue' -and $_.value -eq $certificateAuthority) })) {
+            Write-Warning "$domain has another CAA record ($($other.flags) $($other.tag) $($other.value)) - remove it unless you added it on purpose."
+        }
+
+        # NOTE: a lock on the SOA record set, not on the zone: a zone lock is inherited by every
+        # record set, so terraform destroy could not delete the demo's records. "az lock" cannot
+        # address a record set, Resource Manager's REST API can.
+        $lockUrl = "https://management.azure.com$($zone.id)/SOA/@/providers/Microsoft.Authorization/locks/$dnsLockName" + '?api-version=2016-09-01'
+        $lockFile = Write-TempFile (@{ properties = @{ level = 'CanNotDelete'; notes = 'Keeps the EWP demo zone (and its name servers). Remove with Initialize-AzureDemo.ps1 -Remove.' } } | ConvertTo-Json -Depth 3)
+        try { Invoke-Az rest --method put --url $lockUrl --body "@$lockFile" | Out-Null }
+        finally { Remove-Item $lockFile -ErrorAction SilentlyContinue }
+        Write-Host '          CanNotDelete lock on the SOA record set'
+
+        Set-RoleAssignment $identity.principalId $dnsRoleName $zone.id -RoleId $dnsRole.name
+        $dnsZones += [pscustomobject]@{ Name = $domain; NameServers = @($zone.nameServers) }
+    }
+}
+
+# ── 7. Budget alert ────────────────────────────────────────────────────────────────────────────
 # ┌─ :: ARCHITECTURE :: A budget on the whole subscription ──────────────────────────────────────
 # │ Why : A demo left running (a failed teardown, a forgotten run) costs money every hour.
 # │ How : A monthly cost budget on the subscription (not just the demo group: the AKS node group
@@ -517,5 +668,19 @@ $variables = [ordered]@{
     AZURE_TFSTATE_STORAGE_ACCOUNT = $StateStorageAccountName
     AZURE_TFSTATE_CONTAINER       = $stateContainerName
 }
+if ($dnsZones) {
+    $variables.AZURE_DNS_RESOURCE_GROUP    = $FoundationResourceGroup
+    $variables.AZURE_DNS_ZONE_EWP          = $EwpDomain
+    $variables.AZURE_DNS_ZONE_PARTNER_BANK = $PartnerBankDomain
+}
 foreach ($key in $variables.Keys) { Write-Host ("  {0,-30} {1}" -f $key, $variables[$key]) }
+
+if ($dnsZones) {
+    Write-Step 'At each domain''s registrar, set the name servers to these (doc/Azure.md, "Domains")'
+    foreach ($zone in $dnsZones) {
+        Write-Host "  $($zone.Name)"
+        foreach ($server in $zone.NameServers) { Write-Host "      $($server.TrimEnd('.'))" }
+    }
+    Write-Host '  Check: nslookup -type=NS <domain> 8.8.8.8 lists them (up to 48 hours, usually minutes).'
+}
 Write-Host "`nThen run the workflow 'Azure access check' on main (doc/Azure.md, 'Checking it')."

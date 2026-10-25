@@ -2,18 +2,19 @@
 
 What has to exist in Azure before a GitHub workflow can build EWP's demo there and tear it down
 again: two resource groups, a store for the Terraform state, the identity the workflows sign in
-as, and a budget alert. One script, [Initialize-AzureDemo.ps1](../deploy/azure/Initialize-AzureDemo.ps1),
+as, the DNS zones of the two domains, and a budget alert. One script, [Initialize-AzureDemo.ps1](../deploy/azure/Initialize-AzureDemo.ps1),
 run once by the subscription's owner, creates all of it. One workflow,
 [Azure access check](../.github/workflows/azure-access-check.yml), proves the result.
 
 In short: **GitHub signs in to Azure without any stored secret. Azure accepts the sign-in only
 from this repository's `azure-demo` environment, which runs only from `main` and only after a
-person approves. The identity may change one resource group (the throw-away one) and the
-Terraform state, and nothing else in the subscription.**
+person approves. The identity may change one resource group (the throw-away one), the
+Terraform state and the demo's address records in the two DNS zones, and nothing else in the
+subscription.**
 
-This is step 5 of the cloud demo. Step 6 adds the domains (DNS zones in the permanent group),
-step 7 the Terraform code and the demo up / down workflows ([Kubernetes.md](Kubernetes.md) is
-what they install).
+This covers steps 5 (the bootstrap) and 6 (the domains) of the cloud demo. Step 7 adds the
+Terraform code and the demo up / down workflows ([Kubernetes.md](Kubernetes.md) is what they
+install).
 
 ## Decisions
 
@@ -26,6 +27,8 @@ what they install).
 | A5 | **Terraform state in Azure Storage with shared keys off**: Entra ID sign-in only (`use_azuread_auth`), TLS 1.2+, no anonymous blobs, blob versions and 30-day soft delete, a CanNotDelete lock. Public endpoint, because GitHub's hosted runners have no fixed addresses | The state lists every resource and can hold generated secrets. With shared keys off there is no account key to leak. Versions bring back a corrupted state, and the lock stops the account being deleted by accident |
 | A6 | **A monthly budget on the whole subscription** with e-mails at 50, 80 and 100% spent and 100% forecast | A forgotten demo costs money every hour. The subscription scope catches the AKS node group and anything made by hand too. It only warns: the teardown and the watchdog (step 7) stop the spending |
 | A7 | **The bootstrap is a script a person runs, not Terraform.** Run it again to repair anything that drifted; `-Remove` undoes all of it | It needs the owner's rights (role assignments, subscription budget, provider registration), which no workflow should hold. Terraform would also need somewhere to keep the state of the thing that holds the state |
+| A8 | **Two registrable domains** (step 6, decided 25-OCT), one for EWP and one for the Partner Bank, each with an **Azure DNS zone in `rg-ewp-foundation`**. The zones are permanent; the demo's records are not: step 7's Terraform writes the A / CNAME records to that demo's gateway, and `terraform destroy` removes them. Nothing in the cluster gets DNS rights (no external-dns); Let's Encrypt checks over HTTP-01 | Two organisations should be two sites to the browser (cookies, SameSite, CORS), as in production; sub-domains of one domain would be one site. A zone's name servers are fixed when it is created and set by hand at the registrar, so the zone must outlive every demo, while the gateway's address changes with every demo. Records written by the deployment identity keep DNS rights out of the cluster and need no change to A4 |
+| A9 | **The identity writes only A and CNAME records**: a custom role `EWP Demo DNS Record Writer` (read the zone; A and CNAME records), assignable only in `rg-ewp-foundation` and assigned per zone. The script itself sets the apex **CAA** record (`0 issue "letsencrypt.org"`) and a **CanNotDelete lock on the SOA record set** | DNS Zone Contributor would let a stolen token delete a zone (new name servers: the domain is dark until the registrar is changed), delegate a sub-domain to other name servers (NS) or allow any certificate authority (CAA). A lock on the zone itself is inherited by every record set, so `terraform destroy` could not delete the demo's records. Azure cannot delete a zone without its SOA record set, so the SOA lock stops a zone delete by anyone, the owner included, and leaves records free to change (Microsoft's "Protecting DNS zones and records") |
 
 ## What exists afterwards
 
@@ -34,13 +37,17 @@ what they install).
 | `rg-ewp-foundation` | (permanent) | Tag `ewp-purpose=foundation` |
 | `stewptf<8 hex>` storage account, container `tfstate` | foundation | The name comes from the subscription id, so it is the same on every run (`-StateStorageAccountName` if it is taken). Lock `ewp-keep-terraform-state` |
 | `id-ewp-github-demo` managed identity | foundation | Federated credential `github-azure-demo`. The script warns about any other federated credential it finds |
+| DNS zones `<EWP domain>` and `<Partner Bank domain>` | foundation | Only with `-EwpDomain` and `-PartnerBankDomain` ([Domains](#domains)). Apex CAA record `0 issue "letsencrypt.org"`; lock `ewp-keep-dns-zone` on the SOA record set. Tags `ewp-purpose=dns-ewp` / `dns-partner-bank` |
+| Custom role `EWP Demo DNS Record Writer` | foundation (assignable scope) | `Microsoft.Network/dnsZones/read`, `.../A/*`, `.../CNAME/*` |
 | `rg-ewp-demo` | (throw-away) | Empty after the bootstrap and after every teardown |
-| Role assignments of the identity | | `rg-ewp-demo`: Contributor, Role Based Access Control Administrator (with the condition); `tfstate` container: Storage Blob Data Contributor |
+| Role assignments of the identity | | `rg-ewp-demo`: Contributor, Role Based Access Control Administrator (with the condition); `tfstate` container: Storage Blob Data Contributor; each DNS zone: EWP Demo DNS Record Writer |
 | Budget `ewp-demo-monthly` | subscription | Amount in the subscription's **billing currency** (required; an Indian account is billed in INR) |
 | Resource providers registered | subscription | Compute, ContainerService, DBforPostgreSQL, KeyVault, ManagedIdentity, Network, OperationalInsights, Insights, Storage, Consumption |
 
-Cost while no demo runs: a few cents a month (the state blobs). The identity, the budget and
-empty resource groups cost nothing.
+Cost while no demo runs: a few cents a month for the state blobs, plus about USD 0.50 (₹42) per
+DNS zone per month and a few cents for queries: about ₹1,000 a year for the two zones, always
+on, besides the two domains' fees at the registrar. The identity, the custom role, the budget
+and empty resource groups cost nothing.
 
 ## Running it
 
@@ -86,7 +93,8 @@ already there, so go straight to step 3 with `./Initialize-AzureDemo.ps1`.
    India is billed in INR, so `420` means ₹420 a month (this project's ₹5,000 a year). It is
    required, so the amount is always chosen on purpose.
 
-   Optional: `-Location` (default `australiaeast`), `-GitHubRepository`, `-GitHubEnvironment`,
+   Optional: `-EwpDomain` and `-PartnerBankDomain` (together; see [Domains](#domains)),
+   `-Location` (default `australiaeast`), `-GitHubRepository`, `-GitHubEnvironment`,
    `-StateStorageAccountName`. It takes 3-5 minutes. Each step prints `ok`, `created` or
    `removed`. It ends with the seven values for GitHub. If it stops, fix the cause and run it
    again: the finished steps only say `ok`.
@@ -125,6 +133,48 @@ and the first access check found the third fault:
 Lesson for every script here: format dates sent to an API with `CultureInfo.InvariantCulture`,
 and quote the separators.
 
+## Domains
+
+Step 6. Two domains, one per organisation (A8): the browser reaches EWP at
+`<host>.<EWP domain>` (the chart's `global.domain`: `idp`, `my`, `shell`, ...) and the Partner
+Bank at `partner-auth`, `partner-api` and `partner-products` `.<Partner Bank domain>`. The zones
+start with only Azure's own records plus CAA; each demo adds its address records (step 7).
+
+1. **Register two domains** at any registrar that lets you set your own name servers (nearly
+   all do). They must be two different registrable domains, neither a sub-domain of the other
+   (the script refuses that). Compare the **renewal** price, not the first year's. Keep the
+   registrar's WHOIS privacy on, and turn off its parking page or forwarding.
+
+2. **Run the script again with the domains**, plus the same values as before:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\deploy\azure\Initialize-AzureDemo.ps1 `
+       -SubscriptionId <subscription id> -AlertEmail <your e-mail> -BudgetAmount <monthly amount> `
+       -EwpDomain <EWP domain> -PartnerBankDomain <Partner Bank domain>
+   ```
+
+   Give both domains on **every later run** too. Without them the DNS step is skipped, and
+   nothing is removed. The new lines end with each zone's four name servers
+   (`ns1-NN.azure-dns.com`, `.net`, `.org`, `.info`).
+
+3. **At each registrar, replace the name servers** with that zone's four. Each zone has its own
+   set, so copy them per domain.
+
+4. **Check** (from any machine; it can take up to 48 hours, usually minutes):
+
+   ```text
+   nslookup -type=NS <domain> 8.8.8.8      the four azure-dns name servers
+   nslookup -type=CAA <domain> 8.8.8.8     issue "letsencrypt.org"
+   ```
+
+5. **Add the three DNS variables** to the GitHub environment (next section) and run the
+   [access check](#checking-it).
+
+A zone created again gets **new** name servers, so step 3 has to be repeated. That is why the
+SOA lock stops any delete. To move to another domain, run the script with the new name. It
+never deletes the old zone: remove that one by hand (the SOA record set's lock first, then the
+zone).
+
 ## GitHub side
 
 Repository **Settings → Environments → New environment** `azure-demo`:
@@ -136,7 +186,7 @@ Repository **Settings → Environments → New environment** `azure-demo`:
 | Allow administrators to bypass configured protection rules | **Off** (on by default: untick it, then **Save protection rules**) | The owner is the repository's administrator: with bypass on, the owner's runs could skip the approval |
 | Deployment branches and tags | **Selected branches and tags**: `main` | Only reviewed, merged code may use the identity. A pull request branch cannot ask for the environment |
 | Environment secrets | **None** | There is nothing secret (A1) |
-| Environment variables | The seven the script printed: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_DEMO_RESOURCE_GROUP`, `AZURE_TFSTATE_RESOURCE_GROUP`, `AZURE_TFSTATE_STORAGE_ACCOUNT`, `AZURE_TFSTATE_CONTAINER` | Identifiers, not secrets. Without a token GitHub issues for this repository and environment they open nothing |
+| Environment variables | The seven the script printed: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_DEMO_RESOURCE_GROUP`, `AZURE_TFSTATE_RESOURCE_GROUP`, `AZURE_TFSTATE_STORAGE_ACCOUNT`, `AZURE_TFSTATE_CONTAINER`; after step 6 also `AZURE_DNS_RESOURCE_GROUP`, `AZURE_DNS_ZONE_EWP`, `AZURE_DNS_ZONE_PARTNER_BANK` | Identifiers, not secrets. Without a token GitHub issues for this repository and environment they open nothing |
 
 ## Checking it
 
@@ -152,6 +202,11 @@ The run's summary lists each check. All of them passed on 25-OCT-2026, after the
 | must not | create a resource group |
 | must not | read the state account's settings or list its keys |
 | must not | make itself Owner of `rg-ewp-demo` (the condition refuses; if it ever did not, the check removes the grant and fails) |
+| may | per DNS zone: read it; write and delete an A record (`ewp-access-check-<run>`, address 192.0.2.1, a never-routed test address) |
+| must not | per DNS zone: create an NS record (delegate a sub-domain); write a CAA record (if either ever succeeded, the check removes it and fails) |
+| must not | per DNS zone: delete or change the zone. A delete is never attempted, since it cannot be undone. The check reads the identity's effective actions on the zone (Azure's permissions API) and fails if any of them covers `dnsZones/delete` or `dnsZones/write` |
+
+The DNS rows show `SKIP` until the three DNS variables exist.
 
 A run from any other branch does not reach Azure: GitHub refuses the environment.
 
@@ -161,8 +216,10 @@ A run from any other branch does not reach Azure: GitHub refuses the environment
 .\deploy\azure\Initialize-AzureDemo.ps1 -Remove
 ```
 
-It asks first, then deletes the budget, the identity's role assignments, the lock and both
-resource groups, **including the Terraform state**. Delete the GitHub environment by hand.
+It asks first, then deletes the budget, the identity's role assignments, the custom DNS role,
+the locks and both resource groups, **including the Terraform state and the DNS zones**. Delete
+the GitHub environment by hand. The domains stay registered. Created again, the zones get new
+name servers to set at the registrars.
 
 ## Known gaps
 
@@ -172,4 +229,6 @@ resource groups, **including the Terraform state**. Delete the GitHub environmen
 | Inside `rg-ewp-demo` the identity may create managed identities and federated credentials (workload identity needs both) | A stolen token could leave a way back in, through an identity in the demo group federated to another issuer. It would reach no further than the demo group, and only until the next teardown | The teardown empties the group. Step 7's demo-down workflow checks the group is empty. A required reviewer approves every run |
 | The budget warns but does not stop anything | A demo nobody tears down keeps costing until someone acts on the e-mail | Step 7: teardown at the end of every run, plus a scheduled watchdog that destroys anything older than the allowed time |
 | The state account has a public endpoint | Reachable from the internet. Entra ID sign-in is still required, and no key exists | Self-hosted runners or a private endpoint, out of scope for the demo |
-| DNS zones | No domains yet | Step 6 (zones in `rg-ewp-foundation`, DNS Zone Contributor on them only) |
+| The identity may overwrite any A or CNAME record in the two zones, not only the demo's | A stolen token could point a demo host name somewhere else until the next demo or teardown. The zones hold nothing but the demo's names, and CAA still allows only Let's Encrypt, which checks control of the host first | Record-set level assignments would need the records to exist first; not worth it for demo-only zones |
+| No DNSSEC | A resolver cannot tell forged answers for the demo's names from real ones. TLS (Let's Encrypt certificates) still protects the connection | Azure DNS can sign the zones; it needs a DS record at each registrar and key rollover care. Out of scope for the demo |
+| Let's Encrypt over HTTP-01 | No wildcard certificates: one certificate (or SAN) per host name | Enough for the demo's fixed host names. DNS-01 would need TXT rights, for the cluster or the workflow |

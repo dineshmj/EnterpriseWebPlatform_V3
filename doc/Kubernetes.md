@@ -39,7 +39,7 @@ the Kubernetes Secrets it reads, and a missing one stops the pod with that name.
 | A CNI that enforces **NetworkPolicy** (Azure CNI with Cilium on AKS) | K6 |
 | The namespace labelled `ewp.dev/trust=true` | trust-manager copies the bundles only there |
 | PostgreSQL with the 12 databases and their users (`db/`), Kafka (SASL_SSL, the users and ACLs of `kafka/`), Temporal | The chart deploys EWP's services, not their infrastructure |
-| The **Partner Bank**, from its own chart in its own namespace ([its doc/Kubernetes.md](https://github.com/dineshmj/EnterpriseWebPlatform_V3_PartnerBank/blob/main/doc/Kubernetes.md)): TLS passed through at the same Gateway (four TLS listeners in Passthrough mode), the home PC's port numbers on `partner-auth`, `partner-api`, `partner-products` `.<domain>` | `global.partnerBank`: EWP calls it like any outside client, through the Gateway, with its client certificate |
+| The **Partner Bank**, from its own chart in its own namespace ([its doc/Kubernetes.md](https://github.com/dineshmj/EnterpriseWebPlatform_V3_PartnerBank/blob/main/doc/Kubernetes.md)): TLS passed through at the same Gateway (four TLS listeners in Passthrough mode), the home PC's port numbers on `partner-auth`, `partner-api`, `partner-products` `.<Partner Bank domain>`, a registrable domain of its own ([Azure.md](Azure.md) A8) | `global.partnerBank`: EWP calls it like any outside client, through the Gateway, with its client certificate |
 
 ## Installing
 
