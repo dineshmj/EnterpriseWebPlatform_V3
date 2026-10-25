@@ -27,6 +27,9 @@ Not gated here, and why:
   required check. Its scan still stops a vulnerable image from being published on `main`.
 - **Playwright**: needs the whole platform running (laptop, or the cloud demo later).
 - **Compiler warnings**: reported, not failing (3 nullable warnings in the IDP today).
+- **Azure access check**: [azure-access-check.yml](../.github/workflows/azure-access-check.yml)
+  is started by hand from `main`, needs the `azure-demo` environment's approval, and checks the
+  demo identity's rights in Azure ([Azure.md](Azure.md)). It is not a pull request gate.
 
 A new advisory can turn a gate red without a code change (as body-parser and multer did on
 24-OCT). That is intended: fix the dependency (an update, or an override in

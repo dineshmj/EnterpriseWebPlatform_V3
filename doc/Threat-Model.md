@@ -46,6 +46,8 @@
                    │
   APIs ──TB6── External systems (core banking, payment network, screening provider)
   Audit API ◄── Kafka (read only) ;  Auditor ──TB1/TB3── Audit BFF → Audit Journey API (token exchange)
+
+  GitHub Actions (main, azure-demo environment) ──TB7── Azure (rg-ewp-demo, Terraform state)
 ```
 
 | ID | Boundary | Crosses it |
@@ -56,6 +58,7 @@
 | TB4 | APIs ↔ their database | One least-privilege database user per deployable |
 | TB5 | Services ↔ Kafka | Each component as its own SCRAM user, limited by ACLs to its own topics and group |
 | TB6 | APIs ↔ external systems | API key + Idempotency-Key over HTTPS, resilience pipeline |
+| TB7 | GitHub Actions ↔ Azure (cloud demo) | GitHub's OIDC token exchanged for the demo identity's Azure token: no stored secret, two resource groups only |
 
 ## 4. Threats and controls (STRIDE)
 
@@ -144,6 +147,16 @@ When automated tests resume, both sides get the same token fixtures (expired, wr
 | S/I | Calls to an impostor endpoint; SSRF by configuration | Base URLs checked at start-up (outside Development: https, `PermittedHosts`, no internal address); no redirects followed; API keys; HTTPS | Payments README #18; Accounts README #15; Compliance README #13; `ExternalEndpoint.cs` |
 | S/T/R | The Partner Bank (EWP as distributor): an impostor, a replayed token, a denied or altered instruction, a second account or order after a lost answer | Mutual TLS with the PoC's own root; EWP's certificate-bound token; every instruction signed (ES256, `jti` fixed at the first send); payment advice and cancellation only for EWP's own orders | Partner Products API README #11-#15, #18 |
 
+### TB7 — GitHub Actions ↔ Azure (cloud demo)
+
+| | Threat | Control | Where |
+|---|---|---|---|
+| S | A stolen deployment credential used from anywhere | No secret exists: a managed identity with one federated credential, which accepts only GitHub's short-lived OIDC token for this repository's `azure-demo` environment | [Azure.md](Azure.md) A1; [Initialize-AzureDemo.ps1](../deploy/azure/Initialize-AzureDemo.ps1) |
+| E | A pull request or changed workflow reaches Azure | The environment admits only `main` and waits for a required reviewer; pull request branches cannot use it | [Azure.md](Azure.md), GitHub side |
+| E | The demo identity widens its own rights | No subscription rights; no management rights on the group holding the identity and the state; role assignments only from a short list and only for managed identities (ABAC condition) | [Azure.md](Azure.md) A2-A4; [azure-access-check.yml](../.github/workflows/azure-access-check.yml) (Owner refused) |
+| T/I | The Terraform state is read, altered or lost | Entra ID sign-in only (no account key exists), the identity's data rights on the one container; versions, 30-day soft delete, CanNotDelete lock | [Azure.md](Azure.md) A5 |
+| D | A forgotten demo runs up cost | Budget alerts at 50/80/100% and on forecast; teardown and watchdog in step 7 | [Azure.md](Azure.md) A6 |
+
 ## 5. Abuse cases (banking)
 
 "Verified by" names the automated test that fails if the control breaks: **UT** = .NET unit or adapter test in `tst/dotnet` (project / class), **PW** = Playwright spec in `tst/playwright/tests`. "Code only" means there is no automated test yet.
@@ -201,6 +214,7 @@ When automated tests resume, both sides get the same token fixtures (expired, wr
 | R-15 | Partner Products: EWP's customer record holds no date of birth, so the agent types it from Form VII and confirms it against photo ID; the Partner Products API trusts the customer facts the Journey API read for the agent (it does not call Customer Onboarding itself) | Medium | Accepted for now: the date of birth joins the customer record (onboarding) later. (Audit events: closed 2026-10-20 - every Form VII and purchase change reaches the audit trail through the Outbox, Integration-Event-Catalogue §4.8.) | - |
 | R-16 | Partner Products: Temporal runs as the local development server (no TLS, no authorization on its frontend) | Low (PoC) / High in production for Temporal's frontend | Accepted for PoC (the polling half closed 2026-10-20: the worker listens to `payments.payment.events` and signals the workflow, polling every 5 minutes only as the safety net): production runs Temporal with mTLS and namespace authorization; workflow input already carries no token or personal data. Network ACLs alone are not enough (Temporal has no caller authentication of its own: whoever reaches the frontend can start, signal, terminate and read workflows), so production takes mTLS from the platform - the bank's service mesh or Temporal Cloud (mTLS or API keys) - plus an authorizer limiting each client to its namespace and actions; the frontend is reachable only from the Worker and the Partner Products Journey API. Not built in the PoC (decision 2026-10-20): the development server has no TLS, and an app-built TLS gateway would not reflect a bank's landscape | Manual runs T1, T2 (worker restart, missed event; 21-OCT) |
 | R-17 | Customers' channel (My EWP): the second factor is a one-time code to the mobile on record - an out-of-band authenticator NIST SP 800-63B calls RESTRICTED (SIM swap, interception) - and the SMS is simulated (console, or the page in Development); the domain APIs still receive RS256 tokens (only the customer-facing ID token and the Journey API's access token are PS256) | Medium in production | Accepted for PoC: production sends codes through an SMS / push provider and moves customers to an app authenticator or passkeys (B4); a shared replay cache (Redis) for several IDP instances; PS256 for every token once all APIs are checked against it | UT `IDP.Tests` (codes, lockout); manual run for 1a |
+| R-18 | Cloud demo: inside `rg-ewp-demo` the deployment identity is Contributor, so it may delete that group and may create managed identities with federated credentials (workload identity needs them). A stolen token could leave a way back in that reaches no further than the demo group | Low (demo only, no customer data) | Accepted: every run needs a reviewer's approval from `main`; the teardown empties the group, and step 7 checks it is empty; a deleted group is restored by running the bootstrap again ([Azure.md](Azure.md), known gaps) | `azure-access-check.yml` (the boundaries around it) |
 
 ## 8. Assumptions and out of scope
 
