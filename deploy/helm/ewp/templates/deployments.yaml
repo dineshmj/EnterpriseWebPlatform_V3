@@ -138,9 +138,10 @@ spec:
                 secretKeyRef:
                   name: {{ $g.tls.keystorePasswordSecret }}
                   key: password
-            # Node keeps its own public roots and adds EWP's private root.
+            # Node keeps its own public roots and adds the trust bundle (EWP's private root, and
+            # any root the environment adds, e.g. Let's Encrypt staging on a test run).
             - name: NODE_EXTRA_CA_CERTS
-              value: /etc/ewp/tls/ca.crt
+              value: /etc/ewp/trust/ca.crt
             {{- if and $c.public $c.node.trustedProxiesVar }}
             - name: {{ $c.node.trustedProxiesVar }}
               value: {{ join "," $g.forwardedHeaders.knownNetworks | quote }}
@@ -204,11 +205,9 @@ spec:
               mountPath: /etc/ewp/tls
               readOnly: true
             {{- end }}
-            {{- if eq $c.stack "dotnet" }}
             - name: trust
               mountPath: /etc/ewp/trust
               readOnly: true
-            {{- end }}
             {{- if hasKey $c "kafka" }}
             - name: kafka-trust
               mountPath: /etc/ewp/kafka
@@ -242,11 +241,9 @@ spec:
           secret:
             secretName: {{ $name }}-tls
         {{- end }}
-        {{- if eq $c.stack "dotnet" }}
         - name: trust
           configMap:
             name: {{ $g.trust.fullBundle }}
-        {{- end }}
         {{- if hasKey $c "kafka" }}
         - name: kafka-trust
           configMap:

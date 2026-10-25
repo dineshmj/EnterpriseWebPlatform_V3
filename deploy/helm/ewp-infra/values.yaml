@@ -1,0 +1,189 @@
+# ┌─ :: ARCHITECTURE + SECURITY :: EWP's infrastructure in a cluster, as data ─────────────────────
+# │ Why : The EWP chart deploys services, not their infrastructure (doc/Kubernetes.md). In a
+# │       cluster the same security as on the laptop must hold: Kafka over TLS with one SCRAM user
+# │       per deployable and deny-by-default ACLs (ps/kafka/Setup-KafkaSecurity.ps1), one
+# │       least-privilege database user per deployable (db/EwpServiceDbUsers.sql).
+# │ How : Kafka: one KRaft node run by the Strimzi operator; its users, ACLs and topics are
+# │       Strimzi resources rendered from the lists below (the laptop script's lists, kept in
+# │       step by hand: CONTRACT). Temporal: the development server (as on the laptop), its
+# │       SQLite file on a volume. Databases: a Job runs the repository's full scripts on the
+# │       managed PostgreSQL server. Every password comes from a Secret (deploy/helm/keyvault-
+# │       secrets); none is in this chart.
+# │ Ref : doc/Cloud-Demo.md CD16-CD18 | kafka/README.md | db/EwpServiceDbUsers.sql
+# └────────────────────────────────────────────────────────────────────────────────────────────────
+
+# The namespace whose pods are the clients (EWP's chart). Only its pods may connect.
+clientNamespace: ewp
+
+kafka:
+  clusterName: ewp
+  # Strimzi 1.2.0 supports Kafka 4.2.x and 4.3.x.
+  version: 4.3.1
+  metadataVersion: 4.3-IV0
+  storage: 10Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 1Gi
+    limits:
+      memory: 1536Mi
+  jvmHeap: 768m
+  # SEC: the listener's certificate comes from EWP's private CA (deploy/helm/ewp-cluster), which
+  # the clients already trust (the EWP chart's global.kafka.caConfigMap = ewp-internal-ca).
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: ewp-internal-ca
+  # The Secret with one key per Kafka user (the key is the user name): its SCRAM password.
+  usersSecret: ewp-kafka-users
+
+  # CONTRACT: ps/kafka/Setup-KafkaSecurity.ps1 ($Topics). Created explicitly; auto-creation is off.
+  topics:
+    - customer.created
+    - onboarding.application.submitted
+    - onboarding.application.status.changed
+    - onboarding.application.rejected
+    - kyc.case.created
+    - kyc.case.approved
+    - kyc.case.rejected
+    - kyc.identity.verification.approved
+    - kyc.identity.verification.rejected
+    - kyc.document.verification.approved
+    - kyc.document.verification.rejected
+    - customer-kyc.case-opening-subscriber.dlq
+    - customer-onboarding.outcome-subscriber.dlq
+    - compliance.case.created
+    - compliance.case.screened
+    - compliance.case.approved
+    - compliance.case.rejected
+    - compliance.case-opening-subscriber.dlq
+    - documents-management.invalidation-subscriber.dlq
+    - accounts.application.created
+    - accounts.application.rejected
+    - accounts.account.opened
+    - accounts.account.opening.failed
+    - accounts.application-opening-subscriber.dlq
+    - notifications.subscriber.dlq
+    - accounts.commands
+    - accounts.funds.replies
+    - payments.payment.events
+    - partner-products.digital-gold.events
+    - accounts.command-subscriber.dlq
+    - payments.saga-reply-subscriber.dlq
+    - audit.trail-subscriber.dlq
+
+  # CONTRACT: ps/kafka/Setup-KafkaSecurity.ps1 ($Users and the Acls phase). Per user:
+  #   write        topics it may write (Write, Describe)
+  #   writePrefix  topic prefixes it may write
+  #   read         topics it may read (Read, Describe)
+  #   group        its consumer group (Read)
+  # Everything else is denied. Kafka UI and the admin user exist on the laptop only.
+  users:
+    ewp-co-outbox-relay:
+      write: [customer.created, onboarding.application.submitted, onboarding.application.status.changed, onboarding.application.rejected]
+    ewp-kyc-api:
+      writePrefix: [kyc.]
+    ewp-kyc-case-opening-subscriber:
+      read: [onboarding.application.submitted]
+      group: customer-kyc.case-opening-subscriber
+      write: [customer-kyc.case-opening-subscriber.dlq]
+    ewp-onboarding-outcome-subscriber:
+      read: [kyc.case.created, kyc.case.approved, kyc.case.rejected, compliance.case.created, compliance.case.approved, compliance.case.rejected,
+             accounts.application.created, accounts.account.opened, accounts.application.rejected, accounts.account.opening.failed]
+      group: customer-onboarding.outcome-subscriber
+      write: [customer-onboarding.outcome-subscriber.dlq]
+    ewp-compliance-api:
+      writePrefix: [compliance.case.]
+    ewp-compliance-case-opening-subscriber:
+      read: [kyc.case.approved]
+      group: compliance.case-opening-subscriber
+      write: [compliance.case-opening-subscriber.dlq]
+    ewp-dm-invalidation-subscriber:
+      read: [onboarding.application.submitted, onboarding.application.rejected]
+      group: documents-management.invalidation-subscriber
+      write: [documents-management.invalidation-subscriber.dlq]
+    ewp-accounts-api:
+      writePrefix: [accounts.application., accounts.account.]
+      write: [accounts.funds.replies]
+    ewp-accounts-application-opening-subscriber:
+      read: [compliance.case.approved]
+      group: accounts.application-opening-subscriber
+      write: [accounts.application-opening-subscriber.dlq]
+    ewp-accounts-command-subscriber:
+      read: [accounts.commands]
+      group: accounts.command-subscriber
+      write: [accounts.command-subscriber.dlq]
+    ewp-payments-api:
+      write: [accounts.commands, payments.payment.events]
+    ewp-partner-products-api:
+      write: [partner-products.digital-gold.events]
+    ewp-partner-products-worker:
+      read: [payments.payment.events]
+      group: partner-products.worker
+    ewp-payments-saga-reply-subscriber:
+      read: [accounts.funds.replies]
+      group: payments.saga-reply-subscriber
+      write: [payments.saga-reply-subscriber.dlq]
+    ewp-notifications-subscriber:
+      read: [kyc.case.created, kyc.case.approved, kyc.case.rejected, compliance.case.screened, compliance.case.approved, compliance.case.rejected,
+             accounts.application.created, accounts.application.rejected, accounts.account.opened, accounts.account.opening.failed,
+             payments.payment.events]
+      group: notifications.subscriber
+      write: [notifications.subscriber.dlq]
+    ewp-audit-api:
+      read: [customer.created, onboarding.application.submitted, onboarding.application.status.changed, onboarding.application.rejected,
+             kyc.case.created, kyc.identity.verification.approved, kyc.identity.verification.rejected,
+             kyc.document.verification.approved, kyc.document.verification.rejected, kyc.case.approved, kyc.case.rejected,
+             compliance.case.created, compliance.case.screened, compliance.case.approved, compliance.case.rejected,
+             accounts.application.created, accounts.application.rejected, accounts.account.opened, accounts.account.opening.failed,
+             accounts.funds.replies, payments.payment.events, partner-products.digital-gold.events]
+      group: audit.trail-subscriber
+      write: [audit.trail-subscriber.dlq]
+
+temporal:
+  image: temporalio/temporal:1.9.1@sha256:ad4c82c97bd12b417d1ea942610dbcd511afb250c4d5ed26c694009533df447e
+  # The image's user "temporal" has no numeric id in its metadata; runAsNonRoot needs one.
+  uid: 1000
+  storage: 1Gi
+  namespace: default
+  # The EWP components that may connect (the Temporal client and the worker).
+  clients: [partner-products-journey-api, partner-products-worker]
+  resources:
+    requests:
+      cpu: 50m
+      memory: 192Mi
+    limits:
+      memory: 512Mi
+
+database:
+  # The PostgreSQL client only (psql); the server is Azure Database for PostgreSQL.
+  image: postgres:18.4-alpine3.23@sha256:996d0920e4ff9df1fc19dacb904492f3c1ec0ec1cc338f0ad7123be7731c5f5e
+  # Required: the server (Terraform output postgres_host) and its admin login.
+  host: ""
+  adminLogin: ""
+  # Secrets (deploy/helm/keyvault-secrets): the admin password (key "password"), and one key per
+  # service role (the key is the role name) with its password.
+  adminSecret: ewp-db-admin
+  rolesSecret: ewp-db-roles
+  # The ConfigMap with the repository's SQL scripts (key = file name), made by the install script
+  # from db/ and src/ (Helm cannot read files outside the chart).
+  scriptsConfigMap: ewp-db-scripts
+  # The users script (db/EwpServiceDbUsers.sql) and, in this order, each database and its full
+  # script (as ps/database/Initialize-EwpDatabases.ps1; EwpBffStateDb last).
+  usersScript: EwpServiceDbUsers.sql
+  databases:
+    - {name: EwpIdentityAccessDb, script: IdentityAccessDb.sql}
+    - {name: EwpBssShellDb, script: EwpBssShellDb.sql}
+    - {name: EwpCustomerDb, script: EwpCustomerDb.sql}
+    - {name: EwpKycDb, script: EwpKycDb.sql}
+    - {name: EwpDocumentsManagementDb, script: EwpDocumentsManagementDb.sql}
+    - {name: EwpComplianceDb, script: EwpComplianceDb.sql}
+    - {name: EwpAccountsDb, script: EwpAccountsDb.sql}
+    - {name: EwpNotificationsDb, script: EwpNotificationsDb.sql}
+    - {name: EwpPaymentsDb, script: EwpPaymentsDb.sql}
+    - {name: EwpAuditDb, script: EwpAuditDb.sql}
+    - {name: EwpPartnerProductsDb, script: EwpPartnerProductsDb.sql}
+    - {name: EwpBffStateDb, script: EwpBffStateDb.sql}
+  # The trust bundle with the public roots (deploy/helm/ewp-cluster): psql verifies the server's
+  # certificate (Azure's public CA) and host name.
+  trustBundle: ewp-trust-bundle

@@ -1,0 +1,36 @@
+# ┌─ :: ARCHITECTURE + SECURITY :: A namespace's secrets, from Key Vault ──────────────────────────
+# │ Why : The EWP, ewp-infra and Partner Bank charts name the Kubernetes Secrets they read and hold
+# │       no secret themselves (doc/Kubernetes.md K5). In Azure the values live in Key Vault; they
+# │       must reach the namespace without any stored credential.
+# │ How : One SecretProviderClass lists every Key Vault secret the namespace needs and which key of
+# │       which Kubernetes Secret it becomes (secretObjects). The Secrets Store CSI driver (an AKS
+# │       add-on) fetches them when a pod mounts that class and keeps them in step (every 2
+# │       minutes): this chart's one sync pod (pause image, does nothing else) mounts it, so the
+# │       Secrets exist before, and independently of, the pods that read them. The driver signs in
+# │       with workload identity: the service account's federated credential (Terraform,
+# │       workload-identity.tf) - no client secret, no Kubernetes token in the pod.
+# │       The list below is written by .github/scripts/demo-secrets.mjs, which also fills Key Vault.
+# │ Ref : doc/Cloud-Demo.md CD14 | Secrets Store CSI driver "Sync as Kubernetes Secret" |
+# │       Microsoft "Azure Key Vault provider: workload identity" | OWASP ASVS V13.3
+# └────────────────────────────────────────────────────────────────────────────────────────────────
+
+# Required: the vault, its tenant and the managed identity allowed to read it (Key Vault Secrets
+# User), from Terraform's outputs.
+keyVault:
+  name: ""
+  tenantId: ""
+  clientId: ""
+
+# CONTRACT: Terraform's federated credentials trust system:serviceaccount:<namespace>:<this name>.
+serviceAccountName: keyvault-secrets
+
+# The sync pod does nothing but hold the volume: the smallest image there is.
+image: registry.k8s.io/pause:3.10.1@sha256:278fb9dbcca9518083ad1e11276933a2e96f23de604a3a08cc3c80002767d24c
+
+# The Kubernetes Secrets to make. One Key Vault secret (object) may feed several keys; "encoding:
+# base64" for files (a .pfx is kept base64 in Key Vault and written as bytes).
+#   - name: ewp-idp
+#     keys:
+#       - {key: ConnectionStrings__IdentityDbConnection, object: conn-ewp-idp}
+#       - {key: signing.pfx, object: pki-idp-signing-pfx, encoding: base64}
+secrets: []

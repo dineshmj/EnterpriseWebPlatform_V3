@@ -59,3 +59,33 @@ spec:
     {{- if .Values.gatewayCheck.enabled }}
     - {{ .Values.gatewayCheck.host }}.{{ $domain }}
     {{- end }}
+{{- if .Values.partnerBank.enabled }}
+{{- $pb := .Values.partnerBank }}
+---
+# ┌─ SEC ────────────────────────────────────────────────────────────────────────────────────────
+# │ The Partner Bank's browser-facing names, on its own domain: a separate certificate (and
+# │ Let's Encrypt order) from EWP's. RSA, so the chain ends at ISRG Root X1, the root the
+# │ Partner Bank's own calls through this Gateway are told to trust (deploy/demo-platform).
+# └──────────────────────────────────────────────────────────────────────────────────────────────
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: partner-bank-public-tls
+  namespace: {{ .Release.Namespace }}
+spec:
+  secretName: partner-bank-public-tls
+  issuerRef:
+    kind: ClusterIssuer
+    name: {{ .Values.certificates.issuer }}
+  privateKey:
+    algorithm: RSA
+    size: 2048
+    rotationPolicy: Always
+  dnsNames:
+    {{- $domain := required "partnerBank.domain is required when the Partner Bank is enabled" $pb.domain }}
+    {{- $hosts := list }}
+    {{- range $pb.listeners }}{{ if eq .tls "Terminate" }}{{ $hosts = append $hosts .host }}{{ end }}{{ end }}
+    {{- range ($hosts | uniq) }}
+    - {{ . }}.{{ $domain }}
+    {{- end }}
+{{- end }}

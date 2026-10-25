@@ -24,6 +24,9 @@ global:
     registry: ghcr.io/dineshmj
     # The full commit SHA the images were built from (doc/Containers.md, decision 1). Required.
     tag: ""
+    # Optional, per component key: sha256:... - the image is then pulled by digest (tag@digest),
+    # so a tag moved during the install cannot mix two builds.
+    digests: {}
     pullPolicy: IfNotPresent
     pullSecrets: []
 

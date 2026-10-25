@@ -51,10 +51,13 @@ https://{{ $host }}.{{ required "global.domain is required (e.g. demo.example.co
 {{- if eq (include "ewp.listener" $c) "http" -}}http://{{ $name }}:8080{{- else -}}https://{{ $name }}{{- end -}}
 {{- end -}}
 
+{{/* repository:tag, or repository:tag@digest when global.image.digests names this component's
+     image digest (the cloud demo pins every image to the digest its tag had at install time). */}}
 {{- define "ewp.image" -}}
 {{- $g := .root.Values.global.image -}}
 {{- $tag := required "global.image.tag is required: the full commit SHA the images were built from" $g.tag -}}
-{{ $g.registry }}/ewp-{{ .name }}:{{ $tag }}
+{{- $digest := index ($g.digests | default dict) .name -}}
+{{ $g.registry }}/ewp-{{ .name }}:{{ $tag }}{{ with $digest }}@{{ . }}{{ end }}
 {{- end -}}
 
 {{- define "ewp.labels" -}}

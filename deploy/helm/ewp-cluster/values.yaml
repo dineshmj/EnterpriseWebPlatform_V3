@@ -31,3 +31,7 @@ bundles:
   namespaceSelector:
     matchLabels:
       ewp.dev/trust: "true"
+
+# PEM certificates added to the full bundle only (never to the private-root bundle the Gateway
+# checks pods against). The cloud demo adds Let's Encrypt's staging roots on staging runs.
+extraRoots: ""

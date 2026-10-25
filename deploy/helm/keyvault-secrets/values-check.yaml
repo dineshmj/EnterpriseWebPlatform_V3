@@ -1,0 +1,17 @@
+# Only for deploy/helm/check-charts.sh: a render with every kind of entry. The real list is written
+# by .github/scripts/demo-secrets.mjs at Demo up.
+keyVault:
+  name: kv-ewp-demo-check
+  tenantId: 00000000-0000-0000-0000-000000000000
+  clientId: 00000000-0000-0000-0000-000000000000
+secrets:
+  - name: ewp-shell
+    keys:
+      - {key: ConnectionStrings__MenuDbConnection, object: conn-ewp-shell-menu}
+      - {key: Oidc__ClientSecret, object: client-BSS-Shell-BFF-ClientID}
+  - name: ewp-idp
+    keys:
+      - {key: ClientSecrets__BSS.Shell.BFF.ClientID, object: client-BSS-Shell-BFF-ClientID}
+  - name: ewp-idp-signing
+    keys:
+      - {key: signing.pfx, object: pki-idp-signing-pfx, encoding: base64}

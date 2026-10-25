@@ -56,9 +56,9 @@ variable "node_vm_size" {
 }
 
 variable "node_count" {
-  description = "Number of nodes. Step 7a needs few; the whole platform (step 7b) needs more, and the subscription's vCPU quota must allow node_count x the size's vCPUs."
+  description = "Number of nodes. The whole platform (EWP's 35 services, Kafka, Temporal, the Partner Bank) needs four; the subscription's vCPU quota must allow node_count x the size's vCPUs (16 for four D4as_v5)."
   type        = number
-  default     = 2
+  default     = 4
 
   validation {
     condition     = var.node_count >= 1 && var.node_count <= 5

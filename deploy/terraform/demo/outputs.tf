@@ -1,5 +1,5 @@
 # CONTRACT: the "Demo up" workflow reads these by name (terraform output -raw <name>); step 7b's
-# platform install adds the database and Key Vault ones to the charts' values. None is secret.
+# platform install (.github/scripts/demo-platform.sh) reads the rest. None is secret.
 
 output "cluster_name" {
   value = azurerm_kubernetes_cluster.demo.name
@@ -38,11 +38,20 @@ output "postgres_admin_login" {
   value = azurerm_postgresql_flexible_server.demo.administrator_login
 }
 
-output "oidc_issuer_url" {
-  description = "For step 7b's workload identity federation (pods -> Key Vault)."
-  value       = azurerm_kubernetes_cluster.demo.oidc_issuer_url
+output "partner_bank_key_vault_name" {
+  value = azurerm_key_vault.partner_bank.name
 }
 
-output "key_vault_secrets_provider_client_id" {
-  value = azurerm_kubernetes_cluster.demo.key_vault_secrets_provider[0].secret_identity[0].client_id
+output "tenant_id" {
+  value = data.azurerm_client_config.current.tenant_id
+}
+
+output "ewp_secrets_client_id" {
+  description = "The identity EWP's secret sync pods read Key Vault with (workload-identity.tf)."
+  value       = azurerm_user_assigned_identity.ewp_secrets.client_id
+}
+
+output "partner_bank_secrets_client_id" {
+  description = "The identity the Partner Bank's secret sync pod reads its Key Vault with."
+  value       = azurerm_user_assigned_identity.partner_bank_secrets.client_id
 }
