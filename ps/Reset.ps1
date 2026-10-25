@@ -196,7 +196,8 @@ function Start-KafkaIfNeeded {
 
 function Assert-KafkaRunning {
     if (-not (Test-KafkaPort)) {
-        throw "Kafka stopped answering on localhost:9092 - was the `"$kafkaWindowTitle`" window closed? Nothing more was done to Kafka; run this script again (same option)."
+        # The window closes with the broker, so the reason is only in Kafka's own log.
+        throw "Kafka stopped answering on localhost:9092 - was the `"$kafkaWindowTitle`" window closed, or did the broker shut itself down? The reason is at the end of $KafkaHome\Logs\server.log ('ERROR Shutdown broker ...'). Nothing more was done to Kafka; run this script again (same option)."
     }
 }
 
