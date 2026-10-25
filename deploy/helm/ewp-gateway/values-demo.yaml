@@ -1,0 +1,10 @@
+# The cloud demo. The values marked <set by the pipeline> come from Terraform's outputs at install
+# time (--set), never committed (.github/workflows/demo-up.yml).
+
+# <set by the pipeline>: AZURE_DNS_ZONE_EWP
+domain: demo.ewp.example
+
+publicIp:
+  # <set by the pipeline>: terraform output gateway_ip_name / resource_group
+  name: pip-ewp-demo-gateway
+  resourceGroup: rg-ewp-demo

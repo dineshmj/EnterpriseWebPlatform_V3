@@ -1,0 +1,212 @@
+# ┌─ :: ARCHITECTURE + SECURITY :: Demo up (step 7a) ──────────────────────────────────────────────
+# │ Why : A cloud demo must appear in one approved run, and nothing may start that the watchdog
+# │       cannot later find and remove.
+# │ How : Environment azure-demo (main only, required reviewer, OIDC sign-in, no secret). Checks
+# │       first that both domains are delegated to Azure DNS (a demo whose names do not resolve
+# │       would only cost money), stamps the start time on rg-ewp-demo (the watchdog's clock),
+# │       then: terraform apply (deploy/terraform/demo) -> cluster credentials through Entra ID
+# │       -> cluster add-ons and the gateway (.github/scripts/demo-cluster-addons.sh) -> the
+# │       gateway check over the internet. Step 7b adds the platform itself.
+# │       A failed run leaves what it made: run "Demo down", or the watchdog removes it.
+# │ Ref : doc/Cloud-Demo.md | doc/Azure.md | GitHub "Configuring OpenID Connect in Azure"
+# └────────────────────────────────────────────────────────────────────────────────────────────────
+name: Demo up
+
+on:
+  workflow_dispatch:
+    inputs:
+      region:
+        description: 'Azure region (closest to the audience; each region needs its own vCPU quota)'
+        type: choice
+        options: [centralindia, australiaeast]
+        default: centralindia
+      certificate_issuer:
+        description: 'Let''s Encrypt: production (trusted; 5 per week for the same names) or staging (test runs)'
+        type: choice
+        options: [letsencrypt-production, letsencrypt-staging]
+        default: letsencrypt-production
+
+# SEC: least privilege by default; the job below asks for what it needs.
+permissions:
+  contents: read
+
+# RESIL: one run at a time against Azure (shared with Demo down, the watchdog, the access check).
+concurrency:
+  group: azure-demo
+  cancel-in-progress: false
+
+jobs:
+  up:
+    name: Bring the demo up
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: azure-demo
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      # Terraform's azurerm provider and backend sign in with the GitHub OIDC token.
+      ARM_USE_OIDC: 'true'
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      TF_IN_AUTOMATION: 'true'
+      TF_INPUT: 'false'
+      TF_VAR_demo_resource_group: ${{ vars.AZURE_DEMO_RESOURCE_GROUP }}
+      TF_VAR_dns_resource_group: ${{ vars.AZURE_DNS_RESOURCE_GROUP }}
+      TF_VAR_ewp_domain: ${{ vars.AZURE_DNS_ZONE_EWP }}
+      TF_VAR_partner_bank_domain: ${{ vars.AZURE_DNS_ZONE_PARTNER_BANK }}
+      STATE_GROUP: ${{ vars.AZURE_TFSTATE_RESOURCE_GROUP }}
+      STATE_ACCOUNT: ${{ vars.AZURE_TFSTATE_STORAGE_ACCOUNT }}
+      STATE_CONTAINER: ${{ vars.AZURE_TFSTATE_CONTAINER }}
+      CERT_ISSUER: ${{ inputs.certificate_issuer }}
+      TF_VAR_location: ${{ inputs.region }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: deploy/terraform/demo
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check the environment's variables
+        run: |
+          missing=0
+          for name in ARM_CLIENT_ID ARM_TENANT_ID ARM_SUBSCRIPTION_ID TF_VAR_demo_resource_group \
+                      TF_VAR_dns_resource_group TF_VAR_ewp_domain TF_VAR_partner_bank_domain \
+                      STATE_GROUP STATE_ACCOUNT STATE_CONTAINER; do
+            [ -n "${!name}" ] || { echo "::error::$name is empty: add its variable to the azure-demo environment (doc/Azure.md, GitHub side)."; missing=1; }
+          done
+          exit $missing
+
+      # ┌─ ARCH ─────────────────────────────────────────────────────────────────────────────────
+      # │ Let's Encrypt resolves every name through the public DNS. If a registrar still points
+      # │ elsewhere, the certificate can never be issued: stop before anything costs money.
+      # └────────────────────────────────────────────────────────────────────────────────────────
+      - name: Check both domains are delegated to Azure DNS
+        run: |
+          failed=0
+          for domain in "$TF_VAR_ewp_domain" "$TF_VAR_partner_bank_domain"; do
+            servers="$(dig +short NS "$domain" @8.8.8.8 | sort | tr '\n' ' ')"
+            if echo "$servers" | grep -q 'azure-dns'; then echo "ok  $domain -> $servers"
+            else echo "::error::$domain is not delegated to Azure DNS (name servers: ${servers:-none}). Set the zone's name servers at the registrar (doc/Azure.md, Domains)."; failed=1; fi
+          done
+          exit $failed
+
+      - name: Sign in to Azure (OIDC)
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # ┌─ ARCH ─────────────────────────────────────────────────────────────────────────────────
+      # │ The watchdog's clock: the first "Demo up" stamps the group with the start time and
+      # │ region; a re-run keeps the stamp, so re-running cannot extend a demo's life. A re-run
+      # │ with another region would make Terraform rebuild everything elsewhere: refused, run
+      # │ "Demo down" first. "Demo down" removes the stamp.
+      # └────────────────────────────────────────────────────────────────────────────────────────
+      - name: Stamp the start time and region
+        run: |
+          group="$TF_VAR_demo_resource_group"
+          started="$(az group show --name "$group" --query 'tags."ewp-demo-started"' -o tsv)"
+          region="$(az group show --name "$group" --query 'tags."ewp-demo-region"' -o tsv)"
+          if [ -n "$started" ] && [ -n "$region" ] && [ "$region" != "$TF_VAR_location" ]; then
+            echo "::error::A demo started $started is running in $region. Run Demo down first, or run Demo up with region $region."
+            exit 1
+          fi
+          if [ -z "$started" ]; then
+            started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            az group update --name "$group" --set "tags.ewp-demo-started=$started" "tags.ewp-demo-region=$TF_VAR_location" --output none
+          fi
+          echo "TF_VAR_started_at=$started" >> "$GITHUB_ENV"
+          echo "Demo started $started in $TF_VAR_location (the watchdog removes it 6 hours later)."
+
+      - name: Get the pinned tools
+        working-directory: .
+        run: bash .github/scripts/demo-tools.sh terraform kubectl kubelogin helm
+
+      - name: terraform init
+        run: |
+          terraform init -lockfile=readonly \
+            -backend-config="resource_group_name=$STATE_GROUP" \
+            -backend-config="storage_account_name=$STATE_ACCOUNT" \
+            -backend-config="container_name=$STATE_CONTAINER" \
+            -backend-config="key=demo.tfstate"
+
+      - name: terraform apply
+        run: terraform apply -auto-approve
+
+      - name: Read Terraform's outputs
+        run: |
+          {
+            echo "CLUSTER_NAME=$(terraform output -raw cluster_name)"
+            echo "DEMO_GROUP=$(terraform output -raw resource_group)"
+            echo "GATEWAY_IP=$(terraform output -raw gateway_ip)"
+            echo "GATEWAY_IP_NAME=$(terraform output -raw gateway_ip_name)"
+            echo "EWP_DOMAIN=$TF_VAR_ewp_domain"
+          } >> "$GITHUB_ENV"
+
+      # ┌─ SEC ──────────────────────────────────────────────────────────────────────────────────
+      # │ The cluster has no local accounts: the kubeconfig holds no credential, only the
+      # │ instruction to get an Entra token through the Azure CLI's sign-in (kubelogin). A new
+      # │ role assignment takes a few minutes to reach the API server: wait for it.
+      # └────────────────────────────────────────────────────────────────────────────────────────
+      - name: Cluster credentials (Entra ID)
+        run: |
+          export KUBECONFIG="$RUNNER_TEMP/kubeconfig"
+          echo "KUBECONFIG=$KUBECONFIG" >> "$GITHUB_ENV"
+          az aks get-credentials --resource-group "$DEMO_GROUP" --name "$CLUSTER_NAME" --format azure --file "$KUBECONFIG" --overwrite-existing
+          kubelogin convert-kubeconfig --login azurecli --kubeconfig "$KUBECONFIG"
+          for attempt in $(seq 1 30); do
+            kubectl get namespaces > /dev/null 2>&1 && { echo "cluster reachable"; exit 0; }
+            echo "waiting for the cluster role to apply ($attempt/30)"; sleep 20
+          done
+          kubectl get namespaces
+
+      - name: Cluster add-ons and the gateway
+        working-directory: .
+        run: bash .github/scripts/demo-cluster-addons.sh
+
+      # ┌─ OBS ──────────────────────────────────────────────────────────────────────────────────
+      # │ From the internet, as a browser would: the name resolves through public DNS, https
+      # │ answers with the gateway's fixed text, and http redirects to https. Staging
+      # │ certificates are not trusted by design, so that run skips the trust check only.
+      # └────────────────────────────────────────────────────────────────────────────────────────
+      - name: Gateway check
+        run: |
+          host="gateway-check.$EWP_DOMAIN"
+          trust=""; [ "$CERT_ISSUER" = "letsencrypt-staging" ] && trust="--insecure"
+          for attempt in $(seq 1 30); do
+            resolved="$(dig +short A "$host" @8.8.8.8 | tail -n 1)"
+            if [ "$resolved" = "$GATEWAY_IP" ] && body="$(curl -fsS $trust --max-time 15 "https://$host/")" && [ "$body" = "EWP gateway OK" ]; then
+              redirect="$(curl -s -o /dev/null --max-time 15 -w '%{http_code} %{redirect_url}' "http://$host/")"
+              if [ "$redirect" != "301 https://$host/" ]; then echo "::error::http answered '$redirect', expected a 301 to https."; exit 1; fi
+              issuer="$(echo | openssl s_client -connect "$GATEWAY_IP:443" -servername "$host" 2>/dev/null | openssl x509 -noout -issuer)"
+              echo "ok  https://$host/ -> $body ($issuer); http -> $redirect"
+              exit 0
+            fi
+            echo "waiting for https://$host/ (resolves to: ${resolved:-nothing}) ($attempt/30)"; sleep 20
+          done
+          echo "::error::https://$host/ did not answer as expected."
+          exit 1
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Demo up"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Started | ${TF_VAR_started_at:-?} (removed by the watchdog 6 hours later) |"
+            echo "| Region | $TF_VAR_location |"
+            echo "| Gateway | ${GATEWAY_IP:-not created} |"
+            echo "| Gateway check | https://gateway-check.${TF_VAR_ewp_domain}/ |"
+            echo "| Certificate issuer | $CERT_ISSUER |"
+            echo "| Job status | ${{ job.status }} |"
+            echo ""
+            echo "Tear it down with **Actions > Demo down** when finished."
+          } >> "$GITHUB_STEP_SUMMARY"

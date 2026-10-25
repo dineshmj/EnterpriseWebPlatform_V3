@@ -7,20 +7,20 @@ run once by the subscription's owner, creates all of it. One workflow,
 [Azure access check](../.github/workflows/azure-access-check.yml), proves the result.
 
 In short: **GitHub signs in to Azure without any stored secret. Azure accepts the sign-in only
-from this repository's `azure-demo` environment, which runs only from `main` and only after a
-person approves. The identity may change one resource group (the throw-away one), the
-Terraform state and the demo's address records in the two DNS zones, and nothing else in the
-subscription.**
+from this repository's two environments, which run only from `main`: `azure-demo` (building a
+demo) only after a person approves, `azure-demo-teardown` (removing it) unattended. The
+identity may change one resource group (the throw-away one), the Terraform state and the
+demo's address records in the two DNS zones, and nothing else in the subscription.**
 
 This covers steps 5 (the bootstrap) and 6 (the domains) of the cloud demo. Step 7 adds the
-Terraform code and the demo up / down workflows ([Kubernetes.md](Kubernetes.md) is what they
-install).
+Terraform code and the Demo up / Demo down / watchdog workflows ([Cloud-Demo.md](Cloud-Demo.md));
+[Kubernetes.md](Kubernetes.md) is what they install.
 
 ## Decisions
 
 | # | Decision | Why |
 |---|---|---|
-| A1 | **OIDC federation, no secret.** A user-assigned managed identity with one federated credential: Entra ID accepts GitHub's short-lived token only for subject `repo:dineshmj@1352986/EnterpriseWebPlatform_V3@1377215876:environment:azure-demo` (owner and repository with their numeric ids, as GitHub issues it) and audience `api://AzureADTokenExchange` | A client secret in GitHub is a long-lived key that works from anywhere until rotated. A managed identity cannot even have one. A managed identity (not an app registration) needs no directory rights to create and lives in the permanent group |
+| A1 | **OIDC federation, no secret.** A user-assigned managed identity with two federated credentials: Entra ID accepts GitHub's short-lived token only for subject `repo:dineshmj@1352986/EnterpriseWebPlatform_V3@1377215876:environment:azure-demo` or `...:environment:azure-demo-teardown` (owner and repository with their numeric ids, as GitHub issues it) and audience `api://AzureADTokenExchange` | A client secret in GitHub is a long-lived key that works from anywhere until rotated. A managed identity cannot even have one. A managed identity (not an app registration) needs no directory rights to create and lives in the permanent group |
 | A2 | **Rights on two fixed resource groups, none on the subscription** (scope B, decided 24-OCT). `rg-ewp-foundation` is permanent; `rg-ewp-demo` always exists, a demo fills it and the teardown empties it | A workflow that may create resource groups needs subscription rights, and then it can reach everything in the subscription. With fixed groups the most a stolen token can damage is the demo |
 | A3 | **No management rights on the permanent group.** The identity has only Storage Blob Data Contributor on the `tfstate` container | The permanent group holds the identity itself. Contributor there would let the workflow add a federated credential to its own identity (a new way in) or delete the state |
 | A4 | **Contributor on `rg-ewp-demo`, plus Role Based Access Control Administrator limited by a condition**: it may create and delete only Network Contributor, Key Vault Secrets User / Certificate User / Secrets Officer and AKS RBAC Cluster Admin, and only for principals of type ServicePrincipal | Terraform must grant the cluster's identity its subnet, the pods' identity the Key Vault, and itself the cluster. Unconditioned, the same role could make the workflow Owner or give a person access |
@@ -29,6 +29,7 @@ install).
 | A7 | **The bootstrap is a script a person runs, not Terraform.** Run it again to repair anything that drifted; `-Remove` undoes all of it | It needs the owner's rights (role assignments, subscription budget, provider registration), which no workflow should hold. Terraform would also need somewhere to keep the state of the thing that holds the state |
 | A8 | **Two registrable domains** (step 6, decided 25-OCT), one for EWP and one for the Partner Bank, each with an **Azure DNS zone in `rg-ewp-foundation`**. The zones are permanent; the demo's records are not: step 7's Terraform writes the A / CNAME records to that demo's gateway, and `terraform destroy` removes them. Nothing in the cluster gets DNS rights (no external-dns); Let's Encrypt checks over HTTP-01 | Two organisations should be two sites to the browser (cookies, SameSite, CORS), as in production; sub-domains of one domain would be one site. A zone's name servers are fixed when it is created and set by hand at the registrar, so the zone must outlive every demo, while the gateway's address changes with every demo. Records written by the deployment identity keep DNS rights out of the cluster and need no change to A4 |
 | A9 | **The identity writes only A and CNAME records**: a custom role `EWP Demo DNS Record Writer` (read the zone; A and CNAME records), assignable only in `rg-ewp-foundation` and assigned per zone. The script itself sets the apex **CAA** record (`0 issue "letsencrypt.org"`) and a **CanNotDelete lock on the SOA record set** | DNS Zone Contributor would let a stolen token delete a zone (new name servers: the domain is dark until the registrar is changed), delegate a sub-domain to other name servers (NS) or allow any certificate authority (CAA). A lock on the zone itself is inherited by every record set, so `terraform destroy` could not delete the demo's records. Azure cannot delete a zone without its SOA record set, so the SOA lock stops a zone delete by anyone, the owner included, and leaves records free to change (Microsoft's "Protecting DNS zones and records") |
+| A10 | **A second environment, `azure-demo-teardown`, for removing only** (step 7, decided 25-OCT): `main` only, **no reviewer**, its own federated credential on the same identity. Demo down and the hourly watchdog run in it; Demo up and the access check stay in `azure-demo` | A watchdog that waits for an approval does not stop a demo forgotten at night. The same identity keeps the bootstrap simple; the price is R-19 (Threat-Model): a workflow on `main` asking for this environment could also create. `main` changes only through a pull request with green CI |
 
 ## What exists afterwards
 
@@ -36,7 +37,7 @@ install).
 |---|---|---|
 | `rg-ewp-foundation` | (permanent) | Tag `ewp-purpose=foundation` |
 | `stewptf<8 hex>` storage account, container `tfstate` | foundation | The name comes from the subscription id, so it is the same on every run (`-StateStorageAccountName` if it is taken). Lock `ewp-keep-terraform-state` |
-| `id-ewp-github-demo` managed identity | foundation | Federated credential `github-azure-demo`. The script warns about any other federated credential it finds |
+| `id-ewp-github-demo` managed identity | foundation | Federated credentials `github-azure-demo` and `github-azure-demo-teardown`. The script warns about any other federated credential it finds |
 | DNS zones `<EWP domain>` and `<Partner Bank domain>` | foundation | Only with `-EwpDomain` and `-PartnerBankDomain` ([Domains](#domains)). Apex CAA record `0 issue "letsencrypt.org"`; lock `ewp-keep-dns-zone` on the SOA record set. Tags `ewp-purpose=dns-ewp` / `dns-partner-bank` |
 | Custom role `EWP Demo DNS Record Writer` | foundation (assignable scope) | `Microsoft.Network/dnsZones/read`, `.../A/*`, `.../CNAME/*` |
 | `rg-ewp-demo` | (throw-away) | Empty after the bootstrap and after every teardown |
@@ -188,6 +189,19 @@ Repository **Settings → Environments → New environment** `azure-demo`:
 | Environment secrets | **None** | There is nothing secret (A1) |
 | Environment variables | The seven the script printed: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_DEMO_RESOURCE_GROUP`, `AZURE_TFSTATE_RESOURCE_GROUP`, `AZURE_TFSTATE_STORAGE_ACCOUNT`, `AZURE_TFSTATE_CONTAINER`; after step 6 also `AZURE_DNS_RESOURCE_GROUP`, `AZURE_DNS_ZONE_EWP`, `AZURE_DNS_ZONE_PARTNER_BANK` | Identifiers, not secrets. Without a token GitHub issues for this repository and environment they open nothing |
 
+Step 7 adds a **second environment, `azure-demo-teardown`** (A10), for Demo down and the
+watchdog:
+
+| Setting | Value | Why |
+|---|---|---|
+| Required reviewers | **None** | The watchdog must be able to remove a demo while nobody is there to approve |
+| Deployment branches and tags | **Selected branches and tags**: `main` | Only reviewed, merged code may use the identity without a reviewer |
+| Environment secrets | **None** | |
+| Environment variables | **The same ten** as `azure-demo` | Each environment sees only its own variables |
+
+Its federated credential exists after running the script once more (any later run creates it;
+the output lists `created federated credential: ...:environment:azure-demo-teardown`).
+
 ## Checking it
 
 **Actions → Azure access check → Run workflow** (branch `main`), then approve the deployment.
@@ -225,9 +239,9 @@ name servers to set at the registrars.
 
 | Gap | Effect | Closed by |
 |---|---|---|
-| Contributor on `rg-ewp-demo` includes deleting the group itself | A broken or hostile run could delete the group. It could not create it again, and its role assignments would go with it | Run the bootstrap again. The teardown (step 7) empties the group with `terraform destroy` and never deletes it |
-| Inside `rg-ewp-demo` the identity may create managed identities and federated credentials (workload identity needs both) | A stolen token could leave a way back in, through an identity in the demo group federated to another issuer. It would reach no further than the demo group, and only until the next teardown | The teardown empties the group. Step 7's demo-down workflow checks the group is empty. A required reviewer approves every run |
-| The budget warns but does not stop anything | A demo nobody tears down keeps costing until someone acts on the e-mail | Step 7: teardown at the end of every run, plus a scheduled watchdog that destroys anything older than the allowed time |
+| Contributor on `rg-ewp-demo` includes deleting the group itself | A broken or hostile run could delete the group. It could not create it again, and its role assignments would go with it | Run the bootstrap again. Demo down empties the group with `terraform destroy` and never deletes it |
+| Inside `rg-ewp-demo` the identity may create managed identities and federated credentials (workload identity needs both) | A stolen token could leave a way back in, through an identity in the demo group federated to another issuer. It would reach no further than the demo group, and only until the next teardown | Demo down empties the group, then checks it is empty and deletes (and reports) anything Terraform did not know. A required reviewer approves every run that creates |
+| The budget warns but does not stop anything | A demo nobody tears down keeps costing until someone acts on the e-mail | Step 7 (built): Demo down at the end of every demo, and the hourly watchdog removes any demo older than 6 hours ([Cloud-Demo.md](Cloud-Demo.md)) |
 | The state account has a public endpoint | Reachable from the internet. Entra ID sign-in is still required, and no key exists | Self-hosted runners or a private endpoint, out of scope for the demo |
 | The identity may overwrite any A or CNAME record in the two zones, not only the demo's | A stolen token could point a demo host name somewhere else until the next demo or teardown. The zones hold nothing but the demo's names, and CAA still allows only Let's Encrypt, which checks control of the host first | Record-set level assignments would need the records to exist first; not worth it for demo-only zones |
 | No DNSSEC | A resolver cannot tell forged answers for the demo's names from real ones. TLS (Let's Encrypt certificates) still protects the connection | Azure DNS can sign the zones; it needs a DS record at each registrar and key rollover care. Out of scope for the demo |

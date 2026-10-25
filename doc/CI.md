@@ -15,7 +15,8 @@ path filter: a required check must always report).
 |---|---|---|
 | .NET | Restore -> vulnerable packages (`dotnet list package --vulnerable --include-transitive`, the solution's deployed packages) -> Release build of `EnterpriseWebPlatform.BSS.slnx` -> unit tests (`tst/dotnet/EwpTests.slnx`) | A HIGH or CRITICAL advisory; a build error; a failing test. Lower advisories are listed on the run's summary |
 | Node (one job per project) | Every `src/**/package.json`, found automatically: install from the committed lockfile (`--frozen-lockfile`) -> Next.js route types (`next typegen`) -> type check -> `pnpm audit --prod` -> tests where a `test` script exists (the Partner Products Journey API: Jest against the real WireMock jar, pinned to 3.13.2 and checked against Maven Central's SHA-256) | A lockfile out of step with `package.json`; a type error; a HIGH or CRITICAL advisory in a production dependency; a failing test |
-| Helm charts | [check-charts.sh](../deploy/helm/check-charts.sh): `helm lint --strict` + `helm template` of `deploy/helm/ewp-cluster` and `deploy/helm/ewp` with every `values-*.yaml` -> kubeconform (strict) against the Kubernetes 1.34 schemas and the cert-manager / trust-manager / Gateway API schemas (CRDs catalog at a pinned commit) -> the chart must refuse to render without each required value. Helm 4.3.1 and kubeconform 0.8.0, each kept only with its published SHA-256 ([Kubernetes.md](Kubernetes.md)) | A lint error; an object that does not match its schema (strict: unknown fields too); a required value no longer refused |
+| Helm charts | [check-charts.sh](../deploy/helm/check-charts.sh): `helm lint --strict` + `helm template` of `deploy/helm/ewp-cluster`, `deploy/helm/ewp` with every `values-*.yaml` and `deploy/helm/ewp-gateway` -> kubeconform (strict) against the Kubernetes 1.34 schemas and the cert-manager / trust-manager / Gateway API / Envoy Gateway schemas (CRDs catalog at a pinned commit) -> each chart must refuse to render without each required value -> the gateway's public certificate must list exactly the EWP chart's public hosts. Helm 4.3.1 and kubeconform 0.8.0, each kept only with its published SHA-256 ([Kubernetes.md](Kubernetes.md)) | A lint error; an object that does not match its schema (strict: unknown fields too); a required value no longer refused; a public host missing from the certificate |
+| Terraform | The cloud demo's code ([deploy/terraform/demo](../deploy/terraform/demo)): `terraform fmt -check` -> `terraform init -backend=false -lockfile=readonly` (no Azure, no credentials; providers only with the checksums in `.terraform.lock.hcl`) -> `terraform validate`; `bash -n` of `.github/scripts/demo-*.sh`. Terraform 1.16.7 from [demo-tools.sh](../.github/scripts/demo-tools.sh), kept only with its published SHA-256 ([Cloud-Demo.md](Cloud-Demo.md)) | Unformatted code; a provider whose checksum differs from the lock file; an invalid configuration; a shell syntax error |
 | **CI result** | Sums up the jobs above | Any of them did not succeed. **This is the one check branch protection requires** |
 
 Not gated here, and why:
@@ -30,6 +31,9 @@ Not gated here, and why:
 - **Azure access check**: [azure-access-check.yml](../.github/workflows/azure-access-check.yml)
   is started by hand from `main`, needs the `azure-demo` environment's approval, and checks the
   demo identity's rights in Azure ([Azure.md](Azure.md)). It is not a pull request gate.
+- **Demo up / Demo down / Demo watchdog**: the cloud demo's workflows run against Azure from
+  `main` only ([Cloud-Demo.md](Cloud-Demo.md)); CI checks their Terraform and scripts without
+  Azure (the Terraform job above).
 
 A new advisory can turn a gate red without a code change (as body-parser and multer did on
 24-OCT). That is intended: fix the dependency (an update, or an override in

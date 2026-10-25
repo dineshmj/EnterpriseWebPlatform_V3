@@ -1,6 +1,6 @@
 # Kubernetes deployment (Helm)
 
-How EWP's 35 images ([Containers.md](Containers.md)) run in a Kubernetes cluster: two Helm
+How EWP's 35 images ([Containers.md](Containers.md)) run in a Kubernetes cluster: the Helm
 charts under [deploy/helm](../deploy/helm), what a cluster must have before them, and every
 secret an environment must create.
 
@@ -12,6 +12,7 @@ the Kubernetes Secrets it reads, and a missing one stops the pod with that name.
 | Chart | Installed | What it makes |
 |---|---|---|
 | [ewp-cluster](../deploy/helm/ewp-cluster) | Once per cluster | EWP's private CA (cert-manager ClusterIssuer `ewp-internal-ca`) and two trust bundles (trust-manager), copied into every namespace labelled `ewp.dev/trust=true` |
+| [ewp-gateway](../deploy/helm/ewp-gateway) | Once per cluster, in `gateway-system` | The public way in: Envoy Gateway's proxy bound to the environment's public IP, the Gateway (`http` for Let's Encrypt and the redirect, `https` with the public certificate), the Let's Encrypt issuers, one certificate for every EWP host, and a fixed-answer gateway check ([Cloud-Demo.md](Cloud-Demo.md)) |
 | [ewp](../deploy/helm/ewp) | Once per environment (namespace) | Per component: Deployment, Service, Certificate, NetworkPolicy, PodDisruptionBudget (2+ instances); per browser-facing component: HTTPRoute + BackendTLSPolicy; the Platform Health list (ConfigMap); the two volumes |
 
 ## Decisions
@@ -35,9 +36,9 @@ the Kubernetes Secrets it reads, and a missing one stops the pod with that name.
 |---|---|
 | Kubernetes **1.34+** | The version the charts are checked against (CI, kubeconform); `Chart.yaml` refuses older clusters |
 | **cert-manager** and **trust-manager** (trust namespace `cert-manager`), then `helm install ewp-cluster deploy/helm/ewp-cluster` | K3 |
-| A **Gateway API** implementation with **BackendTLSPolicy** (Gateway API 1.4+), and a Gateway with an https listener and the public certificate | K4 |
+| A **Gateway API** implementation with **BackendTLSPolicy** (Gateway API 1.4+), and a Gateway with an https listener and the public certificate. The demo: Envoy Gateway 1.9 (Gateway API 1.6) and [ewp-gateway](../deploy/helm/ewp-gateway) | K4 |
 | A CNI that enforces **NetworkPolicy** (Azure CNI with Cilium on AKS) | K6 |
-| The namespace labelled `ewp.dev/trust=true` | trust-manager copies the bundles only there |
+| The namespace labelled `ewp.dev/trust=true` and `ewp.dev/gateway-routes=true` | trust-manager copies the bundles only to the first; the Gateway's https listener accepts routes only from the second |
 | PostgreSQL with the 12 databases and their users (`db/`), Kafka (SASL_SSL, the users and ACLs of `kafka/`), Temporal | The chart deploys EWP's services, not their infrastructure |
 | The **Partner Bank**, from its own chart in its own namespace ([its doc/Kubernetes.md](https://github.com/dineshmj/EnterpriseWebPlatform_V3_PartnerBank/blob/main/doc/Kubernetes.md)): TLS passed through at the same Gateway (four TLS listeners in Passthrough mode), the home PC's port numbers on `partner-auth`, `partner-api`, `partner-products` `.<Partner Bank domain>`, a registrable domain of its own ([Azure.md](Azure.md) A8) | `global.partnerBank`: EWP calls it like any outside client, through the Gateway, with its client certificate |
 
@@ -45,7 +46,9 @@ the Kubernetes Secrets it reads, and a missing one stops the pod with that name.
 
 ```text
 helm install ewp-cluster deploy/helm/ewp-cluster                      # once per cluster
-kubectl create namespace ewp && kubectl label namespace ewp ewp.dev/trust=true
+helm install ewp-gateway deploy/helm/ewp-gateway -n gateway-system ... # once per cluster
+kubectl create namespace ewp
+kubectl label namespace ewp ewp.dev/trust=true ewp.dev/gateway-routes=true
 # create the Secrets listed below (secret store / script)
 helm install ewp deploy/helm/ewp -n ewp -f deploy/helm/ewp/values-demo.yaml \
   --set global.domain=<domain> --set global.image.tag=<full commit SHA> ...
@@ -99,15 +102,17 @@ The `<component>-tls` Secrets are made by cert-manager, the `ewp-internal-ca` an
 
 [check-charts.sh](../deploy/helm/check-charts.sh) - in CI (job "Helm charts", part of
 **CI result**, [CI.md](CI.md)) and on a laptop with `helm` on the PATH: `helm lint --strict` and
-`helm template` of both charts with every `values-*.yaml`, kubeconform (strict) against the
-Kubernetes 1.34 schemas and the cert-manager / trust-manager / Gateway API schemas, and a check
-that each required value still stops a render. Nothing here needs a cluster or Docker.
+`helm template` of the three charts with every `values-*.yaml`, kubeconform (strict) against the
+Kubernetes 1.34 schemas and the cert-manager / trust-manager / Gateway API / Envoy Gateway
+schemas, a check that each required value still stops a render, and a check that the public
+certificate (ewp-gateway `hosts`) lists exactly the EWP chart's public hosts. Nothing here needs
+a cluster or Docker.
 
 ## Known gaps
 
 | Gap | Effect | Planned fix |
 |---|---|---|
-| Not yet installed on a cluster: the charts are checked by rendering and schemas only | Problems only a running cluster shows (the Gateway's BackendTLSPolicy support, a probe timing, a missing grant) are still to find | The first demo run (steps 5-7: Azure bootstrap, domains, Terraform + workflows) |
+| The EWP chart is not yet installed on a cluster: it is checked by rendering and schemas only (step 7a's Demo up installs ewp-cluster and ewp-gateway) | Problems only a running cluster shows (the Gateway's BackendTLSPolicy support, a probe timing, a missing grant) are still to find | Step 7b: the platform on the demo cluster |
 | Kestrel and Node read their certificate at start-up only | A renewed certificate is used after the next restart | 30 days' margin; a demo cluster lives hours. Longer-lived: a reloader that restarts on Secret change, or certificate reload in the hosts |
 | No egress NetworkPolicy | A compromised pod can open connections out of the namespace | With the environment's addresses (PostgreSQL, Kafka, Temporal, the Partner Bank, the Gateway's public IP) at the Terraform step |
 | TLS between pods is server-authenticated, not mutual | A caller proves who it is with its token (every API checks it), not with a certificate | Accepted (Threat-Model R-9); a mesh with mTLS remains the production option |

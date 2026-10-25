@@ -13,6 +13,12 @@ updates:
     schedule:
       interval: weekly
 
+  # The cloud demo's Terraform providers (exact versions + .terraform.lock.hcl checksums).
+  - package-ecosystem: terraform
+    directory: /deploy/terraform/demo
+    schedule:
+      interval: weekly
+
   - package-ecosystem: docker
     # Every folder with a Dockerfile (doc/Containers.md, "Adding an image").
     directories:

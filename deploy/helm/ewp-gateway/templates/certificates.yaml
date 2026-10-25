@@ -1,0 +1,61 @@
+{{- /*
+┌─ :: SECURITY :: The public certificate (Let's Encrypt) ────────────────────────────────────────
+│ Why : The browser must trust EWP's hosts without anything installed; the certificate must
+│       come and go with the demo, without a person in the loop.
+│ How : Two ClusterIssuers (Let's Encrypt staging and production), both answering HTTP-01
+│       through the Gateway's http listener, so nothing in the cluster needs DNS rights
+│       (doc/Azure.md A8). One Certificate lists every EWP host: one order, one renewal. ECDSA
+│       P-256, a new key on every issue. The zones' CAA record allows only Let's Encrypt.
+│       The ACME account keys stay in cert-manager's namespace.
+│ Ref : doc/Cloud-Demo.md | doc/Azure.md A8, A9 | cert-manager "HTTP01 with Gateway API" | RFC 8659 (CAA)
+└────────────────────────────────────────────────────────────────────────────────────────────────
+*/ -}}
+{{- $issuers := dict "letsencrypt-production" "https://acme-v02.api.letsencrypt.org/directory" "letsencrypt-staging" "https://acme-staging-v02.api.letsencrypt.org/directory" -}}
+{{- if not (hasKey $issuers .Values.certificates.issuer) }}
+{{- fail "certificates.issuer must be letsencrypt-production or letsencrypt-staging" }}
+{{- end }}
+{{- $root := . -}}
+{{- range $name, $server := $issuers }}
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: {{ $name }}
+spec:
+  acme:
+    server: {{ $server }}
+    privateKeySecretRef:
+      name: {{ $name }}-account
+    solvers:
+      - http01:
+          gatewayHTTPRoute:
+            parentRefs:
+              - group: gateway.networking.k8s.io
+                kind: Gateway
+                name: {{ $root.Values.gateway.name }}
+                namespace: {{ $root.Release.Namespace }}
+                sectionName: http
+{{- end }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ewp-public-tls
+  namespace: {{ .Release.Namespace }}
+spec:
+  secretName: ewp-public-tls
+  issuerRef:
+    kind: ClusterIssuer
+    name: {{ .Values.certificates.issuer }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  dnsNames:
+    {{- $domain := required "domain is required" .Values.domain }}
+    {{- range .Values.hosts }}
+    - {{ . }}.{{ $domain }}
+    {{- end }}
+    {{- if .Values.gatewayCheck.enabled }}
+    - {{ .Values.gatewayCheck.host }}.{{ $domain }}
+    {{- end }}

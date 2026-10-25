@@ -1,0 +1,56 @@
+# ┌─ :: ARCHITECTURE + SECURITY :: The public way in (once per cluster) ───────────────────────────
+# │ Why : The EWP chart's routes name a Gateway they do not create (doc/Kubernetes.md K4): the
+# │       public address, the public certificate and the TLS settings belong to the environment,
+# │       and outlive any one EWP release.
+# │ How : Installed into the gateway's namespace (gateway-system), after Envoy Gateway and
+# │       cert-manager. Envoy's proxy runs in that namespace too (Envoy Gateway "GatewayNamespace"
+# │       mode), which is what both charts' NetworkPolicies admit. Its Service binds the public IP
+# │       Terraform made, so the DNS records already point at it. Let's Encrypt checks each name
+# │       over HTTP-01 on the http listener; everything else on http is redirected to https.
+# │ Ref : doc/Cloud-Demo.md | doc/Kubernetes.md K4 | Gateway API v1.6 | RFC 8555 (ACME)
+# └────────────────────────────────────────────────────────────────────────────────────────────────
+
+# Required: EWP's domain; the hosts below are <host>.<domain>.
+domain: ""
+
+# CONTRACT: the public hosts of deploy/helm/ewp (components' public.host). One certificate covers
+# them all; check-charts.sh fails when the two lists differ.
+hosts:
+  - idp
+  - shell
+  - customer
+  - kyc
+  - compliance
+  - accounts
+  - payments
+  - audit
+  - operations
+  - ewp-partner
+
+gateway:
+  name: ewp-gateway
+  className: ewp-envoy
+  # SEC: only namespaces with this label may attach routes to the https listener (EWP's
+  # namespace, and this one for the gateway check). The http listener takes routes from this
+  # namespace only: the redirect and cert-manager's HTTP-01 answers.
+  routeNamespaceLabel: ewp.dev/gateway-routes
+
+# The public IP made by Terraform (outputs gateway_ip_name, resource_group). Required.
+publicIp:
+  name: ""
+  resourceGroup: ""
+
+envoy:
+  replicas: 1
+
+certificates:
+  # letsencrypt-production (browsers trust it) or letsencrypt-staging (not trusted, but far
+  # higher rate limits: use it for test runs). Production allows 5 certificates for the same
+  # set of names per 7 days.
+  issuer: letsencrypt-production
+
+# A fixed answer from the gateway itself (no pod): proves DNS, the public IP, the certificate
+# and the redirect before any EWP service is installed.
+gatewayCheck:
+  enabled: true
+  host: gateway-check

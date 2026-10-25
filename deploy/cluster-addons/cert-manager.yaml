@@ -1,0 +1,16 @@
+# ┌─ :: SECURITY :: cert-manager (public and private certificates) ────────────────────────────────
+# │ Why : Two kinds of certificate, both without a person: Let's Encrypt for the browser
+# │       (deploy/helm/ewp-gateway) and EWP's private CA for TLS between pods (ewp-cluster).
+# │ How : Helm values for oci://quay.io/jetstack/charts/cert-manager (version in
+# │       .github/scripts/demo-cluster-addons.sh). CRDs installed with the chart. Gateway API
+# │       support on, so HTTP-01 answers are served through the Gateway (installed first: the
+# │       controller reads the Gateway API CRDs at start-up).
+# │ Ref : doc/Cloud-Demo.md | cert-manager "Gateway API" | RFC 8555
+# └────────────────────────────────────────────────────────────────────────────────────────────────
+crds:
+  enabled: true
+
+config:
+  apiVersion: controller.config.cert-manager.io/v1alpha1
+  kind: ControllerConfiguration
+  enableGatewayAPI: true

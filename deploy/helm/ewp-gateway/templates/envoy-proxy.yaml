@@ -1,0 +1,40 @@
+{{- /*
+┌─ :: ARCHITECTURE :: Envoy's proxy, bound to the environment's public IP ───────────────────────
+│ Why : The DNS records point at a public IP Terraform made before the cluster existed; a
+│       Service that took a fresh address from Azure would leave them pointing at nothing.
+│ How : The GatewayClass hands Envoy Gateway these settings: the proxy's LoadBalancer Service
+│       asks Azure for that IP by name, in the resource group that holds it (the cluster's
+│       identity has Network Contributor on that IP). externalTrafficPolicy Local keeps the
+│       browser's address (X-Forwarded-For) and sends traffic only to nodes running a proxy.
+│ Ref : doc/Cloud-Demo.md | Microsoft "Use a static public IP address with the AKS load balancer"
+└────────────────────────────────────────────────────────────────────────────────────────────────
+*/ -}}
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: {{ .Values.gateway.className }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment:
+        replicas: {{ .Values.envoy.replicas }}
+      envoyService:
+        type: LoadBalancer
+        externalTrafficPolicy: Local
+        annotations:
+          service.beta.kubernetes.io/azure-pip-name: {{ required "publicIp.name is required" .Values.publicIp.name | quote }}
+          service.beta.kubernetes.io/azure-load-balancer-resource-group: {{ required "publicIp.resourceGroup is required" .Values.publicIp.resourceGroup | quote }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: {{ .Values.gateway.className }}
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  parametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: {{ .Values.gateway.className }}
+    namespace: {{ .Release.Namespace }}

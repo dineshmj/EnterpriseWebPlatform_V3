@@ -8,7 +8,8 @@
 # │       type check (Next.js route types generated first) -> pnpm audit of the production
 # │       dependencies (HIGH / CRITICAL fails) -> its tests, if it has any (Jest against the
 # │       real WireMock jar, pinned and checksum-verified).
-# │       Helm: both charts linted, rendered and schema-checked (deploy/helm/check-charts.sh).
+# │       Helm: the charts linted, rendered and schema-checked (deploy/helm/check-charts.sh).
+# │       Terraform: the cloud demo's code formatted and valid (no Azure needed).
 # │       "CI result" sums them up: it is the ONE check branch protection requires. No path
 # │       filter, so it reports on every commit (a required check that never runs would block).
 # │       Actions are pinned to commit SHAs; the job token can only read.
@@ -193,7 +194,7 @@ jobs:
   # ┌─ :: ARCHITECTURE + SECURITY :: The Helm charts render to valid Kubernetes objects ───────────
   # │ Why : A chart error would show only at install time in a short-lived demo cluster; here it
   # │       fails the pull request instead, without any cluster.
-  # │ How : helm lint + helm template of both charts with every values file, then kubeconform
+  # │ How : helm lint + helm template of the charts with every values file, then kubeconform
   # │       (strict: unknown fields fail) against the Kubernetes 1.34 schemas and the CRD
   # │       schemas (cert-manager, trust-manager, Gateway API) from the CRDs catalog at a pinned
   # │       commit. The chart must also REFUSE to render without its required values. Helm and
@@ -233,13 +234,46 @@ jobs:
       - name: Lint and validate
         run: bash deploy/helm/check-charts.sh
 
+  # ┌─ :: ARCHITECTURE + SECURITY :: The cloud demo's Terraform is valid before it meets Azure ────
+  # │ Why : "Demo up" runs only from main, with a person's approval and real money behind it; a
+  # │       syntax or provider error found there wastes both.
+  # │ How : terraform fmt -check, init without a backend (no Azure, no credentials) from the
+  # │       committed lock file only (-lockfile=readonly: a provider whose checksum differs
+  # │       fails), validate. The demo's shell scripts are syntax-checked too. Terraform comes
+  # │       from .github/scripts/demo-tools.sh, pinned and checksum-verified like Helm.
+  # │ Ref : doc/Cloud-Demo.md | OWASP A08
+  # └────────────────────────────────────────────────────────────────────────────────────────────────
+  terraform:
+    name: Terraform
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Get Terraform
+        run: bash .github/scripts/demo-tools.sh terraform
+
+      - name: Format, init, validate
+        working-directory: deploy/terraform/demo
+        run: |
+          set -euo pipefail
+          terraform fmt -check -recursive -diff
+          terraform init -backend=false -lockfile=readonly -input=false
+          terraform validate
+
+      - name: Shell syntax of the demo scripts
+        run: for script in .github/scripts/demo-*.sh; do bash -n "$script" && echo "ok  $script"; done
+
   # ┌─ ARCH ─────────────────────────────────────────────────────────────────────────────────────────
   # │ The single required check: green only when every job above succeeded. Runs even when one
   # │ failed or was skipped, so branch protection always gets an answer.
   # └────────────────────────────────────────────────────────────────────────────────────────────────
   result:
     name: CI result
-    needs: [dotnet, node-projects, node, helm]
+    needs: [dotnet, node-projects, node, helm, terraform]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 2
