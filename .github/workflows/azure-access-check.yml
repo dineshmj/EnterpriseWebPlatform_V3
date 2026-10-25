@@ -1,0 +1,103 @@
+# ┌─ :: SECURITY :: Azure access check (step 5) ───────────────────────────────────────────────────
+# │ Why : The bootstrap (deploy/azure/Initialize-AzureDemo.ps1) gives the demo identity narrow
+# │       rights. Narrow rights are easy to get wrong in both directions: too few and the demo
+# │       fails half-way; too many and a compromised workflow reaches further than it should.
+# │ How : Signs in exactly like the demo workflows will (OIDC, environment azure-demo, no secret)
+# │       and checks both sides: what it MUST be able to do (use rg-ewp-demo, write and read a
+# │       state blob) and what it must NOT (see or touch rg-ewp-foundation's resources, create a
+# │       resource group, read storage keys, hand out Owner). Changes nothing it does not undo.
+# │ Ref : doc/Azure.md "Checking it" | GitHub "Configuring OpenID Connect in Azure"
+# └────────────────────────────────────────────────────────────────────────────────────────────────
+name: Azure access check
+
+on:
+  workflow_dispatch:
+
+# SEC: least privilege by default; the job below asks for what it needs.
+permissions:
+  contents: read
+
+concurrency:
+  group: azure-demo
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check the demo identity's rights
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # SEC: the federated credential accepts only tokens of this environment; the environment
+    # admits only main and waits for the required reviewer.
+    environment: azure-demo
+    permissions:
+      id-token: write        # ask GitHub for the OIDC token Entra exchanges
+      contents: read
+    env:
+      DEMO_GROUP: ${{ vars.AZURE_DEMO_RESOURCE_GROUP }}
+      STATE_GROUP: ${{ vars.AZURE_TFSTATE_RESOURCE_GROUP }}
+      STATE_ACCOUNT: ${{ vars.AZURE_TFSTATE_STORAGE_ACCOUNT }}
+      STATE_CONTAINER: ${{ vars.AZURE_TFSTATE_CONTAINER }}
+    steps:
+      - name: Sign in to Azure (OIDC)
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Check what it may and may not do
+        shell: bash
+        run: |
+          set -uo pipefail
+          failures=0
+          pass() { echo "PASS  $1"; echo "| PASS | $1 |" >> "$GITHUB_STEP_SUMMARY"; }
+          fail() { echo "FAIL  $1"; echo "| **FAIL** | $1 |" >> "$GITHUB_STEP_SUMMARY"; failures=$((failures + 1)); }
+          must()    { local what="$1"; shift; if "$@" > /dev/null 2>&1; then pass "may: $what"; else fail "may: $what"; fi; }
+          mustnot() { local what="$1"; shift; if "$@" > /dev/null 2>&1; then fail "must not: $what"; else pass "must not: $what"; fi; }
+          printf '| Result | Check |\n|---|---|\n' >> "$GITHUB_STEP_SUMMARY"
+
+          for name in DEMO_GROUP STATE_GROUP STATE_ACCOUNT STATE_CONTAINER; do
+            [ -n "${!name}" ] || { echo "Environment variable for $name is not set (doc/Azure.md, GitHub side)."; exit 1; }
+          done
+
+          # ── What it must be able to do ──
+          must "read $DEMO_GROUP" az group show --name "$DEMO_GROUP"
+          must "tag $DEMO_GROUP (Contributor)" az group update --name "$DEMO_GROUP" --set "tags.ewp-last-access-check=$GITHUB_RUN_ID"
+
+          probe="access-check/$GITHUB_RUN_ID.txt"
+          echo "access check $GITHUB_RUN_ID" > probe.txt
+          must "write a state blob" az storage blob upload --auth-mode login --account-name "$STATE_ACCOUNT" \
+            --container-name "$STATE_CONTAINER" --name "$probe" --file probe.txt --overwrite
+          must "read a state blob" az storage blob download --auth-mode login --account-name "$STATE_ACCOUNT" \
+            --container-name "$STATE_CONTAINER" --name "$probe" --file probe-back.txt
+          az storage blob delete --auth-mode login --account-name "$STATE_ACCOUNT" \
+            --container-name "$STATE_CONTAINER" --name "$probe" > /dev/null 2>&1 || true
+
+          # ── What it must not be able to do ──
+          visible=$(az group list --query "[].name" -o tsv 2>/dev/null | sort | tr '\n' ' ')
+          if [ "$visible" = "$DEMO_GROUP " ]; then pass "must not: see any resource group but $DEMO_GROUP"
+          else fail "must not: see any resource group but $DEMO_GROUP (sees: $visible)"; fi
+
+          mustnot "create a resource group" az group create --name "rg-ewp-access-check-$GITHUB_RUN_ID" --location australiaeast
+          mustnot "read the state account's settings" az storage account show --name "$STATE_ACCOUNT" --resource-group "$STATE_GROUP"
+          mustnot "list the state account's keys" az storage account keys list --account-name "$STATE_ACCOUNT" --resource-group "$STATE_GROUP"
+          # SEC: the condition must refuse Owner. If it ever does not, take the grant back at once.
+          # The identity's object id comes from its own token (it may not read the directory).
+          payload=$(az account get-access-token --query accessToken -o tsv | cut -d. -f2 | tr '_-' '/+')
+          while [ $(( ${#payload} % 4 )) -ne 0 ]; do payload="$payload="; done
+          principal=$(echo "$payload" | base64 -d | jq -r '.oid // empty')
+          demo_scope=$(az group show --name "$DEMO_GROUP" --query id -o tsv)
+          if [ -z "$principal" ]; then
+            fail "must not: make itself Owner of $DEMO_GROUP (could not read its own object id)"
+          elif assignment=$(az role assignment create --assignee-object-id "$principal" --assignee-principal-type ServicePrincipal \
+                --role Owner --scope "$demo_scope" --query id -o tsv 2>/dev/null); then
+            az role assignment delete --ids "$assignment" > /dev/null 2>&1 || true
+            fail "must not: make itself Owner of $DEMO_GROUP (granted, then removed - check the condition)"
+          else
+            pass "must not: make itself Owner of $DEMO_GROUP"
+          fi
+
+          # Clean up the probe group in the unlikely case it was created.
+          az group delete --name "rg-ewp-access-check-$GITHUB_RUN_ID" --yes --no-wait > /dev/null 2>&1 || true
+
+          [ "$failures" -eq 0 ] || { echo "$failures check(s) failed."; exit 1; }
