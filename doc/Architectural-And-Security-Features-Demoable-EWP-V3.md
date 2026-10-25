@@ -55,6 +55,11 @@ The document answers *how the platform is built and protected*, not *which busin
 | Does restarting a BFF sign everybody out? | [2.3.4](#234-session-management), [1.6.1](#161-pod-replacement-and-horizontal-scaling) |
 | How does Kubernetes know a pod is healthy, or ready for traffic? | [1.7.2](#172-health-endpoints-for-liveness-and-readiness) |
 | How are vulnerable dependencies caught? | [2.5.1](#251-dependency-vulnerability-scanning) |
+| What does a user see when the database or the IDP is down - a white frame, a stack trace? | [1.6.6](#166-dependency-outages-answered-quickly-and-plainly) |
+| Can the IDP run as several instances? Could a DPoP proof be replayed against a second one? | [1.6.1](#161-pod-replacement-and-horizontal-scaling) |
+| How are the images built, and can one hold a secret? | [1.9.1](#191-container-images-built-only-in-ci) |
+| How does the platform run on Kubernetes? Is traffic between pods encrypted? | [1.9.2](#192-one-helm-chart-for-the-whole-platform) |
+| Can the whole platform be brought up in the cloud, and removed again, without a stored secret? | [1.9.3](#193-a-cloud-demo-that-appears-and-disappears-azure) |
 
 ---
 
@@ -94,6 +99,7 @@ The document answers *how the platform is built and protected*, not *which busin
     - [1.6.3 Timeouts, retries and circuit breakers](#163-timeouts-retries-and-circuit-breakers)
     - [1.6.4 Concurrency control](#164-concurrency-control)
     - [1.6.5 Fail-closed configuration](#165-fail-closed-configuration)
+    - [1.6.6 Dependency outages answered quickly and plainly](#166-dependency-outages-answered-quickly-and-plainly)
   - [1.7 Observability](#17-observability)
     - [1.7.1 Distributed tracing across HTTP and Kafka](#171-distributed-tracing-across-http-and-kafka)
     - [1.7.2 Health endpoints for liveness and readiness](#172-health-endpoints-for-liveness-and-readiness)
@@ -102,6 +108,10 @@ The document answers *how the platform is built and protected*, not *which busin
   - [1.8 Testing](#18-testing)
     - [1.8.1 Test layers, from one decision to the whole platform](#181-test-layers-from-one-decision-to-the-whole-platform)
     - [1.8.2 Neighbours played by WireMock (C# and TypeScript)](#182-neighbours-played-by-wiremock-c-and-typescript)
+  - [1.9 Delivery and deployment](#19-delivery-and-deployment)
+    - [1.9.1 Container images built only in CI](#191-container-images-built-only-in-ci)
+    - [1.9.2 One Helm chart for the whole platform](#192-one-helm-chart-for-the-whole-platform)
+    - [1.9.3 A cloud demo that appears and disappears (Azure)](#193-a-cloud-demo-that-appears-and-disappears-azure)
 - [2. Security features](#2-security-features)
   - [2.1 Identity](#21-identity)
     - [2.1.1 OIDC Authorization Code + PKCE through a BFF](#211-oidc-authorization-code--pkce-through-a-bff)
@@ -109,6 +119,7 @@ The document answers *how the platform is built and protected*, not *which busin
     - [2.1.3 Identity provider hardening](#213-identity-provider-hardening)
     - [2.1.4 Single sign-out](#214-single-sign-out)
     - [2.1.5 Step-up MFA for risky actions](#215-step-up-mfa-for-risky-actions)
+    - [2.1.6 Customers sign in to their own channel (My EWP, FAPI 2.0)](#216-customers-sign-in-to-their-own-channel-my-ewp-fapi-20)
   - [2.2 Authorization beyond RBAC](#22-authorization-beyond-rbac)
     - [2.2.1 Deny by default and strict token validation](#221-deny-by-default-and-strict-token-validation)
     - [2.2.2 RBAC with per-operation scopes](#222-rbac-with-per-operation-scopes)
@@ -449,6 +460,12 @@ Every component also exposes liveness and readiness endpoints for the orchestrat
 
 The KYC (NestJS) BFF and the Audit web app keep their sessions in the same database (schemas `kyc_bff` and `audit_bff`), encrypted at rest, so they too can run as several instances.
 
+**Several instances behind one address.** What a single process used to keep in memory, or read from a fixed list, now comes from a shared store or from the deployment, so the web components can run as several instances too. The IDP accepts each DPoP proof and each `private_key_jwt` client assertion only once *across all its instances*: Duende's replay cache is backed by PostgreSQL (`identity_server.replay_cache`, the SHA-256 of each `jti`), so a proof replayed against a second instance is still refused. The Operations Journey API reads the components behind Platform Health from a deployment file, checked at start-up (the Helm chart generates it). The Shell's menu names each micro front end by key and takes its address from the deployment (`MfeOrigins`, which is also the CSP `frame-src` list). The Audit, Operations and Partner Products web BFFs report *not ready* when their session database is unreachable, so traffic goes to an instance that can serve it.
+
+- Replay cache: [DatabaseReplayCache.cs](../src/IDP/Security/DatabaseReplayCache.cs); MFE addresses: [MfeOrigins.cs](../src/Shell/Configuration/MfeOrigins.cs); the Platform Health list from the chart: [operations-platform.yaml](../deploy/helm/ewp/templates/operations-platform.yaml)
+
+**Not yet:** the Notifications hub (SignalR) has no backplane, so it runs as one instance ([Containers.md](Containers.md#known-gaps-to-close-at-the-deployment-step)).
+
 #### 1.6.2 Dead-letter handling
 
 Two kinds of failure are told apart. **Transient** failures (a dependency is down) are retried in place and never dead-lettered. **Permanent** failures (malformed JSON, an unknown event type, missing required fields, a 4xx rejection from the API) can never succeed. Such a message is copied unchanged to the worker's dead-letter topic, with headers recording the reason, the original topic, partition and offset, the consumer group and the time; then it is committed, so the partition keeps flowing. If writing to the dead-letter topic itself fails, the message is retried rather than lost. On the publishing side, an Outbox row that fails ten times is **parked** (it stays unpublished with `attempt_count` and `last_error` for an operator) instead of being retried forever.
@@ -514,6 +531,18 @@ A component that is missing a required secret or setting refuses to start, rathe
 - Required audience: [CustomerKyc API Program.cs](../src/Microservices/CustomerKyc/API/Program.cs)
 - Development-only signing key: [SigningCredentialExtensions.cs](../src/IDP/Security/SigningCredentialExtensions.cs)
 - MFA required outside Development: `RequireMfaOutsideDevelopment` in [MfaStepUp.cs](../src/Common/WebUtilities/Security/MfaStepUp.cs); the Operations Journey API: `assertSafeOutsideDevelopment` in [journey-options.ts](../src/Microservices/Operations/JourneyApi/src/configuration/journey-options.ts)
+
+#### 1.6.6 Dependency outages answered quickly and plainly
+
+Sessions, key rings and every record live in PostgreSQL, and every sign-in goes through the IDP, so while either is unreachable nothing signed-in can be served - by design. What the platform guarantees is a **quick, plain answer** instead of a hanging page, a white frame or a raw error page. Every database connection gives up after 5 seconds. Every web host (the IDP, the Shell, the .NET BFFs and APIs, the Next.js BFFs and the KYC BFF) answers **503 with `Retry-After: 15`** when the database, the sign-in against the IDP, or an HTTP dependency fails: a styled page that reloads itself for a page load (also inside the Shell's frame; no script and no inline style, so the CSP stays strict), and Problem Details with a trace ID only for a call. Server actions say "temporarily unavailable" instead of signing the person out, and the Shell treats a 503 as "unavailable", not "signed out": it shows a message and asks again every 15 seconds. Readiness reports the database, so with several instances the gateway stops sending traffic to one that cannot reach it. Serialization failures and business errors are not mistaken for an outage.
+
+**Where to look at:**
+
+- .NET hosts: `FailFast`, `IsUnavailable` and `UseEwpOutageAnswer` in [DependencyOutage.cs](../src/Common/WebUtilities/Resilience/DependencyOutage.cs)
+- Next.js BFFs: [outage.ts](../src/Microservices/Audit/BFF.Web/lib/server/outage.ts) (the same in the Operations and Partner Products web apps); KYC BFF: [outage.ts](../src/Microservices/CustomerKyc/BFF.Web/src/resilience/outage.ts)
+- What each component does: [Containers.md](Containers.md#when-postgresql-or-the-idp-is-unreachable)
+
+**Not yet:** a highly available PostgreSQL (zone-redundant, automatic failover), which keeps such an outage to minutes in production.
 
 ### 1.7 Observability
 
@@ -605,6 +634,40 @@ Demo: `dotnet test tst\dotnet\EwpTests.slnx --artifacts-path $env:TEMP\ewp-tests
 - Installing WireMock standalone once: [Install-WireMock.ps1](../ps/wiremock/Install-WireMock.ps1) (pinned 3.13.2, SHA-256 checked)
 
 **Not yet:** the Payment Network and Core Banking adapters with WireMock (the simulators and the Playwright resilience tests cover them today); component tests of a whole API with a test database (controller → domain → Outbox) and WireMock behind it.
+
+### 1.9 Delivery and deployment
+
+#### 1.9.1 Container images built only in CI
+
+Each of the 35 deployables has a multi-stage Dockerfile next to its project, and images are built **only in GitHub Actions** from a known commit, never on a developer's machine. An image holds no secret and no environment's settings: everything arrives at run time, so one image runs everywhere. Runtimes are minimal and non-root - chiseled .NET (no shell, no package manager) and distroless Node 24 - and every base image is pinned by tag *and* digest, every action by commit SHA, with Dependabot proposing moves weekly. Before an image is published it is scanned (Trivy: fixable vulnerabilities and secrets) and started once as a check; on `main` it is pushed to GHCR with an SBOM and SLSA provenance attached. Nothing reaches `main` without a pull request whose single required check, **CI result**, is green: build, unit tests, NuGet and pnpm vulnerability gates, the Helm charts and the Terraform code.
+
+**Where to look at:**
+
+- Decisions and the run-time contract: [Containers.md](Containers.md); the gates and branch protection: [CI.md](CI.md)
+- Workflows: [container-images.yml](../.github/workflows/container-images.yml), [ci.yml](../.github/workflows/ci.yml); the image list: [container-images.json](../.github/container-images.json); an example: the [IDP's Dockerfile](../src/IDP/Dockerfile)
+
+#### 1.9.2 One Helm chart for the whole platform
+
+One chart deploys all 35 services the same way, from one list of components; what is reviewed once in the templates holds for every service. Every pod runs **non-root, read-only, with all capabilities dropped and no Kubernetes token** (Pod Security Standard "restricted"). **Traffic between pods is TLS** from EWP's own private CA (cert-manager, one certificate per Service, renewed automatically) - turned on at run time, with no code change and no service-mesh sidecar. **Network policies deny by default**: a component accepts connections only from the components that call it. The browser's way in is the Gateway API, which re-encrypts to the pod and checks its certificate. The chart holds no secret: it names the Kubernetes Secrets it reads, and a missing one stops the pod with that name. CI lints and renders every chart with every environment's values, checks the result against the Kubernetes schemas (kubeconform, strict), and checks that each required value is still refused when missing.
+
+**Where to look at:**
+
+- Decisions K1-K7, what a cluster needs first, every secret: [Kubernetes.md](Kubernetes.md)
+- Charts: [deploy/helm](../deploy/helm); templates: [deployments.yaml](../deploy/helm/ewp/templates/deployments.yaml), [networkpolicies.yaml](../deploy/helm/ewp/templates/networkpolicies.yaml), [certificates.yaml](../deploy/helm/ewp/templates/certificates.yaml), [routes.yaml](../deploy/helm/ewp/templates/routes.yaml)
+
+**Not yet:** egress network policies (pods may still open connections to the internet).
+
+#### 1.9.3 A cloud demo that appears and disappears (Azure)
+
+The whole platform - and the Partner Bank, from its own repository - can be brought up on Azure for a few hours and removed again completely. **Demo up** (one approved workflow run) makes the network, an AKS cluster, PostgreSQL, two Key Vaults (EWP's and the Partner Bank's) and the public IP with Terraform, puts Envoy Gateway and Let's Encrypt certificates on top, then installs Kafka (Strimzi), Temporal, the 12 databases and their users, every secret, and every service. **Demo down** removes all of it, and an hourly **watchdog** removes a demo left running for more than 6 hours. GitHub signs in to Azure **without any stored secret** (OIDC federation, accepted only from this repository's two environments on `main`), and that identity may change only the throw-away resource group, the Terraform state and the demo's DNS records. Each demo's secrets are generated during the run and kept only in Key Vault, from where the Secrets Store CSI driver (with workload identity) gives each namespace its own; nothing secret is in GitHub, the Terraform state or the repository. EWP and the Partner Bank have two separate registrable domains, so the browser treats the two organisations as two sites, as in production. First full run: 25-OCT-2026 in Central India - the platform came up and every demo user signed in at the Shell.
+
+**Where to look at:**
+
+- The bootstrap and its decisions: [Azure.md](Azure.md), [Initialize-AzureDemo.ps1](../deploy/azure/Initialize-AzureDemo.ps1)
+- Demo up / down, cost, troubleshooting: [Cloud-Demo.md](Cloud-Demo.md); Terraform: [deploy/terraform/demo](../deploy/terraform/demo); workflows: [demo-up.yml](../.github/workflows/demo-up.yml), [demo-down.yml](../.github/workflows/demo-down.yml), [demo-watchdog.yml](../.github/workflows/demo-watchdog.yml); the platform step: [demo-platform.sh](../.github/scripts/demo-platform.sh), [demo-secrets.mjs](../.github/scripts/demo-secrets.mjs)
+- Threats at the cloud boundary: [Threat-Model.md](Threat-Model.md) (TB7)
+
+**Not yet:** the business journeys walked through in the cloud; a private cluster and private endpoints; high availability (one Kafka node, Temporal's development server, one gateway proxy).
 
 ---
 
@@ -913,7 +976,9 @@ Each deployable receives only its own secrets, from its own configuration, and r
 - Per-worker secret, no default: `ClientSecret` in [KycCaseOpeningSubscriberOptions.cs](../src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/Configuration/KycCaseOpeningSubscriberOptions.cs)
 - IDP client secrets from configuration: [ClientSecretStore.cs](../src/IDP/Security/ClientSecretStore.cs)
 
-**Not yet:** an actual secret store (e.g. Azure Key Vault / AWS Secrets Manager) and key rotation.
+In the cloud demo, every secret is generated during Demo up and kept only in Azure Key Vault; each namespace reads its own through the Secrets Store CSI driver with workload identity, and the Partner Bank has a vault of its own ([1.9.3](#193-a-cloud-demo-that-appears-and-disappears-azure)).
+
+**Not yet:** key rotation; a secret store for the laptop setup (it keeps Development-only settings files).
 
 #### 2.4.6 Kafka authentication and per-topic ACLs
 
@@ -1001,6 +1066,8 @@ One script checks every .NET and npm dependency of the solution against publishe
   only through pull requests with a green "CI result": [doc/CI.md](CI.md), [ci.yml](../.github/workflows/ci.yml)
 - Container images scanned (vulnerabilities and secrets) before publishing, with SBOM and SLSA
   provenance attached: [doc/Containers.md](Containers.md)
+- Infrastructure code checked on every pull request: the Helm charts against the Kubernetes
+  schemas, Terraform formatted and validated with providers pinned by checksum ([doc/CI.md](CI.md))
 
 **Not yet:** SAST, and signing the images (they carry provenance attestations, not signatures).
 

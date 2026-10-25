@@ -462,6 +462,8 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Dependency vulnerability scanning | Present: CI gate on every pull request ([doc/CI.md](CI.md): NuGet `--vulnerable`, `pnpm audit --prod`, HIGH / CRITICAL fails; `main` takes changes only through pull requests with a green check); container images scanned by Trivy before they are published ([doc/Containers.md](Containers.md)); locally `ps/build/Scan-Dependencies.ps1` |
 | Rate limiting | Present: IDP login throttling and lockout; every .NET BFF and API limits per caller (person by subject ID, with a tighter budget for changes; machine client by client ID; anonymous by IP) and answers 429 with Retry-After. Shared code: `Common.WebUtilities/Security/RateLimiting.cs`, configuration `RateLimiting`. The NestJS Journey APIs: an overall limit and one per person and calling client; the SignalR hub: a cap on live connections per person |
 | Health checks | Present: `/health/live` and `/health/ready` on every .NET component (workers via a built-in listener); relay heartbeat and Outbox backlog (Degraded) checks |
+| Graceful degradation when a dependency is down | Present: 5-second database connect timeout everywhere; the IDP, the Shell and every BFF and API answer 503 + `Retry-After` (a self-reloading page, or Problem Details) when PostgreSQL, the sign-in at the IDP or an HTTP dependency fails; the Shell shows "temporarily unavailable" instead of signing the person out ([Containers.md](Containers.md#when-postgresql-or-the-idp-is-unreachable)) |
+| Several instances per component | Present for every component except the Notifications hub (no SignalR backplane yet): sessions, Data Protection keys, the IDP's DPoP / client-assertion replay cache and the Outbox relays are shared or locked in PostgreSQL; Platform Health's list and the MFE addresses come from the deployment |
 | Kafka authentication and authorization | Present: SCRAM-SHA-512 user per deployable, deny-by-default ACLs (own topics and consumer group only), no topic auto-creation; TLS (`SASL_SSL`, broker certificate from the local PKI, host name checked by every client) |
 | IDP hardening (lockout, no enumeration, POST logout, front-channel logout, refresh-token rotation) | Present; refresh tokens, PAR requests and signing keys in Duende's operational store (PostgreSQL), so an IDP restart signs nobody out |
 | MFA and step-up | Present, off by default in Development (`Mfa:Enabled`; cannot be switched off elsewhere - the IDP and the APIs refuse to start): TOTP with Google Authenticator for every user, enrolment at sign-in with recovery codes; tokens carry `amr` and `auth_time`, and risky actions (officer decisions, operations' retry, resend, reconciliation, simulator switch) require a RECENT MFA sign-in; a stale one is renewed in the Shell's in-page overlay with the code only, without a pop-up and without signing out (`acr_values=mfa`; only the IDP's step-up code page may be framed, by the Shell only) |
@@ -470,8 +472,11 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Document content verification (allow-list + magic bytes) | Present |
 | Direct / pre-signed document upload, malware scanning | Planned / Target |
 | Secrets per deployable, fail closed when missing | Present |
-| Secret store, key rotation | Target |
-| SBOM, SAST / SCA / DAST, artifact signing | Target |
+| Secret store, key rotation | Partial: in the cloud demo every secret is generated per demo and kept only in Azure Key Vault (one vault per organisation), read by the Secrets Store CSI driver with workload identity ([Cloud-Demo.md](Cloud-Demo.md)); key rotation Target |
+| Container images | Present: one Dockerfile per deployable (35), built only in CI from a commit; chiseled .NET and distroless Node runtimes, non-root; base images pinned by digest; Trivy scan (vulnerabilities and secrets) and a start check before publishing to GHCR ([Containers.md](Containers.md)) |
+| Kubernetes deployment | Present: one Helm chart over all components ([Kubernetes.md](Kubernetes.md)): restricted pods (non-root, read-only, no token), TLS between pods from a private CA, default-deny network policies (ingress), Gateway API with backend TLS, secrets by name only; charts checked in CI (lint, kubeconform strict). Partial: no egress policies |
+| Cloud environment as code | Present: the Azure demo ([Azure.md](Azure.md), [Cloud-Demo.md](Cloud-Demo.md)): Terraform (AKS, PostgreSQL, Key Vault, public IP, DNS records), GitHub OIDC sign-in without a stored secret, Demo up / Demo down / a 6-hour watchdog; first full run 25-OCT-2026 (all demo users signed in). Partial: single zone, public API server, one Kafka node, Temporal development server |
+| SBOM, SAST / SCA / DAST, artifact signing | Partial: SCA gate in CI (NuGet, pnpm), SBOM and SLSA provenance attached to every image, image scan with Trivy; SAST, DAST and artifact signing Target |
 | WAF, DDoS, SIEM / SOC, HA, DR, multi-region, regulatory evidence | Production Concern |
 
 ---
@@ -525,7 +530,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [x] Persistent server-side BFF sessions and Data Protection keys (.NET BFFs)
 - [x] Audit trail (tamper-evident, from Kafka; auditor screens)
 - [ ] PII-aware logging
-- [ ] Secrets management
+- [ ] Secrets management (Partial: Azure Key Vault in the cloud demo)
 - [ ] Key rotation
 - [x] CSP and security headers
 - [x] Rate limiting
@@ -539,12 +544,14 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [x] Step-up in an in-page overlay (no pop-up)
 
 **Phase 6 — Secure delivery**
-- [ ] Automated tests (Partial: Playwright end-to-end, resilience and security suite; unit tests planned)
-- [ ] SAST, SCA, secret scanning
-- [ ] SBOM
-- [ ] Container and IaC scanning
+- [ ] Automated tests (Partial: Playwright end-to-end, resilience and security suite against the local platform; unit tests and Jest in CI on every pull request)
+- [ ] SAST, SCA, secret scanning (Partial: SCA gate in CI; Trivy's secret scan of every image)
+- [x] SBOM (attached to every image)
+- [x] Container scanning (Trivy, before publishing)
+- [ ] IaC scanning (Partial: charts checked against the Kubernetes schemas, Terraform validated, in CI)
 - [ ] DAST / API testing
-- [ ] Artifact signing and provenance
+- [ ] Artifact signing and provenance (Partial: SLSA provenance attached; no signatures)
+- [x] CI gates and a protected `main` (one required check, "CI result")
 
 **Phase 7 — Operational resilience**
 - [x] OpenTelemetry traces
@@ -556,7 +563,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [ ] Backup / restore testing
 - [ ] Chaos testing
 - [ ] Runbooks
-- [ ] Terraform / IaC for cloud environments
+- [x] Terraform / IaC for cloud environments (the Azure demo)
 
 **Phase 8 — Payments orchestration**
 - [x] Orchestrated saga with funds holds, timeouts and compensation
@@ -582,6 +589,19 @@ Details: [Saga plan §2](EWP-V3-Saga-Choreography-and-Orchestration-Plans.md#2-o
 - [ ] FAPI 2.0 profile end to end (PAR for EWP's own customer channel, DPoP or mTLS everywhere)
 
 Details: [PartnerProducts-Requirements.md](Requirements/PartnerProducts-Requirements.md).
+
+**Phase 10 — Containers, Kubernetes and the cloud demo**
+- [x] Container images for all 35 deployables, built and scanned in CI, published to GHCR (2026-10-24)
+- [x] Services that run as several instances; dependency outages answered with 503 + Retry-After (2026-10-24)
+- [x] Helm charts: one chart over all components, TLS between pods, default-deny network policies (2026-10-25)
+- [x] Azure bootstrap: GitHub OIDC without a stored secret, rights on the throw-away group only, two domains (2026-10-25)
+- [x] Demo up / Demo down / watchdog with Terraform; the public gateway with Let's Encrypt (2026-10-25)
+- [x] The whole platform and the Partner Bank on AKS; every demo user signed in (2026-10-25, staging certificates)
+- [ ] The business journeys walked through in the cloud, with production certificates
+- [ ] Egress network policies
+- [ ] Centralized logs and metrics for the cloud demo (Grafana / Observe)
+
+Details: [Containers.md](Containers.md), [Kubernetes.md](Kubernetes.md), [Azure.md](Azure.md), [Cloud-Demo.md](Cloud-Demo.md).
 
 ---
 

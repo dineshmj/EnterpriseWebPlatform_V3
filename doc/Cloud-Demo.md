@@ -18,7 +18,7 @@ Step 7 of the cloud demo, in two parts:
 | Part | What | Status |
 |---|---|---|
 | **7a** | Azure resources (Terraform), cluster add-ons and the public gateway, the three workflows | Built 25-OCT-2026; first runs 25-OCT-2026 (Central India, staging): Demo up and Demo down green |
-| **7b** | The platform: Kafka, Temporal, the 12 databases and their users, the secrets in Key Vault, the EWP and Partner Bank charts | Built 25-OCT-2026, not yet run against Azure |
+| **7b** | The platform: Kafka, Temporal, the 12 databases and their users, the secrets in Key Vault, the EWP and Partner Bank charts | Built 25-OCT-2026; first run 25-OCT-2026 (Central India, staging): Demo up green, all 8 demo users signed in at the Shell; the business journeys (onboarding, payment, Digital Gold with the staff view) and a production-certificate run still to do |
 
 ## What Demo up makes
 
@@ -164,13 +164,14 @@ to the watchdog. A test run of 7a alone can use `node_count` 2 (Terraform variab
 | `No image ...:main on GHCR` | An image was never published from `main` | Run **Container images** for that image (Actions), then Demo up again |
 | `... did not answer with its issuer` (last step) | The platform is up but an issuer is not reachable through the gateway | `kubectl get pods -A`, then the pod's log; for the Partner Bank also `kubectl get httproute,backendtlspolicy -n partner-bank` |
 | `ResourceGroupDeletionBlocked` / "Rolling Upgrade in progress" in Demo down | Azure was upgrading the nodes' VM agent and would not delete the node group (first Demo down, 25-OCT-2026) | Wait until the upgrade ends (it did, by itself, within the hour) or cancel it (owner: `az vmss rolling-upgrade cancel`), then run Demo down again |
+| The Shell shows its menu, but a micro front end's frame stays empty or shows the browser's error page (staging run) | The browser does not trust Let's Encrypt's staging certificate and cannot show its "accept the risk" page inside a frame (first sign-in, 25-OCT-2026). Not a fault of the platform: the BFFs answered correctly | Expected with staging only. Open each micro front end's host once in its own tab and accept the warning, then reload the Shell; or run with `letsencrypt-production` |
 | `Terraform left resources in rg-ewp-demo` (Demo down) | Something not in the state (made by hand, or a lost state) | The run deleted them; find out where they came from |
 
 ## Known gaps
 
 | Gap | Effect | Closed by |
 |---|---|---|
-| The platform (7b) not yet run against Azure | Faults only a real cluster shows (the CSI driver with workload identity, Strimzi on AKS, the scripts on Azure's PostgreSQL, 38 pods starting on four nodes) are still to find | The first Demo up with 7b. 7a ran green on 25-OCT-2026 |
+| The business journeys not yet run in the cloud | The platform starts and every demo user signs in (25-OCT-2026), but onboarding, a payment and a Digital Gold purchase (with the staff view at the Partner Bank) have not been walked through on Azure | A Demo up with `letsencrypt-production`, then the journeys |
 | The AKS API server and the Key Vault have public endpoints | Reachable from the internet; every call still needs an Entra token with a role on that one resource, and no local account or key exists | Private cluster and private endpoints with self-hosted runners in a VNet; out of scope for the demo |
 | `azure-demo-teardown` has no reviewer, yet signs in as the full deployment identity | A workflow on `main` asking for it could also create (Threat-Model R-19) | Accepted; production would give teardown its own identity with delete rights only |
 | GitHub pauses scheduled workflows after 60 days without repository activity | The watchdog would stop | The Actions tab offers to enable it again; the budget e-mails still warn |
