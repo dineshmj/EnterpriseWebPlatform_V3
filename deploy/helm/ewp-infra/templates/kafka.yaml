@@ -1,0 +1,161 @@
+{{- /*
+┌─ :: ARCHITECTURE + SECURITY :: Kafka: TLS, one SCRAM user per deployable, deny by default ──────
+│ Why : The laptop's broker refuses anything no ACL allows (kafka/README.md): only the Customer
+│       Onboarding relay may publish an application submission, so a forged one is rejected by
+│       the broker. The cluster must keep exactly that, not a convenient open broker.
+│ How : Strimzi (operator in its own namespace, watching this one only) runs one KRaft node,
+│       controller and broker in one pod - enough for a demo, no replication. Listener "tls"
+│       9093: TLS with a certificate from EWP's private CA (so the clients' existing trust root
+│       verifies it, host name included), SCRAM-SHA-512 inside it; simple authorization, no
+│       auto-created topics. Each KafkaUser takes its password from the users Secret (Key Vault)
+│       and gets only its topics and group; Strimzi's own operators use their cluster-CA client
+│       certificates on the internal replication listener. Only pods of the client namespace may
+│       connect (networkPolicyPeers).
+│ Ref : doc/Cloud-Demo.md CD16 | kafka/README.md | Strimzi 1.2 "Configuring Kafka" | OWASP A01
+└────────────────────────────────────────────────────────────────────────────────────────────────
+*/ -}}
+{{- $k := .Values.kafka -}}
+{{- $ns := .Release.Namespace -}}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $k.clusterName }}-kafka-listener
+  labels:
+    {{- include "infra.labels" (dict "root" $ "name" "kafka") | nindent 4 }}
+spec:
+  secretName: {{ $k.clusterName }}-kafka-listener-tls
+  duration: 2160h
+  renewBefore: 720h
+  # RSA and PKCS#8: the broker's Java reads the PEM key as Strimzi passes it on.
+  privateKey:
+    algorithm: RSA
+    size: 2048
+    encoding: PKCS8
+    rotationPolicy: Always
+  usages:
+    - server auth
+    - digital signature
+    - key encipherment
+  dnsNames:
+    # The bootstrap Service, and each broker's own name (advertised to the clients).
+    - {{ $k.clusterName }}-kafka-bootstrap
+    - {{ $k.clusterName }}-kafka-bootstrap.{{ $ns }}
+    - {{ $k.clusterName }}-kafka-bootstrap.{{ $ns }}.svc
+    - {{ $k.clusterName }}-kafka-bootstrap.{{ $ns }}.svc.cluster.local
+    - "*.{{ $k.clusterName }}-kafka-brokers.{{ $ns }}.svc"
+    - "*.{{ $k.clusterName }}-kafka-brokers.{{ $ns }}.svc.cluster.local"
+  issuerRef:
+    {{- toYaml $k.issuerRef | nindent 4 }}
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaNodePool
+metadata:
+  name: broker
+  labels:
+    strimzi.io/cluster: {{ $k.clusterName }}
+spec:
+  replicas: 1
+  roles:
+    - controller
+    - broker
+  storage:
+    type: jbod
+    volumes:
+      - id: 0
+        type: persistent-claim
+        size: {{ $k.storage }}
+        kraftMetadata: shared
+        # The volume dies with the demo.
+        deleteClaim: true
+  resources:
+    {{- toYaml $k.resources | nindent 4 }}
+  jvmOptions:
+    -Xms: {{ $k.jvmHeap }}
+    -Xmx: {{ $k.jvmHeap }}
+---
+apiVersion: kafka.strimzi.io/v1
+kind: Kafka
+metadata:
+  name: {{ $k.clusterName }}
+spec:
+  kafka:
+    version: {{ $k.version }}
+    metadataVersion: {{ $k.metadataVersion }}
+    listeners:
+      - name: tls
+        port: 9093
+        type: internal
+        tls: true
+        authentication:
+          type: scram-sha-512
+        configuration:
+          brokerCertChainAndKey:
+            secretName: {{ $k.clusterName }}-kafka-listener-tls
+            certificate: tls.crt
+            key: tls.key
+        networkPolicyPeers:
+          - namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: {{ .Values.clientNamespace }}
+    authorization:
+      type: simple
+    config:
+      # One node: no replication.
+      offsets.topic.replication.factor: 1
+      transaction.state.log.replication.factor: 1
+      transaction.state.log.min.isr: 1
+      default.replication.factor: 1
+      min.insync.replicas: 1
+      # SEC: a mistyped topic name must fail, not create a topic.
+      auto.create.topics.enable: false
+  entityOperator:
+    topicOperator: {}
+    userOperator: {}
+{{- range $k.topics }}
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: {{ . }}
+  labels:
+    strimzi.io/cluster: {{ $k.clusterName }}
+spec:
+  partitions: 1
+  replicas: 1
+{{- end }}
+{{- range $user, $u := $k.users }}
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaUser
+metadata:
+  name: {{ $user }}
+  labels:
+    strimzi.io/cluster: {{ $k.clusterName }}
+spec:
+  authentication:
+    type: scram-sha-512
+    password:
+      valueFrom:
+        secretKeyRef:
+          name: {{ $k.usersSecret }}
+          key: {{ $user }}
+  authorization:
+    type: simple
+    acls:
+      {{- range $u.write }}
+      - resource: {type: topic, name: {{ . }}, patternType: literal}
+        operations: [Write, Describe]
+      {{- end }}
+      {{- range $u.writePrefix }}
+      - resource: {type: topic, name: {{ . }}, patternType: prefix}
+        operations: [Write, Describe]
+      {{- end }}
+      {{- range $u.read }}
+      - resource: {type: topic, name: {{ . }}, patternType: literal}
+        operations: [Read, Describe]
+      {{- end }}
+      {{- with $u.group }}
+      - resource: {type: group, name: {{ . }}, patternType: literal}
+        operations: [Read]
+      {{- end }}
+{{- end }}

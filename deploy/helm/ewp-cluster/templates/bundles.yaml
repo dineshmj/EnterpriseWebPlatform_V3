@@ -1,5 +1,5 @@
-# The private root alone: the Gateway validates the pods with it (BackendTLSPolicy), Node adds
-# it to its own roots (NODE_EXTRA_CA_CERTS).
+# The private root alone: the Gateway validates the pods with it (BackendTLSPolicy), and the
+# Kafka clients the broker (deploy/helm/ewp-infra).
 apiVersion: trust.cert-manager.io/v1alpha1
 kind: Bundle
 metadata:
@@ -15,8 +15,10 @@ spec:
     namespaceSelector:
       {{- toYaml .Values.bundles.namespaceSelector | nindent 6 }}
 ---
-# The public roots + the private root: .NET's SSL_CERT_FILE replaces the system store, and the
-# pods also call public https addresses (the IDP through the gateway).
+# The public roots + the private root: .NET's SSL_CERT_FILE replaces the system store, Node adds
+# it to its own roots (NODE_EXTRA_CA_CERTS), and the pods also call public https addresses (the
+# IDP through the gateway). extraRoots: roots an environment adds, e.g. Let's Encrypt's staging
+# roots when a test run's public certificate comes from staging.
 apiVersion: trust.cert-manager.io/v1alpha1
 kind: Bundle
 metadata:
@@ -27,6 +29,9 @@ spec:
     - secret:
         name: {{ .Values.ca.issuerName }}
         key: ca.crt
+    {{- with .Values.extraRoots }}
+    - inLine: {{ . | quote }}
+    {{- end }}
   target:
     configMap:
       key: ca.crt

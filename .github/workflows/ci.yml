@@ -196,8 +196,11 @@ jobs:
   # │       fails the pull request instead, without any cluster.
   # │ How : helm lint + helm template of the charts with every values file, then kubeconform
   # │       (strict: unknown fields fail) against the Kubernetes 1.34 schemas and the CRD
-  # │       schemas (cert-manager, trust-manager, Gateway API) from the CRDs catalog at a pinned
-  # │       commit. The chart must also REFUSE to render without its required values. Helm and
+  # │       schemas (cert-manager, trust-manager, Gateway API, Envoy Gateway, Strimzi, Secrets
+  # │       Store CSI) from the CRDs catalog at a pinned commit. The charts must also REFUSE to
+  # │       render without their required values. Then the cloud demo's contracts (every Secret
+  # │       key a chart reads is made by demo-secrets.mjs and the other way round; database
+  # │       roles, Kafka users and topics as on the laptop) and its throw-away PKI. Helm and
   # │       kubeconform are kept only when their SHA-256 is the published one recorded here.
   # │ Ref : doc/Kubernetes.md | OWASP A05, A08
   # └────────────────────────────────────────────────────────────────────────────────────────────────

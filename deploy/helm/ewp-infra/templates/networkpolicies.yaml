@@ -1,0 +1,18 @@
+{{- /*
+┌─ :: SECURITY :: Nothing reaches this namespace unless a policy says so ────────────────────────
+│ Why : Kafka, Temporal and the database job hold or reach every service's data.
+│ How : Default deny for every pod here; Temporal's policy (temporal.yaml) and the ones Strimzi
+│       writes for the broker (its listener admits the client namespace only; the operators
+│       reach their ports) add what each needs. The database job needs no incoming connection.
+│ Ref : doc/Kubernetes.md K6 | OWASP A01, A05
+└────────────────────────────────────────────────────────────────────────────────────────────────
+*/ -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  labels:
+    {{- include "infra.labels" (dict "root" . "name" "ewp-infra") | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress"]

@@ -8,3 +8,8 @@ publicIp:
   # <set by the pipeline>: terraform output gateway_ip_name / resource_group
   name: pip-ewp-demo-gateway
   resourceGroup: rg-ewp-demo
+
+partnerBank:
+  enabled: true
+  # <set by the pipeline>: AZURE_DNS_ZONE_PARTNER_BANK
+  domain: partner.example

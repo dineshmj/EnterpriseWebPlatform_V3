@@ -1,0 +1,157 @@
+{{- /*
+┌─ :: ARCHITECTURE + SECURITY :: Temporal: the development server, as on the laptop ─────────────
+│ Why : The Digital Gold purchase runs as a Temporal workflow (Partner Products Journey API starts
+│       it, the worker runs it). A demo that lives a few hours needs a Temporal frontend, not a
+│       production cluster of four services and two databases.
+│ How : One pod, "temporal server start-dev" (ps/temporal/Start-Temporal.ps1 on the laptop), its
+│       SQLite file on a small volume, so a purchase waiting for its payment survives a restart.
+│       gRPC 7233 admits only the Temporal client and the worker of the client namespace; the web
+│       UI (8233) has no route and no allowed caller - kubectl port-forward only.
+│       DEBT: no TLS or authorization on the frontend (start-dev has none, Threat-Model R-16):
+│       the NetworkPolicy is the control. Production: Temporal Cloud (mTLS, API keys) or the
+│       full Temporal chart with TLS.
+│ Ref : doc/Cloud-Demo.md CD17 | doc/Threat-Model.md R-16 | Temporal CLI "server start-dev"
+└────────────────────────────────────────────────────────────────────────────────────────────────
+*/ -}}
+{{- $t := .Values.temporal -}}
+{{- $ctx := dict "root" . "name" "temporal" -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: temporal-data
+  labels:
+    {{- include "infra.labels" $ctx | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: {{ $t.storage }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal
+  labels:
+    {{- include "infra.labels" $ctx | nindent 4 }}
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  # One volume (ReadWriteOnce, one SQLite file): the old pod lets go before the new one starts.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "infra.selector" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "infra.labels" $ctx | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: {{ $t.uid }}
+        runAsGroup: {{ $t.uid }}
+        fsGroup: {{ $t.uid }}
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: temporal
+          image: {{ $t.image }}
+          imagePullPolicy: IfNotPresent
+          args:
+            - server
+            - start-dev
+            - --ip
+            - 0.0.0.0
+            - --port
+            - "7233"
+            - --ui-port
+            - "8233"
+            - --db-filename
+            - /data/temporal.db
+            - --namespace
+            - {{ $t.namespace }}
+            - --log-format
+            - json
+          env:
+            # The CLI keeps its own settings under HOME; the root file system is read-only.
+            - name: HOME
+              value: /tmp
+          ports:
+            - name: grpc
+              containerPort: 7233
+            - name: ui
+              containerPort: 8233
+          securityContext:
+            {{- include "infra.containerSecurity" . | nindent 12 }}
+          startupProbe:
+            tcpSocket:
+              port: grpc
+            periodSeconds: 5
+            failureThreshold: 24
+          livenessProbe:
+            tcpSocket:
+              port: grpc
+            periodSeconds: 20
+          readinessProbe:
+            tcpSocket:
+              port: grpc
+            periodSeconds: 10
+          resources:
+            {{- toYaml $t.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: temporal-data
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: temporal
+  labels:
+    {{- include "infra.labels" $ctx | nindent 4 }}
+spec:
+  selector:
+    {{- include "infra.selector" $ctx | nindent 4 }}
+  ports:
+    - name: grpc
+      port: 7233
+      targetPort: grpc
+      appProtocol: grpc
+    - name: ui
+      port: 8233
+      targetPort: ui
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: temporal
+  labels:
+    {{- include "infra.labels" $ctx | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "infra.selector" $ctx | nindent 6 }}
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        {{- range $t.clients }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $.Values.clientNamespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ . }}
+        {{- end }}
+      ports:
+        - port: 7233

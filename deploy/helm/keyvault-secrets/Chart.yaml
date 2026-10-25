@@ -1,0 +1,7 @@
+apiVersion: v2
+name: keyvault-secrets
+description: Once per namespace - the Kubernetes Secrets the other charts name, kept in step with Azure Key Vault by the Secrets Store CSI driver (workload identity, no stored credential).
+type: application
+version: 0.1.0
+appVersion: "1"
+kubeVersion: ">= 1.34.0-0"

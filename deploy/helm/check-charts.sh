@@ -3,9 +3,11 @@
 # │ Why : The same check in CI (.github/workflows/ci.yml, job "Helm charts") and on a laptop.
 # │ How : helm lint + helm template for every values file, kubeconform (strict) on the result,
 # │       and the required values must stop a render. kubeconform is skipped with a warning
-# │       when it is not installed (laptop); CI always has it.
-# │       Needs: helm, optionally kubeconform; KUBERNETES_VERSION and CRDS_CATALOG_COMMIT from
-# │       the CI job (defaults below are the same).
+# │       when it is not installed (laptop); CI always has it. Then the cloud demo's contracts
+# │       (check-contracts.mjs: secrets, database roles, Kafka users and topics) and its
+# │       throw-away PKI (demo-secrets.mjs --check-pki).
+# │       Needs: helm, node, openssl, optionally kubeconform; KUBERNETES_VERSION and
+# │       CRDS_CATALOG_COMMIT from the CI job (defaults below are the same).
 # │ Ref : doc/Kubernetes.md
 # └────────────────────────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
@@ -56,7 +58,7 @@ gateway_values="$here/ewp-gateway/values-demo.yaml"
 helm lint --strict "$here/ewp-gateway" -f "$gateway_values"
 helm template ewp-gateway "$here/ewp-gateway" --namespace gateway-system -f "$gateway_values" > "$out/ewp-gateway.yaml"
 validate "$out/ewp-gateway.yaml"
-for missing in domain publicIp.name publicIp.resourceGroup; do
+for missing in domain publicIp.name publicIp.resourceGroup partnerBank.domain; do
   if helm template ewp-gateway "$here/ewp-gateway" -f "$gateway_values" --set "$missing=" > /dev/null 2>&1; then
     echo "::error::The ewp-gateway chart rendered without $missing - it must refuse."
     exit 1
@@ -78,5 +80,35 @@ if [ -z "$ewp_hosts" ] || [ "$ewp_hosts" != "$gateway_hosts" ]; then
   exit 1
 fi
 echo "public certificate covers the ewp chart's public hosts: $ewp_hosts"
+
+echo "== ewp-infra"
+infra_values="$here/ewp-infra/values-demo.yaml"
+helm lint --strict "$here/ewp-infra" -f "$infra_values"
+helm template ewp-infra "$here/ewp-infra" --namespace ewp-infra -f "$infra_values" > "$out/ewp-infra.yaml"
+validate "$out/ewp-infra.yaml"
+for missing in database.host database.adminLogin; do
+  if helm template ewp-infra "$here/ewp-infra" -f "$infra_values" --set "$missing=" > /dev/null 2>&1; then
+    echo "::error::The ewp-infra chart rendered without $missing - it must refuse."
+    exit 1
+  fi
+  echo "refused without $missing (as it must)"
+done
+
+echo "== keyvault-secrets"
+kvs_values="$here/keyvault-secrets/values-check.yaml"
+helm lint --strict "$here/keyvault-secrets" -f "$kvs_values"
+helm template keyvault-secrets "$here/keyvault-secrets" --namespace ewp -f "$kvs_values" > "$out/keyvault-secrets.yaml"
+validate "$out/keyvault-secrets.yaml"
+for missing in keyVault.name keyVault.tenantId keyVault.clientId; do
+  if helm template keyvault-secrets "$here/keyvault-secrets" -f "$kvs_values" --set "$missing=" > /dev/null 2>&1; then
+    echo "::error::The keyvault-secrets chart rendered without $missing - it must refuse."
+    exit 1
+  fi
+  echo "refused without $missing (as it must)"
+done
+
+echo "== cloud demo contracts"
+node "$here/check-contracts.mjs" "$out/ewp-values-demo.yaml" "$out/ewp-infra.yaml"
+node "$here/../../.github/scripts/demo-secrets.mjs" --check-pki
 
 echo "Helm charts OK"

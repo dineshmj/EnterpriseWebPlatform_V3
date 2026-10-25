@@ -54,3 +54,24 @@ certificates:
 gatewayCheck:
   enabled: true
   host: gateway-check
+
+# ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────────────
+# │ The Partner Bank (its own chart, namespace and registrable domain) shares this Gateway and
+# │ keeps the home PC's port numbers. Its two browser ports end TLS here with a Let's Encrypt
+# │ certificate (the browser would not trust the Partner Bank's own PKI) and the Gateway opens a
+# │ new TLS connection to the pod, checked against that PKI (the Partner chart's
+# │ BackendTLSPolicy). Its two mutual-TLS ports are passed through untouched: EWP's client
+# │ certificate must reach the pod in the handshake itself (Partner Bank Containers.md, 4).
+# │ Only namespaces labelled routeNamespaceLabel may attach routes to these listeners.
+# └──────────────────────────────────────────────────────────────────────────────────────────────
+partnerBank:
+  enabled: false
+  # Required when enabled: the Partner Bank's domain (AZURE_DNS_ZONE_PARTNER_BANK).
+  domain: ""
+  routeNamespaceLabel: ewp.dev/partner-bank-routes
+  # CONTRACT: the listener names are the Partner chart's ports[].listener values.
+  listeners:
+    - {name: partner-auth, port: 47401, host: partner-auth, tls: Terminate}
+    - {name: partner-products, port: 47402, host: partner-products, tls: Terminate}
+    - {name: partner-auth-mtls, port: 47411, host: partner-auth, tls: Passthrough}
+    - {name: partner-api, port: 47403, host: partner-api, tls: Passthrough}

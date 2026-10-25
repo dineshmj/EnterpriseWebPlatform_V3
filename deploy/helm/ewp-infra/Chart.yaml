@@ -1,0 +1,7 @@
+apiVersion: v2
+name: ewp-infra
+description: Once per environment, in its own namespace - what EWP's services need but do not deploy themselves - Kafka (Strimzi) with its users, ACLs and topics, a Temporal server, and the job that prepares the 12 databases and their users.
+type: application
+version: 0.1.0
+appVersion: "1"
+kubeVersion: ">= 1.34.0-0"

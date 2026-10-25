@@ -1,0 +1,88 @@
+{{- /*
+┌─ :: SECURITY :: The sync pod: holds the secrets volume, nothing else ──────────────────────────
+│ Why : The CSI driver writes Kubernetes Secrets only while some pod mounts the class. Tying that
+│       to every service would make each pod's start depend on Key Vault; one small pod per
+│       namespace decouples them and is the only holder of the Key Vault identity.
+│ How : pause image, restricted pod (non-root, read-only, no capabilities, RuntimeDefault
+│       seccomp), no Kubernetes token mounted (the driver requests the service account's token
+│       itself), no incoming connections (NetworkPolicy).
+│ Ref : doc/Cloud-Demo.md CD14 | Kubernetes Pod Security Standards "restricted"
+└────────────────────────────────────────────────────────────────────────────────────────────────
+*/ -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.serviceAccountName }}
+  labels:
+    {{- include "kvs.labels" . | nindent 4 }}
+  annotations:
+    azure.workload.identity/client-id: {{ required "keyVault.clientId is required" .Values.keyVault.clientId | quote }}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keyvault-secrets
+  labels:
+    {{- include "kvs.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      {{- include "kvs.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "kvs.labels" . | nindent 8 }}
+      annotations:
+        # A changed list restarts the pod, so the driver writes the new Secrets at once.
+        checksum/secrets: {{ toJson .Values.secrets | sha256sum }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccountName }}
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65535
+        runAsGroup: 65535
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: sync
+          image: {{ .Values.image }}
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 1m
+              memory: 8Mi
+            limits:
+              memory: 16Mi
+          volumeMounts:
+            - name: secrets
+              mountPath: /mnt/keyvault
+              readOnly: true
+      volumes:
+        - name: secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: keyvault-secrets
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: keyvault-secrets
+  labels:
+    {{- include "kvs.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "kvs.selector" . | nindent 6 }}
+  policyTypes: ["Ingress"]

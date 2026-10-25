@@ -7,7 +7,8 @@
 # └────────────────────────────────────────────────────────────────────────────────────────────────
 
 global:
-  # <set by the pipeline>: --set global.domain=... --set global.image.tag=<commit SHA>
+  # <set by the pipeline>: --set global.domain=... --set global.image.tag=main, and every
+  # image's digest (global.image.digests, resolved from GHCR when the demo starts)
   domain: demo.ewp.example
   image:
     tag: "0000000000000000000000000000000000000000"
@@ -25,13 +26,14 @@ global:
     # <set by the pipeline>: the Gateway pods' subnet.
     knownNetworks: ["10.224.0.0/16"]
 
+  # The platform's own infrastructure (deploy/helm/ewp-infra, namespace ewp-infra). The broker's
+  # certificate comes from EWP's private CA, so its trust root is the private-root bundle.
   kafka:
-    # <set by the pipeline>
-    bootstrapServers: kafka.ewp-infra.svc:9093
+    bootstrapServers: ewp-kafka-bootstrap.ewp-infra.svc:9093
+    caConfigMap: ewp-internal-ca
 
   temporal:
-    # <set by the pipeline>
-    address: temporal-frontend.ewp-infra.svc:7233
+    address: temporal.ewp-infra.svc:7233
 
   partnerBank:
     # <set by the pipeline>: the Partner Bank's own chart and host names.

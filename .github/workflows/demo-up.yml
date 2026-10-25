@@ -1,4 +1,4 @@
-# ┌─ :: ARCHITECTURE + SECURITY :: Demo up (step 7a) ──────────────────────────────────────────────
+# ┌─ :: ARCHITECTURE + SECURITY :: Demo up (steps 7a + 7b) ──────────────────────────────────────────────
 # │ Why : A cloud demo must appear in one approved run, and nothing may start that the watchdog
 # │       cannot later find and remove.
 # │ How : Environment azure-demo (main only, required reviewer, OIDC sign-in, no secret). Checks
@@ -6,7 +6,9 @@
 # │       would only cost money), stamps the start time on rg-ewp-demo (the watchdog's clock),
 # │       then: terraform apply (deploy/terraform/demo) -> cluster credentials through Entra ID
 # │       -> cluster add-ons and the gateway (.github/scripts/demo-cluster-addons.sh) -> the
-# │       gateway check over the internet. Step 7b adds the platform itself.
+# │       gateway check over the internet -> the platform (.github/scripts/demo-platform.sh:
+# │       Kafka, Temporal, the databases, the secrets from Key Vault, the Partner Bank from its
+# │       own repository's chart, EWP) -> both issuers answering through the gateway.
 # │       A failed run leaves what it made: run "Demo down", or the watchdog removes it.
 # │ Ref : doc/Cloud-Demo.md | doc/Azure.md | GitHub "Configuring OpenID Connect in Azure"
 # └────────────────────────────────────────────────────────────────────────────────────────────────
@@ -39,7 +41,7 @@ jobs:
   up:
     name: Bring the demo up
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 100
     environment: azure-demo
     permissions:
       id-token: write
@@ -61,6 +63,7 @@ jobs:
       STATE_CONTAINER: ${{ vars.AZURE_TFSTATE_CONTAINER }}
       CERT_ISSUER: ${{ inputs.certificate_issuer }}
       TF_VAR_location: ${{ inputs.region }}
+      PARTNER_DOMAIN: ${{ vars.AZURE_DNS_ZONE_PARTNER_BANK }}
     defaults:
       run:
         shell: bash
@@ -70,6 +73,17 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      # ARCH: the Partner Bank is another organisation's code: its chart comes from its own
+      # repository (public, main), next to this one; its images from GHCR by digest.
+      - name: Check out the Partner Bank's chart
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: dineshmj/EnterpriseWebPlatform_V3_PartnerBank
+          ref: main
+          path: partner-bank
+          persist-credentials: false
+          sparse-checkout: deploy/helm
 
       - name: Check the environment's variables
         run: |
@@ -162,6 +176,15 @@ jobs:
             echo "GATEWAY_IP=$(terraform output -raw gateway_ip)"
             echo "GATEWAY_IP_NAME=$(terraform output -raw gateway_ip_name)"
             echo "EWP_DOMAIN=$TF_VAR_ewp_domain"
+            echo "POD_CIDR=$(terraform output -raw pod_cidr)"
+            echo "EWP_KEY_VAULT=$(terraform output -raw key_vault_name)"
+            echo "PARTNER_KEY_VAULT=$(terraform output -raw partner_bank_key_vault_name)"
+            echo "TENANT_ID=$(terraform output -raw tenant_id)"
+            echo "EWP_SECRETS_CLIENT_ID=$(terraform output -raw ewp_secrets_client_id)"
+            echo "PARTNER_SECRETS_CLIENT_ID=$(terraform output -raw partner_bank_secrets_client_id)"
+            echo "POSTGRES_HOST=$(terraform output -raw postgres_host)"
+            echo "POSTGRES_ADMIN_LOGIN=$(terraform output -raw postgres_admin_login)"
+            echo "PARTNER_CHART=$GITHUB_WORKSPACE/partner-bank/deploy/helm/partner-bank"
           } >> "$GITHUB_ENV"
 
       # ┌─ SEC ──────────────────────────────────────────────────────────────────────────────────
@@ -208,6 +231,22 @@ jobs:
           echo "::error::https://$host/ did not answer as expected."
           exit 1
 
+      # ┌─ RESIL ────────────────────────────────────────────────────────────────────────────────
+      # │ Same reason as after the apply: the Key Vault token the secrets script asks for would
+      # │ be a new token, and the sign-in's GitHub assertion is valid for 5 minutes only. The
+      # │ cluster's token (kubelogin) is cached and lasts beyond the platform step.
+      # └────────────────────────────────────────────────────────────────────────────────────────
+      - name: Sign in to Azure again (fresh token for Key Vault)
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: The platform (Kafka, Temporal, databases, secrets, Partner Bank, EWP)
+        working-directory: .
+        run: bash .github/scripts/demo-platform.sh
+
       - name: Summary
         if: always()
         run: |
@@ -220,6 +259,8 @@ jobs:
             echo "| Region | $TF_VAR_location |"
             echo "| Gateway | ${GATEWAY_IP:-not created} |"
             echo "| Gateway check | https://gateway-check.${TF_VAR_ewp_domain}/ |"
+            echo "| EWP | https://shell.${TF_VAR_ewp_domain}/ |"
+            echo "| Partner Bank | https://partner-auth.${PARTNER_DOMAIN}:47401/ |"
             echo "| Certificate issuer | $CERT_ISSUER |"
             echo "| Job status | ${{ job.status }} |"
             echo ""

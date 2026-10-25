@@ -1,0 +1,151 @@
+{{- /*
+┌─ :: ARCHITECTURE + SECURITY :: The 12 databases and their users, from the repository's scripts ─
+│ Why : The server is private (VNet only): the GitHub runner cannot reach it, a pod can. The
+│       cloud must get exactly the laptop's schema and least-privilege users (one role per
+│       deployable, its own database only, no DDL) - from the same full scripts, not a copy.
+│ How : A Job per Helm revision, as ps/database/Initialize-EwpDatabases.ps1 does it:
+│         1. create each database that does not exist yet;
+│         2. run db/EwpServiceDbUsers.sql (roles, CONNECT, grants, default privileges);
+│         3. run the full script of each database created in step 1 only - a re-run of Demo up
+│            never erases data;
+│         4. give every role its password from Key Vault (the users script sets the public
+│            development ones; the server is private and its databases empty until step 3).
+│       Two adaptations for a managed server, made on the fly: the admin login owns the tables,
+│       so "ALTER DEFAULT PRIVILEGES FOR ROLE postgres" names it instead; and NOSUPERUSER is
+│       dropped (only a superuser may state it on ALTER ROLE, and Azure gives none).
+│       psql verifies the server's certificate and name (sslmode verify-full).
+│ Ref : doc/Cloud-Demo.md CD18 | db/EwpServiceDbUsers.sql | OWASP A01, A02, A05
+└────────────────────────────────────────────────────────────────────────────────────────────────
+*/ -}}
+{{- $d := .Values.database -}}
+{{- $ctx := dict "root" . "name" "database-init" -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: database-init
+  labels:
+    {{- include "infra.labels" $ctx | nindent 4 }}
+data:
+  init.sh: |
+    #!/bin/sh
+    set -eu
+    scripts=/etc/ewp/db-scripts
+    roles=/etc/ewp/db-roles
+    admin="$PGUSER"
+    run() { psql -X -q -v ON_ERROR_STOP=1 "$@"; }
+    adapt() { sed -e "s/FOR ROLE postgres/FOR ROLE \"$admin\"/g" -e 's/ NOSUPERUSER//g' "$1"; }
+
+    created=""
+    for entry in {{ range $d.databases }}{{ .name }}={{ .script }} {{ end }}; do
+      name="${entry%%=*}"
+      if [ "$(run -d postgres -At -c "SELECT 1 FROM pg_database WHERE datname = '$name'")" != "1" ]; then
+        run -d postgres -c "CREATE DATABASE \"$name\""
+        created="$created $entry"
+        echo "created database $name"
+      fi
+    done
+
+    adapt "$scripts/{{ $d.usersScript }}" | run -d postgres -f -
+    echo "service roles and grants applied"
+
+    for entry in $created; do
+      name="${entry%%=*}"; script="${entry#*=}"
+      adapt "$scripts/$script" | run -d "$name" -f -
+      echo "ran $script on $name"
+    done
+
+    # SEC: the password is read by psql itself (\set with backquotes), never on a command line.
+    for file in "$roles"/*; do
+      role="$(basename "$file")"
+      printf '\\set pw `cat %s`\nALTER ROLE "%s" PASSWORD :%s;\n' "$file" "$role" "'pw'" | run -d postgres -f -
+    done
+    echo "role passwords set from Key Vault"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: database-init-{{ .Release.Revision }}
+  labels:
+    {{- include "infra.labels" $ctx | nindent 4 }}
+spec:
+  backoffLimit: 2
+  # Kept for its log for the demo's lifetime.
+  ttlSecondsAfterFinished: 21600
+  template:
+    metadata:
+      labels:
+        {{- include "infra.labels" $ctx | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        # The image's postgres user (Alpine).
+        runAsUser: 70
+        runAsGroup: 70
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: init
+          image: {{ $d.image }}
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "/etc/ewp/db-init/init.sh"]
+          env:
+            - name: PGHOST
+              value: {{ required "database.host is required" $d.host | quote }}
+            - name: PGUSER
+              value: {{ required "database.adminLogin is required" $d.adminLogin | quote }}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $d.adminSecret }}
+                  key: password
+            - name: PGSSLMODE
+              value: verify-full
+            - name: PGSSLROOTCERT
+              value: /etc/ewp/trust/ca.crt
+            - name: PGCONNECT_TIMEOUT
+              value: "15"
+            # Quiet NOTICEs (e.g. "drop cascades"); warnings and errors still show.
+            - name: PGOPTIONS
+              value: "-c client_min_messages=warning"
+          securityContext:
+            {{- include "infra.containerSecurity" . | nindent 12 }}
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: init
+              mountPath: /etc/ewp/db-init
+              readOnly: true
+            - name: scripts
+              mountPath: /etc/ewp/db-scripts
+              readOnly: true
+            - name: roles
+              mountPath: /etc/ewp/db-roles
+              readOnly: true
+            - name: trust
+              mountPath: /etc/ewp/trust
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: init
+          configMap:
+            name: database-init
+        - name: scripts
+          configMap:
+            name: {{ $d.scriptsConfigMap }}
+        - name: roles
+          secret:
+            secretName: {{ $d.rolesSecret }}
+        - name: trust
+          configMap:
+            name: {{ $d.trustBundle }}
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi

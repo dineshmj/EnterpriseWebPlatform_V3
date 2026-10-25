@@ -38,6 +38,34 @@ spec:
           selector:
             matchLabels:
               {{ .Values.gateway.routeNamespaceLabel }}: "true"
+    {{- if .Values.partnerBank.enabled }}
+    {{- $pb := .Values.partnerBank }}
+    {{- $domain := required "partnerBank.domain is required when the Partner Bank is enabled" $pb.domain }}
+    {{- range $pb.listeners }}
+    # The Partner Bank, {{ .host }}:{{ .port }} ({{ if eq .tls "Terminate" }}the browser's TLS ends here{{ else }}TLS passed through to the pod{{ end }}).
+    - name: {{ .name }}
+      protocol: {{ ternary "HTTPS" "TLS" (eq .tls "Terminate") }}
+      port: {{ .port }}
+      hostname: {{ .host }}.{{ $domain }}
+      tls:
+        mode: {{ .tls }}
+        {{- if eq .tls "Terminate" }}
+        certificateRefs:
+          - kind: Secret
+            name: partner-bank-public-tls
+        {{- end }}
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              {{ $pb.routeNamespaceLabel }}: "true"
+        {{- if eq .tls "Passthrough" }}
+        kinds:
+          - kind: TLSRoute
+        {{- end }}
+    {{- end }}
+    {{- end }}
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute

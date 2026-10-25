@@ -1,0 +1,26 @@
+# ┌─ :: ARCHITECTURE + SECURITY :: Strimzi (the operator that runs EWP's Kafka) ──────────────────
+# │ Why : A Kafka broker in Kubernetes needs its certificates, users, ACLs and topics kept in step
+# │       with what is declared (deploy/helm/ewp-infra) - an operator's job, not a script's.
+# │ How : Helm values for oci://quay.io/strimzi-helm/strimzi-kafka-operator (version in
+# │       .github/scripts/demo-platform.sh). Installed in its own namespace "strimzi", watching
+# │       ewp-infra only (its rights in other namespaces: none). One replica, the chart's default
+# │       restricted security context, no Kubernetes API access beyond what the chart grants.
+# │ Ref : doc/Cloud-Demo.md CD16 | Strimzi 1.2 "Deploying the Cluster Operator using Helm"
+# └────────────────────────────────────────────────────────────────────────────────────────────────
+replicas: 1
+
+watchNamespaces:
+  - ewp-infra
+watchAnyNamespace: false
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 384Mi
+  limits:
+    memory: 512Mi
+
+# SEC: the operator's own pod accepts only its metrics port; it talks to the API server and the
+# Kafka pods in ewp-infra.
+operatorNetworkPolicy:
+  enabled: true

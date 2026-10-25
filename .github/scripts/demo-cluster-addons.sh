@@ -7,18 +7,20 @@
 # │         1. Envoy Gateway (brings the Gateway API CRDs)
 # │         2. cert-manager (Gateway API support needs those CRDs at start-up)
 # │         3. trust-manager
-# │         4. deploy/helm/ewp-cluster (private CA + trust bundles)
+# │         4. deploy/helm/ewp-cluster (private CA + trust bundles; on a staging run the bundle
+# │            also trusts Let's Encrypt's staging roots, which the pods meet calling the IDP)
 # │         5. namespace gateway-system + deploy/helm/ewp-gateway (Envoy bound to the public IP,
-# │            Gateway, Let's Encrypt issuers, public certificate, gateway check)
-# │       then waits for the public IP on the gateway and for the certificate.
+# │            Gateway with EWP's and the Partner Bank's listeners, Let's Encrypt issuers, the
+# │            two public certificates, gateway check)
+# │       then waits for the public IP on the gateway and for both certificates.
 # │       Chart versions are exact; the charts come from their publishers' OCI registries.
-# │       Needs: kubectl (KUBECONFIG set), helm; EWP_DOMAIN, GATEWAY_IP_NAME, GATEWAY_IP,
-# │       DEMO_GROUP, CERT_ISSUER.
+# │       Needs: kubectl (KUBECONFIG set), helm; EWP_DOMAIN, PARTNER_DOMAIN, GATEWAY_IP_NAME,
+# │       GATEWAY_IP, DEMO_GROUP, CERT_ISSUER.
 # │ Ref : doc/Cloud-Demo.md | doc/Kubernetes.md | deploy/cluster-addons/*.yaml
 # └────────────────────────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-: "${EWP_DOMAIN:?}" "${GATEWAY_IP_NAME:?}" "${GATEWAY_IP:?}" "${DEMO_GROUP:?}" "${CERT_ISSUER:?}"
+: "${EWP_DOMAIN:?}" "${PARTNER_DOMAIN:?}" "${GATEWAY_IP_NAME:?}" "${GATEWAY_IP:?}" "${DEMO_GROUP:?}" "${CERT_ISSUER:?}"
 
 ENVOY_GATEWAY_VERSION='v1.9.2'
 CERT_MANAGER_VERSION='v1.21.2'
@@ -52,7 +54,13 @@ helm upgrade --install trust-manager oci://quay.io/jetstack/charts/trust-manager
   --namespace cert-manager -f "$addons/trust-manager.yaml" --wait --timeout 10m
 
 step "ewp-cluster (private CA, trust bundles)"
-retry helm upgrade --install ewp-cluster "$repo/deploy/helm/ewp-cluster" --wait --timeout 5m
+# SEC: staging certificates are untrusted by design; only a staging run adds their roots, and
+# only to the full bundle (never to the private-root bundle the Gateway checks pods against).
+extra_roots="$(mktemp)"
+if [ "$CERT_ISSUER" = "letsencrypt-staging" ]; then
+  cat "$repo"/deploy/demo-platform/letsencrypt-roots/staging-root-x*.pem > "$extra_roots"
+fi
+retry helm upgrade --install ewp-cluster "$repo/deploy/helm/ewp-cluster" --set-file "extraRoots=$extra_roots" --wait --timeout 5m
 
 # ┌─ SEC ────────────────────────────────────────────────────────────────────────────────────────
 # │ Only namespaces carrying ewp.dev/gateway-routes=true may attach routes to the https listener
@@ -64,6 +72,7 @@ kubectl label namespace gateway-system ewp.dev/gateway-routes=true --overwrite
 retry helm upgrade --install ewp-gateway "$repo/deploy/helm/ewp-gateway" --namespace gateway-system \
   -f "$repo/deploy/helm/ewp-gateway/values-demo.yaml" \
   --set "domain=$EWP_DOMAIN" \
+  --set "partnerBank.domain=$PARTNER_DOMAIN" \
   --set "publicIp.name=$GATEWAY_IP_NAME" \
   --set "publicIp.resourceGroup=$DEMO_GROUP" \
   --set "certificates.issuer=$CERT_ISSUER" \
@@ -84,14 +93,16 @@ for attempt in $(seq 1 60); do
 done
 echo "gateway on $address"
 
-step "Waiting for the public certificate (Let's Encrypt, HTTP-01)"
-if ! kubectl wait certificate/ewp-public-tls -n gateway-system --for=condition=Ready --timeout=15m; then
-  kubectl describe certificate ewp-public-tls -n gateway-system || true
-  kubectl get certificaterequests,orders.acme.cert-manager.io,challenges.acme.cert-manager.io -n gateway-system -o wide || true
-  kubectl describe challenges.acme.cert-manager.io -n gateway-system || true
-  exit 1
-fi
-echo "certificate ready"
+step "Waiting for the public certificates (Let's Encrypt, HTTP-01)"
+for certificate in ewp-public-tls partner-bank-public-tls; do
+  if ! kubectl wait "certificate/$certificate" -n gateway-system --for=condition=Ready --timeout=15m; then
+    kubectl describe certificate "$certificate" -n gateway-system || true
+    kubectl get certificaterequests,orders.acme.cert-manager.io,challenges.acme.cert-manager.io -n gateway-system -o wide || true
+    kubectl describe challenges.acme.cert-manager.io -n gateway-system || true
+    exit 1
+  fi
+  echo "$certificate ready"
+done
 
 # NOTE: only now: until the certificate's Secret exists, the https listener refers to nothing.
 kubectl wait gateway/ewp-gateway -n gateway-system --for=condition=Programmed --timeout=5m
