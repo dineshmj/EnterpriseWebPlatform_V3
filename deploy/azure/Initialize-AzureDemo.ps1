@@ -57,6 +57,13 @@
 .PARAMETER GitHubEnvironment
     The GitHub environment those workflows must run in. Default azure-demo.
 
+.PARAMETER GitHubOwnerId
+    Numeric id of the repository's owner, part of GitHub's OIDC subject. Default: read from
+    api.github.com (public repositories). Pass it, with -GitHubRepositoryId, for a private one.
+
+.PARAMETER GitHubRepositoryId
+    Numeric id of the repository. Default: read from api.github.com.
+
 .PARAMETER StateStorageAccountName
     Name of the state storage account, if the generated one is taken (3-24 lower-case letters and digits).
 
@@ -89,6 +96,10 @@ param(
 
     [ValidatePattern('^[A-Za-z0-9._-]+$')]
     [string]$GitHubEnvironment = 'azure-demo',
+
+    [long]$GitHubOwnerId,
+
+    [long]$GitHubRepositoryId,
 
     [string]$FoundationResourceGroup = 'rg-ewp-foundation',
 
@@ -371,7 +382,7 @@ $stateContainerScope = "$foundationScope/providers/Microsoft.Storage/storageAcco
 # │       reads it can sign in from anywhere, until someone notices and rotates it.
 # │ How : A user-assigned managed identity (no secret can even be created for one) with ONE
 # │       federated credential: Entra accepts GitHub's short-lived OIDC token only when its
-# │       subject is "repo:<owner>/<repo>:environment:<environment>" and its audience is
+# │       subject is "repo:<owner>@<id>/<repo>@<id>:environment:<environment>" and its audience is
 # │       api://AzureADTokenExchange. The GitHub environment adds the human gate (required
 # │       reviewer) and admits only main.
 # │ Ref : doc/Azure.md A1 | Microsoft Entra workload identity federation | GitHub OIDC hardening
@@ -385,13 +396,28 @@ if (-not $identity) {
 }
 else { Write-Host '  ok      managed identity' }
 
-$subject = "repo:${GitHubRepository}:environment:$GitHubEnvironment"
+# ┌─ SEC ────────────────────────────────────────────────────────────────────────────────────────
+# │ GitHub's subject carries the owner's and the repository's numeric ids next to their names
+# │ (repo:owner@123/name@456:environment:x). A repository deleted and re-created under the same
+# │ name gets a new id, so it cannot sign in. Ids and exact spelling come from GitHub's API.
+# └────────────────────────────────────────────────────────────────────────────────────────────────
+if (-not $GitHubOwnerId -or -not $GitHubRepositoryId) {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+    try { $repositoryInfo = Invoke-RestMethod -Uri "https://api.github.com/repos/$GitHubRepository" -Headers @{ Accept = 'application/vnd.github+json' } }
+    catch { throw "Could not read https://api.github.com/repos/$GitHubRepository ($($_.Exception.Message)). For a private repository pass -GitHubOwnerId and -GitHubRepositoryId (the run's 'subject claim' line shows them)." }
+    $GitHubOwnerId = $repositoryInfo.owner.id
+    $GitHubRepositoryId = $repositoryInfo.id
+    $GitHubRepository = $repositoryInfo.full_name
+}
+$ownerName, $repositoryName = $GitHubRepository -split '/', 2
+$subject = "repo:$ownerName@$GitHubOwnerId/$repositoryName@${GitHubRepositoryId}:environment:$GitHubEnvironment"
 $federatedArguments = @('--name', $federatedCredentialName, '--identity-name', $IdentityName,
     '--resource-group', $FoundationResourceGroup, '--issuer', 'https://token.actions.githubusercontent.com',
     '--subject', $subject, '--audiences', 'api://AzureADTokenExchange')
 $federated = Get-AzOrNull identity federated-credential show --name $federatedCredentialName --identity-name $IdentityName --resource-group $FoundationResourceGroup
 if (-not $federated) { Invoke-Az identity federated-credential create @federatedArguments | Out-Null; Write-Host "  created federated credential: $subject" }
-else { Invoke-Az identity federated-credential update @federatedArguments | Out-Null; Write-Host "  ok      federated credential: $subject" }
+elseif ($federated.subject -cne $subject) { Invoke-Az identity federated-credential update @federatedArguments | Out-Null; Write-Host "  updated federated credential: $subject (was $($federated.subject))" }
+else { Write-Host "  ok      federated credential: $subject" }
 
 # SEC: other federated credentials on this identity would be other ways in - report them.
 $others = @(Invoke-Az identity federated-credential list --identity-name $IdentityName --resource-group $FoundationResourceGroup) |
