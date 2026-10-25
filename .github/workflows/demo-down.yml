@@ -1,0 +1,149 @@
+# ┌─ :: ARCHITECTURE + SECURITY :: Demo down (step 7a) ────────────────────────────────────────────
+# │ Why : A demo nobody removes keeps costing money every hour, and a DNS name left pointing at a
+# │       released Azure address can be taken over by whoever gets that address next.
+# │ How : terraform destroy (deploy/terraform/demo), then proof: rg-ewp-demo must be empty (it
+# │       also catches anything Terraform does not know, such as an identity added inside the
+# │       group), and neither zone may keep its wildcard record. Leftovers are deleted and the
+# │       run still fails, so a person looks at why. Finally the start stamp goes.
+# │       Environment azure-demo-teardown: main only, NO reviewer, so the hourly watchdog can call
+# │       this unattended. It signs in as the same identity (its own federated credential); the
+# │       code is the reviewed code on main, and it only removes.
+# │ Ref : doc/Cloud-Demo.md | doc/Azure.md (gaps) | Microsoft "Prevent dangling DNS entries and subdomain takeover"
+# └────────────────────────────────────────────────────────────────────────────────────────────────
+name: Demo down
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      reason:
+        description: Why the demo is removed (shown in the summary)
+        type: string
+        required: false
+        default: called by another workflow
+
+# SEC: least privilege by default; the job below asks for what it needs.
+permissions:
+  contents: read
+
+jobs:
+  down:
+    name: Tear the demo down
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    # RESIL: the same group as Demo up (job level, so it also holds when the watchdog calls this
+    # workflow): a destroy never runs beside an apply.
+    concurrency:
+      group: azure-demo
+      cancel-in-progress: false
+    environment: azure-demo-teardown
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      ARM_USE_OIDC: 'true'
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      TF_IN_AUTOMATION: 'true'
+      TF_INPUT: 'false'
+      TF_VAR_demo_resource_group: ${{ vars.AZURE_DEMO_RESOURCE_GROUP }}
+      TF_VAR_dns_resource_group: ${{ vars.AZURE_DNS_RESOURCE_GROUP }}
+      TF_VAR_ewp_domain: ${{ vars.AZURE_DNS_ZONE_EWP }}
+      TF_VAR_partner_bank_domain: ${{ vars.AZURE_DNS_ZONE_PARTNER_BANK }}
+      STATE_GROUP: ${{ vars.AZURE_TFSTATE_RESOURCE_GROUP }}
+      STATE_ACCOUNT: ${{ vars.AZURE_TFSTATE_STORAGE_ACCOUNT }}
+      STATE_CONTAINER: ${{ vars.AZURE_TFSTATE_CONTAINER }}
+      REASON: ${{ inputs.reason || 'started by hand' }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: deploy/terraform/demo
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check the environment's variables
+        run: |
+          missing=0
+          for name in ARM_CLIENT_ID ARM_TENANT_ID ARM_SUBSCRIPTION_ID TF_VAR_demo_resource_group \
+                      TF_VAR_dns_resource_group TF_VAR_ewp_domain TF_VAR_partner_bank_domain \
+                      STATE_GROUP STATE_ACCOUNT STATE_CONTAINER; do
+            [ -n "${!name}" ] || { echo "::error::$name is empty: add its variable to the azure-demo-teardown environment (doc/Azure.md, GitHub side)."; missing=1; }
+          done
+          exit $missing
+
+      - name: Sign in to Azure (OIDC)
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get the pinned tools
+        working-directory: .
+        run: bash .github/scripts/demo-tools.sh terraform
+
+      - name: terraform init
+        run: |
+          terraform init -lockfile=readonly \
+            -backend-config="resource_group_name=$STATE_GROUP" \
+            -backend-config="storage_account_name=$STATE_ACCOUNT" \
+            -backend-config="container_name=$STATE_CONTAINER" \
+            -backend-config="key=demo.tfstate"
+
+      # NOTE: the cluster goes before the public IP (it depends on the IP's role assignment), so
+      # Azure has released the IP from the cluster's load balancer by the time Terraform deletes it.
+      - name: terraform destroy
+        run: terraform destroy -auto-approve
+
+      # ┌─ SEC ──────────────────────────────────────────────────────────────────────────────────
+      # │ Trust, but verify: Terraform removes only what its state lists. Whatever is left is
+      # │ deleted here (a few passes: some resources need others gone first), and the run fails
+      # │ so the cause gets looked at. A wildcard record left in a zone would point at an
+      # │ address Azure may give to another customer: it is deleted in every case.
+      # └────────────────────────────────────────────────────────────────────────────────────────
+      - name: Check nothing is left
+        if: always()
+        run: |
+          group="$TF_VAR_demo_resource_group"
+          leftovers() { az resource list --resource-group "$group" --query "[].id" -o tsv; }
+          left=0
+          if [ -n "$(leftovers)" ]; then
+            left=1
+            echo "::error::Terraform left resources in $group:"; leftovers
+            for pass in 1 2 3; do
+              for id in $(leftovers); do az resource delete --ids "$id" --output none || true; done
+              [ -z "$(leftovers)" ] && break
+            done
+          fi
+          for zone in "$TF_VAR_ewp_domain" "$TF_VAR_partner_bank_domain"; do
+            if az network dns record-set a show --resource-group "$TF_VAR_dns_resource_group" --zone-name "$zone" --name '*' --output none 2>/dev/null; then
+              left=1
+              echo "::error::The wildcard record in $zone outlived the demo; deleting it."
+              az network dns record-set a delete --resource-group "$TF_VAR_dns_resource_group" --zone-name "$zone" --name '*' --yes
+            fi
+          done
+          remaining="$(leftovers)"
+          if [ -n "$remaining" ]; then echo "::error::Still left after deleting: $remaining"; exit 1; fi
+          if [ "$left" -eq 1 ]; then echo "::error::Cleaned up, but Terraform should have removed these (see above)."; exit 1; fi
+          echo "$group is empty; no demo records in the zones."
+
+      - name: Remove the start stamp
+        run: |
+          az group update --name "$TF_VAR_demo_resource_group" --remove tags.ewp-demo-started --output none
+          az group update --name "$TF_VAR_demo_resource_group" --remove tags.ewp-demo-region --output none
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Demo down"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Reason | $REASON |"
+            echo "| Job status | ${{ job.status }} |"
+          } >> "$GITHUB_STEP_SUMMARY"

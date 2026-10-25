@@ -51,4 +51,32 @@ for missing in global.domain global.image.tag global.kafka.bootstrapServers glob
   echo "refused without $missing (as it must)"
 done
 
+echo "== ewp-gateway"
+gateway_values="$here/ewp-gateway/values-demo.yaml"
+helm lint --strict "$here/ewp-gateway" -f "$gateway_values"
+helm template ewp-gateway "$here/ewp-gateway" --namespace gateway-system -f "$gateway_values" > "$out/ewp-gateway.yaml"
+validate "$out/ewp-gateway.yaml"
+for missing in domain publicIp.name publicIp.resourceGroup; do
+  if helm template ewp-gateway "$here/ewp-gateway" -f "$gateway_values" --set "$missing=" > /dev/null 2>&1; then
+    echo "::error::The ewp-gateway chart rendered without $missing - it must refuse."
+    exit 1
+  fi
+  echo "refused without $missing (as it must)"
+done
+if helm template ewp-gateway "$here/ewp-gateway" -f "$gateway_values" --set certificates.issuer=other > /dev/null 2>&1; then
+  echo "::error::The ewp-gateway chart accepted an unknown certificate issuer - it must refuse."
+  exit 1
+fi
+echo "refused an unknown certificate issuer (as it must)"
+
+# CONTRACT: the public certificate must name every public host of the EWP chart, or a browser
+# meets a certificate error on the host it lacks.
+ewp_hosts="$(sed -n 's/^ *public: *{host: *\([a-z0-9-]*\)}.*/\1/p' "$here/ewp/values.yaml" | sort | tr '\n' ' ')"
+gateway_hosts="$(sed -n '/^hosts:/,/^[a-z]/s/^  - *\([a-z0-9-]*\)$/\1/p' "$here/ewp-gateway/values.yaml" | sort | tr '\n' ' ')"
+if [ -z "$ewp_hosts" ] || [ "$ewp_hosts" != "$gateway_hosts" ]; then
+  echo "::error::ewp-gateway hosts ($gateway_hosts) differ from the ewp chart's public hosts ($ewp_hosts)."
+  exit 1
+fi
+echo "public certificate covers the ewp chart's public hosts: $ewp_hosts"
+
 echo "Helm charts OK"

@@ -1,0 +1,86 @@
+# ┌─ :: ARCHITECTURE + SECURITY :: Demo watchdog (step 7a) ────────────────────────────────────────
+# │ Why : The budget only warns (doc/Azure.md A6). A forgotten demo, a failed "Demo down" or a
+# │       run that broke half-way must still stop costing money without anyone remembering.
+# │ How : Every hour: reads rg-ewp-demo. Anything in it, with a start stamp older than
+# │       MAX_HOURS - or with no stamp at all (nothing should be there then) - and it calls
+# │       "Demo down". Runs in azure-demo-teardown (main only, no reviewer), so it acts at night.
+# │       NOTE: GitHub pauses scheduled workflows after 60 days without repository activity; the
+# │       Actions tab then offers to enable it again.
+# │ Ref : doc/Cloud-Demo.md | FinOps Foundation "Cloud policy and governance"
+# └────────────────────────────────────────────────────────────────────────────────────────────────
+name: Demo watchdog
+
+on:
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+
+# SEC: least privilege by default; each job asks for what it needs.
+permissions:
+  contents: read
+
+concurrency:
+  group: azure-demo-watchdog
+  cancel-in-progress: false
+
+env:
+  MAX_HOURS: 6
+
+jobs:
+  check:
+    name: Is a demo past its time?
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: azure-demo-teardown
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      expired: ${{ steps.age.outputs.expired }}
+      reason: ${{ steps.age.outputs.reason }}
+    steps:
+      - name: Sign in to Azure (OIDC)
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Check the demo's age
+        id: age
+        shell: bash
+        env:
+          DEMO_GROUP: ${{ vars.AZURE_DEMO_RESOURCE_GROUP }}
+        run: |
+          set -euo pipefail
+          [ -n "$DEMO_GROUP" ] || { echo "::error::AZURE_DEMO_RESOURCE_GROUP is empty in azure-demo-teardown."; exit 1; }
+          count="$(az resource list --resource-group "$DEMO_GROUP" --query 'length(@)' -o tsv)"
+          started="$(az group show --name "$DEMO_GROUP" --query 'tags."ewp-demo-started"' -o tsv)"
+          expired=false; reason=""
+          if [ "$count" -eq 0 ]; then
+            reason="no demo running"
+          elif [ -z "$started" ]; then
+            expired=true; reason="$count resources in $DEMO_GROUP without a start stamp"
+          else
+            age_hours=$(( ( $(date -u +%s) - $(date -u -d "$started" +%s) ) / 3600 ))
+            if [ "$age_hours" -ge "$MAX_HOURS" ]; then
+              expired=true; reason="demo started $started, ${age_hours} h ago (limit ${MAX_HOURS} h)"
+            else
+              reason="demo started $started, ${age_hours} h ago (limit ${MAX_HOURS} h): left running"
+            fi
+          fi
+          echo "$reason"
+          echo "| Watchdog | $reason |" >> "$GITHUB_STEP_SUMMARY"
+          { echo "expired=$expired"; echo "reason=watchdog: $reason"; } >> "$GITHUB_OUTPUT"
+
+  teardown:
+    name: Remove it
+    needs: check
+    if: needs.check.outputs.expired == 'true'
+    # SEC: the called workflow's job needs the OIDC token; the caller must grant it.
+    permissions:
+      id-token: write
+      contents: read
+    uses: ./.github/workflows/demo-down.yml
+    with:
+      reason: ${{ needs.check.outputs.reason }}

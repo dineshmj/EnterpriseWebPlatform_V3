@@ -86,3 +86,10 @@ desktop.ini
 src/Shell/wwwroot/
 src/Microservices/*/BFF.Web/wwwroot/
 **/tsconfig.tsbuildinfo
+
+# Terraform working files (the cloud demo; state lives in Azure, never here).
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log

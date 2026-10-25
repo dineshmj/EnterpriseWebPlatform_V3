@@ -1,0 +1,25 @@
+# ┌─ :: ARCHITECTURE :: Envoy Gateway (the cluster's Gateway API implementation) ──────────────────
+# │ Why : The EWP chart needs HTTPRoute + BackendTLSPolicy; the Partner Bank chart needs TLSRoute
+# │       with TLS passed through to its pods (its mutual TLS ends there, not at the gateway).
+# │       Envoy Gateway does both, inside the cluster, behind one public IP.
+# │ How : Helm values for oci://docker.io/envoyproxy/gateway-helm (version in
+# │       .github/scripts/demo-cluster-addons.sh). It installs the Gateway API CRDs too.
+# │       GatewayNamespace mode: each Gateway's Envoy pods run in the Gateway's own namespace
+# │       (gateway-system), the namespace the charts' NetworkPolicies admit.
+# │ Ref : doc/Cloud-Demo.md | Envoy Gateway "Deployment mode" | Gateway API v1.6
+# └────────────────────────────────────────────────────────────────────────────────────────────────
+config:
+  envoyGateway:
+    gateway:
+      controllerName: gateway.envoyproxy.io/gatewayclass-controller
+    provider:
+      type: Kubernetes
+      kubernetes:
+        deploy:
+          type: GatewayNamespace
+    logging:
+      level:
+        default: info
+
+deployment:
+  replicas: 1

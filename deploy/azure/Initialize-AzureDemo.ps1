@@ -23,8 +23,10 @@
                                 (shared keys off), TLS 1.2+, no public blobs, versions and 30-day
                                 soft delete, a CanNotDelete lock. Container "tfstate".
             id-ewp-github-demo  User-assigned managed identity that GitHub Actions signs in as.
-                                One federated credential: only workflow jobs of
-                                <repository> running in the GitHub environment <environment>.
+                                Two federated credentials: only workflow jobs of <repository>
+                                running in the GitHub environment <environment> (Demo up, with a
+                                reviewer) or <teardown environment> (Demo down and the watchdog,
+                                unattended).
             <EWP domain>        Public DNS zones of the two domains (-EwpDomain, -PartnerBankDomain).
             <Partner domain>    Apex CAA record (only Let's Encrypt may issue certificates) and a
                                 CanNotDelete lock on the SOA record set (the zone cannot be deleted;
@@ -72,6 +74,10 @@
 
 .PARAMETER GitHubEnvironment
     The GitHub environment those workflows must run in. Default azure-demo.
+
+.PARAMETER GitHubTeardownEnvironment
+    The GitHub environment of "Demo down" and the hourly watchdog (no reviewer, so a forgotten
+    demo is removed at night too). Default azure-demo-teardown. Step 7.
 
 .PARAMETER GitHubOwnerId
     Numeric id of the repository's owner, part of GitHub's OIDC subject. Default: read from
@@ -126,6 +132,9 @@ param(
     [ValidatePattern('^[A-Za-z0-9._-]+$')]
     [string]$GitHubEnvironment = 'azure-demo',
 
+    [ValidatePattern('^[A-Za-z0-9._-]+$')]
+    [string]$GitHubTeardownEnvironment = 'azure-demo-teardown',
+
     [long]$GitHubOwnerId,
 
     [long]$GitHubRepositoryId,
@@ -147,7 +156,12 @@ $ErrorActionPreference = 'Stop'
 
 $stateContainerName = 'tfstate'
 $budgetName = 'ewp-demo-monthly'
-$federatedCredentialName = 'github-' + $GitHubEnvironment
+if ($GitHubTeardownEnvironment -eq $GitHubEnvironment) { throw '-GitHubTeardownEnvironment must differ from -GitHubEnvironment (one has a reviewer, the other none).' }
+# environment -> federated credential name
+$federatedCredentials = [ordered]@{
+    $GitHubEnvironment         = 'github-' + $GitHubEnvironment
+    $GitHubTeardownEnvironment = 'github-' + $GitHubTeardownEnvironment
+}
 $stateLockName = 'ewp-keep-terraform-state'
 $dnsRoleName = 'EWP Demo DNS Record Writer'
 $dnsLockName = 'ewp-keep-dns-zone'
@@ -346,7 +360,7 @@ if ($Remove) {
             Invoke-Az group delete --name $group --yes | Out-Null
         }
     }
-    Write-Host "`nRemoved. Delete the GitHub environment '$GitHubEnvironment' (or its variables) by hand."
+    Write-Host "`nRemoved. Delete the GitHub environments '$GitHubEnvironment' and '$GitHubTeardownEnvironment' (or their variables) by hand."
     return
 }
 
@@ -437,12 +451,13 @@ $stateContainerScope = "$foundationScope/providers/Microsoft.Storage/storageAcco
 # ┌─ :: SECURITY :: GitHub Actions signs in without a secret ────────────────────────────────────
 # │ Why : A client secret or certificate stored in GitHub is a long-lived credential: whoever
 # │       reads it can sign in from anywhere, until someone notices and rotates it.
-# │ How : A user-assigned managed identity (no secret can even be created for one) with ONE
-# │       federated credential: Entra accepts GitHub's short-lived OIDC token only when its
-# │       subject is "repo:<owner>@<id>/<repo>@<id>:environment:<environment>" and its audience is
-# │       api://AzureADTokenExchange. The GitHub environment adds the human gate (required
-# │       reviewer) and admits only main.
-# │ Ref : doc/Azure.md A1 | Microsoft Entra workload identity federation | GitHub OIDC hardening
+# │ How : A user-assigned managed identity (no secret can even be created for one) with TWO
+# │       federated credentials: Entra accepts GitHub's short-lived OIDC token only when its
+# │       subject is "repo:<owner>@<id>/<repo>@<id>:environment:<environment>" for one of the
+# │       two environments, and its audience is api://AzureADTokenExchange. Both environments
+# │       admit only main. azure-demo adds the human gate (required reviewer) for Demo up;
+# │       azure-demo-teardown has none, so the watchdog can remove a forgotten demo at night.
+# │ Ref : doc/Azure.md A1, A10 | Microsoft Entra workload identity federation | GitHub OIDC hardening
 # └────────────────────────────────────────────────────────────────────────────────────────────────
 Write-Step "GitHub Actions identity ($IdentityName)"
 $identity = Get-AzOrNull identity show --name $IdentityName --resource-group $FoundationResourceGroup
@@ -467,18 +482,21 @@ if (-not $GitHubOwnerId -or -not $GitHubRepositoryId) {
     $GitHubRepository = $repositoryInfo.full_name
 }
 $ownerName, $repositoryName = $GitHubRepository -split '/', 2
-$subject = "repo:$ownerName@$GitHubOwnerId/$repositoryName@${GitHubRepositoryId}:environment:$GitHubEnvironment"
-$federatedArguments = @('--name', $federatedCredentialName, '--identity-name', $IdentityName,
-    '--resource-group', $FoundationResourceGroup, '--issuer', 'https://token.actions.githubusercontent.com',
-    '--subject', $subject, '--audiences', 'api://AzureADTokenExchange')
-$federated = Get-AzOrNull identity federated-credential show --name $federatedCredentialName --identity-name $IdentityName --resource-group $FoundationResourceGroup
-if (-not $federated) { Invoke-Az identity federated-credential create @federatedArguments | Out-Null; Write-Host "  created federated credential: $subject" }
-elseif ($federated.subject -cne $subject) { Invoke-Az identity federated-credential update @federatedArguments | Out-Null; Write-Host "  updated federated credential: $subject (was $($federated.subject))" }
-else { Write-Host "  ok      federated credential: $subject" }
+foreach ($environmentName in $federatedCredentials.Keys) {
+    $federatedCredentialName = $federatedCredentials[$environmentName]
+    $subject = "repo:$ownerName@$GitHubOwnerId/$repositoryName@${GitHubRepositoryId}:environment:$environmentName"
+    $federatedArguments = @('--name', $federatedCredentialName, '--identity-name', $IdentityName,
+        '--resource-group', $FoundationResourceGroup, '--issuer', 'https://token.actions.githubusercontent.com',
+        '--subject', $subject, '--audiences', 'api://AzureADTokenExchange')
+    $federated = Get-AzOrNull identity federated-credential show --name $federatedCredentialName --identity-name $IdentityName --resource-group $FoundationResourceGroup
+    if (-not $federated) { Invoke-Az identity federated-credential create @federatedArguments | Out-Null; Write-Host "  created federated credential: $subject" }
+    elseif ($federated.subject -cne $subject) { Invoke-Az identity federated-credential update @federatedArguments | Out-Null; Write-Host "  updated federated credential: $subject (was $($federated.subject))" }
+    else { Write-Host "  ok      federated credential: $subject" }
+}
 
 # SEC: other federated credentials on this identity would be other ways in - report them.
 $others = @(Invoke-Az identity federated-credential list --identity-name $IdentityName --resource-group $FoundationResourceGroup) |
-    Where-Object { $_.name -ne $federatedCredentialName }
+    Where-Object { $federatedCredentials.Values -notcontains $_.name }
 foreach ($other in $others) { Write-Warning "Unexpected federated credential '$($other.name)' (subject $($other.subject)) - remove it unless you added it on purpose." }
 
 # ── 5. What the identity may do ────────────────────────────────────────────────────────────────
@@ -656,7 +674,7 @@ finally { Remove-Item $budgetFile -ErrorAction SilentlyContinue }
 Write-Host "  ok      alerts to $AlertEmail"
 
 # ── Hand-over ──────────────────────────────────────────────────────────────────────────────────
-Write-Step 'Done. GitHub environment variables (Settings > Environments > azure-demo > Environment variables)'
+Write-Step "Done. GitHub environment variables, the same in BOTH environments (Settings > Environments > $GitHubEnvironment and $GitHubTeardownEnvironment > Environment variables)"
 # NOTE: these are identifiers, not secrets: without a token GitHub issues for this repository and
 # environment they open nothing. Variables (not secrets) keep them readable in the logs.
 $variables = [ordered]@{

@@ -1,0 +1,14 @@
+# ┌─ :: SECURITY :: trust-manager (the bundles EWP's pods trust) ──────────────────────────────────
+# │ Why : Every EWP pod must trust EWP's private root (TLS between pods) and, for .NET, the
+# │       public roots as well (deploy/helm/ewp-cluster, doc/Kubernetes.md K3).
+# │ How : Helm values for oci://quay.io/jetstack/charts/trust-manager (version in
+# │       .github/scripts/demo-cluster-addons.sh). Reads sources only from cert-manager's
+# │       namespace (where ewp-cluster keeps the root); the default public CA package is on.
+# │ Ref : doc/Kubernetes.md K3 | cert-manager "trust-manager"
+# └────────────────────────────────────────────────────────────────────────────────────────────────
+app:
+  trust:
+    namespace: cert-manager
+
+defaultPackage:
+  enabled: true
