@@ -68,7 +68,7 @@ Each document has one purpose. A fact is written in exactly one place; other doc
 | [Container images](doc/Containers.md) | How every service becomes an image in CI, and what an image needs from its environment (the run-time contract) |
 | [CI gates](doc/CI.md) | What every pull request and push to main must pass, and the branch protection |
 | [Kubernetes deployment](doc/Kubernetes.md) | The Helm charts (`deploy/helm`): what a cluster needs first, TLS between pods, network rules, every secret an environment creates |
-| [Azure demo bootstrap](doc/Azure.md) | What exists in Azure before the demo workflows run (`deploy/azure`): GitHub's secret-less OIDC sign-in, the two resource groups, the Terraform state store, the budget alert |
+| [Azure demo bootstrap](doc/Azure.md) | What exists in Azure before the demo workflows run (`deploy/azure`): GitHub's secret-less OIDC sign-in, the two resource groups, the Terraform state store, the two domains' DNS zones, the budget alert |
 | [Checklists](doc/Checklists/README.md) | One checklist per deployable tier (IDP, Shell, MFE SPAs and BFFs, Journey and domain APIs, Outbox publishers, subscribers, Kafka, PostgreSQL users and grants): what is true today, and what is open |
 
 ### Per component (`doc/Requirements/`)

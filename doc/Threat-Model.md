@@ -47,7 +47,7 @@
   APIs ──TB6── External systems (core banking, payment network, screening provider)
   Audit API ◄── Kafka (read only) ;  Auditor ──TB1/TB3── Audit BFF → Audit Journey API (token exchange)
 
-  GitHub Actions (main, azure-demo environment) ──TB7── Azure (rg-ewp-demo, Terraform state)
+  GitHub Actions (main, azure-demo environment) ──TB7── Azure (rg-ewp-demo, Terraform state, demo DNS records)
 ```
 
 | ID | Boundary | Crosses it |
@@ -58,7 +58,7 @@
 | TB4 | APIs ↔ their database | One least-privilege database user per deployable |
 | TB5 | Services ↔ Kafka | Each component as its own SCRAM user, limited by ACLs to its own topics and group |
 | TB6 | APIs ↔ external systems | API key + Idempotency-Key over HTTPS, resilience pipeline |
-| TB7 | GitHub Actions ↔ Azure (cloud demo) | GitHub's OIDC token exchanged for the demo identity's Azure token: no stored secret, two resource groups only |
+| TB7 | GitHub Actions ↔ Azure (cloud demo) | GitHub's OIDC token exchanged for the demo identity's Azure token: no stored secret, two resource groups and the A / CNAME records of two DNS zones only |
 
 ## 4. Threats and controls (STRIDE)
 
@@ -155,6 +155,7 @@ When automated tests resume, both sides get the same token fixtures (expired, wr
 | E | A pull request or changed workflow reaches Azure | The environment admits only `main` and waits for a required reviewer; pull request branches cannot use it | [Azure.md](Azure.md), GitHub side |
 | E | The demo identity widens its own rights | No subscription rights; no management rights on the group holding the identity and the state; role assignments only from a short list and only for managed identities (ABAC condition) | [Azure.md](Azure.md) A2-A4; [azure-access-check.yml](../.github/workflows/azure-access-check.yml) (Owner refused) |
 | T/I | The Terraform state is read, altered or lost | Entra ID sign-in only (no account key exists), the identity's data rights on the one container; versions, 30-day soft delete, CanNotDelete lock | [Azure.md](Azure.md) A5 |
+| T/D | The demo's domains are taken over: a zone deleted (new name servers, domain dark), a sub-domain delegated elsewhere, a certificate from another authority | The identity writes only A and CNAME records (custom role, per zone); the owner sets CAA (Let's Encrypt only); a CanNotDelete lock on each zone's SOA record set stops a zone delete by anyone | [Azure.md](Azure.md) A8, A9; [azure-access-check.yml](../.github/workflows/azure-access-check.yml) (NS, CAA, zone delete refused) |
 | D | A forgotten demo runs up cost | Budget alerts at 50/80/100% and on forecast; teardown and watchdog in step 7 | [Azure.md](Azure.md) A6 |
 
 ## 5. Abuse cases (banking)

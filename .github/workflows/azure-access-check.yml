@@ -1,11 +1,13 @@
-# ┌─ :: SECURITY :: Azure access check (step 5) ───────────────────────────────────────────────────
+# ┌─ :: SECURITY :: Azure access check (steps 5 and 6) ────────────────────────────────────────────
 # │ Why : The bootstrap (deploy/azure/Initialize-AzureDemo.ps1) gives the demo identity narrow
 # │       rights. Narrow rights are easy to get wrong in both directions: too few and the demo
 # │       fails half-way; too many and a compromised workflow reaches further than it should.
 # │ How : Signs in exactly like the demo workflows will (OIDC, environment azure-demo, no secret)
 # │       and checks both sides: what it MUST be able to do (use rg-ewp-demo, write and read a
-# │       state blob) and what it must NOT (see or touch rg-ewp-foundation's resources, create a
-# │       resource group, read storage keys, hand out Owner). Changes nothing it does not undo.
+# │       state blob, write and delete an A record in each DNS zone) and what it must NOT (see or
+# │       touch rg-ewp-foundation's resources, create a resource group, read storage keys, hand
+# │       out Owner, delegate a sub-domain, change CAA, delete a zone). Changes nothing it does
+# │       not undo.
 # │ Ref : doc/Azure.md "Checking it" | GitHub "Configuring OpenID Connect in Azure"
 # └────────────────────────────────────────────────────────────────────────────────────────────────
 name: Azure access check
@@ -37,6 +39,9 @@ jobs:
       STATE_GROUP: ${{ vars.AZURE_TFSTATE_RESOURCE_GROUP }}
       STATE_ACCOUNT: ${{ vars.AZURE_TFSTATE_STORAGE_ACCOUNT }}
       STATE_CONTAINER: ${{ vars.AZURE_TFSTATE_CONTAINER }}
+      DNS_GROUP: ${{ vars.AZURE_DNS_RESOURCE_GROUP }}
+      DNS_ZONE_EWP: ${{ vars.AZURE_DNS_ZONE_EWP }}
+      DNS_ZONE_PARTNER_BANK: ${{ vars.AZURE_DNS_ZONE_PARTNER_BANK }}
     steps:
       - name: Sign in to Azure (OIDC)
         uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
@@ -99,5 +104,58 @@ jobs:
 
           # Clean up the probe group in the unlikely case it was created.
           az group delete --name "rg-ewp-access-check-$GITHUB_RUN_ID" --yes --no-wait > /dev/null 2>&1 || true
+
+          # ── DNS zones (step 6) ──
+          if [ -z "$DNS_GROUP" ] || [ -z "$DNS_ZONE_EWP" ] || [ -z "$DNS_ZONE_PARTNER_BANK" ]; then
+            echo "SKIP  DNS zones (AZURE_DNS_* variables not set: step 6 not run yet)"
+            echo "| SKIP | DNS zones (AZURE_DNS_* variables not set) |" >> "$GITHUB_STEP_SUMMARY"
+          else
+            probe_name="ewp-access-check-$GITHUB_RUN_ID"
+            for zone in "$DNS_ZONE_EWP" "$DNS_ZONE_PARTNER_BANK"; do
+              must "read zone $zone" az network dns zone show --resource-group "$DNS_GROUP" --name "$zone"
+              # 192.0.2.1: TEST-NET-1 (RFC 5737), never routed.
+              must "write an A record in $zone" az network dns record-set a add-record --resource-group "$DNS_GROUP" \
+                --zone-name "$zone" --record-set-name "$probe_name" --ipv4-address 192.0.2.1
+              must "delete an A record in $zone" az network dns record-set a delete --resource-group "$DNS_GROUP" \
+                --zone-name "$zone" --name "$probe_name" --yes
+
+              # SEC: an NS record would hand a sub-domain to someone else's name servers.
+              if az network dns record-set ns add-record --resource-group "$DNS_GROUP" --zone-name "$zone" \
+                  --record-set-name "$probe_name" --nsdname ns1.example.invalid > /dev/null 2>&1; then
+                az network dns record-set ns delete --resource-group "$DNS_GROUP" --zone-name "$zone" --name "$probe_name" --yes > /dev/null 2>&1 || true
+                fail "must not: delegate a sub-domain of $zone (NS record created, then removed)"
+              else
+                pass "must not: delegate a sub-domain of $zone"
+              fi
+              # SEC: CAA names the only certificate authority allowed; it is the owner's to set.
+              if az network dns record-set caa add-record --resource-group "$DNS_GROUP" --zone-name "$zone" \
+                  --record-set-name "$probe_name" --flags 0 --tag issue --value example.invalid > /dev/null 2>&1; then
+                az network dns record-set caa delete --resource-group "$DNS_GROUP" --zone-name "$zone" --name "$probe_name" --yes > /dev/null 2>&1 || true
+                fail "must not: write a CAA record in $zone (created, then removed)"
+              else
+                pass "must not: write a CAA record in $zone"
+              fi
+              # SEC: a zone delete cannot be undone (new name servers), so it is never attempted:
+              # the identity's effective actions on the zone are asked for and matched instead.
+              zone_id=$(az network dns zone show --resource-group "$DNS_GROUP" --name "$zone" --query id -o tsv 2>/dev/null)
+              actions=$(az rest --method get --url "https://management.azure.com${zone_id}/providers/Microsoft.Authorization/permissions?api-version=2022-04-01" \
+                --query "value[].actions[]" -o tsv 2>/dev/null)
+              if [ -z "$zone_id" ] || [ -z "$actions" ]; then
+                fail "must not: delete or change zone $zone (could not read its permissions)"
+              else
+                widened=""
+                shopt -s nocasematch
+                while IFS= read -r action; do
+                  for operation in Microsoft.Network/dnsZones/delete Microsoft.Network/dnsZones/write; do
+                    # shellcheck disable=SC2053 # the action is a wildcard pattern on purpose
+                    [[ "$operation" == $action ]] && widened="$widened $action"
+                  done
+                done <<< "$actions"
+                shopt -u nocasematch
+                if [ -z "$widened" ]; then pass "must not: delete or change zone $zone"
+                else fail "must not: delete or change zone $zone (allowed by:$widened)"; fi
+              fi
+            done
+          fi
 
           [ "$failures" -eq 0 ] || { echo "$failures check(s) failed."; exit 1; }
