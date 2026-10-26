@@ -41,17 +41,24 @@ retry() {
   return 1
 }
 
+# ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────────────
+# │ AKS's admissions enforcer rewrites every webhook's namespaceSelector (so no webhook can block
+# │ kube-system) and becomes that field's manager. Helm 4 updates objects with server-side apply,
+# │ so the SECOND run on the same cluster refused cert-manager's webhook ("conflict with
+# │ admissionsenforcer ... namespaceSelector", re-run of Demo up, 26-OCT-2026). --force-conflicts
+# │ lets the chart's value through; the enforcer adds its exclusions again on the same request.
+# └──────────────────────────────────────────────────────────────────────────────────────────────
 step "Envoy Gateway $ENVOY_GATEWAY_VERSION"
 helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm --version "$ENVOY_GATEWAY_VERSION" \
-  --namespace envoy-gateway-system --create-namespace -f "$addons/envoy-gateway.yaml" --wait --timeout 10m
+  --namespace envoy-gateway-system --create-namespace -f "$addons/envoy-gateway.yaml" --force-conflicts --wait --timeout 10m
 
 step "cert-manager $CERT_MANAGER_VERSION"
 helm upgrade --install cert-manager oci://quay.io/jetstack/charts/cert-manager --version "$CERT_MANAGER_VERSION" \
-  --namespace cert-manager --create-namespace -f "$addons/cert-manager.yaml" --wait --timeout 10m
+  --namespace cert-manager --create-namespace -f "$addons/cert-manager.yaml" --force-conflicts --wait --timeout 10m
 
 step "trust-manager $TRUST_MANAGER_VERSION"
 helm upgrade --install trust-manager oci://quay.io/jetstack/charts/trust-manager --version "$TRUST_MANAGER_VERSION" \
-  --namespace cert-manager -f "$addons/trust-manager.yaml" --wait --timeout 10m
+  --namespace cert-manager -f "$addons/trust-manager.yaml" --force-conflicts --wait --timeout 10m
 
 step "ewp-cluster (private CA, trust bundles)"
 # SEC: staging certificates are untrusted by design; only a staging run adds their roots, and
