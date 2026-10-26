@@ -128,6 +128,7 @@ const o = {
   kafka: (user) => `kafka-user-${user}`,
   client: (id) => `client-${kv(id)}`,
   apiKey: (name) => `api-key-${name}`,
+  simulatorAdminKey: 'simulator-admin-key',
   sessionKey: (name) => `session-key-${name}`,
   kycSessionSecret: 'session-secret-kyc-bff',
   documentKey: 'documents-encryption-key-1',
@@ -181,7 +182,11 @@ function ewpNamespace() {
   ]) {
     add(`ewp-${caller}`, key, o.apiKey(name));
     add(`ewp-${simulator}`, 'Simulator__ApiKey', o.apiKey(name));
+    // SEC: the behaviour switch from the Operations Journey API (another pod): one admin key,
+    // known only to it and the simulators (Test environment only - the chart's simulators).
+    add(`ewp-${simulator}`, 'Simulator__AdminKey', o.simulatorAdminKey);
   }
+  add('ewp-operations-journey-api', 'OPERATIONS_JOURNEY_SIMULATOR_ADMIN_KEY', o.simulatorAdminKey);
   add('ewp-data-protection', 'certificate.pfx', o.dataProtectionPfx, b64);
   add('ewp-data-protection', 'password', o.dataProtectionPassword);
   add('ewp-tls-keystore-password', 'password', o.keystorePassword);
@@ -409,6 +414,7 @@ for (const role of dbRoles) base.ewp[o.dbRole(role)] = () => password();
 for (const user of kafkaUsers) base.ewp[o.kafka(user)] = () => password();
 for (const id of Object.keys(clients)) base.ewp[o.client(id)] = () => password(40);
 for (const name of ['screening-provider', 'core-banking', 'payment-network']) base.ewp[o.apiKey(name)] = () => password(40);
+base.ewp[o.simulatorAdminKey] = () => password(40);
 for (const name of ['kyc-bff', 'audit-web', 'operations-web', 'partner-products-web']) base.ewp[o.sessionKey(name)] = key32;
 base.ewp[o.kycSessionSecret] = () => password(48);
 base.ewp[o.documentKey] = key32;

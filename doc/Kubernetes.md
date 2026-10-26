@@ -85,7 +85,7 @@ Component Secrets (`ewp-<component>`; each key = the setting's name):
 | `ewp-customer-outbox-publisher` | `ConnectionStrings__CustomerDbConnection`, `Kafka__SaslPassword` |
 | `ewp-<subscriber>` (the 8 Kafka subscribers) | `Kafka__SaslPassword`, `<Subscriber>__ClientSecret` (e.g. `PaymentsSagaReplySubscriber__ClientSecret`) |
 | `ewp-partner-products-worker` | `PARTNER_PRODUCTS_WORKER_CLIENT_SECRET`, `PARTNER_PRODUCTS_WORKER_KAFKA_PASSWORD` |
-| `ewp-<simulator>` (the 3 simulators) | `Simulator__ApiKey` - equal to its caller's `ApiKey` |
+| `ewp-<simulator>` (the 3 simulators) | `Simulator__ApiKey` - equal to its caller's `ApiKey`; `Simulator__AdminKey` - equal to the Operations Journey API's `OPERATIONS_JOURNEY_SIMULATOR_ADMIN_KEY` (the behaviour switch from another pod) |
 
 Shared Secrets and files:
 

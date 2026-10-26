@@ -108,6 +108,14 @@ export default function FaultControlsPage() {
           </Alert>
         )}
 
+        {/* NOTE: the fault proxy (Toxiproxy) runs on a developer's machine only; a cluster's callers use direct addresses. */}
+        {simulatorsAvailable && !routesAvailable && (
+          <Alert tone="info" title="Platform APIs (fault proxy): not in this environment">
+            Cutting, slowing or hanging the route to one of the platform's own APIs needs the fault proxy, which runs on a
+            developer's machine only. Here the simulated external systems below can still be switched.
+          </Alert>
+        )}
+
         {routesAvailable && (
           <Card>
             <CardHeader
@@ -166,6 +174,9 @@ export default function FaultControlsPage() {
             <CardContent className="space-y-4">
               {simulatorError && <Alert tone="danger">{simulatorError}</Alert>}
               {!simulators && !simulatorError && <p className="text-sm text-ink-muted">Reading the simulators…</p>}
+              {simulators?.some((s) => s.behaviour === 'Unknown') && (
+                <Alert tone="warning">A simulator does not answer, or refuses this API: is it running, and (in a cluster) does it have the same admin key as the Operations Journey API?</Alert>
+              )}
               {simulators && (
                 <Table aria-label="Simulators">
                   <thead>

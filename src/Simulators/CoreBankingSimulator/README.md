@@ -9,8 +9,8 @@ URL: `https://localhost:46376` (launch profile `https`).
 | Endpoint | Who | Purpose |
 |---|---|---|
 | `POST /v1/accounts` | Accounts API, headers `X-Api-Key` (compared in constant time) and **`Idempotency-Key`** | Open an account: returns `accountNumber`, `bsb` (`062-000`), `reference`, `product` |
-| `GET /admin/behaviour` | localhost only | Current behaviour |
-| `PUT /admin/behaviour` | localhost only | Change behaviour at runtime: `{"behaviour":"Down"}` |
+| `GET /admin/behaviour` | localhost, or `X-Simulator-Admin-Key` | Current behaviour |
+| `PUT /admin/behaviour` | localhost, or `X-Simulator-Admin-Key` | Change behaviour at runtime: `{"behaviour":"Down"}` |
 | `GET /health` | anyone | Liveness |
 
 ## Idempotency
@@ -47,6 +47,6 @@ What this project does to stay secure: each control, what would go wrong without
 |---|---|---|---|---|
 | 1 | An API key on every business call, compared in constant time; no key configured = no start | Anyone on the network could call the "external" system | Unauthenticated use of a partner API; timing attacks on the key | `Simulator:ApiKey`, `CryptographicOperations.FixedTimeEquals` in [Program.cs](Program.cs) |
 | 2 | `Idempotency-Key` required; the same key always returns the same result | A retried request after a timeout would act twice (two accounts, two payments) | Duplicated money movement | `Idempotency-Key` in [Program.cs](Program.cs) |
-| 3 | The behaviour switch (`/admin/behaviour`) answers only loopback callers | Anyone could switch the provider to Down | Unauthorised control of a test dependency | `IsLoopback` in [Program.cs](Program.cs) |
+| 3 | The behaviour switch (`/admin/behaviour`) answers only loopback callers - or, where the simulator runs on another machine than the Operations Journey API (the cloud demo), a caller sending the configured `Simulator:AdminKey` in `X-Simulator-Admin-Key` (compared in constant time; unset = loopback only) | Anyone could switch the provider to Down | Unauthorised control of a test dependency | `IsAdmin` / `IsLocal` in [Program.cs](Program.cs) |
 | 4 | Host filtering: `localhost` only | Requests addressed to other host names would be served | Host-header attacks | [appsettings.Development.json](appsettings.Development.json) |
 | 5 | Container image: built only by CI from a commit, chiseled non-root runtime (no shell, files read-only to the process), base images pinned by tag and digest, scanned before it is published (HIGH / CRITICAL with a fix, or any secret, fails); its API key comes from the environment - none of them is in the image. Development, test and demo environments only - never deployed to production. | A developer-built or tampered image could run in an environment; a credential in a layer stays in the registry for good; a shell in the image helps an attacker who gets in | Supply-chain tampering (OWASP A08); vulnerable components (A06); hard-coded credentials (CWE-798) | [Dockerfile](Dockerfile), [.dockerignore](../../../.dockerignore), [container-images.yml](../../../.github/workflows/container-images.yml), [doc/Containers.md](../../../doc/Containers.md) |

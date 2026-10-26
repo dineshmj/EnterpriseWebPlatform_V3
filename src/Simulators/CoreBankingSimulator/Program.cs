@@ -11,7 +11,7 @@ using System.Text.Json.Serialization;
 // refusing (timeouts, retries, circuit breaker, and compensation after a failure).
 //
 // POST /v1/accounts              open an account (needs X-Api-Key and Idempotency-Key)
-// GET  /admin/behaviour          current behaviour            } localhost only
+// GET  /admin/behaviour          current behaviour            } localhost, or with X-Simulator-Admin-Key
 // PUT  /admin/behaviour          change behaviour at runtime  }
 //
 // Behaviour: Healthy | Slow (answers after SlowDelaySeconds) | Failing (HTTP 500)
@@ -25,7 +25,7 @@ using System.Text.Json.Serialization;
 // │       refusing - without depending on a real provider.
 // │ How : Same contract style as a real partner: an API key compared in constant time (no key = no
 // │       start), an Idempotency-Key that always returns the same result, and a behaviour switch
-// │       that answers loopback callers only.
+// │       that answers loopback callers only (in a cluster: a configured admin key).
 // │ Ref : Features 1.6.3, 1.7.4 | Threat-Model TB6 | CWE-208 (timing-safe comparison)
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 // A friendly console window title (instead of the EXE's full path) on a local Windows run.
@@ -35,6 +35,14 @@ var builder = WebApplication.CreateBuilder(args);
 var apiKey = builder.Configuration["Simulator:ApiKey"];
 if (string.IsNullOrWhiteSpace(apiKey))
     throw new InvalidOperationException("Simulator:ApiKey is not configured.");
+
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ Optional admin key: lets a caller on ANOTHER machine (the Operations Journey API in a
+// │ cluster) use the behaviour switch by sending it in X-Simulator-Admin-Key. Unset = the
+// │ switch answers loopback callers only, as on a developer's machine. Set it only where the
+// │ switch may exist (Development / Test) - never with a real provider.
+// └──────────────────────────────────────────────────────────────────────────────────────
+var adminKey = builder.Configuration["Simulator:AdminKey"];
 
 var bsb = builder.Configuration["Simulator:Bsb"] ?? "062-000";
 var state = new SimulatorState(
@@ -111,13 +119,13 @@ app.MapPost("/v1/accounts", async (HttpContext http, OpenAccountRequest request,
     return Results.Created($"/v1/accounts/{account.AccountNumber}", account);
 });
 
-// Administration: loopback only (the demo operator on this machine).
+// Administration: loopback, or the configured admin key (the Operations Journey API in a cluster).
 app.MapGet("/admin/behaviour", (HttpContext http) =>
-    IsLocal(http) ? Results.Ok(state) : Results.NotFound());
+    IsAdmin(http) ? Results.Ok(state) : Results.NotFound());
 
 app.MapPut("/admin/behaviour", (HttpContext http, BehaviourChange change) =>
 {
-    if (!IsLocal(http))
+    if (!IsAdmin(http))
         return Results.NotFound();
 
     state = state with { Behaviour = change.Behaviour };
@@ -128,6 +136,14 @@ app.MapPut("/admin/behaviour", (HttpContext http, BehaviourChange change) =>
 app.MapGet("/health", () => Results.Ok(new { status = "Healthy" }));
 
 app.Run();
+
+bool IsAdmin(HttpContext http) =>
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ The behaviour switch: a caller on this machine, or one that sends the configured admin
+    // │ key (compared in constant time). No key configured = loopback only.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    IsLocal(http) || (!string.IsNullOrEmpty(adminKey) &&
+        CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(http.Request.Headers["X-Simulator-Admin-Key"].ToString()), Encoding.UTF8.GetBytes(adminKey)));
 
 static bool IsLocal(HttpContext http) =>
     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────

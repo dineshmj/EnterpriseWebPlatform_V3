@@ -28,6 +28,11 @@ export interface JourneyOptions {
   simulatorControlsEnabled: boolean;
   /** A changed behaviour goes back to Healthy by itself after this many minutes. */
   simulatorAutoRevertMinutes: number;
+  /**
+   * Sent as X-Simulator-Admin-Key when the simulators run on other machines (a cluster): they accept
+   * the switch from loopback callers, or from a caller with this key. Empty = loopback only (laptop).
+   */
+  simulatorAdminKey: string;
 
   /**
    * The fault proxy's routes (cut / slow / hang an API for its server-side callers). ON only in
@@ -145,6 +150,8 @@ export function loadOptions(): JourneyOptions {
     callerClientId: required('OPERATIONS_JOURNEY_CALLER_CLIENT_ID'),
     simulatorControlsEnabled: flag('OPERATIONS_SIMULATOR_CONTROLS_ENABLED'),
     simulatorAutoRevertMinutes: minutes('OPERATIONS_SIMULATOR_AUTO_REVERT_MINUTES'),
+    // Optional: only a cluster needs it (the simulators are not on this machine there).
+    simulatorAdminKey: process.env.OPERATIONS_JOURNEY_SIMULATOR_ADMIN_KEY?.trim() ?? '',
     faultControlsEnabled: flag('OPERATIONS_FAULT_CONTROLS_ENABLED'),
     // Read only when the controls are on: an environment without the proxy needs no address.
     faultProxyAdminUrl: '',

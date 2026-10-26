@@ -560,6 +560,8 @@ components:
       OPERATIONS_MFA_MAX_AGE_MINUTES: "15"
     secretEnv:
       - OPERATIONS_JOURNEY_CLIENT_SECRET
+      # SEC: sent to the simulators (other pods) for their behaviour switch; Test only.
+      - OPERATIONS_JOURNEY_SIMULATOR_ADMIN_KEY
 
   partner-products-journey-api:
     stack: node
@@ -725,6 +727,8 @@ components:
     secretEnv:
       # Equal to the Compliance API's ScreeningProvider__ApiKey.
       - Simulator__ApiKey
+      # The behaviour switch from the Operations Journey API (its OPERATIONS_JOURNEY_SIMULATOR_ADMIN_KEY).
+      - Simulator__AdminKey
 
   core-banking-simulator:
     stack: dotnet
@@ -737,6 +741,8 @@ components:
     secretEnv:
       # Equal to the Accounts API's CoreBanking__ApiKey.
       - Simulator__ApiKey
+      # The behaviour switch from the Operations Journey API (its OPERATIONS_JOURNEY_SIMULATOR_ADMIN_KEY).
+      - Simulator__AdminKey
 
   payment-network-simulator:
     stack: dotnet
@@ -749,3 +755,5 @@ components:
     secretEnv:
       # Equal to the Payments API's PaymentNetwork__ApiKey.
       - Simulator__ApiKey
+      # The behaviour switch from the Operations Journey API (its OPERATIONS_JOURNEY_SIMULATOR_ADMIN_KEY).
+      - Simulator__AdminKey
