@@ -597,7 +597,7 @@ Details: [PartnerProducts-Requirements.md](Requirements/PartnerProducts-Requirem
 - [x] Azure bootstrap: GitHub OIDC without a stored secret, rights on the throw-away group only, two domains (2026-10-25)
 - [x] Demo up / Demo down / watchdog with Terraform; the public gateway with Let's Encrypt (2026-10-25)
 - [x] The whole platform and the Partner Bank on AKS; every demo user signed in (2026-10-25, staging certificates)
-- [ ] The business journeys walked through in the cloud, with production certificates
+- [x] The business journeys walked through in the cloud, with production certificates (2026-10-26)
 - [ ] Egress network policies
 - [ ] Centralized logs and metrics for the cloud demo (Grafana / Observe)
 
