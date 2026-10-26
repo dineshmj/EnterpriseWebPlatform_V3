@@ -35,12 +35,24 @@ internal static class AccountsTestData
         return application;
     }
 
-    /// <summary>An open Sydney account of <see cref="Customer"/> with this balance and nothing held.</summary>
+    /// <summary>
+    /// An open Sydney account of <see cref="Customer"/> with this balance and nothing held: it
+    /// opens empty, and Sophie deposits the balance in cash at the counter - as in the API.
+    /// </summary>
     public static Account OpenAccount(decimal balance = 5_000m, long id = 11)
+    {
+        var account = NewAccount(id);
+        if (balance > 0)
+            Deposit(account, balance);
+        return account;
+    }
+
+    /// <summary>A newly opened Sydney account of <see cref="Customer"/>: ACTIVE, balance zero.</summary>
+    public static Account NewAccount(long id = 11)
     {
         var application = OpeningApplication();
         application.RecordAccountOpened("72947086", "062-000", Now);
-        var account = Account.Open("72947086", "062-000", "CB-REF-1", application, balance, Now);
+        var account = Account.Open("72947086", "062-000", "CB-REF-1", application, Now);
         // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
         // │ The database assigns the ID (a funds hold names its account by it): set it the way
         // │ EF Core does, through the private setter.
@@ -48,6 +60,12 @@ internal static class AccountsTestData
         typeof(Account).GetProperty(nameof(Account.Id))!.SetValue(account, id);
         return account;
     }
+
+    /// <summary>Cash Sophie counted at the Sydney counter, credited to <paramref name="account"/>.</summary>
+    public static CashDeposit Deposit(
+        Account account, decimal amount, BranchCode? staffBranch = null, string customerNumber = Customer, string receivedBy = Sophie) =>
+        CashDeposit.Record(Guid.NewGuid(), "DEP-261015-TEST01", account, customerNumber, amount,
+            staffBranch ?? Sydney, receivedBy, Now);
 
     /// <summary>Funds held on <paramref name="account"/> for a payment.</summary>
     public static FundsHold Reserve(Account account, decimal amount, BranchCode? initiatorBranch = null, string customerNumber = Customer) =>

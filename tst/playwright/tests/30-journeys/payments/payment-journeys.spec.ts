@@ -12,7 +12,7 @@ import { resetAllSimulators } from '../../../support/simulators';
  * approval tier (AUD 1,000), the payment network sends it, Accounts debits or releases. Each
  * journey closes with Sarah reading the payment's Audit Trail.
  *
- * The tests share one funded customer (AUD 5,000 opening deposit), onboarded by the first test.
+ * The tests share one funded customer (AUD 5,000 cash deposit after onboarding), onboarded by the first test.
  */
 test.describe('Payment journeys', () => {
   test.describe.configure({ timeout: 6 * 60_000 });

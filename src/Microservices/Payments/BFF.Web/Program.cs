@@ -175,8 +175,11 @@ builder.Services
         options.Scope.Add("offline_access");
         options.Scope.Add("payments.read");
         options.Scope.Add("payments.write");
-        // Read-only: the payment screen finds the customer's paying accounts in Accounts.
+        // The payment screen finds the customer's paying accounts in Accounts (read); the cash
+        // deposit screen credits one (write - admitted by the Accounts API for this client and
+        // for cash deposits only).
         options.Scope.Add("accounts.read");
+        options.Scope.Add("accounts.write");
         options.ClaimActions.MapJsonKey("role", "role", "role");
         // Display hints for the MFE (the API decides from the access token).
         options.ClaimActions.MapJsonKey("branch", "branch");

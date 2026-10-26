@@ -54,8 +54,15 @@ public sealed class MfePayments
                         "payments.write",
 
                         // The payment screen finds the customer's paying accounts (and what is
-                        // available) in Accounts, with the staff member's own token - read only.
-                        "accounts.read"
+                        // available) in Accounts, with the staff member's own token.
+                        "accounts.read",
+
+                        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+                        // │ The counter's cash deposit credits an account in Accounts. accounts.write alone
+                        // │ opens nothing else: the Accounts API admits this client (pinned by client ID)
+                        // │ only to cash deposits, and only for a person with account.deposit.record.
+                        // └──────────────────────────────────────────────────────────────────────────────────────
+                        "accounts.write"
                     },
 
                     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────

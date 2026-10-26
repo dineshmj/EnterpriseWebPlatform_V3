@@ -13,8 +13,8 @@ namespace EnterpriseWebPlatform.Accounts.Api.Domain.Aggregates;
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// Aggregate root: a customer account, as opened by the core-banking system (which
-/// issues the BSB and account number). Simplified: no interest or statements; the
-/// balance changes only by the demo opening deposit and settled payments.
+/// issues the BSB and account number). Simplified: no interest or statements; an account
+/// opens with a zero balance, which changes only by cash deposits and settled payments.
 ///
 /// Invariants: one account per onboarding application (ApplicationRef); a holder
 /// (customer number), a product and a core-banking identity are always present;
@@ -78,7 +78,6 @@ public sealed class Account
         string bsb,
         string coreBankingReference,
         AccountApplication application,
-        decimal openingDeposit,
         DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(application);
@@ -87,8 +86,6 @@ public sealed class Account
             throw new DomainConflictException("An account is opened only for an application the core-banking system has opened.");
         if (string.IsNullOrWhiteSpace(accountNumber) || string.IsNullOrWhiteSpace(bsb) || string.IsNullOrWhiteSpace(coreBankingReference))
             throw new DomainRuleViolationException("An account needs its account number, BSB and core-banking reference.");
-        if (openingDeposit < 0 || decimal.Round(openingDeposit, 2) != openingDeposit)
-            throw new DomainRuleViolationException("The opening deposit must be zero or a positive amount in cents.");
 
         return new Account
         {
@@ -102,7 +99,11 @@ public sealed class Account
             Product = application.Product.Value,
             Status = AccountStatus.Active,
             Currency = Money.Aud,
-            Balance = openingDeposit,
+            // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+            // │ Every account opens empty: money arrives only as a recorded deposit (CashDeposit),
+            // │ never from configuration.
+            // └──────────────────────────────────────────────────────────────────────────────────────
+            Balance = 0m,
             HeldAmount = 0m,
             OpenedAt = now,
             UpdatedAt = now,
@@ -150,6 +151,15 @@ public sealed class Account
         if (amount <= 0 || amount > HeldAmount)
             throw new DomainConflictException("The account does not hold these funds.");
         HeldAmount -= amount;
+        Touch(now);
+    }
+
+    /// <summary>Cash paid in at the counter is credited (see CashDeposit, which checks the rules).</summary>
+    internal void CreditCash(decimal amount, DateTimeOffset now)
+    {
+        if (amount <= 0 || Status != AccountStatus.Active)
+            throw new DomainConflictException("The account cannot be credited.");
+        Balance += amount;
         Touch(now);
     }
 

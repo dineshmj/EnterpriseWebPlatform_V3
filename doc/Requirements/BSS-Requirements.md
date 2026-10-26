@@ -564,7 +564,7 @@ Feature: Opening the customer's account
   Scenario: Jack opens Camilla's account
     When Jack approves the account application with the "Everyday transaction account" product
     Then the core-banking system opens the account with a BSB and account number
-    And the account is ACTIVE with an opening balance of 5,000.00 AUD (demo deposit)
+    And the account is ACTIVE with a balance of 0.00 AUD (money arrives as a cash deposit at the counter)
     And the onboarding application is COMPLETED
     And Camilla is ACTIVE
 

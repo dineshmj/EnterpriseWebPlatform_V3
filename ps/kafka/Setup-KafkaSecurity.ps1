@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Secures the local Kafka broker (C:\Kafka, KRaft) for EWP V3: TLS (SASL_SSL),
     SCRAM-SHA-512 authentication, one Kafka user per deployable, least-privilege ACLs,
@@ -96,6 +96,7 @@ $Topics = @(
     'accounts.application.rejected',
     'accounts.account.opened',
     'accounts.account.opening.failed',
+    'accounts.account.deposited',
     'accounts.application-opening-subscriber.dlq',
     'notifications.subscriber.dlq',
     'accounts.commands',
@@ -430,7 +431,7 @@ switch ($Phase) {
                    'kyc.document.verification.approved', 'kyc.document.verification.rejected', 'kyc.case.approved', 'kyc.case.rejected',
                    'compliance.case.created', 'compliance.case.screened', 'compliance.case.approved', 'compliance.case.rejected',
                    'accounts.application.created', 'accounts.application.rejected', 'accounts.account.opened', 'accounts.account.opening.failed',
-                   'accounts.funds.replies', 'payments.payment.events', 'partner-products.digital-gold.events') {
+                   'accounts.account.deposited', 'accounts.funds.replies', 'payments.payment.events', 'partner-products.digital-gold.events') {
         Grant 'ewp-audit-api' "--operation Read --operation Describe --topic $t"
     }
     Grant 'ewp-audit-api' '--operation Read --group audit.trail-subscriber'

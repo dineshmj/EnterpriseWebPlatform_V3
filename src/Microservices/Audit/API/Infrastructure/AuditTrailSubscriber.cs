@@ -37,6 +37,7 @@ public sealed class AuditTrailSubscriberOptions : ISubscriberSettings
         KafkaTopicNames.AccountApplicationRejected,
         KafkaTopicNames.AccountOpened,
         KafkaTopicNames.AccountOpeningFailed,
+        KafkaTopicNames.AccountCashDeposited,
         KafkaTopicNames.AccountsFundsReplies,
         KafkaTopicNames.PaymentEvents,
         KafkaTopicNames.PartnerProductsDigitalGoldEvents

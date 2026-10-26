@@ -157,6 +157,22 @@ export interface PayerAccount {
   available: number;
 }
 
+/** Cash recorded at the counter (Accounts), as the receipt shows it. */
+export interface CashDepositReceipt {
+  depositNumber: string;
+  customerNumber: string;
+  bsb: string;
+  accountNumber: string;
+  amount: number;
+  currency: string;
+  balanceAfter: number;
+  recordedAt: string;
+  created: boolean;
+}
+
+/** The most one cash deposit may be (Accounts checks it too): below AUSTRAC's AUD 10,000 threshold. */
+export const CASH_DEPOSIT_MAX = 9_999.99;
+
 export interface BsbInfo {
   bsb: string;
   bank: string;

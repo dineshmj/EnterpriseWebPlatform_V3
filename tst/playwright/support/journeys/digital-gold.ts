@@ -51,7 +51,7 @@ const goldAccounts = new Map<string, Promise<GoldAccount>>();
 // ┌─ :: ARCHITECTURE :: A new customer per run ───────────────────────────────────────────────────
 // │ Why : The Partner Bank opens ONE Digital Gold account per customer and keeps it after an
 // │       EWP database re-create; a fixed demo customer would be refused on the second run.
-// │ How : The customer is onboarded end to end (funded account, AUD 5,000) once per spec file;
+// │ How : The customer is onboarded end to end (then AUD 5,000 deposited in cash) once per spec file;
 // │       Form VII is recorded and sent once; the file's tests reuse the open account.
 // │ Ref : support/journeys/payments.ts fundedCustomer | PartnerProducts-Requirements.md
 // └──────────────────────────────────────────────────────────────────────────────────────────────

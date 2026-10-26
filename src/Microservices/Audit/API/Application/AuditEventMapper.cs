@@ -18,14 +18,16 @@ public static class AuditEventMapper
 {
     // ┌─ DEBT ───────────────────────────────────────────────────────────────────────────────
     // │ Who acted, in order of preference: the decider of a decision, the approver of an
-    // │ opening - taken from the producer's envelope, which is trusted (each producer has its
+    // │ opening, the person who received a cash deposit - taken from the producer's
+    // │ envelope, which is trusted (each producer has its
     // │ own Kafka user and ACLs) but not signed. Production: signed event envelopes
     // │ (Threat-Model R-6, production item 3).
     // └──────────────────────────────────────────────────────────────────────────────────────
     private static readonly (string UserId, string LanId)[] ActorFields =
     [
         ("DecisionByUserId", "DecisionByLanId"),
-        ("ApprovedByUserId", "ApprovedByLanId")
+        ("ApprovedByUserId", "ApprovedByLanId"),
+        ("ReceivedByUserId", "ReceivedByLanId")
     ];
 
     public static AuditEntry? Map(string topic, int partition, long offset, string rawMessage, DateTimeOffset recordedAt)
@@ -92,11 +94,12 @@ public static class AuditEventMapper
 
     /// <summary>
     /// The record an auditor searches by: a Digital Gold purchase (it names its payment too, but
-    /// is its own record), else the payment, else the application (onboarding or Form VII), else
-    /// the customer.
+    /// is its own record), else a cash deposit, else the payment, else the application
+    /// (onboarding or Form VII), else the customer.
     /// </summary>
     private static (string? Type, string? Ref) RecordOf(JsonElement payload) =>
         Text(payload, "PurchaseNumber") is { } purchase ? ("PURCHASE", Limit(purchase, 100))
+        : Text(payload, "DepositNumber") is { } deposit ? ("DEPOSIT", Limit(deposit, 100))
         : Text(payload, "PaymentNumber") is { } payment ? ("PAYMENT", Limit(payment, 100))
         : Text(payload, "ApplicationNumber") is { } application ? ("APPLICATION", Limit(application, 100))
         : Text(payload, "CustomerNumber") is { } customer ? ("CUSTOMER", Limit(customer, 100))

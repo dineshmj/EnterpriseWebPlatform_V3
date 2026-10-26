@@ -24,6 +24,7 @@ public sealed class AccountsDbContext(DbContextOptions<AccountsDbContext> option
     public DbSet<AccountApplication> AccountApplications => Set<AccountApplication>();
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<FundsHold> FundsHolds => Set<FundsHold>();
+    public DbSet<CashDeposit> CashDeposits => Set<CashDeposit>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
     public DbSet<StaffMember> StaffMembers => Set<StaffMember>();
@@ -53,6 +54,10 @@ public sealed class AccountsDbContext(DbContextOptions<AccountsDbContext> option
         var changedHolds = ChangeTracker.Entries<FundsHold>()
             .Select(e => e.Entity)
             .Where(h => h.DomainEvents.Count > 0)
+            .ToList();
+        var changedDeposits = ChangeTracker.Entries<CashDeposit>()
+            .Select(e => e.Entity)
+            .Where(d => d.DomainEvents.Count > 0)
             .ToList();
 
         // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
@@ -105,6 +110,23 @@ public sealed class AccountsDbContext(DbContextOptions<AccountsDbContext> option
             {
                 OutboxMessages.Add(FundsIntegrationEventMapper.ToOutboxMessage(
                     hold, domainEvent, context.WorkflowId, context.CorrelationId, context.CausationId));
+                await SaveTranslatingErrorsAsync(cancellationToken);
+            }
+        }
+
+        // 4. Cash deposits: each is its own workflow (the command's context), naming who received the cash.
+        foreach (var deposit in changedDeposits)
+        {
+            var events = deposit.DomainEvents.ToList();
+            deposit.ClearDomainEvents();
+            var receivedByLanId = await StaffMembers.AsNoTracking()
+                .Where(x => x.UserId == deposit.ReceivedByUserId)
+                .Select(x => x.LanId)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            foreach (var domainEvent in events)
+            {
+                OutboxMessages.Add(CashDepositIntegrationEventMapper.ToOutboxMessage(deposit, domainEvent, context, receivedByLanId));
                 await SaveTranslatingErrorsAsync(cancellationToken);
             }
         }
@@ -253,6 +275,28 @@ public sealed class AccountsDbContext(DbContextOptions<AccountsDbContext> option
             e.Property(x => x.SettledAt).HasColumnName("settled_at");
             e.Property(x => x.ReleasedAt).HasColumnName("released_at");
             e.Property(x => x.Version).HasColumnName("version").IsConcurrencyToken().IsRequired();
+        });
+
+        modelBuilder.Entity<CashDeposit>(e =>
+        {
+            e.ToTable("cash_deposits");
+            e.HasKey(x => x.Id);
+            e.Ignore(x => x.DomainEvents);
+            e.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
+            e.Property(x => x.DepositRef).HasColumnName("deposit_ref").IsRequired();
+            e.HasIndex(x => x.DepositRef).IsUnique().HasDatabaseName("uq_cash_deposits_deposit_ref");
+            e.Property(x => x.DepositNumber).HasColumnName("deposit_number").HasMaxLength(30).IsRequired();
+            e.Property(x => x.AccountId).HasColumnName("account_id").IsRequired();
+            e.Property(x => x.Bsb).HasColumnName("bsb").HasMaxLength(7).IsRequired();
+            e.Property(x => x.AccountNumber).HasColumnName("account_number").HasMaxLength(30).IsRequired();
+            e.Property(x => x.CustomerNumber).HasColumnName("customer_number").HasMaxLength(100).IsRequired();
+            e.Property(x => x.BranchCode).HasColumnName("branch_code").HasMaxLength(BranchCode.MaxLength)
+                .HasConversion(v => v.Value, v => BranchCode.Create(v)).IsRequired();
+            e.Property(x => x.Amount).HasColumnName("amount").HasPrecision(18, 2).IsRequired();
+            e.Property(x => x.Currency).HasColumnName("currency").HasMaxLength(3).IsRequired();
+            e.Property(x => x.BalanceAfter).HasColumnName("balance_after").HasPrecision(18, 2).IsRequired();
+            e.Property(x => x.ReceivedByUserId).HasColumnName("received_by_user_id").HasMaxLength(200).IsRequired();
+            e.Property(x => x.RecordedAt).HasColumnName("recorded_at").IsRequired();
         });
 
         modelBuilder.Entity<OutboxMessage>(e =>
