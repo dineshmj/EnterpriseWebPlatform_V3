@@ -37,7 +37,7 @@ var builder = WebApplication.CreateBuilder(args);
 // │ (section ClientIds; each must equal the IDP's ClientIds entry). Read now: a missing one
 // │ stops the start-up - a pin is never empty.
 // └──────────────────────────────────────────────────────────────────────────────────────
-var clientIds = ClientIds.From(builder.Configuration).Require(nameof(ClientIds.AccountApplicationOpeningSubscriber), nameof(ClientIds.AccountsCommandSubscriber), nameof(ClientIds.OperationsJourneyApi));
+var clientIds = ClientIds.From(builder.Configuration).Require(nameof(ClientIds.AccountApplicationOpeningSubscriber), nameof(ClientIds.AccountsCommandSubscriber), nameof(ClientIds.OperationsJourneyApi), nameof(ClientIds.PaymentsWeb));
 builder.Services.AddSingleton(clientIds);
 
 // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
@@ -162,6 +162,20 @@ builder.Services.AddAuthorization(options =>
         policy.RequireClaim("permission", "payment.initiate");
         policy.RequireClaim("branch");
     });
+
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Cash deposit at the counter: only the Payments BFF (the counter screen, pinned by
+    // │ client ID), for a person with account.deposit.record and a branch. Branch, customer
+    // │ and account state are checked again by the command and the aggregate.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    options.AddPolicy("CashDepositRecord", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireClaim("scope", "accounts.write");
+        policy.RequireClaim("permission", "account.deposit.record");
+        policy.RequireClaim("branch");
+        policy.RequireClaim("client_id", clientIds.PaymentsWeb);
+    });
 });
 builder.Services.AddSingleton<IAuthorizationHandler, AccountOfficerAuthorizationHandler>();
 
@@ -174,21 +188,14 @@ builder.Services.AddScoped<IOpeningTrace>(sp => sp.GetRequiredService<AccountsDb
 builder.Services.AddScoped<IAccountApplicationRepository, AccountApplicationRepository>();
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
 builder.Services.AddScoped<IFundsHoldRepository, FundsHoldRepository>();
+builder.Services.AddScoped<ICashDepositRepository, CashDepositRepository>();
 builder.Services.AddScoped<IAccountsQueries, AccountsQueries>();
 builder.Services.AddScoped<OpenAccountApplicationCommandHandler>();
 builder.Services.AddScoped<OfficerActionCommandHandler>();
 builder.Services.AddScoped<OpenDueAccountCommandHandler>();
 builder.Services.AddScoped<RecordOpeningErrorCommandHandler>();
 builder.Services.AddScoped<FundsCommandHandler>();
-
-// ┌─ DEBT ───────────────────────────────────────────────────────────────────────────────
-// │ Demo only: a new account starts with this balance so payments can be shown at once
-// │ (Accounts:DemoOpeningDeposit; 0 when not configured).
-// └──────────────────────────────────────────────────────────────────────────────────────
-var openingDeposit = builder.Configuration.GetValue<decimal?>("Accounts:DemoOpeningDeposit") ?? 0m;
-if (openingDeposit < 0 || decimal.Round(openingDeposit, 2) != openingDeposit)
-    throw new InvalidOperationException("Accounts:DemoOpeningDeposit must be zero or a positive amount in cents.");
-builder.Services.AddSingleton(new AccountOpeningDeposit(openingDeposit));
+builder.Services.AddScoped<RecordCashDepositCommandHandler>();
 
 // ---------------------------------------------------------------- Core banking (external)
 builder.Services.AddOptions<CoreBankingOptions>()

@@ -397,7 +397,8 @@ Operations Journey API (NestJS)	https://operations-journey.dev.localhost:46382  
 
 	d) Payments - the ORCHESTRATED saga:
 
-		A new account starts with a demo balance of 5,000.00 AUD (Accounts:DemoOpeningDeposit). As sophie.cs, open Payments -> New Payment:
+		A new account opens with a balance of 0.00 AUD. First, as sophie.cs, open Payments -> Cash Deposit, find the customer, keep the
+		suggested 5,000.00, tick "I have counted the cash" and press Deposit (cash only, at most 9,999.99). Then open Payments -> New Payment:
 		find the customer, pick the paying account, enter the payee (BSB, account, name - Confirmation of Payee checks it), the amount, then
 		Transfer. The status page follows the PaymentSaga live: ReserveFunds (Accounts) -> send to the Payment Network Simulator -> SettleFunds.
 		Confirmation of Payee (simulator): an account number ending in 0 = no match, in 9 = close match, otherwise match.

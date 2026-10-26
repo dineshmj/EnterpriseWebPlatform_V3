@@ -41,8 +41,14 @@ public interface IFundsHoldRepository
     void Add(FundsHold hold);
 }
 
-/// <summary>The demo deposit credited when an account is opened (configuration; 0 outside demos).</summary>
-public sealed record AccountOpeningDeposit(decimal Amount);
+/// <summary>Loads and adds CashDeposit aggregates.</summary>
+public interface ICashDepositRepository
+{
+    /// <summary>The deposit recorded under this Idempotency-Key; null when there is none yet.</summary>
+    Task<CashDeposit?> GetByRefAsync(Guid depositRef, CancellationToken cancellationToken);
+
+    void Add(CashDeposit deposit);
+}
 
 /// <summary>Workflow metadata of the command being handled (see the Event Catalogue).</summary>
 public sealed record WorkflowContext(Guid? WorkflowId, Guid? CorrelationId, Guid CausationId);

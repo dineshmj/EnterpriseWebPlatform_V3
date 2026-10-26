@@ -64,6 +64,12 @@ public static class KafkaTopicNames
     public const string AccountOpeningFailed = "accounts.account.opening.failed";
 
     /// <summary>
+    /// Cash paid in at the counter and credited (CashDeposited). Owned and written by Accounts
+    /// (inside its accounts.account.* write grant); read by Audit. Key: the DepositRef.
+    /// </summary>
+    public const string AccountCashDeposited = "accounts.account.deposited";
+
+    /// <summary>
     /// Commands TO Accounts (ReserveFunds, SettleFunds, ReleaseFunds), written by the
     /// Payments saga orchestrator. Key: the PaymentRef, so one payment's commands stay in order.
     /// </summary>

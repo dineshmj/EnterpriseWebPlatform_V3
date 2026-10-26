@@ -413,6 +413,16 @@ VALUES
                 WHERE name = 'Payments'))
     ),
     (
+        'Cash Deposit',
+        '/v1/payments/cash-deposit',
+        'fa-money-bill-wave',
+        (SELECT id FROM management_areas
+         WHERE name = 'Payment Instructions'
+           AND microservice_id =
+               (SELECT id FROM microservices
+                WHERE name = 'Payments'))
+    ),
+    (
         'View Payments',
         '/v1/payments/view-all',
         'fa-money-bill-transfer',
@@ -648,6 +658,18 @@ CROSS JOIN
         ('customer_service_agent')
 ) AS r(role_short_name)
 WHERE mi.task_name = 'New Payment';
+
+-- Cash Deposit: at the counter, the customer service agent records the cash a customer pays in
+-- (account.deposit.record; the Accounts API credits the account).
+INSERT INTO menu_items_and_roles (menu_item_id, role_short_name)
+SELECT mi.id, r.role_short_name
+FROM menu_items mi
+CROSS JOIN
+(
+    VALUES
+        ('customer_service_agent')
+) AS r(role_short_name)
+WHERE mi.task_name = 'Cash Deposit';
 
 -- Payment Approvals: the payments officer's queue (payments above the approval tier).
 INSERT INTO menu_items_and_roles (menu_item_id, role_short_name)

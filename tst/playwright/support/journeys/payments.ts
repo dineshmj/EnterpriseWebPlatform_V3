@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { lanIds, type ExpectedEntry } from '../audit';
 import { newSydneyCustomer } from '../data';
-import { PaymentApprovalsMfe, PaymentsMfe, type Payee, type PaymentOutcome } from '../pages/mfes';
+import { CashDepositMfe, PaymentApprovalsMfe, PaymentsMfe, type Payee, type PaymentOutcome } from '../pages/mfes';
 import type { ShellPage } from '../pages/ShellPage';
 import type { PersonaName } from '../personas';
 import { withSimulator } from '../simulators';
@@ -9,9 +9,9 @@ import { accountDecision, complianceDecision, expectOnboardingStatus, kycDecisio
 
 /**
  * The steps of a payment, each as the person who does it. Payments need a customer with an
- * OPEN, FUNDED account of the Sydney branch: every new account starts with the demo opening
- * deposit (Accounts:DemoOpeningDeposit, AUD 5,000), so a spec file onboards ONE customer and
- * its payments share that account (the file's tests run in order, in one worker).
+ * OPEN, FUNDED account of the Sydney branch: a new account opens empty, so after onboarding
+ * Sophie deposits AUD 5,000 in cash at the counter. A spec file onboards ONE customer and its
+ * payments share that account (the file's tests run in order, in one worker).
  */
 type SignIn = (username: PersonaName) => Promise<ShellPage>;
 
@@ -36,7 +36,7 @@ const fundedCustomers = new Map<string, Promise<string>>();
 export function fundedCustomer(signedInAs: SignIn, key: string): Promise<string> {
   let customer = fundedCustomers.get(key);
   if (!customer) {
-    customer = test.step('A funded customer: onboarded end to end (the account opens with the demo deposit)', () =>
+    customer = test.step('A funded customer: onboarded end to end, then AUD 5,000 deposited in cash', () =>
       withSimulator('screeningProvider', { behaviour: 'Healthy', forcedOutcome: 'CLEAR' }, async () => {
         const sophie = await signedInAs('sophie.cs');
         const { customerNumber, applicationNumber } = await submitApplication(sophie, newSydneyCustomer('Payer', key));
@@ -46,6 +46,7 @@ export function fundedCustomer(signedInAs: SignIn, key: string): Promise<string>
         await complianceDecision(await signedInAs('olivia.compliance'), applicationNumber, 'Approve');
         await accountDecision(await signedInAs('jack.accounts'), applicationNumber, 'Approve');
         await expectOnboardingStatus(sophie, applicationNumber, 'Completed');
+        await depositCash(sophie, customerNumber, '5000.00');
         return customerNumber;
       }));
     // A failed onboarding is not cached: the next test tries again.
@@ -53,6 +54,17 @@ export function fundedCustomer(signedInAs: SignIn, key: string): Promise<string>
     fundedCustomers.set(key, customer);
   }
   return customer;
+}
+
+/** Sophie records cash the customer paid in at the counter; returns the deposit number from the receipt. */
+export async function depositCash(agent: ShellPage, customerNumber: string, amount: string): Promise<string> {
+  return test.step(`Sophie deposits AUD ${amount} in cash for ${customerNumber}`, async () => {
+    const cashDeposit = new CashDepositMfe(agent);
+    await cashDeposit.open();
+    await cashDeposit.chooseAccount(customerNumber);
+    await cashDeposit.enterCash(amount);
+    return cashDeposit.deposit();
+  });
 }
 
 /** Sophie captures a payment from the customer's account; returns its number (her screen is then on the payment's page). */

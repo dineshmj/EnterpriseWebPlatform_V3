@@ -354,6 +354,7 @@ INSERT INTO permissions (name, code, description) VALUES
 ('Reject Account Application','account.application.reject','Reject an account application'),
 ('Hold Account Application','account.application.hold','Place an account application on hold'),
 ('View Account Lifecycle','account.lifecycle.view','View account lifecycle information'),
+('Record Cash Deposit','account.deposit.record','Record cash a customer paid in at the counter, crediting the account (assisted channel)'),
 ('Initiate Payment','payment.initiate','Capture and send a payment for a customer (assisted channel)'),
 ('View Payment','payment.view','View payment instructions'),
 ('Validate Payment','payment.validate','Validate payment instructions'),
@@ -597,6 +598,8 @@ JOIN permissions p ON p.code IN (
     -- Assisted channel: capture a customer's payment and follow it (never approve it).
     'payment.initiate',
     'payment.view',
+    -- At the counter: count the cash a customer pays in and credit it to their account.
+    'account.deposit.record',
     'workflow.status.view',
     -- Assisted channel, as the Partner Bank's distributor: the customer's signed Digital Gold forms.
     'partner.gold.view',

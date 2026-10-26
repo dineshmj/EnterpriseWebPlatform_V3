@@ -335,6 +335,47 @@ export class PaymentsMfe {
   }
 }
 
+/** The receipt's deposit number: "DEP-yymmdd-XXXXXX". */
+const DEPOSIT_NUMBER = /^DEP-\d{6}-[A-Z0-9]{6}$/;
+
+/** Payments: "Cash Deposit" - the counter records cash a customer paid in (Accounts credits the account). */
+export class CashDepositMfe {
+  static readonly title = 'Cash deposit';
+
+  constructor(private readonly shell: ShellPage) {}
+
+  async open(): Promise<void> {
+    await this.shell.openMenuItem('Payments', 'Cash Deposit');
+    await this.shell.waitForScreen(CashDepositMfe.title);
+  }
+
+  /** 1 · Customer: finds the customer (by customer number) and chooses their account. */
+  async chooseAccount(customerNumber: string): Promise<void> {
+    const mfe = this.shell.workspace();
+    await mfe.locator('#deposit-search').fill(customerNumber);
+    const account = mfe.getByRole('list', { name: 'Matching accounts' }).getByRole('button').filter({ hasText: customerNumber });
+    await expect(account.first()).toBeVisible({ timeout: 15_000 });
+    await account.first().click();
+  }
+
+  /** 2 · Cash: the counted amount (the screen suggests AUD 5,000) and the "counted" confirmation. */
+  async enterCash(amount: string): Promise<void> {
+    const mfe = this.shell.workspace();
+    await mfe.locator('#deposit-amount').fill(amount);
+    await mfe.getByLabel('I have counted the cash and it matches the amount').check();
+  }
+
+  /** Records the deposit and returns the receipt's deposit number. */
+  async deposit(): Promise<string> {
+    const mfe = this.shell.workspace();
+    await mfe.getByRole('button', { name: 'Deposit', exact: true }).click();
+    await expect(mfe.getByText('Deposit recorded', { exact: true })).toBeVisible({ timeout: 30_000 });
+    const number = mfe.getByText(DEPOSIT_NUMBER);
+    await expect(number).toBeVisible();
+    return (await number.textContent())!.trim();
+  }
+}
+
 /** Payments: the officer's "Payment Approvals" queue → the payment's page → approve or reject. */
 export class PaymentApprovalsMfe {
   static readonly queueTitle = 'Payment approvals';

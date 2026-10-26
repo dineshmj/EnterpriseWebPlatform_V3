@@ -52,7 +52,7 @@ The IDP authenticates humans and services and issues the tokens and claims that 
 | `CustomerKYC.Microservice.BFF.ClientID` | Interactive (confidential) **+ token exchange** | KYC BFF; exchanges the officer's token for Documents Management (`documents-management.read`) | Present |
 | `Compliance.Microservice.BFF.ClientID` | Interactive (confidential) | Compliance BFF | Present |
 | `Accounts.Microservice.BFF.ClientID` | Interactive (confidential) | Accounts BFF | Present |
-| `Payments.Microservice.BFF.ClientID` | Interactive (confidential) | Payments BFF | Present |
+| `Payments.Microservice.BFF.ClientID` | Interactive (confidential) | Payments BFF (`payments.read/write`, `accounts.read`, and `accounts.write` for the counter's cash deposit - the Accounts API pins that endpoint to this client) | Present |
 | `Audit.Microservice.Web.ClientID` | Interactive (confidential) **+ token exchange** | Audit web BFF (Next.js): signs the person in, then exchanges their token for one aimed at the Audit Journey API (`audit-journey.read`) | Present (front end in 6e-3) |
 | `Audit.JourneyApi.ClientID` | **Token exchange only** (no client credentials) | Audit Journey API (NestJS) → Audit API (`audit.read`) and Payments API (`payments.read`), always for a person | Present |
 | `Operations.JourneyApi.ClientID` | **Token exchange only** (no client credentials) | Operations Journey API (NestJS) → Accounts, Compliance and Partner Products APIs (`accounts.read/write`, `compliance.read/write`, `partner-products.read/write`) for their parked Outbox messages, always for the signed-in operator; only a token the Operations web BFF exchanged | Present |

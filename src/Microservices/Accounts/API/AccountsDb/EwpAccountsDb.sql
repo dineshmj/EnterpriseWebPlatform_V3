@@ -11,6 +11,7 @@
 -- │ (the databases are re-created on purpose in the PoC). Production: versioned
 -- │ migrations (production item 8).
 -- └──────────────────────────────────────────────────────────────────────────────────────
+DROP TABLE IF EXISTS cash_deposits CASCADE;
 DROP TABLE IF EXISTS funds_holds CASCADE;
 DROP TABLE IF EXISTS accounts CASCADE;
 DROP TABLE IF EXISTS account_applications CASCADE;
@@ -128,7 +129,8 @@ CREATE TABLE accounts (
     core_banking_reference VARCHAR(100) NOT NULL,
 
     -- Funds: the ledger balance and what payments in progress have reserved (funds_holds).
-    -- Available = balance - held_amount, never negative.
+    -- Available = balance - held_amount, never negative. An account opens at 0; cash
+    -- deposits (cash_deposits) credit it, settled payments debit it.
     currency CHAR(3) NOT NULL DEFAULT 'AUD',
     balance NUMERIC(18,2) NOT NULL DEFAULT 0,
     held_amount NUMERIC(18,2) NOT NULL DEFAULT 0,
@@ -196,6 +198,44 @@ CREATE TABLE funds_holds (
 
 CREATE INDEX ix_funds_holds_account_status ON funds_holds (account_id, status);
 
+-- Cash paid in at the counter, one row per deposit (never changed afterwards). Recording it
+-- credits accounts.balance in the same transaction.
+-- ┌─ :: ARCHITECTURE + SECURITY :: Cash deposits, guarded by the database too ─────────────────────
+-- │ Why : A credit must happen once per request and stay within the PoC's cash limit even if code
+-- │       or a hand-edit goes wrong.
+-- │ How : One deposit per DepositRef (the screen's Idempotency-Key, unique); amount in (0, 9,999.99]
+-- │       (below AUSTRAC's AUD 10,000 cash reporting threshold); the account must exist.
+-- │ Ref : Features 1.4.3, 1.6.4 | Defence in depth
+-- └────────────────────────────────────────────────────────────────────────────────────────────────
+CREATE TABLE cash_deposits (
+    id BIGSERIAL PRIMARY KEY,
+    deposit_ref UUID NOT NULL,
+    deposit_number VARCHAR(30) NOT NULL,
+    account_id BIGINT NOT NULL REFERENCES accounts (id),
+    bsb VARCHAR(7) NOT NULL,
+    account_number VARCHAR(30) NOT NULL,
+    customer_number VARCHAR(100) NOT NULL,
+
+    -- ABAC: the branch whose counter received the cash (always the account's branch).
+    branch_code VARCHAR(20) NOT NULL,
+
+    amount NUMERIC(18,2) NOT NULL,
+    currency CHAR(3) NOT NULL,
+    -- The account's balance right after the deposit (the customer's receipt).
+    balance_after NUMERIC(18,2) NOT NULL,
+
+    -- The staff member who counted and recorded the cash.
+    received_by_user_id VARCHAR(200) NOT NULL,
+    recorded_at TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT uq_cash_deposits_deposit_ref UNIQUE (deposit_ref),
+    CONSTRAINT ck_cash_deposits_amount CHECK (amount > 0 AND amount <= 9999.99),
+    CONSTRAINT ck_cash_deposits_currency CHECK (currency = 'AUD'),
+    CONSTRAINT ck_cash_deposits_balance_after CHECK (balance_after >= amount)
+);
+
+CREATE INDEX ix_cash_deposits_account_recorded ON cash_deposits (account_id, recorded_at);
+
 -- Transactional Outbox (same shape as the other contexts).
 CREATE TABLE outbox_messages (
     id UUID PRIMARY KEY,
@@ -251,7 +291,7 @@ CREATE TABLE inbox_messages (
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ewp_accounts_api') THEN
-        GRANT SELECT, INSERT, UPDATE ON account_applications, accounts, funds_holds, outbox_messages, inbox_messages, staff_members TO ewp_accounts_api;   -- no DELETE: nothing is ever deleted
+        GRANT SELECT, INSERT, UPDATE ON account_applications, accounts, funds_holds, cash_deposits, outbox_messages, inbox_messages, staff_members TO ewp_accounts_api;   -- no DELETE: nothing is ever deleted
         GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_accounts_api;
     ELSE
         RAISE WARNING 'Role ewp_accounts_api does not exist yet: run ps\database\Apply-EwpServiceDbUsers.ps1, then this script again.';

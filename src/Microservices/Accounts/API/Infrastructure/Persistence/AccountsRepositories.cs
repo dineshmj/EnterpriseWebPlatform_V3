@@ -80,6 +80,14 @@ public sealed class FundsHoldRepository(AccountsDbContext db) : IFundsHoldReposi
     public void Add(FundsHold hold) => db.FundsHolds.Add(hold);
 }
 
+public sealed class CashDepositRepository(AccountsDbContext db) : ICashDepositRepository
+{
+    public Task<CashDeposit?> GetByRefAsync(Guid depositRef, CancellationToken cancellationToken) =>
+        db.CashDeposits.AsNoTracking().SingleOrDefaultAsync(x => x.DepositRef == depositRef, cancellationToken);
+
+    public void Add(CashDeposit deposit) => db.CashDeposits.Add(deposit);
+}
+
 public sealed class AccountsQueries(AccountsDbContext db) : IAccountsQueries
 {
     public async Task<PagedResponse<AccountApplicationDetail>> GetApplicationsAsync(

@@ -69,6 +69,7 @@ public sealed class AccountsOutboxPublisher(
         [AccountsIntegrationEventMapper.AccountApplicationRejected] = KafkaTopicNames.AccountApplicationRejected,
         [AccountsIntegrationEventMapper.AccountOpened] = KafkaTopicNames.AccountOpened,
         [AccountsIntegrationEventMapper.AccountOpeningFailed] = KafkaTopicNames.AccountOpeningFailed,
+        [CashDepositIntegrationEventMapper.CashDeposited] = KafkaTopicNames.AccountCashDeposited,
 
         // Replies to the Payments saga orchestrator's funds commands.
         [FundsIntegrationEventMapper.FundsReserved] = KafkaTopicNames.AccountsFundsReplies,

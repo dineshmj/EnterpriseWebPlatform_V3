@@ -141,7 +141,7 @@ public sealed class AccountApplication_Decide_Edge_SeparationOfDuties
         var application = AccountsTestData.OpeningApplication();
 
         // When
-        var open = () => Account.Open("72947086", "062-000", "CB-REF-1", application, 5_000m, AccountsTestData.Now);
+        var open = () => Account.Open("72947086", "062-000", "CB-REF-1", application, AccountsTestData.Now);
 
         // Then
         open.Should().Throw<DomainConflictException>().WithMessage("*core-banking system has opened*");

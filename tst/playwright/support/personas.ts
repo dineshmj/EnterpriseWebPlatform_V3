@@ -20,7 +20,7 @@ export interface Persona {
 
 const customerServiceMenu = {
   'Customer Onboarding': ['View Customers', 'New Onboarding Application', 'View Onboarding Applications', 'Onboarding Workflow Monitor'],
-  Payments: ['New Payment', 'View Payments'],
+  Payments: ['New Payment', 'Cash Deposit', 'View Payments'],
   'Partner Products': ['Digital Gold'],
 };
 const kycMenu = { 'Customer KYC': ['View KYC Cases', 'Identity Verification', 'Document Verification'] };
@@ -80,6 +80,7 @@ export const menuAreas: Record<string, string> = {
   'View Accounts': 'Accounts',
   'Account Lifecycle': 'Account Lifecycle',
   'New Payment': 'Payment Instructions',
+  'Cash Deposit': 'Payment Instructions',
   'View Payments': 'Payment Instructions',
   'Payment Approvals': 'Payment Instructions',
   'Manage Beneficiaries': 'Beneficiaries',

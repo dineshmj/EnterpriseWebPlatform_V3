@@ -41,6 +41,11 @@ public sealed record AccountOpeningFailedDomainEvent(
     int Attempts,
     DateTimeOffset OccurredAt) : IDomainEvent;
 
+// ------------------------------------------------------------------ Cash deposits
+
+/// <summary>Cash paid in at the counter was recorded and credited to the account. Published.</summary>
+public sealed record CashDepositedDomainEvent(DateTimeOffset OccurredAt) : IDomainEvent;
+
 // ------------------------------------------------------------------ Funds (replies to Payments' commands)
 
 /// <summary>The funds are reserved for the payment. Published as the reply FundsReserved.</summary>

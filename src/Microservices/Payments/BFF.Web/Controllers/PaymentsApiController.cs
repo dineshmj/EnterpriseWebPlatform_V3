@@ -156,6 +156,28 @@ public sealed class PaymentsApiController(
             cancellationToken);
 
     /// <summary>
+    /// Records cash paid in at the counter (Accounts API). Like a payment, the screen creates
+    /// one Idempotency-Key per deposit form and it is passed through unchanged, so pressing
+    /// Deposit twice (or a resend after a lost answer) never credits the account twice.
+    /// </summary>
+    [HttpPost("cash-deposits")]
+    [ValidateAntiForgeryToken]
+    public Task<IActionResult> RecordCashDeposit(
+        [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
+        [FromBody] JsonElement deposit,
+        CancellationToken cancellationToken = default)
+    {
+        if (!Guid.TryParse(idempotencyKey, out var key) || key == Guid.Empty)
+            return Task.FromResult<IActionResult>(BadRequest(new { message = "An Idempotency-Key header (a GUID) is required." }));
+        if (deposit.ValueKind != JsonValueKind.Object)
+            return Task.FromResult<IActionResult>(BadRequest(new { message = "A deposit is required." }));
+
+        var message = new HttpRequestMessage(HttpMethod.Post, "/v1/accounts/cash-deposits") { Content = JsonContent.Create(deposit) };
+        message.Headers.Add("Idempotency-Key", key.ToString());
+        return SendAsync(PaymentsBffOptions.AccountsApiClient, message, cancellationToken);
+    }
+
+    /// <summary>
     /// Calls the API and relays its status and JSON body (including its explanations, e.g.
     /// a validation problem). When the API is unreachable or its circuit is open, answers
     /// 503 instead of hanging.
