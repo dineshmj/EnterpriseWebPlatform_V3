@@ -18,7 +18,7 @@ Step 7 of the cloud demo, in two parts:
 | Part | What | Status |
 |---|---|---|
 | **7a** | Azure resources (Terraform), cluster add-ons and the public gateway, the three workflows | Built 25-OCT-2026; first runs 25-OCT-2026 (Central India, staging): Demo up and Demo down green |
-| **7b** | The platform: Kafka, Temporal, the 12 databases and their users, the secrets in Key Vault, the EWP and Partner Bank charts | Built 25-OCT-2026; first run 25-OCT-2026 (Central India, staging): Demo up green, all 8 demo users signed in at the Shell; first production-certificate run 26-OCT-2026: onboarding and the cash deposit worked; Digital Gold could not get EWP's token from the Partner Bank, and the simulators showed "Unknown" (both fixed or checked from the next run on, see below) |
+| **7b** | The platform: Kafka, Temporal, the 12 databases and their users, the secrets in Key Vault, the EWP and Partner Bank charts | Built 25-OCT-2026; first run 25-OCT-2026 (Central India, staging): Demo up green, all 8 demo users signed in at the Shell; production certificates 26-OCT-2026: the first run found three faults (Digital Gold's token, the simulators' switch, a re-run conflict - all fixed, see below); **every business journey then passed in the browser, 26-OCT-2026 (Central India, production certificates)**: onboarding with notifications, cash deposit, payments ($100 automatic, $1,100 approved by the payments officer), Digital Gold ($20 automatic, $1,100 approved) with the Partner Bank's staff view, Platform Health and the simulators for both operators, the auditor's trail and its integrity check |
 
 ## What Demo up makes
 
@@ -179,7 +179,6 @@ to the watchdog. A test run of 7a alone can use `node_count` 2 (Terraform variab
 
 | Gap | Effect | Closed by |
 |---|---|---|
-| The business journeys not yet complete in the cloud | Onboarding and the cash deposit worked (26-OCT-2026); payments, Digital Gold and the staff view at the Partner Bank not yet | The next Demo up (its Partner Bank check now proves EWP's token first), then the journeys |
 | No fault routes in the cloud | Cutting, slowing or hanging an API for its callers (Toxiproxy) is laptop-only; in the cluster the callers use direct addresses | Toxiproxy in the cluster with every caller routed through it: a later step if wanted |
 | The AKS API server and the Key Vault have public endpoints | Reachable from the internet; every call still needs an Entra token with a role on that one resource, and no local account or key exists | Private cluster and private endpoints with self-hosted runners in a VNet; out of scope for the demo |
 | `azure-demo-teardown` has no reviewer, yet signs in as the full deployment identity | A workflow on `main` asking for it could also create (Threat-Model R-19) | Accepted; production would give teardown its own identity with delete rights only |
