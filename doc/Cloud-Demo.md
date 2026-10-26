@@ -18,7 +18,7 @@ Step 7 of the cloud demo, in two parts:
 | Part | What | Status |
 |---|---|---|
 | **7a** | Azure resources (Terraform), cluster add-ons and the public gateway, the three workflows | Built 25-OCT-2026; first runs 25-OCT-2026 (Central India, staging): Demo up and Demo down green |
-| **7b** | The platform: Kafka, Temporal, the 12 databases and their users, the secrets in Key Vault, the EWP and Partner Bank charts | Built 25-OCT-2026; first run 25-OCT-2026 (Central India, staging): Demo up green, all 8 demo users signed in at the Shell; the business journeys (onboarding, payment, Digital Gold with the staff view) and a production-certificate run still to do |
+| **7b** | The platform: Kafka, Temporal, the 12 databases and their users, the secrets in Key Vault, the EWP and Partner Bank charts | Built 25-OCT-2026; first run 25-OCT-2026 (Central India, staging): Demo up green, all 8 demo users signed in at the Shell; first production-certificate run 26-OCT-2026: onboarding and the cash deposit worked; Digital Gold could not get EWP's token from the Partner Bank, and the simulators showed "Unknown" (both fixed or checked from the next run on, see below) |
 
 ## What Demo up makes
 
@@ -111,11 +111,15 @@ Then the platform ([demo-platform.sh](../.github/scripts/demo-platform.sh)):
    PostgreSQL take the longest, then the platform about 20-30.
 3. On the way it runs the **gateway check**: `https://gateway-check.<EWP domain>/` answers
    `EWP gateway OK`, and `http://` redirects to `https://`. It ends when the IDP's and the Partner
-   Bank's discovery documents answer through the gateway. Its summary shows the start time, the
+   Bank's discovery documents answer through the gateway, and EWP gets its own token from the
+   Partner Bank over mutual TLS from a pod in the cluster (as Digital Gold does; on a failure the
+   run stops with the reason and the Partner pods' warnings). Its summary shows the start time, the
    gateway's address and `https://shell.<EWP domain>/`; sign in with the same demo users as on
    the laptop.
 4. When finished: **Actions → Demo down → Run workflow**. No approval needed. It takes about
-   10-15 minutes and ends with "rg-ewp-demo is empty".
+   10-15 minutes and ends with "rg-ewp-demo is empty". Before the teardown it prints every pod's
+   recent warnings and errors into its log (step "The pods' warnings and errors"), so a fault seen
+   in the browser can still be explained afterwards.
 
 Looking at the cluster from the laptop (Azure CLI signed in as the subscription owner, who
 first needs a cluster role, e.g. "Azure Kubernetes Service RBAC Reader" on the cluster):
@@ -165,13 +169,17 @@ to the watchdog. A test run of 7a alone can use `node_count` 2 (Terraform variab
 | `... did not answer with its issuer` (last step) | The platform is up but an issuer is not reachable through the gateway | `kubectl get pods -A`, then the pod's log; for the Partner Bank also `kubectl get httproute,backendtlspolicy -n partner-bank` |
 | `ResourceGroupDeletionBlocked` / "Rolling Upgrade in progress" in Demo down | Azure was upgrading the nodes' VM agent and would not delete the node group (first Demo down, 25-OCT-2026) | Wait until the upgrade ends (it did, by itself, within the hour) or cancel it (owner: `az vmss rolling-upgrade cancel`), then run Demo down again |
 | The Shell shows its menu, but a micro front end's frame stays empty or shows the browser's error page (staging run) | The browser does not trust Let's Encrypt's staging certificate and cannot show its "accept the risk" page inside a frame (first sign-in, 25-OCT-2026). Not a fault of the platform: the BFFs answered correctly | Expected with staging only. Open each micro front end's host once in its own tab and accept the warning, then reload the Shell; or run with `letsencrypt-production` |
+| `EWP could not get its token from the Partner Bank` (Demo up's last check, or Digital Gold's screen) | EWP's mutual-TLS call to `partner-auth.<Partner domain>:47411` failed (first production-certificate run, 26-OCT-2026, found in the browser) | The check prints the HTTP status, the Partner Bank's error and curl's TLS steps, then the Partner pods' warnings: a TLS error points at the certificates or the Gateway's passthrough listener, `invalid_client` at the Partner Bank's registration of EWP's certificate |
+| The simulators show "Unknown" on Simulator & fault controls | The simulators refused the Operations Journey API: their switch answered loopback callers only, and in the cluster that API is another pod (first production-certificate run, 26-OCT-2026) | Fixed: the switch also accepts the admin key from Key Vault (`simulator-admin-key`). Seen again: compare the simulators' `Simulator__AdminKey` with the API's `OPERATIONS_JOURNEY_SIMULATOR_ADMIN_KEY` |
+| Simulator & fault controls shows no platform APIs | Expected: the fault routes need Toxiproxy on the same machine, which runs on a developer's laptop only (the page says so) | Nothing; see Known gaps |
 | `Terraform left resources in rg-ewp-demo` (Demo down) | Something not in the state (made by hand, or a lost state) | The run deleted them; find out where they came from |
 
 ## Known gaps
 
 | Gap | Effect | Closed by |
 |---|---|---|
-| The business journeys not yet run in the cloud | The platform starts and every demo user signs in (25-OCT-2026), but onboarding, a payment and a Digital Gold purchase (with the staff view at the Partner Bank) have not been walked through on Azure | A Demo up with `letsencrypt-production`, then the journeys |
+| The business journeys not yet complete in the cloud | Onboarding and the cash deposit worked (26-OCT-2026); payments, Digital Gold and the staff view at the Partner Bank not yet | The next Demo up (its Partner Bank check now proves EWP's token first), then the journeys |
+| No fault routes in the cloud | Cutting, slowing or hanging an API for its callers (Toxiproxy) is laptop-only; in the cluster the callers use direct addresses | Toxiproxy in the cluster with every caller routed through it: a later step if wanted |
 | The AKS API server and the Key Vault have public endpoints | Reachable from the internet; every call still needs an Entra token with a role on that one resource, and no local account or key exists | Private cluster and private endpoints with self-hosted runners in a VNet; out of scope for the demo |
 | `azure-demo-teardown` has no reviewer, yet signs in as the full deployment identity | A workflow on `main` asking for it could also create (Threat-Model R-19) | Accepted; production would give teardown its own identity with delete rights only |
 | GitHub pauses scheduled workflows after 60 days without repository activity | The watchdog would stop | The Actions tab offers to enable it again; the budget e-mails still warn |

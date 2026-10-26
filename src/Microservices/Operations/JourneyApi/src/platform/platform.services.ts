@@ -91,7 +91,9 @@ export class SimulatorService implements OnModuleDestroy {
     return Promise.all(simulators.map(async (simulator) => {
       let behaviour: SimulatorState['behaviour'] = 'Unknown';
       try {
-        const response = await fetch(`${this.options.platform.simulatorBaseUrls[simulator.key]}/admin/behaviour`, { signal: AbortSignal.timeout(3000) });
+        const response = await fetch(`${this.options.platform.simulatorBaseUrls[simulator.key]}/admin/behaviour`, {
+          headers: this.adminHeaders(), signal: AbortSignal.timeout(3000),
+        });
         if (response.ok) behaviour = ((await response.json()) as { behaviour?: Behaviour }).behaviour ?? 'Unknown';
       } catch {
         behaviour = 'Unknown';
@@ -151,12 +153,21 @@ export class SimulatorService implements OnModuleDestroy {
     this.reverts.delete(key);
   }
 
+  // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+  // │ In a cluster the simulators are on other machines: the admin key proves this API is the
+  // │ caller (server-side only - never sent to or from the browser). On a laptop it is unset
+  // │ and the simulators accept the switch from loopback.
+  // └──────────────────────────────────────────────────────────────────────────────────────
+  private adminHeaders(): Record<string, string> {
+    return this.options.simulatorAdminKey ? { 'X-Simulator-Admin-Key': this.options.simulatorAdminKey } : {};
+  }
+
   private async send(baseUrl: string, behaviour: Behaviour): Promise<void> {
     let response: Response;
     try {
       response = await fetch(`${baseUrl}/admin/behaviour`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...this.adminHeaders() },
         body: JSON.stringify({ behaviour }),
         signal: AbortSignal.timeout(5000),
       });

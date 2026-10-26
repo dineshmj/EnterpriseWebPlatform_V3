@@ -84,7 +84,7 @@ jobs:
 
       - name: Get the pinned tools
         working-directory: .
-        run: bash .github/scripts/demo-tools.sh terraform
+        run: bash .github/scripts/demo-tools.sh terraform kubectl kubelogin
 
       - name: terraform init
         run: |
@@ -93,6 +93,22 @@ jobs:
             -backend-config="storage_account_name=$STATE_ACCOUNT" \
             -backend-config="container_name=$STATE_CONTAINER" \
             -backend-config="key=demo.tfstate"
+
+      # ┌─ OBS ──────────────────────────────────────────────────────────────────────────────────
+      # │ The pods' warnings and errors into this job's log before the cluster is gone (a fault
+      # │ seen in the browser can then be explained afterwards). Evidence only: no cluster in the
+      # │ state, or any failure here, never stops the teardown.
+      # └────────────────────────────────────────────────────────────────────────────────────────
+      - name: The pods' warnings and errors (before the teardown)
+        continue-on-error: true
+        run: |
+          cluster="$(terraform output -raw cluster_name 2>/dev/null || true)"
+          group="$(terraform output -raw resource_group 2>/dev/null || true)"
+          if [ -z "$cluster" ] || [ -z "$group" ]; then echo "No cluster in the state: nothing to collect."; exit 0; fi
+          export KUBECONFIG="$RUNNER_TEMP/kubeconfig"
+          az aks get-credentials --resource-group "$group" --name "$cluster" --format azure --file "$KUBECONFIG" --overwrite-existing
+          kubelogin convert-kubeconfig --login azurecli --kubeconfig "$KUBECONFIG"
+          timeout 600 bash "$GITHUB_WORKSPACE/.github/scripts/demo-logs.sh"
 
       # NOTE: the cluster goes before the public IP (it depends on the IP's role assignment), so
       # Azure has released the IP from the cluster's load balancer by the time Terraform deletes it.

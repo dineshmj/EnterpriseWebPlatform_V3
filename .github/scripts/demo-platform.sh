@@ -18,7 +18,8 @@
 # │            own calls
 # │         6. EWP: the chart with every image pinned to the digest its "main" tag has now
 # │       then checks from outside: the IDP's and the Partner Bank's discovery documents through
-# │       the Gateway. Nothing secret is printed; values pass only through Key Vault.
+# │       the Gateway; and from inside, EWP's own token at the
+# │       Partner Bank over mutual TLS. Nothing secret is printed; values pass only through Key Vault.
 # │       Needs: kubectl (KUBECONFIG set), helm, node, openssl, curl, az (signed in); env below.
 # │ Ref : doc/Cloud-Demo.md (7b, CD14-CD18) | doc/Kubernetes.md
 # └────────────────────────────────────────────────────────────────────────────────────────────────
@@ -191,6 +192,74 @@ for issuer in "https://idp.$EWP_DOMAIN" "https://partner-auth.$PARTNER_DOMAIN:47
     echo "waiting for $issuer ($attempt/30)"; sleep 10
   done
 done
+
+# ┌─ OBS + SEC ──────────────────────────────────────────────────────────────────────────────────
+# │ EWP's own token at the Partner Bank, asked for exactly as Partner Products asks for it: from
+# │ a pod in the ewp namespace, mutual TLS with EWP's client certificate (the demo PKI), the
+# │ Partner Bank's server certificate trusted only through the demo root, client credentials
+# │ for scope partner.distribution, through the Gateway's passthrough port 47411. The browser
+# │ checks above never touch this path (first production-certificate run, 26-OCT-2026: green,
+# │ yet Digital Gold could not get its token). The token itself is never printed - only the
+# │ status, the Partner Bank's error and, on a failure, curl's TLS steps and the logs.
+# └──────────────────────────────────────────────────────────────────────────────────────────────
+step "Check: EWP's token at the Partner Bank (mutual TLS, as Partner Products asks)"
+token_url="https://partner-auth.$PARTNER_DOMAIN:47411/connect/token"
+kubectl delete pod partner-token-check -n ewp --ignore-not-found --wait=true > /dev/null
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: partner-token-check
+  namespace: ewp
+  labels: {app.kubernetes.io/name: partner-token-check}
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  securityContext: {runAsNonRoot: true, runAsUser: 100, runAsGroup: 101, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: curl
+      image: curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
+      securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
+      resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {memory: 64Mi}}
+      command: ["sh", "-c"]
+      args:
+        - |
+          ask() {
+            curl -sS --max-time 20 "\$@" -o /tmp/body -w '%{http_code}' \
+              --cacert /pki/ewp-trust-root.cer \
+              --cert-type P12 --cert "/pki/ewp-partner-client.pfx:\$(cat /pki/ewp-partner-client.pfx.password)" \
+              -d grant_type=client_credentials -d client_id=FourWalls.Ewp.PartnerProducts -d scope=partner.distribution \
+              "$token_url"
+          }
+          code="\$(ask)"
+          if [ "\$code" = "200" ] && grep -q '"access_token"' /tmp/body; then
+            echo "ok  HTTP 200: the Partner Bank issued EWP's token"; exit 0
+          fi
+          echo "FAILED: HTTP \${code:-none}"
+          [ -s /tmp/body ] && sed -e 's/"access_token":"[^"]*"/"access_token":"(hidden)"/' /tmp/body && echo
+          echo "--- curl's connection and TLS steps:"
+          ask -v 2>&1 | grep -E '^\* ' | grep -v -i 'password'
+          exit 1
+      volumeMounts:
+        - {name: pki, mountPath: /pki, readOnly: true}
+        - {name: tmp, mountPath: /tmp}
+  volumes:
+    - {name: pki, secret: {secretName: ewp-partner-pki}}
+    - {name: tmp, emptyDir: {sizeLimit: 1Mi}}
+EOF
+phase=""
+for attempt in $(seq 1 30); do
+  phase="$(kubectl get pod partner-token-check -n ewp -o jsonpath='{.status.phase}' 2>/dev/null || true)"
+  case "$phase" in Succeeded|Failed) break ;; esac
+  sleep 5
+done
+kubectl logs partner-token-check -n ewp 2>/dev/null || true
+kubectl delete pod partner-token-check -n ewp --ignore-not-found --wait=false > /dev/null
+if [ "$phase" != "Succeeded" ]; then
+  echo "::error::EWP could not get its token from the Partner Bank ($token_url; pod phase: ${phase:-unknown}). The Partner Products and Partner Bank log lines follow."
+  bash "$repo/.github/scripts/demo-logs.sh" 'partner'
+  exit 1
+fi
 
 echo
 echo "Platform up: https://shell.$EWP_DOMAIN/"
