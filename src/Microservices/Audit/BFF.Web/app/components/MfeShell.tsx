@@ -1,12 +1,44 @@
 'use client';
 
 import { ScrollText } from 'lucide-react';
+import { unstable_isUnrecognizedActionError } from 'next/navigation';
 import { useEffect } from 'react';
 import { Badge } from './ui/feedback';
 import { shellOrigin } from '../../lib/shell-origin';
 
 /** How often, at most, this application tells the Shell that the person is active here. */
 const ACTIVITY_REPORT_MS = 60_000;
+
+/** After a redeploy, reload at most once a minute - a broken build must not reload in a loop. */
+const NEW_BUILD_RELOAD_MS = 60_000;
+const NEW_BUILD_RELOAD_KEY = 'ewp-new-build-reload';
+
+// ┌─ ARCH + RESIL ───────────────────────────────────────────────────────────────────────
+// │ Version skew: after a redeploy, a tab opened on the OLD build still calls server
+// │ actions by their old ids, which the new build no longer has ("Failed to find Server
+// │ Action", every poll). Such a call can never succeed, so reload the page once to load
+// │ the new build. Only that error triggers it - every other failure is the page's own.
+// │ OBS: nothing else is needed server-side; the reload ends the log noise as well.
+// └──────────────────────────────────────────────────────────────────────────────────────
+function useReloadOnNewBuild() {
+  useEffect(() => {
+    const onRejection = (event: PromiseRejectionEvent) => {
+      if (!unstable_isUnrecognizedActionError(event.reason)) return;
+      event.preventDefault();
+      try {
+        const last = Number(window.sessionStorage.getItem(NEW_BUILD_RELOAD_KEY) ?? 0);
+        if (Date.now() - last < NEW_BUILD_RELOAD_MS) return;
+        window.sessionStorage.setItem(NEW_BUILD_RELOAD_KEY, String(Date.now()));
+      } catch {
+        // No session storage (private window, blocked site data): still reload - the browser's
+        // own back-off is then the only guard, which is acceptable for a rare redeploy.
+      }
+      window.location.reload();
+    };
+    window.addEventListener('unhandledrejection', onRejection);
+    return () => window.removeEventListener('unhandledrejection', onRejection);
+  }, []);
+}
 
 // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
 // │ While the person works here, tell the Shell (at most once a minute, its origin only,
@@ -41,6 +73,7 @@ function useReportActivityToShell() {
 export function MfeShell({ title, subtitle = 'Audit', children }: { title: string; subtitle?: string; children: React.ReactNode }) {
 
   useReportActivityToShell();
+  useReloadOnNewBuild();
   useEffect(() => {
     const parentWindow = window.parent;
     if (!parentWindow || parentWindow === window) return;

@@ -24,6 +24,8 @@ Deployables: `src/Microservices/Audit/BFF.Web`, `src/Microservices/Operations/BF
 - [x] **A link to another organisation's page opens in a new tab at the click, cut off from this page** (`opener = null`), and only with the https address EWP's server returned. → Partner Products `digital-gold/view-all/page.tsx` ("View at the Partner Bank")
 
 - [x] **Activity is reported to the Shell** (`BSS_MFE_ACTIVITY`, at most once a minute, the Shell's origin only, no data), so the Shell keeps its own session alive while the person works here. → `app/components/MfeShell.tsx`
+- [x] **A tab left open across a redeploy reloads itself once** when the new build no longer knows its server actions (Next.js `unstable_isUnrecognizedActionError`, at most once a minute). *Because* such a call can never succeed: without the reload the tab keeps polling with dead action ids and the pod logs "Failed to find Server Action" every minute. → `app/components/MfeShell.tsx` (`useReloadOnNewBuild`)
+- [x] **The health page says when its own server cannot be reached** instead of leaving the last HEALTHY answer on screen as if it were current. → Operations `platform/view-all/page.tsx`
 
 ## 4. Headers and configuration
 
