@@ -16,6 +16,7 @@ export const urls = {
   paymentsApi: 'https://payments-api.dev.localhost:44488',
   accountsApi: 'https://accounts-api.dev.localhost:48486',
   customerOnboardingApi: 'https://customer-api.dev.localhost:46363',
+  documentsManagementApi: 'https://documents-management-api.dev.localhost:49486',
 } as const;
 
 export interface Service {
@@ -36,7 +37,7 @@ export const services: Service[] = [
   { name: 'Customer Onboarding API', readiness: `${urls.customerOnboardingApi}/health/ready`, startedBy: vs },
   { name: 'Customer KYC BFF', readiness: `${urls.kycMfe}/health/ready`, startedBy: node },
   { name: 'Customer KYC API', readiness: 'https://kyc-api.dev.localhost:46305/health/ready', startedBy: vs },
-  { name: 'Documents Management API', readiness: 'https://documents-management-api.dev.localhost:49486/health/ready', startedBy: vs },
+  { name: 'Documents Management API', readiness: `${urls.documentsManagementApi}/health/ready`, startedBy: vs },
   { name: 'Compliance BFF', readiness: `${urls.complianceMfe}/health/ready`, startedBy: vs },
   { name: 'Compliance API', readiness: 'https://compliance-api.dev.localhost:46306/health/ready', startedBy: vs },
   { name: 'Accounts BFF', readiness: `${urls.accountsMfe}/health/ready`, startedBy: vs },
