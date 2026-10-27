@@ -18,6 +18,7 @@ export const clientIds = {
   partnerProductsWorker: 'PartnerProducts.Worker.M2M.ClientID',
   auditWeb: 'Audit.Microservice.Web.ClientID',
   paymentsWeb: 'Payments.Microservice.BFF.ClientID',
+  accountsWeb: 'Accounts.Microservice.BFF.ClientID',
   paymentsSagaReplySubscriber: 'Payments.SagaReplySubscriber.To.PaymentsApi.M2M.ClientID',
   kycCaseOpeningSubscriber: 'CustomerKyc.CaseOpeningSubscriber.To.CustomerKycApi.M2M.ClientID',
 } as const;
@@ -78,12 +79,19 @@ export function partnerWebSignInToken(person: ShellPage, http: APIRequestContext
 }
 
 /**
- * The person's own Payments BFF sign-in token: the BFF signs in with payments.read and
- * payments.write, so this is the token it calls the Payments API with - for the tests that call
- * the API directly (e.g. its BIAN /v2 contract). Same silent flow as partnerWebSignInToken.
+ * The person's own Payments BFF sign-in token, with the scopes the BFF signs in with (payments and
+ * accounts - the counter's cash deposit goes to the Accounts API): the token it calls those APIs
+ * with - for the tests that call them directly (e.g. their BIAN /v2 contracts). Same silent flow
+ * as partnerWebSignInToken.
  */
 export function paymentsWebSignInToken(person: ShellPage, http: APIRequestContext): Promise<string> {
-  return webSignInToken(person, http, clientIds.paymentsWeb, `${urls.paymentsMfe}/signin-oidc`, 'openid profile roles organization payments.read payments.write');
+  return webSignInToken(person, http, clientIds.paymentsWeb, `${urls.paymentsMfe}/signin-oidc`,
+    'openid profile roles organization payments.read payments.write accounts.read accounts.write');
+}
+
+/** The person's own Accounts BFF sign-in token (an account officer's view of the Accounts API). */
+export function accountsWebSignInToken(person: ShellPage, http: APIRequestContext): Promise<string> {
+  return webSignInToken(person, http, clientIds.accountsWeb, `${urls.accountsMfe}/signin-oidc`, 'openid profile roles organization accounts.read accounts.write');
 }
 
 /** A BFF client's sign-in token for the signed-in person (Authorization Code + PKCE, prompt=none). */

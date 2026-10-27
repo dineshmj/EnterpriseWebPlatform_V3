@@ -17,6 +17,7 @@
   <ItemGroup>
     <!-- BIAN's published contract (doc/bian), checked against the /v2 mapping (Bian/). -->
     <None Include="..\..\..\doc\bian\release14.0.0\PaymentOrderInitiation.yaml" Link="Bian\PaymentOrderInitiation.yaml" CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="..\Shared\BianSchema.cs" Link="Shared\BianSchema.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="AwesomeAssertions" Version="9.6.0" />

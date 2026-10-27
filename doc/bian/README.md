@@ -41,7 +41,7 @@ on an older release would name the payments contract differently.
 | EWP API | BIAN service domain | Decision |
 |---|---|---|
 | Payments (start, read, approve or reject a payment) | **PaymentOrderInitiation** - "captures the payer and payee details and other key properties of the payment and initiates the orchestration of the transaction" | **`/v2` built** (below) |
-| Accounts (accounts, cash deposit, holds for payments) | **CurrentAccount** - "a consumer checking/demand deposit account … payments and deposits, … liens" | Confident: Retrieve, Deposit, AmountBlock - next |
+| Accounts (accounts, cash deposit, holds for payments) | **CurrentAccount** - "a consumer checking/demand deposit account … payments and deposits, … liens" | **`/v2` built**: Retrieve, Deposit (below). AmountBlock not offered: the holds are the payment saga's internal, machine-only commands |
 | Customer Onboarding (customer records) | **PartyReferenceDataDirectory** - "party reference information … contacts … demographic information" | Confident: Register, Retrieve, Update - next |
 | Documents Management | **DocumentDirectory** - "directory based categorization and storage … for documents" | Confident: Register, Retrieve - next |
 | Accounts (account-opening applications) | CustomerOffer | Plausible only (BIAN's offer covers credit, collateral, underwriting) - `/v1` only |
@@ -89,13 +89,58 @@ EWP's statuses in BIAN's status types (BIAN's list is coarser; EWP's code always
 Code: [Bian/](../../src/Microservices/Payments/API/Bian),
 [PaymentOrderInitiationController.cs](../../src/Microservices/Payments/API/Controllers/PaymentOrderInitiationController.cs).
 
+## Accounts: CurrentAccount
+
+| BIAN operation | EWP | Same rules as |
+|---|---|---|
+| `GET /v2/CurrentAccount/{id}/Retrieve` | the account (an account officer, own branch) | `GET /v1/accounts/{id}` |
+| `POST /v2/CurrentAccount/{id}/Deposit/Initiate` | cash paid in at the counter (201; `Idempotency-Key` header) | `POST /v1/accounts/cash-deposits` |
+
+Not offered: **AmountBlock** (place, settle, release a hold). In EWP those are the payment
+saga's internal commands - one pinned machine client, an Inbox, replies through the Outbox. A
+second HTTP door into moving held money would add risk and show nothing new; the holds are
+visible through Retrieve (current balance - available balance). And EWP's "settle" is a debit,
+not a change to the block, so it would not map to `AmountBlock/Update` honestly anyway.
+
+Where EWP's account sits in BIAN's `CurrentAccountFacility`:
+
+| EWP | BIAN property |
+|---|---|
+| account number | `CurrentAccountNumber` (`AccountIdentificationType` "AccountNumber"), also in `AccountDetails.AccountIdentification` |
+| BSB | `BankBranchLocationReference.BranchIdentification` - a BSB identifies a bank branch |
+| owner: customer number, holder name | `AssociationType` "PartyIsPrimaryOwnerOfAccount", `AssociationReference` (`PartyIdentification`, `PartyName`). BIAN's own `CustomerReference` is typed as an "ItemInventory" with a single text property - not used |
+| core-banking reference, product | `ProductInstanceReference` (`ProductAgreementIdentification`, `AgreementDescription`) |
+| balance (funds on hold included) | `AccountBalance`, `BalanceType` "CurrentBalance" |
+| available balance | `AccountDetails.AccountBalance`, `BalanceType` "AvailableBalance". BIAN gives each level ONE balance; the amount on hold is current - available |
+| status | `AccountStatus`: ACTIVE -> "Enabled", FROZEN and CLOSED -> "Disabled" (BIAN: "cannot be used, temporarily or permanently"; it has no "Closed"); EWP's code in `AccountDetails.AccountStatus.AccountStatus.StatusReason` |
+| opened at | `AccountDateType` "OpeningDate", `AccountDate` |
+
+A cash deposit in BIAN's `Deposit`:
+
+| EWP | BIAN property |
+|---|---|
+| the depositing customer (must own the account) | `DepositTransactionSourceReference` - required by EWP |
+| amount (AUD, positive) | `DepositTransactionAmount` |
+| cash, nothing else | `DepositType` "CashDeposit" (absent = cash; any other type refused) |
+| deposit number, balance after (answer) | `DepositTransaction.TransactionIdentification`, `DepositTransaction.FinancialTransactionTargetAccount.AccountBalance` |
+
+Code: [Bian/](../../src/Microservices/Accounts/API/Bian),
+[CurrentAccountController.cs](../../src/Microservices/Accounts/API/Controllers/CurrentAccountController.cs).
+
 ## Checking it
 
-- **CI, no running service:** `tst/dotnet/Payments.Api.Tests/Bian` - every `/v2` body (each EWP
-  status, a partner's request, both decisions) validated against BIAN's file; the mapping rules
-  (required properties, currency, amount format, the decision task); a body with a value BIAN
-  does not list - at the top and three references deep - must fail the check.
-- **Live, as a demo:** `tst/playwright/tests/20-functional/bian/payment-order-initiation.spec.ts`
-  - Sophie initiates through BIAN; `/v1` and `/v2` show the same payment; the same
-  Idempotency-Key through `/v1` finds it; Sophie may not approve through BIAN's Exchange (403);
-  Emily approves through it and the payment completes.
+- **CI, no running service:** `tst/dotnet/<API>.Tests/Bian` - every `/v2` body validated against
+  BIAN's file (Payments: each EWP status, a partner's request, both decisions; Accounts: the
+  account in each status, a deposit request, the recorded deposit); the mapping rules (required
+  properties, currency, amount format, the decision task, cash only); and a body with a value
+  BIAN does not list must fail the check (Payments: at the top and three references deep;
+  Accounts: two deep). The schema check is one shared helper,
+  [tst/dotnet/Shared/BianSchema.cs](../../tst/dotnet/Shared/BianSchema.cs) (JSON Schema Draft-07
+  rules, as OpenAPI 3.0 uses), linked into each test project.
+- **Live, as a demo:** `tst/playwright/tests/20-functional/bian/`
+  - `payment-order-initiation.spec.ts`: Sophie initiates through BIAN; `/v1` and `/v2` show the
+    same payment; the same Idempotency-Key through `/v1` finds it; Sophie may not approve through
+    BIAN's Exchange (403); Emily approves through it and the payment completes.
+  - `current-account.spec.ts`: Jack retrieves the account through BIAN and `/v1` shows the same
+    (both balances); Sophie deposits cash through BIAN; the same Idempotency-Key through `/v2` and
+    `/v1` finds that deposit; Jack may not deposit (403); the balance moved once.

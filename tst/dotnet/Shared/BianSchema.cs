@@ -6,7 +6,7 @@ using Json.Schema;
 using YamlDotNet.Core;
 using YamlDotNet.RepresentationModel;
 
-namespace EnterpriseWebPlatform.Payments.Api.Tests.Support;
+namespace EnterpriseWebPlatform.Tests.Bian;
 
 // ┌─ :: ARCHITECTURE :: BIAN's own file is the judge ──────────────────────────────────────────────
 // │ Why : "BIAN-compatible" must mean "valid against what BIAN publishes", not "looks like it".
