@@ -2,8 +2,11 @@
 # │ Why : The workflow pins actions to commit SHAs and the Dockerfiles pin base images by tag AND
 # │       digest. Pinning stops silent changes; without updates it would also stop security fixes.
 # │ How : Dependabot proposes a pull request a week per ecosystem (all base images in one); the
-# │       image workflow builds and scans each proposal before it can be merged. NuGet and pnpm
-# │       stay with the existing routine (Scan-Dependencies.ps1, pnpm audit at every export).
+# │       image workflow builds and scans each proposal before it can be merged. NuGet too (all
+# │       packages in one pull request): the hand-made routine (Scan-Dependencies.ps1) missed the
+# │       .NET 10.0.14 security release (27-OCT-2026), and the CI gate cannot see fixes that are
+# │       in the runtime rather than in a package advisory. pnpm stays with its routine (pnpm
+# │       audit at every export; outdated checked whenever a Node project is worked on).
 # │ Ref : doc/Containers.md | OWASP A06 Vulnerable and Outdated Components
 # └────────────────────────────────────────────────────────────────────────────────────────────────
 version: 2
@@ -74,4 +77,58 @@ updates:
     # └────────────────────────────────────────────────────────────────────────────────────────────
     groups:
       base-images:
+        patterns: ['*']
+
+  - package-ecosystem: nuget
+    # Every folder with a .csproj, the test projects included (doc/Containers.md, "Adding an image").
+    directories:
+      - /src/AsyncWorkflows/Contracts
+      - /src/AsyncWorkflows/Infrastructure/Kafka
+      - /src/AsyncWorkflows/Infrastructure/Subscribers
+      - /src/AsyncWorkflows/Publishers/CustomerOnboarding/CustomerOutboxPublisher
+      - /src/AsyncWorkflows/Subscribers/Accounts/AccountApplicationOpeningSubscriber
+      - /src/AsyncWorkflows/Subscribers/Accounts/AccountsCommandSubscriber
+      - /src/AsyncWorkflows/Subscribers/Compliance/ComplianceCaseOpeningSubscriber
+      - /src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber
+      - /src/AsyncWorkflows/Subscribers/CustomerOnboarding/OnboardingOutcomeSubscriber
+      - /src/AsyncWorkflows/Subscribers/DocumentsManagement/DocumentInvalidationSubscriber
+      - /src/AsyncWorkflows/Subscribers/Notifications/NotificationsSubscriber
+      - /src/AsyncWorkflows/Subscribers/Payments/PaymentsSagaReplySubscriber
+      - /src/Common/Observability
+      - /src/Common/WebUtilities
+      - /src/IDP
+      - /src/Microservices/Accounts/API
+      - /src/Microservices/Accounts/BFF.Web
+      - /src/Microservices/Audit/API
+      - /src/Microservices/Compliance/API
+      - /src/Microservices/Compliance/BFF.Web
+      - /src/Microservices/CustomerKyc/API
+      - /src/Microservices/CustomerOnboarding/API
+      - /src/Microservices/CustomerOnboarding/BFF.Web
+      - /src/Microservices/DocumentsManagement/API
+      - /src/Microservices/Notifications/API
+      - /src/Microservices/PartnerProducts/API
+      - /src/Microservices/Payments/API
+      - /src/Microservices/Payments/BFF.Web
+      - /src/Shell
+      - /src/Simulators/CoreBankingSimulator
+      - /src/Simulators/PaymentNetworkSimulator
+      - /src/Simulators/ScreeningProviderSimulator
+      - /tst/dotnet/Accounts.Api.Tests
+      - /tst/dotnet/IDP.Tests
+      - /tst/dotnet/PartnerProducts.Api.Tests
+      - /tst/dotnet/Payments.Api.Tests
+    schedule:
+      interval: weekly
+    # ┌─ ARCH ─────────────────────────────────────────────────────────────────────────────────────
+    # │ As for the images: minor and patch only - a major (.NET 11, Duende 9) is a planned step.
+    # │ One pull request for all packages, so the Microsoft.* packages move as one release across
+    # │ the 36 projects; that release's runtime image comes in the base-images pull request -
+    # │ merge the two together. The Partner Bank's repository proposes the same the same week.
+    # └────────────────────────────────────────────────────────────────────────────────────────────
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+    groups:
+      nuget-packages:
         patterns: ['*']

@@ -18,7 +18,7 @@
 # │ Ref : doc/Containers.md | Features 1.6.5, 2.4.5 | OWASP A02, A05, A08 | Threat-Model R-10
 # └────────────────────────────────────────────────────────────────────────────────────────────────
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0.402-noble@sha256:747cbade5bfd918a175ac32f8f1d931edec2c7d0d5397a3de72eaef1ac1f66d2 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.403-noble@sha256:de4fe90a98845d75910b9769662465c84de1a934665c431279d1382b2bddc02b AS build
 WORKDIR /src
 
 # Restore from the project files alone (layer reused until a project file changes).
@@ -37,7 +37,7 @@ RUN dotnet publish src/IDP/EnterpriseWebPlatform.IdentityServer.csproj \
         --configuration Release --runtime linux-x64 --self-contained false --no-restore \
         --output /app -p:UseAppHost=false
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.13-noble-chiseled-extra@sha256:9e3919aff68057f3e45125c5255a71d3b5f40364e45ede883348688851b9f0df AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.14-noble-chiseled-extra@sha256:9b755ea799ae649141a073e30d8b62d8095a5465af2b7694d17866e8c05131d8 AS runtime
 WORKDIR /app
 
 # Owned by root: the "app" user reads and runs the files but cannot change them.
