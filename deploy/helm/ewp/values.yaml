@@ -81,6 +81,33 @@ global:
   networkPolicies:
     enabled: true
 
+  # SEC: where EWP's pods may connect OUT to (templates/networkpolicies.yaml derives each
+  # component's list from its own entry). Off: outgoing connections are not limited.
+  egress:
+    enabled: true
+    # The Gateway's public IP: the IDP and the Partner Bank are reached by their public names.
+    # Required when enabled (the environment's; the demo: Terraform output gateway_ip).
+    gatewayIp: ""
+    # The Gateway's listeners: EWP's https and the Partner Bank's four ports.
+    gatewayPorts: [443, 47401, 47402, 47403, 47411]
+    # PostgreSQL's subnet (5432). Required when enabled (the demo: Terraform output postgres_cidr).
+    postgresCidr: ""
+    # Kafka and Temporal (deploy/helm/ewp-infra).
+    infraNamespace: ewp-infra
+    kafkaPods:
+      strimzi.io/cluster: ewp
+      strimzi.io/kind: Kafka
+    temporalPods:
+      app.kubernetes.io/name: temporal
+    # The cluster DNS (CoreDNS on AKS).
+    dns:
+      namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+
   # SEC: step-up with the authenticator code. Outside Development the Operations Journey API
   # refuses to start without it; the IDP and the APIs get the same value.
   mfa:

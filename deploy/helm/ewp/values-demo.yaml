@@ -26,6 +26,11 @@ global:
     # <set by the pipeline>: the Gateway pods' subnet.
     knownNetworks: ["10.224.0.0/16"]
 
+  egress:
+    # <set by the pipeline>: Terraform outputs gateway_ip and postgres_cidr.
+    gatewayIp: 192.0.2.10
+    postgresCidr: 10.224.16.0/24
+
   # The platform's own infrastructure (deploy/helm/ewp-infra, namespace ewp-infra). The broker's
   # certificate comes from EWP's private CA, so its trust root is the private-root bundle.
   kafka:

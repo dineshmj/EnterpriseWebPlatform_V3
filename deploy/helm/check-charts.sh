@@ -45,7 +45,7 @@ done
 
 # SEC: the chart refuses to render without the values that must come from the environment.
 values="$here/ewp/values-demo.yaml"
-for missing in global.domain global.image.tag global.kafka.bootstrapServers global.temporal.address global.partnerBank.apiBaseUrl; do
+for missing in global.domain global.image.tag global.kafka.bootstrapServers global.temporal.address global.partnerBank.apiBaseUrl global.egress.gatewayIp global.egress.postgresCidr; do
   if helm template ewp "$here/ewp" -f "$values" --set "$missing=" > /dev/null 2>&1; then
     echo "::error::The ewp chart rendered without $missing - it must refuse."
     exit 1
@@ -86,7 +86,7 @@ infra_values="$here/ewp-infra/values-demo.yaml"
 helm lint --strict "$here/ewp-infra" -f "$infra_values"
 helm template ewp-infra "$here/ewp-infra" --namespace ewp-infra -f "$infra_values" > "$out/ewp-infra.yaml"
 validate "$out/ewp-infra.yaml"
-for missing in database.host database.adminLogin; do
+for missing in database.host database.adminLogin database.cidr; do
   if helm template ewp-infra "$here/ewp-infra" -f "$infra_values" --set "$missing=" > /dev/null 2>&1; then
     echo "::error::The ewp-infra chart rendered without $missing - it must refuse."
     exit 1

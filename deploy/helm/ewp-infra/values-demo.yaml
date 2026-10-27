@@ -1,5 +1,6 @@
-# The cloud demo. <set by the pipeline>: the database server and its admin login (Terraform's
-# outputs postgres_host, postgres_admin_login), never committed.
+# The cloud demo. <set by the pipeline>: the database server, its admin login and its subnet
+# (Terraform's outputs postgres_host, postgres_admin_login, postgres_cidr), never committed.
 database:
   host: psql-ewp-demo-xxxxx.postgres.database.azure.com
   adminLogin: ewpadmin
+  cidr: 10.224.16.0/24

@@ -652,10 +652,12 @@ One chart deploys all 35 services the same way, from one list of components; wha
 
 **Where to look at:**
 
-- Decisions K1-K7, what a cluster needs first, every secret: [Kubernetes.md](Kubernetes.md)
+- Decisions K1-K12, what a cluster needs first, every secret: [Kubernetes.md](Kubernetes.md)
 - Charts: [deploy/helm](../deploy/helm); templates: [deployments.yaml](../deploy/helm/ewp/templates/deployments.yaml), [networkpolicies.yaml](../deploy/helm/ewp/templates/networkpolicies.yaml), [certificates.yaml](../deploy/helm/ewp/templates/certificates.yaml), [routes.yaml](../deploy/helm/ewp/templates/routes.yaml)
 
-**Not yet:** egress network policies (pods may still open connections to the internet).
+Outgoing connections are limited the same way (K12): a pod may reach the cluster DNS, the components that admit it, and only those outside addresses its own entry implies - PostgreSQL's subnet for a service with a connection string, the Kafka brokers for one with a Kafka entry, Temporal for its two clients, the Gateway for anything that calls a public address (the IDP, the Partner Bank). No pod can reach the internet, the cloud's metadata service or another namespace it does not call.
+
+**Not yet:** the Kafka broker's pods (Strimzi) are not limited outgoing; no FQDN filtering at the edge (Azure Firewall).
 
 #### 1.9.3 A cloud demo that appears and disappears (Azure)
 

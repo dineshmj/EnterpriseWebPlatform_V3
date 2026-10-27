@@ -26,6 +26,11 @@ output "pod_cidr" {
   value       = local.pod_cidr
 }
 
+output "postgres_cidr" {
+  description = "PostgreSQL's delegated subnet: the only address range the charts' egress rules open for 5432."
+  value       = local.postgres_cidr
+}
+
 output "key_vault_name" {
   value = azurerm_key_vault.demo.name
 }

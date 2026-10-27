@@ -4,7 +4,10 @@
 │ How : Default deny for every pod here; Temporal's policy (temporal.yaml) and the ones Strimzi
 │       writes for the broker (its listener admits the client namespace only; the operators
 │       reach their ports) add what each needs. The database job needs no incoming connection.
-│ Ref : doc/Kubernetes.md K6 | OWASP A01, A05
+│       Outgoing: Temporal none (temporal.yaml), the database job only DNS and PostgreSQL
+│       (below). DEBT: Strimzi's pods (broker, entity operator) are not limited outgoing - the
+│       operators call the Kubernetes API server, whose address is the cluster's, not the chart's.
+│ Ref : doc/Kubernetes.md K6, K12 | OWASP A01, A05
 └────────────────────────────────────────────────────────────────────────────────────────────────
 */ -}}
 apiVersion: networking.k8s.io/v1
@@ -16,3 +19,34 @@ metadata:
 spec:
   podSelector: {}
   policyTypes: ["Ingress"]
+---
+{{- $ctx := dict "root" . "name" "database-init" }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: database-init
+  labels:
+    {{- include "infra.labels" $ctx | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "infra.selector" $ctx | nindent 6 }}
+  # SEC: the job runs the full database scripts as the server's admin - it may reach the server
+  # and the cluster DNS, nothing else.
+  policyTypes: ["Ingress", "Egress"]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {port: 53, protocol: UDP}
+        - {port: 53, protocol: TCP}
+    - to:
+        - ipBlock:
+            cidr: {{ required "database.cidr is required (PostgreSQL's subnet, Terraform output postgres_cidr)" .Values.database.cidr }}
+      ports:
+        - {port: 5432, protocol: TCP}

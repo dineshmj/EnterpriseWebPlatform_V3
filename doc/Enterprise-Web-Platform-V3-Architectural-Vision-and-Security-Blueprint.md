@@ -474,7 +474,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Secrets per deployable, fail closed when missing | Present |
 | Secret store, key rotation | Partial: in the cloud demo every secret is generated per demo and kept only in Azure Key Vault (one vault per organisation), read by the Secrets Store CSI driver with workload identity ([Cloud-Demo.md](Cloud-Demo.md)); key rotation Target |
 | Container images | Present: one Dockerfile per deployable (35), built only in CI from a commit; chiseled .NET and distroless Node runtimes, non-root; base images pinned by digest; Trivy scan (vulnerabilities and secrets) and a start check before publishing to GHCR ([Containers.md](Containers.md)) |
-| Kubernetes deployment | Present: one Helm chart over all components ([Kubernetes.md](Kubernetes.md)): restricted pods (non-root, read-only, no token), TLS between pods from a private CA, default-deny network policies (ingress), Gateway API with backend TLS, secrets by name only; charts checked in CI (lint, kubeconform strict). Partial: no egress policies |
+| Kubernetes deployment | Present: one Helm chart over all components ([Kubernetes.md](Kubernetes.md)): restricted pods (non-root, read-only, no token), TLS between pods from a private CA, default-deny network policies in both directions (each pod reaches only what its own entry says it calls: K12), Gateway API with backend TLS, secrets by name only; charts checked in CI (lint, kubeconform strict). Partial: the Kafka broker's (Strimzi) outgoing connections are not limited |
 | Cloud environment as code | Present: the Azure demo ([Azure.md](Azure.md), [Cloud-Demo.md](Cloud-Demo.md)): Terraform (AKS, PostgreSQL, Key Vault, public IP, DNS records), GitHub OIDC sign-in without a stored secret, Demo up / Demo down / a 6-hour watchdog; first full run 25-OCT-2026 (all demo users signed in). Partial: single zone, public API server, one Kafka node, Temporal development server |
 | SBOM, SAST / SCA / DAST, artifact signing | Partial: SCA gate in CI (NuGet, pnpm), SBOM and SLSA provenance attached to every image, image scan with Trivy; SAST, DAST and artifact signing Target |
 | WAF, DDoS, SIEM / SOC, HA, DR, multi-region, regulatory evidence | Production Concern |
@@ -598,7 +598,7 @@ Details: [PartnerProducts-Requirements.md](Requirements/PartnerProducts-Requirem
 - [x] Demo up / Demo down / watchdog with Terraform; the public gateway with Let's Encrypt (2026-10-25)
 - [x] The whole platform and the Partner Bank on AKS; every demo user signed in (2026-10-25, staging certificates)
 - [x] The business journeys walked through in the cloud, with production certificates (2026-10-26)
-- [ ] Egress network policies
+- [ ] Egress network policies (built 27-OCT-2026 for EWP, ewp-infra and the Partner Bank - K12; to verify in the next cloud demo; Strimzi's pods excepted)
 - [ ] Centralized logs and metrics for the cloud demo (Grafana / Observe)
 
 Details: [Containers.md](Containers.md), [Kubernetes.md](Kubernetes.md), [Azure.md](Azure.md), [Cloud-Demo.md](Cloud-Demo.md).
