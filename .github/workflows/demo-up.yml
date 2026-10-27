@@ -184,6 +184,7 @@ jobs:
             echo "PARTNER_SECRETS_CLIENT_ID=$(terraform output -raw partner_bank_secrets_client_id)"
             echo "POSTGRES_HOST=$(terraform output -raw postgres_host)"
             echo "POSTGRES_ADMIN_LOGIN=$(terraform output -raw postgres_admin_login)"
+            echo "POSTGRES_CIDR=$(terraform output -raw postgres_cidr)"
             echo "PARTNER_CHART=$GITHUB_WORKSPACE/partner-bank/deploy/helm/partner-bank"
           } >> "$GITHUB_ENV"
 

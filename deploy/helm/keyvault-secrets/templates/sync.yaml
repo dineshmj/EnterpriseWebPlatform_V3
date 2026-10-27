@@ -85,4 +85,6 @@ spec:
   podSelector:
     matchLabels:
       {{- include "kvs.selector" . | nindent 6 }}
-  policyTypes: ["Ingress"]
+  # SEC: no rule = nothing in, nothing out. The pause container connects nowhere; Key Vault is
+  # read by the CSI driver on the node, not by this pod.
+  policyTypes: ["Ingress", "Egress"]

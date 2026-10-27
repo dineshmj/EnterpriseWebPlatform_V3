@@ -162,6 +162,8 @@ database:
   # Required: the server (Terraform output postgres_host) and its admin login.
   host: ""
   adminLogin: ""
+  # Required: the server's subnet (Terraform output postgres_cidr) - the job's only way out.
+  cidr: ""
   # Secrets (deploy/helm/keyvault-secrets): the admin password (key "password"), and one key per
   # service role (the key is the role name) with its password.
   adminSecret: ewp-db-admin

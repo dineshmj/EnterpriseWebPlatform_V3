@@ -1,37 +1,71 @@
 {{- /*
-┌─ :: SECURITY :: Who may open a connection to whom ─────────────────────────────────────────────
+┌─ :: SECURITY :: Who may open a connection to whom - in AND out ────────────────────────────────
 │ Why : A token is the main gate, but a compromised pod should not even reach an API it never
-│       calls (defence in depth; the Partner Bank's private ports work the same way).
-│ How : Every EWP pod refuses incoming connections by default. Each component then admits only
-│       the components listed in its allowFrom, the gateway (public components), and the
-│       Operations Journey API (it asks every component's readiness for Platform Health).
-│       DEBT: outgoing traffic is not limited yet (PostgreSQL, Kafka, Temporal, the IDP through
-│       the gateway and the Partner Bank are outside the namespace; their addresses are the
-│       environment's) - an egress policy belongs with those addresses (Terraform step).
-│       The kubelet's probes come from the node; CNIs admit them (Azure CNI / Cilium do).
-│ Ref : doc/Kubernetes.md | OWASP A01, A05 | NIST SP 800-204 (microservice security)
+│       calls (defence in depth; the Partner Bank's private ports work the same way). And it
+│       should not reach anything OUTSIDE the platform either: no download of a second stage, no
+│       sending data to an attacker's server, no scanning of the VNet.
+│ How : Incoming - every EWP pod refuses connections by default. Each component admits only the
+│       components listed in its allowFrom, the gateway (public components), and the Operations
+│       Journey API (it asks every component's readiness for Platform Health).
+│       Outgoing (global.egress) - every EWP pod may only open connections to:
+│         - the cluster DNS;
+│         - the components that admit it (the mirror of their allowFrom, so the two sides
+│           cannot drift; the Operations Journey API: every component);
+│         and, derived from what its own entry already declares (no second list to keep):
+│         - PostgreSQL (its subnet, 5432) - a connection string among its secrets;
+│         - Kafka's brokers (9093)        - a kafka entry;
+│         - Temporal (7233)               - TEMPORAL_ADDRESS in its settings;
+│         - the Gateway                   - any public EWP address or the Partner Bank's in its
+│           settings: the IDP and the Partner Bank are reached by their public names, and the IDP
+│           itself calls the clients' public back-channel logout addresses. Two rules: the Gateway's pods
+│           (Cilium hands a connection to the load balancer's IP straight to them) and the
+│           public IP on the listener ports (where it goes out and back in).
+│       Nothing else: no internet, no Azure metadata service, no other namespace. The kubelet's
+│       probes come from the node; CNIs admit them (Azure CNI / Cilium do).
+│ Ref : doc/Kubernetes.md K6, K12 | OWASP A01, A05, A10 (SSRF) | NIST SP 800-204 |
+│       MITRE ATT&CK T1041 (exfiltration over C2), T1105 (ingress tool transfer)
 └────────────────────────────────────────────────────────────────────────────────────────────────
 */ -}}
 {{- if .Values.global.networkPolicies.enabled }}
 {{- $root := . -}}
 {{- $g := .Values.global -}}
+{{- $egress := $g.egress.enabled -}}
 {{- $enabled := include "ewp.enabled" . | fromYaml -}}
+{{- if $egress }}
+{{- $_ := required "global.egress.gatewayIp is required when egress is limited (the Gateway's public IP)" $g.egress.gatewayIp }}
+{{- $_ := required "global.egress.postgresCidr is required when egress is limited (PostgreSQL's subnet)" $g.egress.postgresCidr }}
+{{- end }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: ewp-default-deny-ingress
+  name: ewp-default-deny
 spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/part-of: ewp
       app.kubernetes.io/instance: {{ $root.Release.Name }}
-  policyTypes: ["Ingress"]
+  policyTypes: {{ if $egress }}["Ingress", "Egress"]{{ else }}["Ingress"]{{ end }}
 {{- range $name, $c := $enabled }}
 {{- $ctx := dict "root" $root "name" $name }}
 {{- $listener := include "ewp.listener" $c }}
 {{- $callers := $c.allowFrom | default list }}
 {{- if and (hasKey $enabled "operations-journey-api") (ne $name "operations-journey-api") }}
 {{- $callers = append $callers "operations-journey-api" }}
+{{- end }}
+{{- /* ARCH: outgoing, derived from the entry itself (see the box above). */}}
+{{- $callees := list }}
+{{- range $other, $o := $enabled }}
+{{- if and (ne $other $name) (or (eq $name "operations-journey-api") (has $name ($o.allowFrom | default list))) }}
+{{- $callees = append $callees $other }}
+{{- end }}
+{{- end }}
+{{- $postgres := false }}
+{{- range $c.secretEnv }}{{ if or (hasPrefix "ConnectionStrings__" .) (hasSuffix "_DATABASE_URL" .) }}{{ $postgres = true }}{{ end }}{{ end }}
+{{- $temporal := false }}
+{{- $gateway := false }}
+{{- range $k, $v := $c.env }}
+{{- if contains "global.temporal" (toString $v) }}{{ $temporal = true }}{{ end }}
+{{- if regexMatch `ewp\.public"|global\.partnerBank` (toString $v) }}{{ $gateway = true }}{{ end }}
 {{- end }}
 ---
 apiVersion: networking.k8s.io/v1
@@ -44,7 +78,7 @@ spec:
   podSelector:
     matchLabels:
       {{- include "ewp.selector" $ctx | nindent 6 }}
-  policyTypes: ["Ingress"]
+  policyTypes: {{ if $egress }}["Ingress", "Egress"]{{ else }}["Ingress"]{{ end }}
   ingress:
     {{- if $callers }}
     - from:
@@ -65,5 +99,65 @@ spec:
       ports:
         - port: {{ $listener }}
     {{- end }}
+  {{- if $egress }}
+  egress:
+    - to:
+        - namespaceSelector:
+            {{- toYaml $g.egress.dns.namespaceSelector | nindent 12 }}
+          podSelector:
+            {{- toYaml $g.egress.dns.podSelector | nindent 12 }}
+      ports:
+        - {port: 53, protocol: UDP}
+        - {port: 53, protocol: TCP}
+    {{- range $callees }}
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "ewp.selector" (dict "root" $root "name" .) | nindent 14 }}
+      ports:
+        - port: {{ include "ewp.listener" (index $enabled .) }}
+    {{- end }}
+    {{- if $postgres }}
+    - to:
+        - ipBlock:
+            cidr: {{ $g.egress.postgresCidr }}
+      ports:
+        - {port: 5432, protocol: TCP}
+    {{- end }}
+    {{- if hasKey $c "kafka" }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $g.egress.infraNamespace }}
+          podSelector:
+            matchLabels:
+              {{- toYaml $g.egress.kafkaPods | nindent 14 }}
+      ports:
+        - {port: 9093, protocol: TCP}
+    {{- end }}
+    {{- if $temporal }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $g.egress.infraNamespace }}
+          podSelector:
+            matchLabels:
+              {{- toYaml $g.egress.temporalPods | nindent 14 }}
+      ports:
+        - {port: 7233, protocol: TCP}
+    {{- end }}
+    {{- if $gateway }}
+    - to:
+        - namespaceSelector:
+            {{- toYaml $g.gateway.namespaceSelector | nindent 12 }}
+    - to:
+        - ipBlock:
+            cidr: {{ $g.egress.gatewayIp }}/32
+      ports:
+        {{- range $g.egress.gatewayPorts }}
+        - {port: {{ . }}, protocol: TCP}
+        {{- end }}
+    {{- end }}
+  {{- end }}
 {{- end }}
 {{- end }}

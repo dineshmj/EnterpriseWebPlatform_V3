@@ -28,6 +28,8 @@ set -euo pipefail
 : "${EWP_DOMAIN:?}" "${PARTNER_DOMAIN:?}" "${CERT_ISSUER:?}" "${POD_CIDR:?}"
 : "${EWP_KEY_VAULT:?}" "${PARTNER_KEY_VAULT:?}" "${TENANT_ID:?}" "${EWP_SECRETS_CLIENT_ID:?}" "${PARTNER_SECRETS_CLIENT_ID:?}"
 : "${POSTGRES_HOST:?}" "${POSTGRES_ADMIN_LOGIN:?}" "${PARTNER_CHART:?}"
+# SEC: the two outside addresses the charts' egress rules allow (doc/Kubernetes.md K12).
+: "${GATEWAY_IP:?}" "${POSTGRES_CIDR:?}"
 export EWP_KEY_VAULT PARTNER_KEY_VAULT TENANT_ID EWP_SECRETS_CLIENT_ID PARTNER_SECRETS_CLIENT_ID PARTNER_DOMAIN POSTGRES_HOST
 
 STRIMZI_VERSION='1.2.0'
@@ -133,6 +135,7 @@ retry helm upgrade --install ewp-infra "$repo/deploy/helm/ewp-infra" --namespace
   -f "$repo/deploy/helm/ewp-infra/values-demo.yaml" \
   --set "database.host=$POSTGRES_HOST" \
   --set "database.adminLogin=$POSTGRES_ADMIN_LOGIN" \
+  --set "database.cidr=$POSTGRES_CIDR" \
   --timeout 10m
 revision="$(helm history ewp-infra -n ewp-infra --max 1 -o json | node -e 'process.stdin.on("data", d => process.stdout.write(String(JSON.parse(d).at(-1).revision)))')"
 if ! kubectl wait "job/database-init-$revision" -n ewp-infra --for=condition=Complete --timeout=10m; then
@@ -160,6 +163,7 @@ image_values "$work/partner-bank-images.json" \
 helm upgrade --install partner-bank "$PARTNER_CHART" --namespace partner-bank \
   -f "$PARTNER_CHART/values-demo.yaml" -f "$work/partner-bank-images.json" \
   --set "global.domain=$PARTNER_DOMAIN" \
+  --set "global.egress.gatewayIp=$GATEWAY_IP" \
   --wait --timeout 10m
 
 step "EWP"
@@ -171,6 +175,8 @@ helm upgrade --install ewp "$repo/deploy/helm/ewp" --namespace ewp \
   -f "$repo/deploy/helm/ewp/values-demo.yaml" -f "$work/ewp-images.json" \
   --set "global.domain=$EWP_DOMAIN" \
   --set-json "global.forwardedHeaders.knownNetworks=[\"$POD_CIDR\"]" \
+  --set "global.egress.gatewayIp=$GATEWAY_IP" \
+  --set "global.egress.postgresCidr=$POSTGRES_CIDR" \
   --set "global.partnerBank.tokenEndpoint=https://partner-auth.$PARTNER_DOMAIN:47411/connect/token" \
   --set "global.partnerBank.apiBaseUrl=https://partner-api.$PARTNER_DOMAIN:47403" \
   --set "global.partnerBank.staffViewUrl=https://partner-products.$PARTNER_DOMAIN:47402/StaffView" \
