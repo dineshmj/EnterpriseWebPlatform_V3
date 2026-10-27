@@ -70,6 +70,7 @@ Each document has one purpose. A fact is written in exactly one place; other doc
 | [Kubernetes deployment](doc/Kubernetes.md) | The Helm charts (`deploy/helm`): what a cluster needs first, TLS between pods, network rules, every secret an environment creates |
 | [Azure demo bootstrap](doc/Azure.md) | What exists in Azure before the demo workflows run (`deploy/azure`): GitHub's secret-less OIDC sign-in, the two resource groups, the Terraform state store, the two domains' DNS zones, the budget alert |
 | [Cloud demo](doc/Cloud-Demo.md) | Bringing a demo up and down on Azure (`deploy/terraform/demo`, the Demo up / Demo down / watchdog workflows): AKS, PostgreSQL, Key Vault, the public gateway with Let's Encrypt, cost and the 6-hour watchdog |
+| [BIAN compatibility](doc/bian/README.md) | Which domain APIs also speak BIAN's standard service-domain contracts (`/v2`, release 14.0.0), the mapping of every API (and why some have no BIAN fit), and how BIAN's own published file checks it |
 | [Checklists](doc/Checklists/README.md) | One checklist per deployable tier (IDP, Shell, MFE SPAs and BFFs, Journey and domain APIs, Outbox publishers, subscribers, Kafka, PostgreSQL users and grants): what is true today, and what is open |
 
 ### Per component (`doc/Requirements/`)

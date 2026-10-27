@@ -73,14 +73,26 @@ export function claimsOf(jwt: string): Record<string, unknown> {
  * through the person's IDP session in this browser context); the redirect back to the BFF is
  * caught before it arrives, so the BFF's own session is untouched.
  */
-export async function partnerWebSignInToken(person: ShellPage, http: APIRequestContext): Promise<string> {
-  const clientId = clientIds.partnerProductsWeb;
-  const redirectUri = `${urls.partnerProductsMfe}/api/auth/callback`;
+export function partnerWebSignInToken(person: ShellPage, http: APIRequestContext): Promise<string> {
+  return webSignInToken(person, http, clientIds.partnerProductsWeb, `${urls.partnerProductsMfe}/api/auth/callback`, 'openid profile roles organization');
+}
+
+/**
+ * The person's own Payments BFF sign-in token: the BFF signs in with payments.read and
+ * payments.write, so this is the token it calls the Payments API with - for the tests that call
+ * the API directly (e.g. its BIAN /v2 contract). Same silent flow as partnerWebSignInToken.
+ */
+export function paymentsWebSignInToken(person: ShellPage, http: APIRequestContext): Promise<string> {
+  return webSignInToken(person, http, clientIds.paymentsWeb, `${urls.paymentsMfe}/signin-oidc`, 'openid profile roles organization payments.read payments.write');
+}
+
+/** A BFF client's sign-in token for the signed-in person (Authorization Code + PKCE, prompt=none). */
+async function webSignInToken(person: ShellPage, http: APIRequestContext, clientId: string, redirectUri: string, scope: string): Promise<string> {
   const verifier = randomBytes(32).toString('base64url');
   const state = randomBytes(16).toString('base64url');
   const authorize = new URL(`${urls.idp}/connect/authorize`);
   for (const [name, value] of Object.entries({
-    client_id: clientId, redirect_uri: redirectUri, response_type: 'code', scope: 'openid profile roles organization',
+    client_id: clientId, redirect_uri: redirectUri, response_type: 'code', scope,
     state, nonce: randomBytes(16).toString('base64url'), prompt: 'none',
     code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256',
   })) authorize.searchParams.set(name, value);
