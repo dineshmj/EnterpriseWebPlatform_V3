@@ -485,8 +485,10 @@ Operations Journey API (NestJS)	https://operations-journey.dev.localhost:46382  
 			.\ps\Reset.ps1                    (shows a menu)
 			.\ps\Reset.ps1 -Level 7 -Force    (everything, no questions)
 
-	   1  Data only              drops and recreates the 11 databases and every ewp_* user, empties the documents store,
-	                             the audit chain's checkpoints (Audit API\AuditAnchors) and the Playwright sign-ins. Kafka is not touched: its old messages stay, but every
+	   1  Data only              drops and recreates the 12 databases and every ewp_* user, empties the documents store,
+	                             the audit chain's checkpoints (Audit API\AuditAnchors) and the Playwright sign-ins, and
+	                             stops Temporal and deletes its workflows (%LOCALAPPDATA%\EWP\temporal\ewp-dev.db), so no
+	                             old purchase workflow runs against the new data. Kafka is not touched: its old messages stay, but every
 	                             consumer group has already read them, so nothing is replayed.
 	   2  Data + Kafka messages  level 1, plus every Kafka topic emptied (ps\kafka\Reset-KafkaRecords.ps1); the topics,
 	                             consumer groups, users and ACLs stay exactly as they are. The quick clean slate.
@@ -500,7 +502,8 @@ Operations Journey API (NestJS)	https://operations-journey.dev.localhost:46382  
 	   7  Everything             level 6, with Kafka stopped, wiped and re-formatted first (every topic, message,
 	                             consumer group, user and ACL gone, then recreated). The full fresh start.
 
-	   After 1, 2, 6 or 7: start Visual Studio and .\ps\run\Start-NodeServices.ps1, and sign in again. Those four ask
+	   After 1, 2, 6 or 7: start Temporal (.\ps\temporal\Start-Temporal.ps1, empty), Visual Studio and
+	   .\ps\run\Start-NodeServices.ps1, and sign in again. Those four ask
 	   one YES (or pass -Force); levels 3-5 erase nothing and ask nothing. No connection string is ever asked.
 
 	   How option 2 empties Kafka: Reset-KafkaRecords.ps1 deletes each topic's records up to its current end

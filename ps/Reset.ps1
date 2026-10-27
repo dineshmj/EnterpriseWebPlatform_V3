@@ -27,10 +27,13 @@
 
     Every level first checks that no console window of the platform is open (Kafka, the Node.js
     services, the .NET services) and exits if one is. Levels 1, 2, 6 and 7 also delete the
-    Playwright saved sign-ins and results.
+    Playwright saved sign-ins and results, and Temporal's workflows: Temporal is stopped and its
+    SQLite file (%LOCALAPPDATA%\EWP\temporal\ewp-dev.db) deleted, so no purchase workflow of the old
+    data is left to fail against the new databases.
 
-    After 1, 2, 6 or 7: start the solution in Visual Studio (this also restarts the simulators, whose
-    state is in memory), then .\ps\run\Start-NodeServices.ps1, and sign in again (old sessions are gone;
+    After 1, 2, 6 or 7: start Temporal (.\ps\temporal\Start-Temporal.ps1; it starts empty), start the
+    solution in Visual Studio (this also restarts the simulators, whose state is in memory), then
+    .\ps\run\Start-NodeServices.ps1, and sign in again (old sessions are gone;
     with Mfa:Enabled on, everybody enrols again). The demo customers come from the Playwright seed
     scenarios.
 
@@ -88,6 +91,8 @@ $adminProps = Join-Path $KafkaHome 'config\admin.properties'
 $storage = Join-Path $root 'src\Microservices\DocumentsManagement\API\DocumentStorage'
 $auditAnchors = Join-Path $root 'src\Microservices\Audit\API\AuditAnchors'
 $playwright = Join-Path $root 'tst\playwright'
+$temporalPort = 7233
+$temporalDb = Join-Path $env:LOCALAPPDATA 'EWP\temporal\ewp-dev.db'   # Start-Temporal.ps1's default -DbFile
 
 # ===================================================================================================
 # Helpers
@@ -257,6 +262,34 @@ function Clear-DocumentStorage {
     }
 }
 
+# ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────────────────
+# │ Temporal keeps the Digital Gold purchase workflows in its own SQLite file, outside PostgreSQL.
+# │ Left alone, a reset kept every old gold-purchase-* run: they retried against orders the new
+# │ EwpPartnerProductsDb no longer has (404s) and cluttered the history (found 21-OCT-2026). A clean
+# │ slate wipes them with the databases. Stopping comes first: the dev server holds the file open.
+# │ Temporal is not restarted here - like the rest of the platform, it is started again afterwards.
+# └──────────────────────────────────────────────────────────────────────────────────────────────────
+function Clear-TemporalWorkflows {
+    Write-Step "Wiping Temporal's workflows ($temporalDb)"
+    $listener = Get-NetTCPConnection -LocalPort $temporalPort -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($listener) {
+        Stop-Process -Id $listener.OwningProcess -Force
+        Write-Host "     Temporal stopped (port $temporalPort); its window closes by itself."
+    }
+    # RESIL: Windows releases the file a moment after the process ends; try for up to 15 s.
+    $parts = @(Get-Item "$temporalDb*" -ErrorAction SilentlyContinue)   # the database, -wal and -shm
+    $deadline = (Get-Date).AddSeconds(15)
+    while ($true) {
+        try { $parts | Remove-Item -Force -ErrorAction Stop; break }
+        catch {
+            if ((Get-Date) -gt $deadline) { throw "Could not delete $temporalDb - is Temporal still running? $($_.Exception.Message)" }
+            Start-Sleep -Seconds 1
+            $parts = @(Get-Item "$temporalDb*" -ErrorAction SilentlyContinue)
+        }
+    }
+    Write-Host "     $($parts.Count) file(s) deleted; Temporal starts empty."
+}
+
 function Clear-PlaywrightState {
     Write-Step 'Clearing the Playwright sign-ins and results'
     foreach ($folder in @('.auth', 'test-results', 'playwright-report')) {
@@ -334,7 +367,7 @@ $levelNames = @{
 
 if (-not $Level) {
     $hints = @{
-        1 = 'Databases and their users recreated, stored documents emptied. Kafka untouched.'
+        1 = 'Databases and their users recreated, stored documents and Temporal workflows emptied. Kafka untouched.'
         2 = 'Level 1, plus every Kafka topic emptied; topics, consumer groups, users and ACLs stay.'
         3 = 'PostgreSQL ewp_* users and their grants created / refreshed. No data erased.'
         4 = 'Kafka users, topics, consumer groups and ACLs created / refreshed. No data erased.'
@@ -403,6 +436,7 @@ if ($erasesData -and -not $Force) {
     Write-Host '  - PostgreSQL: the 12 EWP databases and every ewp_* user (recreated empty, with seed data)'
     Write-Host "  - the stored documents ($storage)"
     Write-Host "  - the audit chain's checkpoints ($auditAnchors)"
+    Write-Host "  - Temporal's workflows (Temporal stopped, $temporalDb deleted)"
     Write-Host '  - the Playwright saved sign-ins and test results'
     if ($kafkaSecurity) { Write-Host '  Kafka users, topics, consumer groups and ACLs are then recreated / refreshed.' }
     elseif (-not $clearsKafkaMessages) { Write-Host '  Kafka is not touched.' }
@@ -413,7 +447,7 @@ if ($erasesData -and -not $Force) {
 # Run the chosen level
 # ===================================================================================================
 $script:stepCount = 0
-if ($erasesData) { $script:stepCount += 5 }      # stop, drop, create, documents, Playwright
+if ($erasesData) { $script:stepCount += 6 }      # stop, drop, create, documents, Temporal, Playwright
 if ($wipesKafka) { $script:stepCount += 3 }      # stop Kafka, wipe, format
 if ($kafkaSecurity) { $script:stepCount += 2 }   # Kafka running, security
 if ($clearsKafkaMessages) { $script:stepCount += 2 }   # Kafka running, topics emptied
@@ -427,6 +461,7 @@ try {
     if ($erasesData) {
         Reset-Databases
         Clear-DocumentStorage
+        Clear-TemporalWorkflows
         Clear-PlaywrightState
     }
 }
@@ -436,7 +471,7 @@ finally {
 
 Write-Host "`nDone (level $Level - $levelName)." -ForegroundColor Green
 if ($erasesData) {
-    Write-Host 'Next: start the solution in Visual Studio, then .\ps\run\Start-NodeServices.ps1.'
+    Write-Host 'Next: .\ps\temporal\Start-Temporal.ps1, start the solution in Visual Studio, then .\ps\run\Start-NodeServices.ps1.'
     Write-Host 'Sign in again in the browser (old sessions are gone); run the Playwright seed scenarios for demo customers.'
 } else {
     Write-Host 'Nothing was erased; running services pick the changes up on their next connection.'
