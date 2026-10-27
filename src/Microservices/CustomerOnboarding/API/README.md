@@ -2,6 +2,21 @@
 
 Customers and their onboarding applications; starts the onboarding saga through its Outbox.
 
+## BIAN contract (`/v2`)
+
+Next to its own `/v1`, the API offers BIAN's **PartyReferenceDataDirectory** service domain
+(semantic APIs release 14.0.0), on the same query, command handler, policies and object-level
+checks; EWP's own callers keep `/v1`.
+
+| Endpoint | Policy | Purpose |
+|---|---|---|
+| `GET /v2/PartyReferenceDataDirectory/{id}/Retrieve` | as `GET /v1/customers/{id}` (`CustomerRead`, in the caller's scope) | The directory entry: name, Person / Organisation, customer number, registered at. `ETag` = the customer's version. |
+| `GET /v2/PartyReferenceDataDirectory/{id}/Reference/primary/Retrieve` | the same | BIAN's `Reference`: legal name, e-mail, phone, residential address. |
+| `PUT /v2/PartyReferenceDataDirectory/{id}/Reference/primary/Update` | as `PUT /v1/customers/{id}` (`CustomerWrite`, the managing agent) | A new e-mail and / or phone; `If-Match` with the last `ETag` required (428 without, 412 stale). Name, address and dates may come back unchanged, never changed. |
+
+Not offered: BIAN's `Register` - its body has no e-mail, phone or address, without which EWP
+registers no customer. Mapping, field by field: [doc/bian/README.md](../../../../doc/bian/README.md).
+
 ## Security controls
 
 What this project does to stay secure: each control, what would go wrong without it, the threat it stops, and where to find it in the code. The platform-wide picture: [Architectural and security features §2](../../../../doc/Architectural-And-Security-Features-Demoable-EWP-V3.md#2-security-features).
@@ -21,6 +36,7 @@ What this project does to stay secure: each control, what would go wrong without
 | 11 | HTTPS only (HSTS outside Development) and host filtering (`AllowedHosts`) | Tokens could travel over plain HTTP; a forged `Host` header could poison generated links | Interception (OWASP A02) and host-header attacks | `UseHsts` in [Program.cs](Program.cs); `AllowedHosts` in [appsettings.Development.json](appsettings.Development.json) |
 | 12 | The customers' online registration (My EWP): `internal/v1/customers/online-identity/candidates` and `/links` accept ONLY the IDP (`client_id` `IdentityServer.CustomerDirectory.ClientID` pinned, scope `customer-onboarding.online-identity`, which no staff token carries). A candidate is an ACTIVE customer with exactly the typed e-mail and no online identity yet; anything else gets one 404 with no reason. The answer holds only the first name and the mobile's last three digits. One online identity per customer: the subject is linked once and never replaced (409) | A caller could probe which customers exist, read their contact details, or take over a customer's online access by registering a second identity | Account enumeration; excessive data exposure (OWASP API3); account takeover | Policy `CustomerOnlineIdentity` in [Program.cs](Program.cs); [InternalCustomerOnlineIdentityController.cs](API/Controllers/InternalCustomerOnlineIdentityController.cs); [CustomerOnlineIdentityHandler.cs](Application/Customers/Commands/OnlineIdentity/CustomerOnlineIdentityHandler.cs); `LinkOnlineIdentity` in [Customer.cs](Domain/Aggregates/Customer.cs) |
 | 13 | Container image: built only by CI from a commit, chiseled non-root runtime (no shell, files read-only to the process), base images pinned by tag and digest, scanned before it is published (HIGH / CRITICAL with a fix, or any secret, fails); settings and secrets come from the environment; the database connection string is no longer in `appsettings.json` - none of them is in the image. | A developer-built or tampered image could run in an environment; a credential in a layer stays in the registry for good; a shell in the image helps an attacker who gets in | Supply-chain tampering (OWASP A08); vulnerable components (A06); hard-coded credentials (CWE-798) | [Dockerfile](Dockerfile), [.dockerignore](../../../../.dockerignore), [container-images.yml](../../../../.github/workflows/container-images.yml), [doc/Containers.md](../../../../doc/Containers.md) |
+| 14 | The BIAN contract (`/v2`) is a second door to the SAME rules: the same query, command handler, policies and object-level checks as `/v1` (branch scope with 404, the managing agent for changes); only the e-mail and phone can change - a changed name, address or date is refused and named, a BIAN property EWP does not keep is refused, not dropped; `If-Match` with the customer's version is required (428 / 412, a weak or `*` tag is no version); BIAN's `Register` is not offered | A second API generation that drifts from the first - looser checks on the new route, a lost update, or data the caller believes stored but that was ignored | Authorization bypass through an alternative endpoint (OWASP A01, API5); mass assignment (API3, API6); lost updates | [PartyReferenceDataDirectoryController.cs](API/Controllers/PartyReferenceDataDirectoryController.cs), [PartyReferenceDataDirectoryMapper.cs](API/Bian/PartyReferenceDataDirectoryMapper.cs), [PartyReferenceDataDirectory.cs](API/Bian/PartyReferenceDataDirectory.cs) |
 
 ## Monitoring
 
