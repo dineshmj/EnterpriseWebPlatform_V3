@@ -22,7 +22,7 @@
     </PackageReference>
     <!-- A real relational database in the test process: the MFA claims are conditional UPDATEs
          (ExecuteUpdate), which EF Core's in-memory provider cannot run. -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.13" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.14" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
     <PackageReference Include="NUnit" Version="5.0.0" />
     <PackageReference Include="NUnit.Analyzers" Version="4.15.0">
