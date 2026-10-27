@@ -43,7 +43,7 @@ on an older release would name the payments contract differently.
 | Payments (start, read, approve or reject a payment) | **PaymentOrderInitiation** - "captures the payer and payee details and other key properties of the payment and initiates the orchestration of the transaction" | **`/v2` built** (below) |
 | Accounts (accounts, cash deposit, holds for payments) | **CurrentAccount** - "a consumer checking/demand deposit account … payments and deposits, … liens" | **`/v2` built**: Retrieve, Deposit (below). AmountBlock not offered: the holds are the payment saga's internal, machine-only commands |
 | Customer Onboarding (customer records) | **PartyReferenceDataDirectory** - "party reference information … contacts … demographic information" | **`/v2` built**: Retrieve, Reference Retrieve and Update (below). Register not offered: BIAN's directory entry has no contact details, and EWP registers no customer without them |
-| Documents Management | **DocumentDirectory** - "directory based categorization and storage … for documents" | Confident: Register, Retrieve - next |
+| Documents Management | **DocumentDirectory** - "directory based categorization and storage … for documents" | **`/v2` built**, read-only: Retrieve, DocumentReferenceProperties Retrieve (below). Register and Update not offered: BIAN's directory entry carries no file |
 | Accounts (account-opening applications) | CustomerOffer | Plausible only (BIAN's offer covers credit, collateral, underwriting) - `/v1` only |
 | Customer Onboarding (onboarding applications) | PartyLifecycleManagement | Plausible only - `/v1` only |
 | KYC (identity and document verification) | PartyLifecycleManagement (IdentityProofing, Documentation) | Would merge two bounded contexts into one BIAN domain; IdentityProofing offers Retrieve only - `/v1` only |
@@ -170,15 +170,55 @@ Where EWP's customer sits in BIAN's `PartyReferenceDataDirectoryEntry` and `Refe
 Code: [Bian/](../../src/Microservices/CustomerOnboarding/API/API/Bian),
 [PartyReferenceDataDirectoryController.cs](../../src/Microservices/CustomerOnboarding/API/API/Controllers/PartyReferenceDataDirectoryController.cs).
 
+## Documents: DocumentDirectory
+
+| BIAN operation | EWP | Same rules as |
+|---|---|---|
+| `GET /v2/DocumentDirectory/{id}/Retrieve` | the document's directory entry (own branch) | `GET /v1/documents/{id}` |
+| `GET /v2/DocumentDirectory/{id}/DocumentReferenceProperties/primary/Retrieve` | the document's version and type | `GET /v1/documents/{id}` |
+
+The rating was "confident: Register, Retrieve" before BIAN's file was read field by field
+(28-OCT-2026). BIAN's DocumentDirectory is a directory of POINTERS to documents: the entry holds
+an identification, a date type (`OpenDate` / `RefreshDate`), a date and a status - and no
+operation in the file takes or returns a file (no binary, no multipart, no file name, content
+type, size or hash). BIAN's `Document` schema is defined but reached by no operation. So:
+
+- **Register is not offered.** EWP stores no document without its content - the file's
+  signature decides its type, the content is hashed and encrypted at rest. A Register without the
+  file would create an entry pointing at nothing; a multipart Register would not be BIAN's
+  contract. Documents are uploaded through `/v1`.
+- **Update is not offered.** A document's content never changes, and its status (attached as
+  evidence, invalidated) changes only through the saga's internal steps - never by a caller.
+- **The content stays on `/v1`** (`GET /v1/documents/{id}/content`).
+
+EWP keeps one reference-properties record per document, addressed as `primary`.
+
+Where EWP's document sits in BIAN's `DocumentDirectoryEntry` and `DocumentReferenceProperties`:
+
+| EWP | BIAN property |
+|---|---|
+| document ID | `DocumentDirectoryEntryIdentification` (also in `DocumentReferenceProperties.DocumentDirectoryEntryReference`) |
+| uploaded at | `DirectoryEntryDateType` "OpenDate", `DirectoryEntryDate.DateContent` (the UTC date) |
+| status AVAILABLE / ATTACHED / INVALIDATED | `DirectoryEntryStatus.StatusReason` - BIAN's `Status` has no status value, so the reason starts with EWP's code: `AVAILABLE`, `ATTACHED: evidence of <application>`, `INVALIDATED: <reason>` |
+| when that status began | `DirectoryEntryStatus.StatusDateTime` (uploaded, attached or invalidated at) |
+| version | `DocumentReferenceProperties.VersionNumber` |
+| document type (e.g. `KYCProof`) | `DocumentReferencePropertiesType` (absent when the upload named none) |
+| file name, content type, size, SHA-256, content | not in BIAN's DocumentDirectory - `/v1` only |
+| a service performed on the document | BIAN's `DocumentService` (provider, schedule, outcome): EWP records none - left out |
+
+Code: [Bian/](../../src/Microservices/DocumentsManagement/API/API/Bian),
+[DocumentDirectoryController.cs](../../src/Microservices/DocumentsManagement/API/API/Controllers/DocumentDirectoryController.cs).
+
 ## Checking it
 
 - **CI, no running service:** `tst/dotnet/<API>.Tests/Bian` - every `/v2` body validated against
   BIAN's file (Payments: each EWP status, a partner's request, both decisions; Accounts: the
   account in each status, a deposit request, the recorded deposit; Customers: a person's and a
-  business's entry, the reference with and without an address, a contact change); the mapping
-  rules (required properties, currency, amount format, the decision task, cash only, only the
-  contacts change, unknown BIAN properties refused); and a body with a value BIAN does not list
-  must fail the check (Payments: at the top and three references deep; Accounts and Customers:
+  business's entry, the reference with and without an address, a contact change; Documents: the
+  entry in each status, the reference properties with and without a type); the mapping rules
+  (required properties, currency, amount format, the decision task, cash only, only the contacts
+  change, unknown BIAN properties refused); and a body with a value BIAN does not list must fail
+  the check (Payments: at the top and three references deep; Accounts, Customers and Documents:
   two deep). The schema check is one shared helper,
   [tst/dotnet/Shared/BianSchema.cs](../../tst/dotnet/Shared/BianSchema.cs) (JSON Schema Draft-07
   rules, as OpenAPI 3.0 uses), linked into each test project.
@@ -193,3 +233,7 @@ Code: [Bian/](../../src/Microservices/CustomerOnboarding/API/API/Bian),
     Retrieve and RetrieveReference show the same; Mia (another branch) finds nothing (404); an
     Update without `If-Match` is refused (428); with the ETag it changes the e-mail and `/v1` sees
     it; the old ETag again is refused (412); a name change through BIAN is refused (400).
+  - `document-directory.spec.ts`: Sophie (Sydney) and Mia (Melbourne) upload through `/v1`;
+    Liam, a Sydney KYC officer, sees Sophie's document through BIAN's Retrieve and
+    DocumentReferenceProperties as `/v1` shows it; Mia's does not exist for him (404); both
+    uploads are removed again.

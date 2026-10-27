@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>EnterpriseWebPlatform.DocumentsManagement.Api.Tests</RootNamespace>
+    <AssemblyName>EnterpriseWebPlatform.DocumentsManagement.Api.Tests</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Microservices\DocumentsManagement\API\EnterpriseWebPlatform.BSS.Microservices.DocumentsManagement.Api.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="NUnit.Framework" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- BIAN's published contract (doc/bian), checked against the /v2 mapping (Bian/). -->
+    <None Include="..\..\..\doc\bian\release14.0.0\DocumentDirectory.yaml" Link="Bian\DocumentDirectory.yaml" CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="..\Shared\BianSchema.cs" Link="Shared\BianSchema.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="AwesomeAssertions" Version="9.6.0" />
+    <PackageReference Include="coverlet.collector" Version="10.1.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="JsonSchema.Net" Version="9.5.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+    <PackageReference Include="Moq" Version="4.21.0" />
+    <PackageReference Include="NUnit" Version="5.0.0" />
+    <PackageReference Include="NUnit.Analyzers" Version="4.15.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="NUnit3TestAdapter" Version="6.3.1" />
+    <PackageReference Include="YamlDotNet" Version="18.1.0" />
+  </ItemGroup>
+</Project>

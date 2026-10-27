@@ -25,6 +25,22 @@ ASP.NET Core 10 on Kestrel, launch profile `https`: `https://documents-managemen
 | `GET /v1/documents/{id}/content` | `DocumentRead` | Content |
 | `DELETE /v1/documents/{id}` | `DocumentWrite` | Delete the document and its stored content |
 
+## BIAN contract (`/v2`)
+
+Next to its own `/v1`, the API offers BIAN's **DocumentDirectory** service domain (semantic APIs
+release 14.0.0), read-only, on the same query, policy and object-level check; EWP's own callers
+keep `/v1`.
+
+| Endpoint | Policy | Purpose |
+|---|---|---|
+| `GET /v2/DocumentDirectory/{id}/Retrieve` | as `GET /v1/documents/{id}` (`DocumentRead`, own branch) | The directory entry: document ID, uploaded at (`OpenDate`), status (`AVAILABLE`, `ATTACHED: evidence of …`, `INVALIDATED: …`) and since when. |
+| `GET /v2/DocumentDirectory/{id}/DocumentReferenceProperties/primary/Retrieve` | the same | BIAN's reference properties: `VersionNumber` (the document's version) and the document type. |
+
+Not offered: BIAN's `Register` and `Update`. BIAN's directory entry carries no file (no content,
+name, type or hash), and EWP stores nothing it has not checked; a document's status changes only
+through the saga's internal steps. The content stays on `/v1`. Mapping:
+[doc/bian/README.md](../../../../doc/bian/README.md#documents-documentdirectory).
+
 ## Security controls
 
 What this project does to stay secure: each control, what would go wrong without it, the threat it stops, and where to find it in the code. The platform-wide picture: [Architectural and security features §2](../../../../doc/Architectural-And-Security-Features-Demoable-EWP-V3.md#2-security-features).
@@ -44,5 +60,6 @@ What this project does to stay secure: each control, what would go wrong without
 | 11 | HTTPS only (HSTS outside Development) and host filtering (`AllowedHosts`) | Tokens could travel over plain HTTP; a forged `Host` header could poison generated links | Interception (OWASP A02) and host-header attacks | `UseHsts` in [Program.cs](Program.cs); `AllowedHosts` in [appsettings.Development.json](appsettings.Development.json) |
 | 12 | Documents encrypted at rest (envelope encryption): each file sealed with its own random AES-256-GCM key, that key wrapped by a key-encryption key named in the file (rotation without re-encrypting); the document ID is bound in, so a file swapped onto another document, or changed by one byte, does not open; no valid key ring = no start-up | A disk copy, backup or container escape would yield readable driver licences and tax notices; a file could be silently replaced | Exposure of sensitive PII at rest (OWASP A02 Cryptographic Failures); tampering with evidence | [EncryptedDocumentStorage.cs](Infrastructure/Storage/EncryptedDocumentStorage.cs), `DocumentStorage:Encryption` in [Program.cs](Program.cs) |
 | 13 | Container image: built only by CI from a commit, chiseled non-root runtime (no shell, files read-only to the process), base images pinned by tag and digest, scanned before it is published (HIGH / CRITICAL with a fix, or any secret, fails); settings and secrets come from the environment; the database connection string is no longer in `appsettings.json` - none of them is in the image. The encrypted documents go to a mounted volume (`DocumentStorage:RootPath`); the local document store never enters the build. | A developer-built or tampered image could run in an environment; a credential in a layer stays in the registry for good; a shell in the image helps an attacker who gets in | Supply-chain tampering (OWASP A08); vulnerable components (A06); hard-coded credentials (CWE-798) | [Dockerfile](Dockerfile), [.dockerignore](../../../../.dockerignore), [container-images.yml](../../../../.github/workflows/container-images.yml), [doc/Containers.md](../../../../doc/Containers.md) |
+| 14 | The BIAN contract (`/v2`) is a second door to the SAME rules: the same query, `DocumentRead` policy and branch check as `GET /v1/documents/{id}` (404 for another branch's document, so none can be probed); read-only - BIAN's `Register` and `Update` are not offered, so no file enters without the signature check, hash and encryption, and no caller edits a document's status | A second API generation that drifts from the first - a looser check on the new route, or a way to store or change evidence around `/v1`'s controls | Authorization bypass through an alternative endpoint (OWASP A01, API5); BOLA (API1) | [DocumentDirectoryController.cs](API/Controllers/DocumentDirectoryController.cs), [DocumentDirectoryMapper.cs](API/Bian/DocumentDirectoryMapper.cs), [DocumentDirectory.cs](API/Bian/DocumentDirectory.cs) |
 
 **Not yet:** malware scanning and encryption at rest.

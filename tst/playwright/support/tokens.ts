@@ -20,6 +20,7 @@ export const clientIds = {
   paymentsWeb: 'Payments.Microservice.BFF.ClientID',
   accountsWeb: 'Accounts.Microservice.BFF.ClientID',
   customerOnboardingWeb: 'CustomerOnboarding.Microservice.BFF.ClientID',
+  customerKycWeb: 'CustomerKYC.Microservice.BFF.ClientID',
   paymentsSagaReplySubscriber: 'Payments.SagaReplySubscriber.To.PaymentsApi.M2M.ClientID',
   kycCaseOpeningSubscriber: 'CustomerKyc.CaseOpeningSubscriber.To.CustomerKycApi.M2M.ClientID',
 } as const;
@@ -99,6 +100,11 @@ export function accountsWebSignInToken(person: ShellPage, http: APIRequestContex
 export function customerOnboardingWebSignInToken(person: ShellPage, http: APIRequestContext): Promise<string> {
   return webSignInToken(person, http, clientIds.customerOnboardingWeb, `${urls.customerOnboardingMfe}/signin-oidc`,
     'openid profile roles organization customer-onboarding.read customer-onboarding.write');
+}
+
+/** The person's own Customer KYC BFF sign-in token (a KYC officer's; exchanged for Documents Management read). */
+export function customerKycWebSignInToken(person: ShellPage, http: APIRequestContext): Promise<string> {
+  return webSignInToken(person, http, clientIds.customerKycWeb, `${urls.kycMfe}/api/auth/callback`, 'openid profile roles organization customer-kyc.read');
 }
 
 /** A BFF client's sign-in token for the signed-in person (Authorization Code + PKCE, prompt=none). */
