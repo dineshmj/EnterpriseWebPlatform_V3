@@ -1,6 +1,7 @@
 'use client';
 
 import { Activity, FlaskConical, RefreshCw } from 'lucide-react';
+import { unstable_isUnrecognizedActionError } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { formatTime, MfeShell, signInAgain } from '@/app/components/MfeShell';
 import { Button } from '@/app/components/ui/button';
@@ -39,7 +40,20 @@ export default function PlatformHealthPage() {
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const result = await loadPlatformHealth();
+    // ┌─ RESIL + OBS ────────────────────────────────────────────────────────────────────────
+    // │ If this app's own server cannot be reached, the action THROWS (no result at all).
+    // │ Say so, rather than leaving the last answer on screen as if it were current - a
+    // │ health page must never show HEALTHY from a check it could not make. A call from an
+    // │ older build is rethrown: MfeShell reloads the page for that.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    let result: Awaited<ReturnType<typeof loadPlatformHealth>>;
+    try {
+      result = await loadPlatformHealth();
+    } catch (e) {
+      if (unstable_isUnrecognizedActionError(e)) throw e;
+      setError('The Operations service could not be reached. The readiness below is from the last successful check - it is not current.');
+      return;
+    }
     if (!result.ok) {
       if (result.signedOut) { signInAgain(); return; }
       setError(result.error);
