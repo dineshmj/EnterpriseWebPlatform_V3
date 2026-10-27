@@ -15,6 +15,7 @@ export const urls = {
   /** Called directly only by the API-level tests (the screens go through their BFFs). */
   paymentsApi: 'https://payments-api.dev.localhost:44488',
   accountsApi: 'https://accounts-api.dev.localhost:48486',
+  customerOnboardingApi: 'https://customer-api.dev.localhost:46363',
 } as const;
 
 export interface Service {
@@ -32,7 +33,7 @@ export const services: Service[] = [
   { name: 'IDP', readiness: `${urls.idp}/health/ready`, startedBy: vs },
   { name: 'Shell BFF', readiness: `${urls.shell}/health/ready`, startedBy: vs },
   { name: 'Customer Onboarding BFF', readiness: `${urls.customerOnboardingMfe}/health/ready`, startedBy: vs },
-  { name: 'Customer Onboarding API', readiness: 'https://customer-api.dev.localhost:46363/health/ready', startedBy: vs },
+  { name: 'Customer Onboarding API', readiness: `${urls.customerOnboardingApi}/health/ready`, startedBy: vs },
   { name: 'Customer KYC BFF', readiness: `${urls.kycMfe}/health/ready`, startedBy: node },
   { name: 'Customer KYC API', readiness: 'https://kyc-api.dev.localhost:46305/health/ready', startedBy: vs },
   { name: 'Documents Management API', readiness: 'https://documents-management-api.dev.localhost:49486/health/ready', startedBy: vs },

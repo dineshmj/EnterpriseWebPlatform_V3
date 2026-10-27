@@ -33,6 +33,7 @@ public sealed class GetCustomerQueryHandler
                 x.Status,
                 x.BranchId,
                 x.Version,
+                x.CreatedAt,
                 ResidentialAddress = x.Addresses
                     .Where(a => a.AddressType == AddressType.Residential)
                     .OrderByDescending(a => a.IsPrimary)
@@ -60,7 +61,8 @@ public sealed class GetCustomerQueryHandler
                 row.Status.ToString().ToUpperInvariant(),
                 row.BranchId,
                 row.Version,
-                row.ResidentialAddress);
+                row.ResidentialAddress,
+                row.CreatedAt);
     }
 }
 
@@ -77,7 +79,9 @@ public sealed record CustomerDetailsDto(
     long? BranchId,
     long Version,
     // The primary residential address: shown read-only when onboarding an existing customer.
-    CustomerAddressDto? ResidentialAddress);
+    CustomerAddressDto? ResidentialAddress,
+    // When the customer was registered (BIAN /v2: the directory entry's OpenDate).
+    DateTimeOffset CreatedAt);
 
 public sealed record CustomerAddressDto(
     string AddressLine1,

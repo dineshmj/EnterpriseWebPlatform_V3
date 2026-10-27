@@ -42,7 +42,7 @@ on an older release would name the payments contract differently.
 |---|---|---|
 | Payments (start, read, approve or reject a payment) | **PaymentOrderInitiation** - "captures the payer and payee details and other key properties of the payment and initiates the orchestration of the transaction" | **`/v2` built** (below) |
 | Accounts (accounts, cash deposit, holds for payments) | **CurrentAccount** - "a consumer checking/demand deposit account … payments and deposits, … liens" | **`/v2` built**: Retrieve, Deposit (below). AmountBlock not offered: the holds are the payment saga's internal, machine-only commands |
-| Customer Onboarding (customer records) | **PartyReferenceDataDirectory** - "party reference information … contacts … demographic information" | Confident: Register, Retrieve, Update - next |
+| Customer Onboarding (customer records) | **PartyReferenceDataDirectory** - "party reference information … contacts … demographic information" | **`/v2` built**: Retrieve, Reference Retrieve and Update (below). Register not offered: BIAN's directory entry has no contact details, and EWP registers no customer without them |
 | Documents Management | **DocumentDirectory** - "directory based categorization and storage … for documents" | Confident: Register, Retrieve - next |
 | Accounts (account-opening applications) | CustomerOffer | Plausible only (BIAN's offer covers credit, collateral, underwriting) - `/v1` only |
 | Customer Onboarding (onboarding applications) | PartyLifecycleManagement | Plausible only - `/v1` only |
@@ -127,14 +127,59 @@ A cash deposit in BIAN's `Deposit`:
 Code: [Bian/](../../src/Microservices/Accounts/API/Bian),
 [CurrentAccountController.cs](../../src/Microservices/Accounts/API/Controllers/CurrentAccountController.cs).
 
+## Customers: PartyReferenceDataDirectory
+
+| BIAN operation | EWP | Same rules as |
+|---|---|---|
+| `GET /v2/PartyReferenceDataDirectory/{id}/Retrieve` | the customer's directory entry (in the caller's scope) | `GET /v1/customers/{id}` |
+| `GET /v2/PartyReferenceDataDirectory/{id}/Reference/primary/Retrieve` | legal name, e-mail, phone, residential address | `GET /v1/customers/{id}` |
+| `PUT /v2/PartyReferenceDataDirectory/{id}/Reference/primary/Update` | a new e-mail and / or phone (the managing agent; `If-Match` required) | `PUT /v1/customers/{id}` |
+
+The rating was "confident" before BIAN's file was read field by field (27-OCT-2026); two gaps
+narrowed what `/v2` offers:
+
+- **Register is not offered.** Its body, the directory entry, holds a name, a party type, an
+  identifier and a date - no e-mail, phone or address. EWP registers no customer without them,
+  and BIAN's Reference (where they live) has no Register of its own. Customers are registered
+  through `/v1`.
+- **The name cannot change through BIAN.** BIAN has one name string (`PartyName`,
+  `PartyFullLegalName`); EWP keeps a first and a last name, and splitting "Mary Anne Smith" would
+  be a guess. Update changes the contact details; the name, the address and the dates may be sent
+  back unchanged (read, modify, write) but a change to them is refused and named. `/v1` changes
+  no address either.
+
+EWP keeps one reference record per customer, addressed as `primary`. `/v1`'s `ExpectedVersion`
+becomes HTTP's own check: each answer carries the customer's version as its `ETag`, and Update
+needs it in `If-Match` (428 without it, 412 when the customer changed meanwhile). A property BIAN
+defines but EWP does not keep (nationality, date of birth, political exposure, …) is refused, not
+silently dropped.
+
+Where EWP's customer sits in BIAN's `PartyReferenceDataDirectoryEntry` and `Reference`:
+
+| EWP | BIAN property |
+|---|---|
+| first and last name | `PartyReference.PartyName.Name`, `Reference.PartyFullLegalName.Name` ("first last") |
+| customer number | `PartyReference.PartyIdentification.PartyIdentification.IdentifierValue` (BIAN's identification types are government documents only - no type is set) |
+| Individual / Business | `PartyType` "Person" / "Organisation"; an individual's legal structure "Individual" (a business has none: EWP does not record partnership, company, …) |
+| registered at | `DirectoryEntryDateType` "OpenDate", `DirectoryEntryDate`; `Reference.CustomerSinceDate` |
+| e-mail | `Reference.eMailAddress`: `ContactPointType` "ElectronicAddress", the address in `LocationReference.LocationAddress` |
+| phone | `Reference.CellPhoneNumber`: `ContactPointType` "PhoneNumber" (EWP keeps one phone number, mobile or not) |
+| residential address | `Reference.ResidentialAddress` (`AddressType` "Residential"): lines 1 and 2 in the one free-format `AddressLine`, `PostCode`, `TownName`, `Country.CountryCode`; the state's name in `AddressDescription` - BIAN's `CountrySubDivision` is the kind of area (State, Province, …), not its name |
+| status (PROSPECT … CLOSED) | not here: a party's lifecycle belongs to BIAN's PartyLifecycleManagement |
+
+Code: [Bian/](../../src/Microservices/CustomerOnboarding/API/API/Bian),
+[PartyReferenceDataDirectoryController.cs](../../src/Microservices/CustomerOnboarding/API/API/Controllers/PartyReferenceDataDirectoryController.cs).
+
 ## Checking it
 
 - **CI, no running service:** `tst/dotnet/<API>.Tests/Bian` - every `/v2` body validated against
   BIAN's file (Payments: each EWP status, a partner's request, both decisions; Accounts: the
-  account in each status, a deposit request, the recorded deposit); the mapping rules (required
-  properties, currency, amount format, the decision task, cash only); and a body with a value
-  BIAN does not list must fail the check (Payments: at the top and three references deep;
-  Accounts: two deep). The schema check is one shared helper,
+  account in each status, a deposit request, the recorded deposit; Customers: a person's and a
+  business's entry, the reference with and without an address, a contact change); the mapping
+  rules (required properties, currency, amount format, the decision task, cash only, only the
+  contacts change, unknown BIAN properties refused); and a body with a value BIAN does not list
+  must fail the check (Payments: at the top and three references deep; Accounts and Customers:
+  two deep). The schema check is one shared helper,
   [tst/dotnet/Shared/BianSchema.cs](../../tst/dotnet/Shared/BianSchema.cs) (JSON Schema Draft-07
   rules, as OpenAPI 3.0 uses), linked into each test project.
 - **Live, as a demo:** `tst/playwright/tests/20-functional/bian/`
@@ -144,3 +189,7 @@ Code: [Bian/](../../src/Microservices/Accounts/API/Bian),
   - `current-account.spec.ts`: Jack retrieves the account through BIAN and `/v1` shows the same
     (both balances); Sophie deposits cash through BIAN; the same Idempotency-Key through `/v2` and
     `/v1` finds that deposit; Jack may not deposit (403); the balance moved once.
+  - `party-reference-data-directory.spec.ts`: Sophie registers a customer through `/v1`; BIAN's
+    Retrieve and RetrieveReference show the same; Mia (another branch) finds nothing (404); an
+    Update without `If-Match` is refused (428); with the ETag it changes the e-mail and `/v1` sees
+    it; the old ETag again is refused (412); a name change through BIAN is refused (400).
