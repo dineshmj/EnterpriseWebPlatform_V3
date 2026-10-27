@@ -101,8 +101,8 @@ public sealed class PaymentsController(
         }
     }
 
-    /// <summary>The highest clearance_level claim; 0 when absent (fail closed).</summary>
-    private static int ClearanceOf(System.Security.Claims.ClaimsPrincipal user) =>
+    /// <summary>The highest clearance_level claim; 0 when absent (fail closed). Shared with /v2 (PaymentOrderInitiationController).</summary>
+    internal static int ClearanceOf(System.Security.Claims.ClaimsPrincipal user) =>
         user.Claims.Where(c => c.Type == "clearance_level")
             .Select(c => int.TryParse(c.Value, out var v) ? v : 0)
             .DefaultIfEmpty(0)

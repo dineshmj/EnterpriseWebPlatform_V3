@@ -12,6 +12,8 @@ export const urls = {
   paymentsMfe: 'https://payments.dev.localhost:46388',
   auditMfe: 'https://audit.dev.localhost:46380',
   partnerProductsMfe: 'https://ewp-partner.dev.localhost:46384',
+  /** Called directly only by the API-level tests (the screens go through the Payments BFF). */
+  paymentsApi: 'https://payments-api.dev.localhost:44488',
 } as const;
 
 export interface Service {
