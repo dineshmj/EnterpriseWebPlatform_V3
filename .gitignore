@@ -93,3 +93,5 @@ src/Microservices/*/BFF.Web/wwwroot/
 *.tfstate.*
 *.tfplan
 crash.log
+# Playwright run state when it is started from the repository root (the suite lives in tst/playwright)
+/test-results/

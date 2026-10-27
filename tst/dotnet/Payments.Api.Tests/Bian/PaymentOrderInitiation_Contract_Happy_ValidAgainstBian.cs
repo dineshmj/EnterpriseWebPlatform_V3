@@ -4,6 +4,7 @@ using EnterpriseWebPlatform.Payments.Api.Application.Queries;
 using EnterpriseWebPlatform.Payments.Api.Bian;
 using EnterpriseWebPlatform.Payments.Api.Domain.ValueObjects;
 using EnterpriseWebPlatform.Payments.Api.Tests.Support;
+using EnterpriseWebPlatform.Tests.Bian;
 
 namespace EnterpriseWebPlatform.Payments.Api.Tests.Bian;
 
