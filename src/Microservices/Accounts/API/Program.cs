@@ -214,31 +214,7 @@ builder.Services.AddSingleton(sp =>
         TimeSpan.FromSeconds(o.RetryInitialDelaySeconds), TimeSpan.FromSeconds(o.RetryMaxDelaySeconds), o.MaxOpeningAttempts);
 });
 
-builder.Services
-    .AddHttpClient<ICoreBankingSystem, CoreBankingClient>(CoreBankingClient.HttpClientName, (sp, client) =>
-        client.BaseAddress = new Uri(sp.GetRequiredService<IOptions<CoreBankingOptions>>().Value.BaseUrl))
-    .WithoutRedirects()   // a 3xx never moves the call, and its API key, elsewhere
-    // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
-    // │ Resilience pipeline around every call to core banking:
-    // │  - attempt timeout : a hung system is abandoned after 5 s
-    // │  - retry           : 2 retries with jittered exponential back-off - safe for this
-    // │                      POST ONLY because of the Idempotency-Key (same key, same account)
-    // │  - circuit breaker : opens when half of at least 3 calls in 30 s fail and then
-    // │                      rejects calls for 30 s, so an outage is not hammered
-    // │  - total timeout   : 20 s for the whole sequence
-    // │ What still fails leaves the application OPENING for a later retry - never "opened".
-    // └──────────────────────────────────────────────────────────────────────────────────────
-    .AddStandardResilienceHandler(options =>
-    {
-        options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(5);
-        options.Retry.MaxRetryAttempts = 2;
-        options.Retry.UseJitter = true;
-        options.CircuitBreaker.MinimumThroughput = 3;
-        options.CircuitBreaker.FailureRatio = 0.5;
-        options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(30);
-        options.CircuitBreaker.BreakDuration = TimeSpan.FromSeconds(30);
-        options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(20);
-    });
+builder.Services.AddCoreBankingClient();   // timeouts, retries, circuit breaker: CoreBankingRegistration
 
 builder.Services.AddKeyedSingleton<LoopHeartbeat>(AccountOpeningWorker.HeartbeatKey);
 builder.Services.AddHostedService<AccountOpeningWorker>();
