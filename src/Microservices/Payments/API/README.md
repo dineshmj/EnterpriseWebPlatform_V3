@@ -21,7 +21,7 @@ URL: `https://payments-api.dev.localhost:44488`. Database: `EwpPaymentsDb` (user
 | Internal replies endpoint | Payments API | `POST /internal/v1/payment-sagas/replies`: the reply courier hands Accounts' replies to the saga. |
 | [AccountsCommandSubscriber](../../../AsyncWorkflows/Subscribers/Accounts/AccountsCommandSubscriber/README.md) | console worker (Accounts) | Courier: `accounts.commands` → Accounts API. |
 | [PaymentsSagaReplySubscriber](../../../AsyncWorkflows/Subscribers/Payments/PaymentsSagaReplySubscriber/README.md) | console worker (Payments) | Courier: `accounts.funds.replies` → this API. |
-| [Payment Network Simulator](../../../Simulators/PaymentNetworkSimulator/README.md) | external | Called **directly over HTTP** by the step runner (Idempotency-Key, timeout, retry, circuit breaker). |
+| [Payment Network Simulator](../../../Simulators/PaymentNetworkSimulator/README.md) | external | Called **directly over HTTP** by the step runner (Idempotency-Key, timeout, retry, circuit breaker - one for payments and their status, another for the BSB and Confirmation of Payee lookups: [PaymentNetworkRegistration.cs](Infrastructure/PaymentNetwork/PaymentNetworkRegistration.cs)). |
 
 Nothing waits in memory. `POST /v1/payments` saves the payment, the saga and the first command in **one transaction** and answers **202 Accepted** in milliseconds. Each later step is a short, separate piece of work (a reply arrived, a timer is due) that loads the saga row, decides, and saves the new state with the next command in one transaction. A restart resumes from the saved step.
 

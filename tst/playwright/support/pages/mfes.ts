@@ -25,6 +25,25 @@ function appears(target: Locator, timeout = 5_000): Promise<boolean> {
   return target.waitFor({ state: 'visible', timeout }).then(() => true, () => false);
 }
 
+// ┌─ :: ARCHITECTURE :: Typing into a screen that has just opened ────────────────────────────────
+// │ Why : The screens are exported HTML: the heading waitForScreen waits for - and the fields -
+// │       are there BEFORE React takes the page over (hydration). Text typed in that moment
+// │       stays in the box but never reaches React, so nothing happens (no search is sent, the
+// │       Search button stays disabled). Seen in the full run of 28-OCT-2026 (cash deposit
+// │       search, Digital Gold customer search).
+// │ How : Type, then wait for the screen's own reaction; if it does not come, clear the field
+// │       and type again (clearing first: React ignores a value it believes it already has).
+// │       Each attempt waits as long as the screen may need, so a slow answer is not a retry.
+// │ Ref : tst/README.md
+// └──────────────────────────────────────────────────────────────────────────────────────────────
+async function typeUntilScreenReacts(field: Locator, text: string, reacted: () => Promise<void>, timeout = 90_000): Promise<void> {
+  await expect(async () => {
+    await field.fill('');
+    await field.fill(text);
+    await reacted();
+  }).toPass({ timeout, intervals: [500, 1_000, 2_000] });
+}
+
 // ---------------------------------------------------------------- Customer Onboarding
 
 export interface Submitted {
@@ -263,13 +282,12 @@ export class PaymentsMfe {
   /** 1 · From: finds the customer (by customer number) and chooses their account. */
   async choosePayer(customerNumber: string): Promise<void> {
     const mfe = this.shell.workspace();
-    await mfe.locator('#payer-search').fill(customerNumber);
     const account = mfe.getByRole('list', { name: 'Matching accounts' }).getByRole('button').filter({ hasText: customerNumber });
     // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
     // │ Wait longer than the Payments BFF may take (10 s per attempt, 30 s in total): right
     // │ after a restart the first search can need a retry, and that is not a failure.
     // └──────────────────────────────────────────────────────────────────────────────────────
-    await expect(account.first()).toBeVisible({ timeout: 35_000 });
+    await typeUntilScreenReacts(mfe.locator('#payer-search'), customerNumber, () => expect(account.first()).toBeVisible({ timeout: 35_000 }));
     await account.first().click();
   }
 
@@ -356,13 +374,12 @@ export class CashDepositMfe {
   /** 1 · Customer: finds the customer (by customer number) and chooses their account. */
   async chooseAccount(customerNumber: string): Promise<void> {
     const mfe = this.shell.workspace();
-    await mfe.locator('#deposit-search').fill(customerNumber);
     const account = mfe.getByRole('list', { name: 'Matching accounts' }).getByRole('button').filter({ hasText: customerNumber });
     // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
     // │ Wait longer than the Payments BFF may take (10 s per attempt, 30 s in total): right
     // │ after a restart the first search can need a retry, and that is not a failure.
     // └──────────────────────────────────────────────────────────────────────────────────────
-    await expect(account.first()).toBeVisible({ timeout: 35_000 });
+    await typeUntilScreenReacts(mfe.locator('#deposit-search'), customerNumber, () => expect(account.first()).toBeVisible({ timeout: 35_000 }));
     await account.first().click();
   }
 
@@ -442,8 +459,10 @@ export class DigitalGoldMfe {
   /** Searches the customer by number and selects them; their panel shows EWP's record. */
   async selectCustomer(customerNumber: string): Promise<void> {
     const mfe = this.shell.workspace();
-    await mfe.locator('#search').fill(customerNumber);
-    await mfe.getByRole('button', { name: 'Search', exact: true }).click();
+    const search = mfe.getByRole('button', { name: 'Search', exact: true });
+    // React enables Search once it holds the text: until then the text was typed too early.
+    await typeUntilScreenReacts(mfe.locator('#search'), customerNumber, () => expect(search).toBeEnabled({ timeout: 2_000 }), 30_000);
+    await search.click();
     await mfe.locator('tbody tr').filter({ hasText: customerNumber }).getByRole('button', { name: 'Select', exact: true }).click();
     await expect(mfe.getByText(`Customer ${customerNumber} - EWP's record`, { exact: true })).toBeVisible();
   }

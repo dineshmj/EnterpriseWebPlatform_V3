@@ -213,31 +213,8 @@ builder.Services.AddOptions<PaymentNetworkOptions>()
     .Validate(o => !string.IsNullOrWhiteSpace(o.ApiKey), "PaymentNetwork:ApiKey is not configured.")
     .ValidateOnStart();
 
-builder.Services
-    .AddHttpClient<IPaymentNetwork, PaymentNetworkClient>(PaymentNetworkClient.HttpClientName, (sp, client) =>
-        client.BaseAddress = new Uri(sp.GetRequiredService<IOptions<PaymentNetworkOptions>>().Value.BaseUrl))
-    .WithoutRedirects()   // a 3xx never moves the call, and its API key, elsewhere
-    // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
-    // │ Resilience pipeline around every call to the payment network:
-    // │  - attempt timeout : a hung network is abandoned after 5 s
-    // │  - retry           : 2 retries with jittered exponential back-off - safe for this
-    // │                      POST ONLY because of the Idempotency-Key (same key, same payment)
-    // │  - circuit breaker : opens when half of at least 3 calls in 30 s fail, then rejects
-    // │                      calls for 30 s, so an outage is not hammered
-    // │  - total timeout   : 20 s for the whole sequence
-    // │ What still fails goes to the saga, which retries later or compensates.
-    // └──────────────────────────────────────────────────────────────────────────────────────
-    .AddStandardResilienceHandler(options =>
-    {
-        options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(5);
-        options.Retry.MaxRetryAttempts = 2;
-        options.Retry.UseJitter = true;
-        options.CircuitBreaker.MinimumThroughput = 3;
-        options.CircuitBreaker.FailureRatio = 0.5;
-        options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(30);
-        options.CircuitBreaker.BreakDuration = TimeSpan.FromSeconds(30);
-        options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(20);
-    });
+// RESIL: timeouts, retries and a circuit breaker per service (payments / lookups) - PaymentNetworkRegistration.cs
+builder.Services.AddPaymentNetworkClient();
 
 // ---------------------------------------------------------------- Saga step runner (in-process)
 builder.Services.AddKeyedSingleton<LoopHeartbeat>(SagaStepRunner.HeartbeatKey);
