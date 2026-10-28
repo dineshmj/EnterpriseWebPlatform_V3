@@ -24,6 +24,10 @@
     <None Include="..\..\..\feature-flags\ewp-flags.json" Link="FeatureFlags\ewp-flags.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
+    <!-- External systems played by WireMock.Net (Infrastructure/): started and stopped per test. -->
+    <Compile Include="..\Shared\WireMockNeighbour.cs" Link="Shared\WireMockNeighbour.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="AwesomeAssertions" Version="9.6.0" />
     <PackageReference Include="coverlet.collector" Version="10.1.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -38,6 +42,7 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="NUnit3TestAdapter" Version="6.3.1" />
+    <PackageReference Include="WireMock.Net" Version="2.20.0" />
     <PackageReference Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>
 </Project>

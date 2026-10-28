@@ -170,31 +170,7 @@ builder.Services.AddSingleton(sp =>
     return new ScreeningRetryPolicy(TimeSpan.FromSeconds(o.RetryInitialDelaySeconds), TimeSpan.FromSeconds(o.RetryMaxDelaySeconds));
 });
 
-builder.Services
-    .AddHttpClient<IScreeningProvider, ScreeningProviderClient>(ScreeningProviderClient.HttpClientName, (sp, client) =>
-        client.BaseAddress = new Uri(sp.GetRequiredService<IOptions<ScreeningProviderOptions>>().Value.BaseUrl))
-    .WithoutRedirects()   // a 3xx never moves the call, and its API key, elsewhere
-    // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
-    // │ Resilience pipeline around every call to the external provider:
-    // │  - attempt timeout : a hung provider is abandoned after 5 s
-    // │  - retry           : 2 retries with jittered exponential back-off (screening is a
-    // │                      read-only check, so repeating it is safe)
-    // │  - circuit breaker : opens when half of at least 3 calls in 30 s fail and then
-    // │                      rejects calls for 30 s, so a provider outage is not hammered
-    // │  - total timeout   : 20 s for the whole sequence
-    // │ What still fails leaves the case in SCREENING for a later retry - never a pass.
-    // └──────────────────────────────────────────────────────────────────────────────────────
-    .AddStandardResilienceHandler(options =>
-    {
-        options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(5);
-        options.Retry.MaxRetryAttempts = 2;
-        options.Retry.UseJitter = true;
-        options.CircuitBreaker.MinimumThroughput = 3;
-        options.CircuitBreaker.FailureRatio = 0.5;
-        options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(30);
-        options.CircuitBreaker.BreakDuration = TimeSpan.FromSeconds(30);
-        options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(20);
-    });
+builder.Services.AddScreeningProviderClient();   // timeouts, retries, circuit breaker: ScreeningProviderRegistration
 
 builder.Services.AddKeyedSingleton<LoopHeartbeat>(ScreeningWorker.HeartbeatKey);
 builder.Services.AddHostedService<ScreeningWorker>();

@@ -102,8 +102,14 @@ public sealed class ScreeningProviderClient(HttpClient http, IOptions<ScreeningP
             if (!response.IsSuccessStatusCode)
                 throw new ScreeningUnavailableException($"Screening provider returned HTTP {(int)response.StatusCode}.");
 
-            var body = await response.Content.ReadFromJsonAsync<ProviderResponse>(cancellationToken)
-                ?? throw new ScreeningUnavailableException("Screening provider returned an empty response.");
+            // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+            // │ A body that is not the provider's JSON (an HTML error page, an empty 200) is
+            // │ "unavailable" like any other unusable answer - before, its JsonException escaped
+            // │ the handler: no failure recorded, no next attempt time, the case retried every
+            // │ cycle (found by the WireMock adapter tests, 28-OCT-2026).
+            // └──────────────────────────────────────────────────────────────────────────────────────
+            var body = await TryReadAsync<ProviderResponse>(response, cancellationToken)
+                ?? throw new ScreeningUnavailableException("Screening provider returned an empty or unreadable response.");
 
             ScreeningOutcome outcome;
             try { outcome = ComplianceCodes.ParseScreeningOutcome(body.Outcome ?? string.Empty); }
@@ -114,6 +120,12 @@ public sealed class ScreeningProviderClient(HttpClient http, IOptions<ScreeningP
 
             return new ScreeningResponse(outcome, body.Provider, body.ScreeningId);
         }
+    }
+
+    private static async Task<T?> TryReadAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken) where T : class
+    {
+        try { return await response.Content.ReadFromJsonAsync<T>(cancellationToken); }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or NotSupportedException) { return null; }
     }
 
     private sealed record ProviderResponse(
