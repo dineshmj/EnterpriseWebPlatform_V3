@@ -16,8 +16,10 @@
 │         - Kafka's brokers (9093)        - a kafka entry;
 │         - Temporal (7233)               - TEMPORAL_ADDRESS in its settings;
 │         - LaunchDarkly (443, public addresses only) - featureFlags, and only while
-│           global.featureFlags.launchDarkly.enabled: it publishes no fixed addresses, so this
-│           one rule names "the internet minus private ranges"; off (the default) it is absent;
+│           global.featureFlags.launchDarkly.enabled: its IP ranges change and it advises
+│           allowing its domains, which a NetworkPolicy cannot name, so this one rule names
+│           "the internet minus private ranges"; off (the default) it is absent. Production:
+│           a Relay Proxy inside the network instead (feature-flags/README.md);
 │         - the Gateway                   - any public EWP address or the Partner Bank's in its
 │           settings: the IDP and the Partner Bank are reached by their public names, and the IDP
 │           itself calls the clients' public back-channel logout addresses. Two rules: the Gateway's pods

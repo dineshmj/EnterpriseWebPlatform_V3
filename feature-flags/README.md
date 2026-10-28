@@ -41,7 +41,17 @@ Code: [Common/WebUtilities/FeatureFlags](../src/Common/WebUtilities/FeatureFlags
    setx EWP_LAUNCHDARKLY_SDK_KEY "sdk-..."
    ```
    To go back to the file: `reg delete HKCU\Environment /v EWP_LAUNCHDARKLY_SDK_KEY /f`, then restart them.
-4. **Cloud demo:** add the GitHub repository secret `LAUNCHDARKLY_SDK_KEY` (the SDK key of another environment, e.g. *Production*). Demo up then stores it in Key Vault, and the chart switches the five APIs to LaunchDarkly. Their NetworkPolicy then allows HTTPS (443) to public addresses - LaunchDarkly publishes no fixed addresses a NetworkPolicy could name ([doc/Kubernetes.md](../doc/Kubernetes.md), K13). Without the secret nothing changes.
+4. **Cloud demo:** add the GitHub repository secret `LAUNCHDARKLY_SDK_KEY` (the SDK key of another environment, e.g. *Production*). Demo up then stores it in Key Vault, and the chart switches the five APIs to LaunchDarkly. Their NetworkPolicy then allows HTTPS (443) to public addresses - LaunchDarkly's IP ranges change and it advises allowing its domains, which a NetworkPolicy cannot name ([doc/Kubernetes.md](../doc/Kubernetes.md), K13). Without the secret nothing changes.
+
+## In a bank's private network
+
+Application pods talking to the internet is the demo's shortcut, not a bank's set-up. LaunchDarkly itself runs only as a service (no on-premises edition), so a bank puts LaunchDarkly's **Relay Proxy** (open source) inside its network:
+
+- **Relay Proxy, connected:** the Relay Proxy is the one component that reaches LaunchDarkly - through the bank's outbound proxy, allowed by domain (e.g. `stream.launchdarkly.com`, `events.launchdarkly.com`). The APIs' SDKs talk only to the Relay Proxy (SDK "proxy mode"; LaunchDarkly also publishes its IP ranges for firewalls). The APIs need no internet route at all.
+- **Relay Proxy, offline mode** (select LaunchDarkly plans): no connection to LaunchDarkly - flag rules are exported to a file the Relay Proxy reads (fully air-gapped). Changing a flag then means updating that file, and the console shows no usage from these services.
+- **No LaunchDarkly:** a self-hosted flag service (flagd - what the file mode here comes from -, Unleash, Flagsmith) - with OpenFeature, a different provider in [EwpFeatureFlags.cs](../src/Common/WebUtilities/FeatureFlags/EwpFeatureFlags.cs), no change to the code that asks for flags.
+
+Not built in the PoC: the code would only need the Relay Proxy's address as the SDK's base URI. LaunchDarkly docs: [public IP list](https://launchdarkly.com/docs/home/infrastructure/ip-list), [Relay Proxy offline mode](https://launchdarkly.com/docs/sdk/relay-proxy/offline).
 
 ## Tests
 

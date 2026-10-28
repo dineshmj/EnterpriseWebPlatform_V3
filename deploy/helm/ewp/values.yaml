@@ -131,7 +131,8 @@ global:
     launchDarkly:
       # true: EWP_LAUNCHDARKLY_SDK_KEY from the Secret below (the demo: GitHub secret
       # LAUNCHDARKLY_SDK_KEY -> Key Vault), and these components may open HTTPS (443) to public
-      # addresses - LaunchDarkly publishes no fixed addresses a NetworkPolicy could name.
+      # addresses - LaunchDarkly's IP ranges change and it advises allowing its domains, which a
+      # NetworkPolicy cannot name. Production: a Relay Proxy inside the network (feature-flags/README.md).
       enabled: false
       secret: ewp-launchdarkly
       key: sdk-key
