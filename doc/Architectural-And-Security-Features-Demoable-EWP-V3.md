@@ -612,7 +612,7 @@ Each layer proves what the one below cannot, and none needs more of the platform
 
 | Layer | Where | Needs running | Proves |
 |---|---|---|---|
-| Unit (NUnit) | [tst/dotnet](../tst/dotnet) - `Payments.Api.Tests`, `Accounts.Api.Tests` | nothing | the decisions: aggregates, policies, saga steps, authorization handlers, idempotency |
+| Unit (NUnit) | [tst/dotnet](../tst/dotnet) - one project per .NET API with decisions (Payments, Accounts, Customer Onboarding, KYC, Compliance, Documents Management, Partner Products) and the IDP | nothing | the decisions: aggregates, policies, saga steps, authorization handlers, idempotency |
 | Adapter, with the neighbour played by WireMock | `PartnerProducts.Api.Tests` (C#); the Partner Products Journey API's `test/` (TypeScript) - see [1.8.2](#182-neighbours-played-by-wiremock-c-and-typescript) | nothing (WireMock starts and stops with the test) | our side of a contract: what we send, and how every answer - refusal, failure, late or lost answer - is translated |
 | End to end (Playwright, Edge) | [tst/playwright](../tst/playwright): `30-journeys`, `35-resilience`, `40-security` | the whole platform | several people through real screens; resilience with the simulators and the fault proxy ([1.7.4](#174-operations-platform-health-and-the-simulator-switch)); headers, sessions, MFA |
 

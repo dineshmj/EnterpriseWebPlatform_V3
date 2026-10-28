@@ -607,5 +607,5 @@ These are the production requirements from all four rounds. Each is recorded in 
     - shared token fixtures for the .NET and NestJS stacks (R-11);
     - authorization-matrix tests;
     - CSRF and token-exchange abuse tests;
-    - .NET unit tests for the remaining contexts (Customer Onboarding, KYC, Compliance, Documents Management, Audit). Payments, Accounts, Partner Products and the IDP's MFA codes have them.
+    - .NET unit tests for the remaining contexts. **Done 28-OCT** for Customer Onboarding, KYC, Compliance and Documents Management (`tst/dotnet`, 449 tests in all); Audit remains.
 17. An independent penetration test of the trust boundaries and the financial workflows, and a check of the production configuration in a production-like environment (Microsoft, round 4).
