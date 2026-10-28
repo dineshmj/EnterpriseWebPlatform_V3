@@ -150,6 +150,13 @@ public sealed class PaymentsDbContext(DbContextOptions<PaymentsDbContext> option
                 .HasConversion(v => v.Value, v => BranchCode.Create(v)).IsRequired();
             e.Property(x => x.InitiatedByUserId).HasColumnName("initiated_by_user_id").HasMaxLength(200).IsRequired();
             e.Property(x => x.ApprovalRequired).HasColumnName("approval_required").IsRequired();
+            e.Ignore(x => x.Fraud);
+            e.Property(x => x.FraudDecision).HasColumnName("fraud_decision").HasMaxLength(10)
+                .HasConversion(v => v.ToCode(), v => PaymentsCodes.ParseFraudDecision(v)).IsRequired();
+            e.Property(x => x.FraudSource).HasColumnName("fraud_source").HasMaxLength(10)
+                .HasConversion(v => v.ToCode(), v => PaymentsCodes.ParseFraudSource(v)).IsRequired();
+            e.Property(x => x.FraudScore).HasColumnName("fraud_score");
+            e.Property(x => x.FraudReasons).HasColumnName("fraud_reasons").HasMaxLength(200);
             e.Property(x => x.Status).HasColumnName("status").HasMaxLength(30)
                 .HasConversion(v => v.ToCode(), v => PaymentsCodes.ParsePaymentStatus(v)).IsRequired();
             e.Property(x => x.CompensationOutcome).HasColumnName("compensation_outcome").HasMaxLength(30)

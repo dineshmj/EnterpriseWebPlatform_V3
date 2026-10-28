@@ -25,6 +25,9 @@ export const simulators = [
   { key: 'screening-provider', name: 'Screening Provider', affects: 'Compliance screening', behaviours: common },
   { key: 'core-banking', name: 'Core Banking', affects: 'Account opening', behaviours: common },
   { key: 'payment-network', name: 'Payment Network', affects: 'Sending payments', behaviours: [...common, 'LosingAnswers'] as readonly Behaviour[] },
+  // The payment network's fraud scoring: the same simulator, its own switch (at <payment network>/fraud). Slow = past
+  // the Payments API's latency budget, so its fallback rules decide.
+  { key: 'fraud-scoring', name: 'Fraud Scoring (Payment Network)', affects: 'Fraud check at payment capture', behaviours: ['Healthy', 'Slow', 'Failing', 'Down'] as readonly Behaviour[] },
 ] as const;
 
 export type SimulatorKey = (typeof simulators)[number]['key'];

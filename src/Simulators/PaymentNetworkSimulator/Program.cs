@@ -14,8 +14,17 @@ using System.Text.Json.Serialization;
 // GET  /v1/payments/by-idempotency-key/{key}   status enquiry: was this payment sent? (X-Api-Key)
 // GET  /v1/bsb/{bsb}             BSB directory: bank, branch, state (needs X-Api-Key)
 // POST /v1/payee-confirmations   Confirmation of Payee: does the name match the account? (X-Api-Key)
+// POST /v1/fraud-scores          the network's fraud score for a payment about to be made (X-Api-Key)
 // GET  /admin/behaviour          current behaviour            } localhost, or with X-Simulator-Admin-Key
 // PUT  /admin/behaviour          change behaviour at runtime  }
+// GET  /fraud/admin/behaviour    the fraud scoring's own behaviour (same rule)
+// PUT  /fraud/admin/behaviour    change it at runtime
+//
+// Fraud scoring (deterministic, for demos): a payee account number ending in 13 is on the
+// network's mule list (DECLINE); AUD 500 or more to a payee the customer never paid, or
+// AUD 50,000 or more to anyone, is REVIEW; anything else ALLOW. Its behaviour is switched
+// apart from the payments': Healthy | Slow (answers after FraudSlowDelayMilliseconds - past
+// the Payments API's latency budget) | Failing (500) | Down (503).
 //
 // Behaviour: Healthy | Slow (answers after SlowDelaySeconds) | Failing (HTTP 500)
 //            | Down (HTTP 503) | Refusing (HTTP 422: a permanent "no")
@@ -59,6 +68,12 @@ var state = new SimulatorState(
     Enum.Parse<Behaviour>(builder.Configuration["Simulator:Behaviour"] ?? nameof(Behaviour.Healthy), ignoreCase: true),
     builder.Configuration.GetValue("Simulator:SlowDelaySeconds", 12));
 
+// The fraud scoring is another service of the network: switched on its own, so a demo can make
+// scoring slow while payments still flow (the Payments API's fallback rules take over).
+var fraudState = new FraudScoringState(
+    Enum.Parse<FraudBehaviour>(builder.Configuration["Simulator:FraudBehaviour"] ?? nameof(FraudBehaviour.Healthy), ignoreCase: true),
+    builder.Configuration.GetValue("Simulator:FraudSlowDelayMilliseconds", 2000));
+
 // Payments sent (or refused) so far, by idempotency key (in memory: a simulator, not a clearing house).
 var results = new ConcurrentDictionary<string, IResult>(StringComparer.Ordinal);
 var sent = new ConcurrentDictionary<string, SentPayment>(StringComparer.Ordinal);
@@ -96,6 +111,42 @@ app.MapPost("/v1/payee-confirmations", (HttpContext http, PayeeConfirmationReque
 
     log.LogInformation("Confirmation of Payee for {Bsb} {Account} \"{Name}\": {Result}.", request.Bsb, Masked(number), name, result.Result);
     return Results.Ok(result);
+});
+
+// ┌─ :: ARCHITECTURE :: The network's fraud score, asked before a payment is made ─────────────────
+// │ Why : Payment schemes sell a risk score for a payment about to be made (the network sees
+// │       every bank's traffic: mule accounts, unusual payees). The Payments API asks it within
+// │       a latency budget, and must cope when it is late or down.
+// │ How : A score 0-999, a decision ALLOW / REVIEW / DECLINE and the reasons, from fixed demo
+// │       rules (see the header); its own behaviour switch (/fraud/admin/behaviour) makes it
+// │       slow, failing or down while payments still flow.
+// │ Ref : Payments API README (fraud check) | Features 1.4 | e.g. Mastercard Consumer Fraud Risk
+// └────────────────────────────────────────────────────────────────────────────────────────────────
+app.MapPost("/v1/fraud-scores", async (HttpContext http, FraudScoreRequest request) =>
+{
+    if (!Authorised(http))
+        return Results.Unauthorized();
+
+    var current = fraudState;
+    switch (current.Behaviour)
+    {
+        case FraudBehaviour.Down:
+            log.LogWarning("Fraud score {EndToEndId}: simulating an OUTAGE (503).", request.EndToEndId);
+            return Results.StatusCode((int)HttpStatusCode.ServiceUnavailable);
+        case FraudBehaviour.Failing:
+            log.LogWarning("Fraud score {EndToEndId}: simulating a FAILURE (500).", request.EndToEndId);
+            return Results.StatusCode((int)HttpStatusCode.InternalServerError);
+        case FraudBehaviour.Slow:
+            log.LogWarning("Fraud score {EndToEndId}: simulating SLOWNESS ({Delay} ms).", request.EndToEndId, current.SlowDelayMilliseconds);
+            await Task.Delay(current.SlowDelayMilliseconds, CancellationToken.None);
+            break;
+    }
+
+    var score = FraudRules.Score(request);
+    log.LogInformation("Fraud score {EndToEndId}: {Amount} {Currency} to {ToBsb} {ToAccount} (first payment to this payee: {FirstPayment}) -> {Score} {Decision} [{Reasons}].",
+        request.EndToEndId, request.Amount, request.Currency, request.Creditor?.Bsb, Masked(request.Creditor?.AccountNumber),
+        request.FirstPaymentToPayee, score.Score, score.Decision, string.Join(", ", score.Reasons));
+    return Results.Ok(score);
 });
 
 app.MapPost("/v1/payments", async (HttpContext http, PaymentRequest request, CancellationToken ct) =>
@@ -209,6 +260,20 @@ app.MapPut("/admin/behaviour", (HttpContext http, BehaviourChange change) =>
     return Results.Ok(state);
 });
 
+// The fraud scoring's own switch, same rule (the Operations screen lists it as its own simulator).
+app.MapGet("/fraud/admin/behaviour", (HttpContext http) =>
+    IsAdmin(http) ? Results.Ok(fraudState) : Results.NotFound());
+
+app.MapPut("/fraud/admin/behaviour", (HttpContext http, FraudBehaviourChange change) =>
+{
+    if (!IsAdmin(http))
+        return Results.NotFound();
+
+    fraudState = fraudState with { Behaviour = change.Behaviour };
+    log.LogWarning("Fraud scoring behaviour changed: {Behaviour}.", fraudState.Behaviour);
+    return Results.Ok(fraudState);
+});
+
 app.MapGet("/health", () => Results.Ok(new { status = "Healthy" }));
 
 app.Run();
@@ -273,6 +338,41 @@ sealed record PayeeConfirmationRequest(string? Bsb, string? AccountNumber, strin
 sealed record PayeeConfirmation(string Result, string? AccountNameHeld);
 
 sealed record BsbEntry(string Bsb, string Bank, string Branch, string State, bool Npp);
+
+enum FraudBehaviour { Healthy, Slow, Failing, Down }
+
+sealed record FraudScoringState(FraudBehaviour Behaviour, int SlowDelayMilliseconds);
+
+sealed record FraudBehaviourChange(FraudBehaviour Behaviour);
+
+sealed record FraudScoreRequest(
+    string? EndToEndId,
+    string? CustomerNumber,
+    AccountParty? Debtor,
+    AccountParty? Creditor,
+    decimal Amount,
+    string? Currency,
+    string? Channel,
+    bool FirstPaymentToPayee);
+
+sealed record FraudScore(int Score, string Decision, IReadOnlyList<string> Reasons);
+
+/// <summary>The demo's fraud rules: fixed, so a demo (and a test) knows the answer in advance.</summary>
+static class FraudRules
+{
+    public static FraudScore Score(FraudScoreRequest request)
+    {
+        if (request.Creditor?.AccountNumber?.Trim().EndsWith("13", StringComparison.Ordinal) == true)
+            return new FraudScore(950, "DECLINE", ["PAYEE_ON_MULE_LIST"]);
+        if (request.Amount >= 50_000m)
+            return new FraudScore(720, "REVIEW", ["HIGH_AMOUNT"]);
+        if (request.Amount >= 500m && request.FirstPaymentToPayee)
+            return new FraudScore(680, "REVIEW", ["NEW_PAYEE", "HIGH_AMOUNT_FOR_NEW_PAYEE"]);
+
+        var score = (int)Math.Min(400m, 50m + request.Amount / 25m) + (request.FirstPaymentToPayee ? 50 : 0);
+        return new FraudScore(score, "ALLOW", request.FirstPaymentToPayee ? ["NEW_PAYEE"] : []);
+    }
+}
 
 /// <summary>
 /// A tiny stand-in for the Australian BSB directory: the first two digits name the bank,

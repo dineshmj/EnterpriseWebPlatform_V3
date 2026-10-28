@@ -22,7 +22,7 @@ public sealed class Payment_Initiate_Edge_InvalidDetails
         Payment.Initiate(
             paymentRef ?? Guid.NewGuid(), "PAY-261015-TEST03", "CUST-100001", PaymentsTestData.Payer, payeeName,
             to ?? PaymentsTestData.Payee, amount, reference, PaymentsTestData.Sydney, initiatedBy,
-            PaymentsTestData.ApprovalThreshold, PaymentsTestData.Now);
+            PaymentsTestData.ApprovalThreshold, PaymentsTestData.Allowed, PaymentsTestData.Now);
 
     [TestCase(0)]
     [TestCase(-1)]

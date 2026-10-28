@@ -5,7 +5,8 @@
 │       what is deployed; built here, it names exactly the Services this release created.
 │ How : global.platformHealth.order gives the screen's order; each listed component's
 │       platformHealth gives its name and group, its readiness address is its Service address
-│       + its readiness path. The simulators' addresses come from their simulatorKey. Same
+│       + its readiness path. The simulators' addresses come from their simulatorKey (and
+│       extraSimulators: another switch in the same pod, at a path - the fraud scoring). Same
 │       format and checks as config/platform.development.json (the Journey API validates it).
 │ Ref : doc/Kubernetes.md | src/Microservices/Operations/JourneyApi/src/platform/components.ts
 └────────────────────────────────────────────────────────────────────────────────────────────────
@@ -22,6 +23,9 @@
 {{- $components = append $components (dict "name" $c.platformHealth.name "group" $c.platformHealth.group "readiness" (printf "%s%s" (include "ewp.internal" (list $root $name)) $ready)) -}}
 {{- with $c.simulatorKey -}}
 {{- $_ := set $simulators . (include "ewp.internal" (list $root $name)) -}}
+{{- end -}}
+{{- range $key, $path := ($c.extraSimulators | default dict) -}}
+{{- $_ := set $simulators $key (printf "%s%s" (include "ewp.internal" (list $root $name)) $path) -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}

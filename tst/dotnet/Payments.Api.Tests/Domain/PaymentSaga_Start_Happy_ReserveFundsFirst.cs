@@ -39,7 +39,7 @@ public sealed class PaymentSaga_Start_Happy_ReserveFundsFirst
         command.CausationId.Should().Be(payment.PaymentRef);
         command.Amount.Should().Be(140m);
         command.BranchCode.Should().Be("SYD001");
-        saga.HistoryKinds().Should().Equal("STARTED", "COMMAND_SENT");
+        saga.HistoryKinds().Should().Equal("STARTED", "FRAUD_CHECK", "COMMAND_SENT");
     }
 
     [Test]
@@ -48,7 +48,7 @@ public sealed class PaymentSaga_Start_Happy_ReserveFundsFirst
         // Given
         var unsaved = Payment.Initiate(
             Guid.NewGuid(), "PAY-261015-TEST04", "CUST-100001", PaymentsTestData.Payer, "Harbour Plumbing", PaymentsTestData.Payee,
-            10m, null, PaymentsTestData.Sydney, PaymentsTestData.Sophie, PaymentsTestData.ApprovalThreshold, PaymentsTestData.Now);
+            10m, null, PaymentsTestData.Sydney, PaymentsTestData.Sophie, PaymentsTestData.ApprovalThreshold, PaymentsTestData.Allowed, PaymentsTestData.Now);
 
         // When
         var start = () => PaymentSaga.Start(unsaved, PaymentsTestData.Policy, Guid.NewGuid(), PaymentsTestData.Now);

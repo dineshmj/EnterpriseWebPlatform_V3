@@ -46,8 +46,17 @@ CREATE TABLE payments (
     branch_code VARCHAR(20) NOT NULL,
     initiated_by_user_id VARCHAR(200) NOT NULL,
 
-    -- Decided at initiation from the configured tier (Payments:ApprovalThreshold).
+    -- Decided at initiation: above the configured tier (Payments:ApprovalThreshold), or when the
+    -- fraud check asked for a REVIEW.
     approval_required BOOLEAN NOT NULL,
+
+    -- The fraud check at initiation: the decision, who made it (the payment network's fraud
+    -- scoring, or the fallback rules when it gave no usable score within the latency budget),
+    -- the provider's score and the reasons. Evidence for the officer and the audit.
+    fraud_decision VARCHAR(10) NOT NULL,
+    fraud_source VARCHAR(10) NOT NULL,
+    fraud_score INTEGER NULL,
+    fraud_reasons VARCHAR(200) NULL,
 
     status VARCHAR(30) NOT NULL,
     -- While COMPENSATING: where the payment ends once the funds are released.
@@ -89,6 +98,15 @@ CREATE TABLE payments (
     CONSTRAINT ck_payments_decision CHECK ((decision_by_user_id IS NULL) = (decision_at IS NULL)),
     CONSTRAINT ck_payments_decider_not_initiator CHECK (decision_by_user_id IS NULL OR decision_by_user_id <> initiated_by_user_id),
     CONSTRAINT ck_payments_decision_only_when_required CHECK (decision_by_user_id IS NULL OR approval_required),
+
+    CONSTRAINT ck_payments_fraud_decision CHECK (fraud_decision IN ('ALLOW', 'REVIEW', 'DECLINE')),
+    CONSTRAINT ck_payments_fraud_source CHECK (fraud_source IN ('PROVIDER', 'FALLBACK')),
+    -- A score exactly when the provider decided; the fallback never declines.
+    CONSTRAINT ck_payments_fraud_score CHECK ((fraud_source = 'PROVIDER') = (fraud_score IS NOT NULL) AND (fraud_score IS NULL OR fraud_score BETWEEN 0 AND 999)),
+    CONSTRAINT ck_payments_fraud_fallback_never_declines CHECK (fraud_source <> 'FALLBACK' OR fraud_decision <> 'DECLINE'),
+    -- A REVIEW always needs a payments officer; a DECLINE never reaches the funds (REJECTED, or INITIATED inside the creating transaction).
+    CONSTRAINT ck_payments_fraud_review_needs_approval CHECK (fraud_decision <> 'REVIEW' OR approval_required),
+    CONSTRAINT ck_payments_fraud_decline_rejected CHECK (fraud_decision <> 'DECLINE' OR status IN ('INITIATED', 'REJECTED')),
 
     CONSTRAINT ck_payments_version CHECK (version > 0)
 );

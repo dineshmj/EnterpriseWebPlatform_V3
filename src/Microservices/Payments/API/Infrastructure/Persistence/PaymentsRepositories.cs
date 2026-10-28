@@ -23,6 +23,11 @@ public sealed class PaymentRepository(PaymentsDbContext db) : IPaymentRepository
             .Select(x => (Guid?)x.PaymentRef)
             .SingleOrDefaultAsync(cancellationToken);
 
+    public Task<bool> HasPaidBeforeAsync(string customerNumber, BankAccountRef payee, CancellationToken cancellationToken) =>
+        db.Payments.AsNoTracking().AnyAsync(x =>
+            x.CustomerNumber == customerNumber && x.To.Bsb == payee.Bsb && x.To.AccountNumber == payee.AccountNumber &&
+            x.Status == PaymentStatus.Completed, cancellationToken);
+
     public void Add(Payment payment) => db.Payments.Add(payment);
 }
 
@@ -188,7 +193,8 @@ public sealed class PaymentsQueries(PaymentsDbContext db, SagaPolicy policy, Tim
             payment.Amount, payment.Currency, payment.Reference, payment.BranchCode.Value, payment.Status.ToCode(),
             payment.ApprovalRequired, payment.OutcomeCode, payment.OutcomeReason, payment.NetworkReference,
             payment.CreatedAt, payment.UpdatedAt, payment.EndedAt, payment.InitiatedByUserId, initiatorLanId, sagaView,
-            payment.DecisionByUserId, deciderLanId, payment.DecisionAt, payment.DecisionRemarks);
+            payment.DecisionByUserId, deciderLanId, payment.DecisionAt, payment.DecisionRemarks,
+            new FraudCheckView(payment.FraudDecision.ToCode(), payment.FraudSource.ToCode(), payment.FraudScore, payment.FraudReasons));
     }
 }
 

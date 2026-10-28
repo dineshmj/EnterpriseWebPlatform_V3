@@ -175,8 +175,24 @@ public sealed class PaymentSaga : AggregateRoot
             Version = 1
         };
 
+        var fraud = payment.Fraud;
         saga.Record(now, "STARTED", $"Payment {payment.PaymentNumber}: {PaymentRules.Format(payment.Amount)} {payment.Currency} from {payment.From} to {payment.To}." +
-            (payment.ApprovalRequired ? " Above the approval tier: a payments officer must approve." : " Within the tier: no approval needed."), requestId);
+            (fraud.Decision == FraudDecision.Decline ? string.Empty
+                : fraud.Decision == FraudDecision.Review ? " The fraud check asks for a review: a payments officer must approve."
+                : payment.ApprovalRequired ? " Above the approval tier: a payments officer must approve." : " Within the tier: no approval needed."), requestId);
+        saga.Record(now, "FRAUD_CHECK", $"Fraud check by {fraud.Describe()}", requestId);
+
+        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // │ A declined payment still gets its saga - the timeline and the published PaymentRejected
+        // │ come from it - but ends at once: no funds are reserved, nothing is sent.
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        if (fraud.Decision == FraudDecision.Decline)
+        {
+            payment.DeclineForFraud(now);
+            saga.Finish(now, "Rejected by the fraud check: nothing was reserved, so there is nothing to undo.");
+            return saga;
+        }
+
         payment.StartReservingFunds(now);
         saga.SendFundsCommand(ReserveFundsCommand, payment, policy, now);
         return saga;

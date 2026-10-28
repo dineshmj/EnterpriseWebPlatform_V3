@@ -93,6 +93,15 @@ export interface PaymentDetail {
   decisionByLanId?: string | null;
   decisionAt?: string | null;
   decisionRemarks?: string | null;
+  /** The fraud check at initiation: who decided (the network's fraud scoring, or the fallback rules when it was late). */
+  fraudCheck?: FraudCheck | null;
+}
+
+export interface FraudCheck {
+  decision: 'ALLOW' | 'REVIEW' | 'DECLINE';
+  source: 'PROVIDER' | 'FALLBACK';
+  score?: number | null;
+  reasons?: string | null;
 }
 
 /** A saga operations should look at (Payment Processing Monitor). */
@@ -242,8 +251,16 @@ export const productLabel = (code: string) =>
   ({ EVERYDAY_TRANSACTION: 'Everyday', SAVINGS: 'Savings' } as Record<string, string>)[code] ?? code;
 
 /** Plain-language labels for the saga's timeline. */
+/** "Review - payment network, score 680 (NEW_PAYEE)" or "Review - fallback rules: the fraud scoring was late (…)". */
+export function fraudCheckLabel(check: FraudCheck): string {
+  const decision = { ALLOW: 'Allow', REVIEW: 'Review', DECLINE: 'Decline' }[check.decision] ?? check.decision;
+  const by = check.source === 'PROVIDER' ? `payment network, score ${check.score}` : 'fallback rules: the fraud scoring did not answer in time';
+  return `${decision} - ${by}${check.reasons ? ` (${check.reasons})` : ''}`;
+}
+
 export const TIMELINE_KIND: Record<string, string> = {
   STARTED: 'Payment started',
+  FRAUD_CHECK: 'Fraud check',
   COMMAND_SENT: 'Instruction sent to Accounts',
   REPLY_RECEIVED: 'Answer from Accounts',
   REPLY_IGNORED: 'Late or duplicate answer ignored',

@@ -5,8 +5,10 @@ using Moq;
 
 using EnterpriseWebPlatform.Payments.Api.Application.Abstractions;
 using EnterpriseWebPlatform.Payments.Api.Application.Commands;
+using EnterpriseWebPlatform.Payments.Api.Application.Fraud;
 using EnterpriseWebPlatform.Payments.Api.Domain.Aggregates;
 using EnterpriseWebPlatform.Payments.Api.Domain.Exceptions;
+using EnterpriseWebPlatform.Payments.Api.Domain.ValueObjects;
 using EnterpriseWebPlatform.Payments.Api.Tests.Support;
 
 namespace EnterpriseWebPlatform.Payments.Api.Tests.Application;
@@ -24,6 +26,7 @@ public sealed class InitiatePaymentCommandHandler_HandleAsync_Edge_Idempotency
     private Mock<IPaymentSagaRepository> _sagas = null!;
     private Mock<IPaymentsUnitOfWork> _unitOfWork = null!;
     private InitiatePaymentCommandHandler _handler = null!;
+    private TestMeterFactory _meters = null!;
 
     [SetUp]
     public void SetUp()
@@ -37,10 +40,21 @@ public sealed class InitiatePaymentCommandHandler_HandleAsync_Edge_Idempotency
         var clock = new Mock<TimeProvider>();
         clock.Setup(c => c.GetUtcNow()).Returns(PaymentsTestData.Now);
 
+        // The fraud scoring allows every payment here: these tests are about the Idempotency-Key.
+        var scoring = new Mock<IFraudScoring>();
+        scoring.Setup(s => s.ScoreAsync(It.IsAny<FraudScoringRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new FraudScoringResult(120, FraudDecision.Allow, []));
+        _meters = new TestMeterFactory();
+        var fraudCheck = new FraudCheck(scoring.Object, _payments.Object, new FraudCheckPolicy(TimeSpan.FromMilliseconds(250), 500m),
+            _meters, NullLogger<FraudCheck>.Instance);
+
         _handler = new InitiatePaymentCommandHandler(
             _payments.Object, _sagas.Object, _unitOfWork.Object, new ApprovalTier(PaymentsTestData.ApprovalThreshold),
-            PaymentsTestData.Policy, clock.Object, NullLogger<InitiatePaymentCommandHandler>.Instance);
+            fraudCheck, PaymentsTestData.Policy, clock.Object, NullLogger<InitiatePaymentCommandHandler>.Instance);
     }
+
+    [TearDown]
+    public void TearDown() => _meters.Dispose();
 
     private static InitiatePaymentCommand CommandFor(Payment payment, decimal? amount = null, string? initiatedBy = null) =>
         new(payment.PaymentRef, payment.CustomerNumber, payment.From.Bsb, payment.From.AccountNumber, payment.PayeeName,
