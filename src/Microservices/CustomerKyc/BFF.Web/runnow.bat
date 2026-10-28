@@ -9,32 +9,21 @@ echo.
 
 cd /d "%~dp0"
 
-echo [1/4] Checking KYC BFF certificate...
+REM +- SEC ------------------------------------------------------------------------------------------
+REM | The ASP.NET Core development certificate (it covers *.dev.localhost), exported ONCE to your
+REM | user profile - the same files every Node service uses. Never a copy in the repository: a
+REM | private key there is public (SonarQube Cloud found one here, 28-OCT-2026).
+REM +-------------------------------------------------------------------------------------------------
+set "CERT_DIR=%USERPROFILE%\.aspnet\https"
 
-if not exist "%~dp0certs\kyc.dev.localhost.pfx" (
-    echo.
-    echo ERROR: KYC BFF certificate was not found:
-    echo   %~dp0certs\kyc.dev.localhost.pfx
-    echo.
-    pause
-    exit /b 1
-)
-
-echo       Certificate found.
+echo [1/4] Checking the development certificate...
+if not exist "%CERT_DIR%\ewp-v3-dev.pfx" goto :nocert
+echo       Found in %CERT_DIR%.
 echo.
 
-echo [2/4] Checking Node.js CA bundle...
-
-if not exist "%~dp0certs\extra-ca-bundle.pem" (
-    echo.
-    echo ERROR: Node.js CA bundle was not found:
-    echo   %~dp0certs\extra-ca-bundle.pem
-    echo.
-    pause
-    exit /b 1
-)
-
-echo       CA bundle found.
+echo [2/4] Checking the Node.js CA file...
+if not exist "%CERT_DIR%\ewp-v3-dev.pem" goto :nocert
+echo       Found in %CERT_DIR%.
 echo.
 
 echo [3/4] Configuring KYC BFF, HTTPS, and Node TLS trust...
@@ -76,9 +65,11 @@ REM ============================================================
 REM KYC BFF HTTPS / Node TLS
 REM ============================================================
 
-set "KYC_BFF_TLS_PFX_PATH=%~dp0certs\kyc.dev.localhost.pfx"
-set "KYC_BFF_TLS_PFX_PASSWORD=kyc-mfe-dev-password"
-set "NODE_EXTRA_CA_CERTS=%~dp0certs\extra-ca-bundle.pem"
+set "KYC_BFF_TLS_PFX_PATH=%CERT_DIR%\ewp-v3-dev.pfx"
+set "KYC_BFF_TLS_PFX_PASSWORD=dev-password"
+REM Node does not use the Windows certificate store: trust the development certificate
+REM explicitly for the calls to the IDP and the APIs.
+set "NODE_EXTRA_CA_CERTS=%CERT_DIR%\ewp-v3-dev.pem"
 
 echo       KYC_BFF_PORT=%KYC_BFF_PORT%
 echo       KYC_IDP_AUTHORITY=%KYC_IDP_AUTHORITY%
@@ -103,5 +94,17 @@ pnpm.cmd run start
 echo.
 echo Customer KYC BFF has stopped.
 echo.
+goto :end
 
+:nocert
+echo.
+echo ERROR: the development certificate was not found in %CERT_DIR%.
+echo Export it once (PowerShell), then run this again:
+echo   dotnet dev-certs https -ep "$env:USERPROFILE\.aspnet\https\ewp-v3-dev.pfx" -p "dev-password"
+echo   dotnet dev-certs https -ep "$env:USERPROFILE\.aspnet\https\ewp-v3-dev.pem" --format Pem --no-password
+echo.
+pause
+exit /b 1
+
+:end
 endlocal

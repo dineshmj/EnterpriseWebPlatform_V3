@@ -29,6 +29,12 @@
 # IdentityServer developer signing key / private key material
 **/tempkey*.jwk
 **/keys/
+# SEC: certificates with their private keys stay in %USERPROFILE%\.aspnet\https, never here
+# (a dev certificate key was committed once - found by SonarQube Cloud, 28-OCT-2026).
+*.pfx
+*.p12
+*.key
+**/certs/
 
 # -------------------------------------------------------------------------------
 # Node.js / Next.js

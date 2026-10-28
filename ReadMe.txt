@@ -45,11 +45,11 @@ What the platform is, how it is designed and what each component must do are doc
 	   C:\Windows\System32\drivers\etc\hosts. Why and how to check: section 2.
 
 	3. Certificates - trust the ASP.NET Core development certificate (it covers *.dev.localhost), and export it once
-	   for the Node.js services (Audit Journey API, Audit web):
+	   for the Node.js services (Journey APIs, Node BFFs, Customer KYC BFF):
 			dotnet dev-certs https --trust
 			dotnet dev-certs https -ep "$env:USERPROFILE\.aspnet\https\ewp-v3-dev.pfx" -p "dev-password"
 			dotnet dev-certs https -ep "$env:USERPROFILE\.aspnet\https\ewp-v3-dev.pem" --format Pem --no-password
-	   (The KYC BFF uses its own copy in src\Microservices\CustomerKyc\BFF.Web\certs.)
+	   Never copy these files into the repository: they hold the certificate's private key.
 
 	4. Kafka - secure it once (SCRAM users, per-component ACLs, explicit topics). Details: section 5.
 			C:\Kafka\StartKafka.bat                                 (in its own window; leave it running)

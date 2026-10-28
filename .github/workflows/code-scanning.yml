@@ -134,7 +134,7 @@ jobs:
           "$scanner" begin \
             /k:"$SONAR_PROJECT_KEY" /o:"$SONAR_ORGANIZATION" \
             /d:sonar.host.url=https://sonarcloud.io /d:sonar.token="$SONAR_TOKEN" \
-            /d:sonar.exclusions='**/node_modules/**,**/.next/**,**/wwwroot/lib/**,test-results/**'
+            /d:sonar.exclusions='**/node_modules/**,**/.next/**,**/wwwroot/lib/**,test-results/**,db/**'
           dotnet build EnterpriseWebPlatform.BSS.slnx --configuration Release
           "$scanner" end /d:sonar.token="$SONAR_TOKEN"
 
@@ -184,7 +184,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/snyk"
-          curl -fsSL -o "$RUNNER_TEMP/snyk/snyk" "https://static.snyk.io/cli/v$SNYK_VERSION/snyk-linux"
+          curl -fsSL --proto '=https' --tlsv1.2 -o "$RUNNER_TEMP/snyk/snyk" "https://static.snyk.io/cli/v$SNYK_VERSION/snyk-linux"
           echo "$SNYK_SHA256  $RUNNER_TEMP/snyk/snyk" | sha256sum --check --strict
           chmod +x "$RUNNER_TEMP/snyk/snyk"
           echo "$RUNNER_TEMP/snyk" >> "$GITHUB_PATH"
@@ -195,7 +195,16 @@ jobs:
         continue-on-error: true
         run: |
           snyk test --all-projects --detection-depth=8 --exclude=tst,test-results \
-            --severity-threshold=high --sarif-file-output=snyk.sarif
+            --severity-threshold=high --sarif-file-output=snyk-runs.sarif
+
+      # Snyk writes one SARIF run per project (47 today); code scanning accepts at most 20 per
+      # upload. One run with every result (rules de-duplicated) keeps them all.
+      - name: Merge into one SARIF run
+        if: env.SNYK_TOKEN != '' && hashFiles('snyk-runs.sarif') != ''
+        run: |
+          jq '.runs |= [ { tool: { driver: (.[0].tool.driver + { rules: ([.[].tool.driver.rules[]?] | unique_by(.id)) }) },
+                           results: [.[].results[]? | del(.ruleIndex)] } ]' snyk-runs.sarif > snyk.sarif
+          echo "Snyk findings: $(jq '.runs[0].results | length' snyk.sarif)"
 
       - name: Upload to code scanning
         if: env.SNYK_TOKEN != '' && hashFiles('snyk.sarif') != ''
@@ -204,6 +213,7 @@ jobs:
           sarif_file: snyk.sarif
           category: snyk-open-source
 
+      # Any trigger on main except a pull request: push, the weekly schedule, or by hand.
       - name: Monitor what main ships
-        if: env.SNYK_TOKEN != '' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: env.SNYK_TOKEN != '' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: snyk monitor --all-projects --detection-depth=8 --exclude=tst,test-results --target-reference=main

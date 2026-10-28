@@ -54,10 +54,37 @@ added (for example: no new HIGH CodeQL alert on a pull request).
 |---|---|---|
 | CodeQL (C#, JavaScript/TypeScript, Actions) | GitHub's data-flow analysis, `security-extended` queries, `build-mode: none` (read from source, no build). The workflows are scanned too (script injection, over-broad tokens) | **Security -> Code scanning**; new alerts on a pull request are annotated on its diff |
 | SonarQube Cloud | Scanner for .NET 12.0.0 around the Release build of `EnterpriseWebPlatform.BSS.slnx`; it also analyses the TypeScript outside the .NET projects, so one project shows C# and TypeScript (bugs, code smells, security hotspots, duplication) | sonarcloud.io; its quality gate shows on the pull request as a separate check |
-| Snyk Open Source | Snyk CLI 1.1308.1 (pinned, Snyk's SHA-256 checked): `snyk test --all-projects` over the restored NuGet projects and the pnpm lockfiles, test projects left out (as in the CI gate), HIGH and above. On `main` also `snyk monitor`, so Snyk alerts on a NEW advisory against what `main` ships, without a commit | **Security -> Code scanning** (category `snyk-open-source`) and app.snyk.io |
+| Snyk Open Source | Snyk CLI 1.1308.1 (pinned, Snyk's SHA-256 checked): `snyk test --all-projects` over the restored NuGet projects and the pnpm lockfiles, test projects left out (as in the CI gate), HIGH and above. Snyk writes one SARIF run per project (47 today) and code scanning takes at most 20 per upload, so they are merged into one run first. On `main` (push, schedule or by hand - not pull requests) also `snyk monitor`, so Snyk alerts on a NEW advisory against what `main` ships, without a commit | **Security -> Code scanning** (category `snyk-open-source`) and app.snyk.io |
 
 SonarQube Cloud and Snyk skip themselves (and say so on the run's summary) until their token
 exists. Fork and Dependabot pull requests get no secrets, so they skip there too.
+
+Snyk and `pnpm audit` can rate the same advisory differently: `qs` 6.16.0 (GHSA-6pq8-jhm2-2vcw,
+28-OCT-2026) was Medium for GitHub, so the CI gate passed, and High for Snyk. It was fixed with
+an override like the others.
+
+**The tokens.** `SONAR_TOKEN` is a *personal* SonarQube Cloud token with **no expiry**: scoped
+organisation tokens need the paid Team plan, and an expiring token would turn the job red on its
+own one day. Accepted for this PoC because the token can only act in one free organisation with
+one public project, and GitHub hands it only to workflows of this repository (not to forks). If
+it may have leaked: revoke it in SonarQube Cloud (**My account -> Access tokens**), generate a
+new one, replace the secret. `SNYK_TOKEN` is the account's auth token; the same applies (Snyk:
+**Account settings -> Auth Token -> Regenerate**). Snyk's GitHub integration (repository import,
+fix pull requests) is deliberately NOT connected: it would ask for write access to every public
+repository and duplicate Dependabot.
+
+**Triage, 28-OCT-2026 (first full scan).** Fixed: a committed private key (the KYC BFF's copy of
+the development certificate - now taken from `%USERPROFILE%\.aspnet\https` like every Node
+service, and `*.pfx` / `*.key` / `certs/` are git-ignored), regular expressions on input without
+a match timeout, a locale-dependent sort, a file check outside the KYC BFF's static root,
+`curl` downloads that could follow a redirect to plain HTTP, `qs` 6.16.0. Dismissed as false
+positives, with the reason on each alert: CSRF on the Domain APIs (bearer tokens only - no
+cookie, so no cross-site request can carry credentials), reflected XSS in the Journey APIs'
+Problem Details (sent as `application/problem+json`, never HTML), log forging (.NET services log
+JSON everywhere but Development, where a newline cannot start a fake entry; the Journey APIs log
+`req.path`, which Express does not URL-decode, so it cannot hold a newline), SQL injection in the Shell's
+`MenuRepository` (only `@p0..` placeholders are formatted in; the values are parameters).
+`db/` is excluded from SonarQube Cloud: it reads T-SQL as Oracle PL/SQL.
 
 ### Setting up SonarQube Cloud (once)
 

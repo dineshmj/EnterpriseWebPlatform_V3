@@ -78,8 +78,8 @@ if (string.IsNullOrWhiteSpace(partnerBankOptions.ClientId))
     throw new InvalidOperationException("PartnerBank:ClientId is required.");
 var settlement = partnerBankOptions.Settlement;
 if (string.IsNullOrWhiteSpace(settlement.PayeeName) || settlement.PayeeName.Length > 70 ||
-    !System.Text.RegularExpressions.Regex.IsMatch(settlement.Bsb, @"^\d{3}-\d{3}$") ||
-    !System.Text.RegularExpressions.Regex.IsMatch(settlement.AccountNumber, @"^\d{5,9}$"))
+    !System.Text.RegularExpressions.Regex.IsMatch(settlement.Bsb, @"^\d{3}-\d{3}$", System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromMilliseconds(100)) ||
+    !System.Text.RegularExpressions.Regex.IsMatch(settlement.AccountNumber, @"^\d{5,9}$", System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromMilliseconds(100)))
 {
     throw new InvalidOperationException("PartnerBank:Settlement needs PayeeName, Bsb (123-456) and AccountNumber (5-9 digits): the purchases' payee.");
 }

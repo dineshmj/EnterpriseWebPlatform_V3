@@ -52,11 +52,11 @@ public sealed partial record BankAccountRef
 
     public static BankAccountRef Create(string? bsb, string? accountNumber, string role)
     {
-        var digits = Regex.Replace(bsb ?? string.Empty, "[\\s-]", string.Empty);
+        var digits = BsbSeparators().Replace(bsb ?? string.Empty, string.Empty);
         if (!BsbPattern().IsMatch(digits))
             throw new DomainRuleViolationException($"The {role} BSB must be 6 digits (e.g. 062-000).");
 
-        var number = Regex.Replace(accountNumber ?? string.Empty, "\\s", string.Empty);
+        var number = Whitespace().Replace(accountNumber ?? string.Empty, string.Empty);
         if (!AccountNumberPattern().IsMatch(number))
             throw new DomainRuleViolationException($"The {role} account number must be 5 to 9 digits.");
 
@@ -70,6 +70,13 @@ public sealed partial record BankAccountRef
 
     [GeneratedRegex("^[0-9]{5,9}$")]
     private static partial Regex AccountNumberPattern();
+
+    // SEC: these two run on raw request input of any length, so they get a match timeout (ReDoS).
+    [GeneratedRegex(@"[\s-]", RegexOptions.None, matchTimeoutMilliseconds: 100)]
+    private static partial Regex BsbSeparators();
+
+    [GeneratedRegex(@"\s", RegexOptions.None, matchTimeoutMilliseconds: 100)]
+    private static partial Regex Whitespace();
 }
 
 // ┌─ :: SECURITY :: Approval limits by clearance ──────────────────────────────────────────────────
@@ -120,7 +127,7 @@ public static partial class PaymentRules
 
     public static string ValidPayeeName(string? name)
     {
-        var value = Regex.Replace(name?.Trim() ?? string.Empty, "\\s+", " ");
+        var value = WhitespaceRuns().Replace(name?.Trim() ?? string.Empty, " ");
         if (value.Length is 0 or > PayeeNameMaxLength || !TextPattern().IsMatch(value))
             throw new DomainRuleViolationException($"The payee's account name is required (at most {PayeeNameMaxLength} letters, digits and common punctuation).");
         return value;
@@ -128,7 +135,7 @@ public static partial class PaymentRules
 
     public static string? ValidReference(string? reference)
     {
-        var value = Regex.Replace(reference?.Trim() ?? string.Empty, "\\s+", " ");
+        var value = WhitespaceRuns().Replace(reference?.Trim() ?? string.Empty, " ");
         if (value.Length == 0)
             return null;
         if (value.Length > ReferenceMaxLength || !TextPattern().IsMatch(value))
@@ -147,4 +154,8 @@ public static partial class PaymentRules
     // Letters (any script), digits, spaces and the punctuation names and references use.
     [GeneratedRegex(@"^[\p{L}\p{M}0-9 .,'&/()\-#:+]+$")]
     private static partial Regex TextPattern();
+
+    // SEC: runs on raw request input of any length, before the length check: a match timeout (ReDoS).
+    [GeneratedRegex(@"\s+", RegexOptions.None, matchTimeoutMilliseconds: 100)]
+    private static partial Regex WhitespaceRuns();
 }
