@@ -1,0 +1,28 @@
+{{- /*
+┌─ :: ARCHITECTURE :: The platform's feature flags, as a flag file ──────────────────────────────
+│ Why : The services read flags through OpenFeature from a flagd flag file; in the cluster that
+│       file is this ConfigMap, so a flag is switched by editing it - no image, no redeploy.
+│ How : global.featureFlags.flags (flag -> true | false) becomes flagd's format: two variants,
+│       on and off, and the default variant. Mounted as a DIRECTORY (deployments.yaml): the
+│       kubelet then replaces the file when the ConfigMap changes (a subPath mount never would).
+│ Ref : feature-flags/README.md | doc/Kubernetes.md | flagd flag definitions
+└────────────────────────────────────────────────────────────────────────────────────────────────
+*/ -}}
+{{- $g := .Values.global -}}
+{{- $readers := list -}}
+{{- range $name, $c := (include "ewp.enabled" . | fromYaml) }}{{ if $c.featureFlags }}{{ $readers = append $readers $name }}{{ end }}{{ end -}}
+{{- if $readers }}
+{{- $flags := dict -}}
+{{- range $flag, $on := $g.featureFlags.flags }}
+{{- $_ := set $flags $flag (dict "state" "ENABLED" "variants" (dict "on" true "off" false) "defaultVariant" (ternary "on" "off" (eq (toString $on) "true"))) -}}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $g.featureFlags.configMap }}
+  labels:
+    {{- include "ewp.labels" (dict "root" . "name" "feature-flags") | nindent 4 }}
+data:
+  ewp-flags.json: |
+    {{- dict "flags" $flags | toPrettyJson | nindent 4 }}
+{{- end }}

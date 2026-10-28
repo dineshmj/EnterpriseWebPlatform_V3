@@ -153,6 +153,19 @@ spec:
             - name: {{ $c.kafka.caVar | default "Kafka__SslCaLocation" }}
               value: /etc/ewp/kafka/ca.crt
             {{- end }}
+            {{- if $c.featureFlags }}
+            # Feature flags: the platform's flag file (feature-flags.yaml), re-read every 5 s.
+            - name: FeatureFlags__File
+              value: /etc/ewp/feature-flags/ewp-flags.json
+            {{- if $g.featureFlags.launchDarkly.enabled }}
+            # SEC: LaunchDarkly instead of the file - its SDK key is a secret (it reads every flag).
+            - name: EWP_LAUNCHDARKLY_SDK_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $g.featureFlags.launchDarkly.secret }}
+                  key: {{ $g.featureFlags.launchDarkly.key }}
+            {{- end }}
+            {{- end }}
             {{- range $k, $v := $c.env }}
             - name: {{ $k }}
               value: {{ tpl (toString $v) $root | quote }}
@@ -223,6 +236,11 @@ spec:
               mountPath: /etc/ewp/platform
               readOnly: true
             {{- end }}
+            {{- if $c.featureFlags }}
+            - name: feature-flags
+              mountPath: /etc/ewp/feature-flags
+              readOnly: true
+            {{- end }}
             {{- range $c.secretFiles }}
             - name: {{ .name }}
               mountPath: {{ .mountPath }}
@@ -264,6 +282,12 @@ spec:
         - name: platform
           configMap:
             name: operations-platform
+        {{- end }}
+        {{- if $c.featureFlags }}
+        # A directory, not a subPath: the kubelet then swaps in a changed flag file.
+        - name: feature-flags
+          configMap:
+            name: {{ $g.featureFlags.configMap }}
         {{- end }}
         {{- range $c.secretFiles }}
         - name: {{ .name }}

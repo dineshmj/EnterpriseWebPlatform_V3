@@ -11,6 +11,7 @@
 # │         secretEnv    keys read from the Secret "<global.secretPrefix><key>" (same names)
 # │         secretRefs   NAME: {secret, key} - a key of a shared Secret
 # │         secretFiles  {name, secret, mountPath} - a Secret mounted as files
+# │         featureFlags true: reads the platform's feature flags (global.featureFlags)
 # │       SEC: no value here is a secret. Secrets exist only in the cluster (doc/Kubernetes.md
 # │       lists every one); a missing key stops the pod with that key's name.
 # │ Ref : doc/Kubernetes.md | doc/Containers.md (run-time contract)
@@ -112,6 +113,28 @@ global:
   # refuses to start without it; the IDP and the APIs get the same value.
   mfa:
     enabled: true
+
+  # ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────────
+  # │ Feature flags (Common/WebUtilities/FeatureFlags): the components with featureFlags: true
+  # │ read the flag file below (ConfigMap, a directory mount so a change reaches the pod; the
+  # │ services re-read it every 5 s) - or LaunchDarkly when launchDarkly.enabled. A flag only
+  # │ switches something OFF for everyone; permissions never come from a flag.
+  # │ Flip on a running cluster: kubectl -n ewp edit configmap ewp-feature-flags (the kubelet
+  # │ updates the file within about a minute; no restart).
+  # └──────────────────────────────────────────────────────────────────────────────────────────
+  featureFlags:
+    configMap: ewp-feature-flags
+    # flag -> true (on) | false (off); the same flags as feature-flags/ewp-flags.json.
+    flags:
+      bian-v2-endpoints: true
+      digital-gold-sales-paused: false
+    launchDarkly:
+      # true: EWP_LAUNCHDARKLY_SDK_KEY from the Secret below (the demo: GitHub secret
+      # LAUNCHDARKLY_SDK_KEY -> Key Vault), and these components may open HTTPS (443) to public
+      # addresses - LaunchDarkly publishes no fixed addresses a NetworkPolicy could name.
+      enabled: false
+      secret: ewp-launchdarkly
+      key: sdk-key
 
   # The certificate that encrypts the IDP's, the Shell's and the .NET BFFs' Data Protection
   # key rings at rest: Secret with keys certificate.pfx and password.
@@ -398,6 +421,7 @@ components:
   customer-onboarding-api:
     stack: dotnet
     role: web
+    featureFlags: true
     allowFrom: [idp, customer-onboarding-bff-web, onboarding-outcome-subscriber, partner-products-journey-api]
     platformHealth: {name: Customer Onboarding API, group: Domain APIs}
     env:
@@ -421,6 +445,7 @@ components:
   documents-management-api:
     stack: dotnet
     role: web
+    featureFlags: true
     # One instance while the documents are on a ReadWriteOnce volume.
     replicas: 1
     persistence: {mountPath: /var/lib/ewp/documents, size: 1Gi}
@@ -454,6 +479,7 @@ components:
   accounts-api:
     stack: dotnet
     role: web
+    featureFlags: true
     mfa: true
     kafka: {}
     allowFrom: [accounts-bff-web, payments-bff-web, account-application-opening-subscriber, accounts-command-subscriber, partner-products-journey-api]
@@ -470,6 +496,7 @@ components:
   payments-api:
     stack: dotnet
     role: web
+    featureFlags: true
     mfa: true
     kafka: {}
     allowFrom: [payments-bff-web, payments-saga-reply-subscriber, audit-journey-api, partner-products-journey-api, partner-products-worker]
@@ -517,6 +544,7 @@ components:
   partner-products-api:
     stack: dotnet
     role: web
+    featureFlags: true
     mfa: true
     kafka: {}
     allowFrom: [partner-products-journey-api, partner-products-worker]

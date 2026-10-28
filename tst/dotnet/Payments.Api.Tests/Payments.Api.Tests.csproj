@@ -20,6 +20,10 @@
     <Compile Include="..\Shared\BianSchema.cs" Link="Shared\BianSchema.cs" />
   </ItemGroup>
   <ItemGroup>
+    <!-- The repository's flag file, read as committed (FeatureFlags/). -->
+    <None Include="..\..\..\feature-flags\ewp-flags.json" Link="FeatureFlags\ewp-flags.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="AwesomeAssertions" Version="9.6.0" />
     <PackageReference Include="coverlet.collector" Version="10.1.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

@@ -6,6 +6,7 @@ using EnterpriseWebPlatform.Accounts.Api.Application.Queries;
 using EnterpriseWebPlatform.Accounts.Api.Bian;
 using EnterpriseWebPlatform.Accounts.Api.Domain.Exceptions;
 using EnterpriseWebPlatform.Accounts.Api.Domain.ValueObjects;
+using EnterpriseWebPlatform.Common.WebUtilities.FeatureFlags;
 
 namespace EnterpriseWebPlatform.Accounts.Api.Controllers;
 
@@ -26,6 +27,7 @@ namespace EnterpriseWebPlatform.Accounts.Api.Controllers;
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 [ApiController]
 [Route("v2/CurrentAccount")]
+[FeatureGate(FeatureFlagKeys.BianV2Endpoints, defaultValue: true)]   // release toggle: off = 404 (Common/WebUtilities/FeatureFlags)
 public sealed class CurrentAccountController(
     IAccountsQueries queries,
     RecordCashDepositCommandHandler depositHandler) : ControllerBase

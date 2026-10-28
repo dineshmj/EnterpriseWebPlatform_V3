@@ -15,6 +15,9 @@
 │         - PostgreSQL (its subnet, 5432) - a connection string among its secrets;
 │         - Kafka's brokers (9093)        - a kafka entry;
 │         - Temporal (7233)               - TEMPORAL_ADDRESS in its settings;
+│         - LaunchDarkly (443, public addresses only) - featureFlags, and only while
+│           global.featureFlags.launchDarkly.enabled: it publishes no fixed addresses, so this
+│           one rule names "the internet minus private ranges"; off (the default) it is absent;
 │         - the Gateway                   - any public EWP address or the Partner Bank's in its
 │           settings: the IDP and the Partner Bank are reached by their public names, and the IDP
 │           itself calls the clients' public back-channel logout addresses. Two rules: the Gateway's pods
@@ -145,6 +148,16 @@ spec:
               {{- toYaml $g.egress.temporalPods | nindent 14 }}
       ports:
         - {port: 7233, protocol: TCP}
+    {{- end }}
+    {{- if and $c.featureFlags $g.featureFlags.launchDarkly.enabled }}
+    # SEC: LaunchDarkly's streaming and events endpoints - HTTPS to public addresses only (no
+    # private range, so not the Azure metadata service or another subnet).
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 100.64.0.0/10]
+      ports:
+        - {port: 443, protocol: TCP}
     {{- end }}
     {{- if $gateway }}
     - to:

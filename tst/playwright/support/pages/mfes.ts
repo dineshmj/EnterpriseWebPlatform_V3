@@ -504,6 +504,17 @@ export class DigitalGoldMfe {
 
   /** Records a transfer authorization slip for `amount` from the first paying account. */
   async recordTransferSlip(slipNumber: string, amount: string, mobileOnSlip: string): Promise<void> {
+    await this.submitTransferSlip(slipNumber, amount, mobileOnSlip);
+    await expect(this.shell.workspace().getByText(new RegExp(`^Transfer slip ${slipNumber} recorded`))).toBeVisible({ timeout: 30_000 });
+  }
+
+  /** Fills in and submits a transfer slip that is expected to be REFUSED; returns the screen's errors (role alert). */
+  async tryRecordTransferSlip(slipNumber: string, amount: string, mobileOnSlip: string): Promise<Locator> {
+    await this.submitTransferSlip(slipNumber, amount, mobileOnSlip);
+    return this.shell.workspace().getByRole('alert');
+  }
+
+  private async submitTransferSlip(slipNumber: string, amount: string, mobileOnSlip: string): Promise<void> {
     const mfe = this.shell.workspace();
     await mfe.locator('#slipNumber').fill(slipNumber);
     await mfe.locator('#amount').fill(amount);
@@ -511,7 +522,6 @@ export class DigitalGoldMfe {
     await mfe.locator('#slipScan').setInputFiles(samplePdf(`Slip ${slipNumber}`));
     await mfe.getByLabel(/signature on the slip/).check();
     await mfe.getByRole('button', { name: 'Record transfer slip', exact: true }).click();
-    await expect(mfe.getByText(new RegExp(`^Transfer slip ${slipNumber} recorded`))).toBeVisible({ timeout: 30_000 });
   }
 
   /** The purchase's row in "Transfer authorization slips". */
