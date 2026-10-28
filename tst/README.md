@@ -66,6 +66,8 @@ test('Sophie submits, Ethan sees the KYC case', async ({ signedInAs }) => {
 
 A sign-in is saved to `.auth\<user>.json` and reused for 20 minutes (`EWP_SESSION_REUSE_MINUTES`); if the saved session has ended (signed out, BFF state re-created), the person signs in again automatically. The IDP allows about 10 sign-ins a minute from one machine (20 requests to its sign-in pages; a security control). After a database re-create, when every saved sign-in is stale, a run can meet that limit: the sign-in then waits about a minute and tries once more, and the test carries a note saying so.
 
+The screens are exported HTML: a screen's heading and fields are there a moment before React takes the page over, and text typed in that moment never reaches React (no search is sent, Search stays disabled). The page objects type the searches that follow a screen's opening through `typeUntilScreenReacts` (`support/pages/mfes.ts`): clear, type, wait for the screen's reaction, and type again if it does not come.
+
 ### MFA tests
 
 `tests\40-security\mfa` runs only with MFA switched on; otherwise it is skipped. The tests play Google Authenticator themselves: they enrol `daniel.ops` from the setup key the IDP shows (kept in `.auth\mfa-daniel.ops.key`) and compute each code. Before running them:
