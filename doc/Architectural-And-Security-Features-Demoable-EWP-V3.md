@@ -612,7 +612,11 @@ The three signals are set up once, in the shared observability library, and ever
 
 The KYC BFF (NestJS) follows the same rules: the same log formats and request line, and `/metrics` with the same metric names plus its circuit breakers and token exchanges ([logger.ts](../src/Microservices/CustomerKyc/BFF.Web/src/observability/logger.ts), [metrics.ts](../src/Microservices/CustomerKyc/BFF.Web/src/observability/metrics.ts)).
 
-**Not yet:** dashboards and alert rules (they belong to the deployment's Grafana / Observe); logs and metrics in the Audit Journey API and Audit web app.
+**In the cloud demo** the three signals reach Grafana ([Cloud-Demo.md](Cloud-Demo.md) CD23): every .NET service pushes them over OTLP (TLS) to one collector in its own namespace, which feeds Prometheus, Loki and Tempo - nothing connects into EWP's pods. Grafana at `grafana.<domain>` signs people in through EWP's own IDP (only operations and platform administrators get in) and opens with three dashboards kept as code in the repository: **Platform health** (every health check, memory, CPU, GC, exceptions, error log lines), **Requests and errors** (rates, 5xx share, p95 by service and route, 429s, retries, timeouts and open circuit breakers) and **Messaging and payments** (published / consumed / dead-lettered by topic, Outbox backlog and parked messages, the Payments saga's running / overdue / stuck counts, the fraud check's fallback share and p95 against its 250 ms budget). A log line's trace ID opens its trace; a span opens its logs.
+
+- The chart: [ewp-observability](../deploy/helm/ewp-observability) (collector, stores, Grafana, NetworkPolicies, route); the dashboards: [dashboards/](../deploy/helm/ewp-observability/dashboards); Grafana's client at the IDP: [ObservabilityGrafana.cs](../src/IDP/ConfigRegistration/Clients/ObservabilityGrafana.cs)
+
+**Not yet:** alert rules; pod and node metrics (kube-state-metrics); the Node tier's, Kafka's and Temporal's logs in Loki (stdout only); logs and metrics in the Audit Journey API and Audit web app.
 
 #### 1.7.4 Operations: Platform Health and the simulator switch
 

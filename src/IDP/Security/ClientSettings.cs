@@ -30,6 +30,14 @@ public static class ClientSettings
     public static ClientIds Ids =>
         _ids ?? throw new InvalidOperationException("ClientSettings has not been initialized.");
 
+    /// <summary>Whether a base address is configured for this client (an optional client exists only then).</summary>
+    public static bool HasBaseUrl(string client)
+    {
+        var configuration = _configuration
+            ?? throw new InvalidOperationException("ClientSettings has not been initialized.");
+        return !string.IsNullOrWhiteSpace(configuration[$"ClientBaseUrls:{client}"]);
+    }
+
     /// <summary>The client's https base address (no trailing slash), e.g. for its redirect URIs.</summary>
     public static string BaseUrlOf(string client)
     {

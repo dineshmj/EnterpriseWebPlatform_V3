@@ -45,6 +45,9 @@ public sealed class ClientIds
     public string AccountsWeb => Of(nameof(AccountsWeb));
     public string PaymentsWeb => Of(nameof(PaymentsWeb));
     public string AuditWeb => Of(nameof(AuditWeb));
+
+    /// <summary>The cloud demo's Grafana (optional: read only where it exists).</summary>
+    public string Grafana => Of(nameof(Grafana));
     public string OperationsWeb => Of(nameof(OperationsWeb));
     public string PartnerProductsWeb => Of(nameof(PartnerProductsWeb));
 

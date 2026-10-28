@@ -27,6 +27,10 @@ on:
         type: choice
         options: [letsencrypt-production, letsencrypt-staging]
         default: letsencrypt-production
+      observability:
+        description: 'Observability in the cluster: Prometheus, Loki, Tempo and Grafana at grafana.<domain> (signed in through EWP''s IDP). Off = a faster, slightly cheaper run'
+        type: boolean
+        default: true
 
 # SEC: least privilege by default; the job below asks for what it needs.
 permissions:
@@ -62,6 +66,7 @@ jobs:
       STATE_ACCOUNT: ${{ vars.AZURE_TFSTATE_STORAGE_ACCOUNT }}
       STATE_CONTAINER: ${{ vars.AZURE_TFSTATE_CONTAINER }}
       CERT_ISSUER: ${{ inputs.certificate_issuer }}
+      OBSERVABILITY: ${{ inputs.observability }}
       TF_VAR_location: ${{ inputs.region }}
       PARTNER_DOMAIN: ${{ vars.AZURE_DNS_ZONE_PARTNER_BANK }}
     defaults:

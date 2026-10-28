@@ -102,6 +102,23 @@ spec:
             # The public roots + EWP's private root (deploy/helm/ewp-cluster).
             - name: SSL_CERT_FILE
               value: /etc/ewp/trust/ca.crt
+            {{- if $g.observability.enabled }}
+            # OBS: metrics, traces and logs pushed to the cluster's collector (ewp-observability).
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ $g.observability.otlpEndpoint | quote }}
+            {{- if eq $name "idp" }}
+            # SEC: Grafana signs in through the IDP - registered only while observability is on.
+            - name: ClientIds__Grafana
+              value: {{ $g.observability.grafanaClientId | quote }}
+            - name: ClientBaseUrls__Grafana
+              value: https://{{ $g.observability.grafanaHost }}.{{ $g.domain }}
+            - name: ClientSecrets__{{ $g.observability.grafanaClientId }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ewp.secretName" $ctx }}
+                  key: ClientSecrets__{{ $g.observability.grafanaClientId }}
+            {{- end }}
+            {{- end }}
             {{- if $c.public }}
             {{- range $i, $n := $g.forwardedHeaders.knownNetworks }}
             - name: ForwardedHeaders__KnownNetworks__{{ $i }}

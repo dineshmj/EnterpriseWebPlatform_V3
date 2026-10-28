@@ -56,6 +56,9 @@ spec:
     {{- range .Values.hosts }}
     - {{ . }}.{{ $domain }}
     {{- end }}
+    {{- range .Values.observabilityHosts }}
+    - {{ . }}.{{ $domain }}
+    {{- end }}
     {{- if .Values.gatewayCheck.enabled }}
     - {{ .Values.gatewayCheck.host }}.{{ $domain }}
     {{- end }}

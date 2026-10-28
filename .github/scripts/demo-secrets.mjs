@@ -7,7 +7,7 @@
 // │       connection string) are written as their own Key Vault secret. Then, per namespace, the
 // │       list of Kubernetes Secrets and which Key Vault secret fills each key is written for
 // │       deploy/helm/keyvault-secrets - the only path from Key Vault into the cluster.
-// │       Two vaults: EWP's (namespaces ewp, ewp-infra) and the Partner Bank's (partner-bank). Of
+// │       Two vaults: EWP's (namespaces ewp, ewp-infra, observability) and the Partner Bank's (partner-bank). Of
 // │       the PKI, the Partner Bank gets only its server certificate and the PUBLIC certificates
 // │       of EWP's root and request-signing key; the root's private key is never stored at all.
 // │       Values are never printed. Key Vault is called over its REST API with the Azure CLI's
@@ -101,6 +101,10 @@ const databaseUrls = {
   'operations-bff-web': ['OPERATIONS_WEB_DATABASE_URL', 'ewp_operations_web'],
   'partner-products-bff-web': ['PARTNER_PRODUCTS_WEB_DATABASE_URL', 'ewp_partner_products_web'],
 };
+// SEC: Grafana (deploy/helm/ewp-observability) signs in through the IDP: its client secret is
+// the IDP's ClientSecrets__<id> and the observability namespace's Secret ewp-grafana-oidc.
+const grafanaClientId = 'Grafana.ClientID';
+
 const kafkaClients = {
   'customer-kyc-api': 'ewp-kyc-api',
   'compliance-api': 'ewp-compliance-api',
@@ -173,6 +177,7 @@ function ewpNamespace() {
     add('ewp-idp', `ClientSecrets__${id}`, o.client(id));
     add(`ewp-${component}`, key, o.client(id));
   }
+  add('ewp-idp', `ClientSecrets__${grafanaClientId}`, o.client(grafanaClientId));
   add('ewp-idp', 'SigningCredential__CertificatePassword', o.idpSigningPassword);
   add('ewp-customer-kyc-bff-web', 'KYC_BFF_SESSION_SECRET', o.kycSessionSecret);
   add('ewp-customer-kyc-bff-web', 'KYC_BFF_SESSION_KEY', o.sessionKey('kyc-bff'));
@@ -228,7 +233,13 @@ function partnerBankNamespace() {
   };
 }
 
-const namespaces = { ewp: ewpNamespace(), 'ewp-infra': infraNamespace(), 'partner-bank': partnerBankNamespace() };
+function observabilityNamespace() {
+  return { 'ewp-grafana-oidc': { 'client-secret': [o.client(grafanaClientId)] } };
+}
+
+const namespaces = {
+  ewp: ewpNamespace(), 'ewp-infra': infraNamespace(), observability: observabilityNamespace(), 'partner-bank': partnerBankNamespace(),
+};
 
 if (process.argv.includes('--list')) {
   for (const [ns, secrets] of Object.entries(namespaces))
@@ -420,7 +431,7 @@ const outDir = env('OUT_DIR');
 const base = { ewp: {}, partner: {} };
 for (const role of dbRoles) base.ewp[o.dbRole(role)] = () => password();
 for (const user of kafkaUsers) base.ewp[o.kafka(user)] = () => password();
-for (const id of Object.keys(clients)) base.ewp[o.client(id)] = () => password(40);
+for (const id of [...Object.keys(clients), grafanaClientId]) base.ewp[o.client(id)] = () => password(40);
 for (const name of ['screening-provider', 'core-banking', 'payment-network']) base.ewp[o.apiKey(name)] = () => password(40);
 base.ewp[o.simulatorAdminKey] = () => password(40);
 for (const name of ['kyc-bff', 'audit-web', 'operations-web', 'partner-products-web']) base.ewp[o.sessionKey(name)] = key32;
@@ -497,6 +508,7 @@ if ((await vaultCall(ewpVault, 'GET', o.dbAdmin)) === undefined) throw new Error
 const settings = {
   ewp: [ewpVault, env('EWP_SECRETS_CLIENT_ID'), 'ewp'],
   'ewp-infra': [ewpVault, env('EWP_SECRETS_CLIENT_ID'), 'ewp'],
+  observability: [ewpVault, env('EWP_SECRETS_CLIENT_ID'), 'ewp'],
   'partner-bank': [partnerVault, env('PARTNER_SECRETS_CLIENT_ID'), 'partner'],
 };
 for (const [ns, secrets] of Object.entries(namespaces)) {

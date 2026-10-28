@@ -34,7 +34,7 @@ Everything in `rg-ewp-demo` (the bootstrap's throw-away group), in the region th
 | PostgreSQL Flexible Server | `psql-ewp-demo-<5 random>` | Version 18, Burstable B2s, 32 GB, no public access, TLS required. Admin `ewpadmin` |
 | Private DNS zone | `ewp-demo.private.postgres.database.azure.com` | Resolves the server inside the VNet only |
 | Key Vaults | `kv-ewp-demo-<5 random>`, `kv-pb-demo-<5 random>` | RBAC only, 7-day soft delete. EWP's holds `postgres-admin-password` and every EWP secret; the Partner Bank's only the Partner Bank's (CD15) |
-| Managed identities | `id-ewp-demo-secrets`, `id-pb-demo-secrets` | Key Vault Secrets User on their own vault only; federated credentials for the service account `keyvault-secrets` in `ewp` and `ewp-infra`, and in `partner-bank` (CD14) |
+| Managed identities | `id-ewp-demo-secrets`, `id-pb-demo-secrets` | Key Vault Secrets User on their own vault only; federated credentials for the service account `keyvault-secrets` in `ewp`, `ewp-infra` and `observability`, and in `partner-bank` (CD14) |
 | Public IP | `pip-ewp-demo-gateway` | Static, Standard. Envoy's Service binds it by name |
 | DNS records | `*.<EWP domain>`, `*.<Partner Bank domain>` | A records to the public IP, TTL 5 minutes |
 | Role assignments | | The workflow: AKS RBAC Cluster Admin on the cluster, Key Vault Secrets Officer on both vaults; the two identities above (all allowed by the bootstrap's condition, [Azure.md](Azure.md) A4) |
@@ -55,11 +55,12 @@ Then the platform ([demo-platform.sh](../.github/scripts/demo-platform.sh)):
 | What | Namespace | Notes |
 |---|---|---|
 | Secrets | (Key Vault) | [demo-secrets.mjs](../.github/scripts/demo-secrets.mjs) makes every secret and the demo PKI the first time and writes them to the two vaults (CD15) |
-| [keyvault-secrets](../deploy/helm/keyvault-secrets) | `ewp-infra`, `ewp`, `partner-bank` | One per namespace: the Kubernetes Secrets the other charts name, synced from Key Vault (CD14) |
+| [keyvault-secrets](../deploy/helm/keyvault-secrets) | `ewp-infra`, `ewp`, `partner-bank`, `observability` | One per namespace: the Kubernetes Secrets the other charts name, synced from Key Vault (CD14) |
 | Strimzi 1.2.0 | `strimzi` | The Kafka operator, watching `ewp-infra` only ([strimzi.yaml](../deploy/cluster-addons/strimzi.yaml)) |
 | [ewp-infra](../deploy/helm/ewp-infra) | `ewp-infra` | Kafka 4.3.1 (one KRaft node, TLS + SCRAM, the laptop's users, ACLs and topics; CD16), Temporal (CD17), the database job (CD18) |
 | [partner-bank](https://github.com/dineshmj/EnterpriseWebPlatform_V3_PartnerBank/tree/main/deploy/helm/partner-bank) | `partner-bank` | From the Partner Bank's repository (`main`), its three images by digest (CD19, CD20) |
-| [ewp](../deploy/helm/ewp) | `ewp` | 35 services, one instance each ([values-demo.yaml](../deploy/helm/ewp/values-demo.yaml)), images by digest (CD20) |
+| [ewp-observability](../deploy/helm/ewp-observability) | `observability` | Only with the run's **observability** input (default on; CD23): an OTLP collector (Grafana Alloy 1.20.1), Prometheus 3.15.0, Loki 3.7.8, Tempo 2.10.8 and Grafana 13.2.4 at `https://grafana.<EWP domain>/`, signed in through EWP's IDP, with three dashboards |
+| [ewp](../deploy/helm/ewp) | `ewp` | 35 services, one instance each ([values-demo.yaml](../deploy/helm/ewp/values-demo.yaml)), images by digest (CD20); with observability on, the 27 .NET services push their metrics, traces and logs to the collector |
 
 ## Decisions
 
@@ -107,6 +108,7 @@ Then the platform ([demo-platform.sh](../.github/scripts/demo-platform.sh)):
    the LaunchDarkly environment the demo should use) and create the two flags there
    ([feature-flags/README.md](../feature-flags/README.md)). Without it the flags come from the
    chart (CD22).
+| CD23 | **Observability in the cluster** (decision 27-OCT-2026), behind Demo up's **observability** input (default on): the .NET services **push** metrics, traces and logs over OTLP (gRPC, TLS with EWP's private CA) to one collector, which feeds Prometheus (its OTLP receiver), Tempo and Loki; Grafana is public at `grafana.<EWP domain>`, signed in through EWP's IDP (an optional client, registered only when `ClientBaseUrls:Grafana` is set); only `operations_administrator` (Viewer) and `platform_administrator` (Admin) get in. One instance each, data on emptyDir, about 1.1 GB of memory requests - it fits the four nodes (the vCPU quota allows no fifth) | Nothing leaves Azure, the egress rules stay strict, no account or key, no free-tier series limit for ~35 services, dashboards are code in the repository. Pushing instead of scraping: nothing new connects INTO EWP's pods, whose `AllowedHosts` and per-Service certificates would refuse a scraper calling them by pod IP. Lost: the data at teardown, managed alerting |
 
 ## Running a demo
 
@@ -122,7 +124,8 @@ Then the platform ([demo-platform.sh](../.github/scripts/demo-platform.sh)):
    run stops with the reason and the Partner pods' warnings). Its summary shows the start time, the
    gateway's address and `https://shell.<EWP domain>/`; sign in with the same demo users as on
    the laptop.
-4. When finished: **Actions → Demo down → Run workflow**. No approval needed. It takes about
+4. **Observability** (when the run's input was on): `https://grafana.<EWP domain>/` signs in through EWP's IDP - as `daniel.ops` (Viewer) or `platform.admin` (Admin); every other demo user is refused. Folder **EWP**: *Platform health*, *Requests and errors*, *Messaging and payments*; **Explore** for logs (Loki) and traces (Tempo) - a log line's trace ID opens its trace, a span opens its logs.
+5. When finished: **Actions → Demo down → Run workflow**. No approval needed. It takes about
    10-15 minutes and ends with "rg-ewp-demo is empty". Before the teardown it prints every pod's
    recent warnings and errors into its log (step "The pods' warnings and errors"), so a fault seen
    in the browser can still be explained afterwards.
@@ -193,4 +196,8 @@ to the watchdog. A test run of 7a alone can use `node_count` 2 (Terraform variab
 | One Kafka node, Temporal's development server | No replication; Temporal has no TLS or authorization on its frontend (Threat-Model R-16) | Enough for a demo; production: 3 brokers, Temporal Cloud |
 | The database job first gives the roles the public development passwords | For seconds, on a private server with empty databases (Threat-Model R-20) | Accepted; the job sets Key Vault's passwords before any service starts |
 | One Envoy proxy, one gateway IP, single-zone nodes | No high availability | Enough for a demo; production: 2+ proxies across zones |
+| Observability: plain HTTP between the collector, the stores and Grafana inside `observability` | NetworkPolicies are the only control there (only the collector writes, only Grafana reads; nothing goes out) | TLS on each store, or a service mesh, in production |
+| Observability: the Node tier, Kafka and Temporal log to stdout only | Their logs are in `kubectl logs`, not in Loki; their metrics and traces are not collected | A log agent with Kubernetes API access (an egress rule for the API server, see the row above), OpenTelemetry in the Node services |
+| Observability: no pod restarts or node metrics, no alert rules | The dashboards show what the services report about themselves | kube-state-metrics and node metrics; alert rules with a notification channel |
+| Observability: data on emptyDir | A restarted store starts empty; everything goes with the teardown | Persistent volumes or a managed service in production |
 | The watchdog's hourly check is a GitHub deployment each time | The `azure-demo-teardown` environment lists many deployments | Cosmetic |

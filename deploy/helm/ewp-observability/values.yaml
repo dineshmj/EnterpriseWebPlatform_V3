@@ -1,0 +1,105 @@
+# ┌─ :: ARCHITECTURE + SECURITY + OBSERVABILITY :: Metrics, traces and logs in the cluster ────────
+# │ Why : The customer's estate is Grafana + Prometheus (metrics), with logs and traces beside them.
+# │       In the cloud demo it runs IN the cluster (decision 27-OCT): nothing leaves Azure, the
+# │       egress rules stay strict, dashboards are code in this repository, no account or key.
+# │ How : EWP's .NET services PUSH over OTLP (gRPC, TLS with EWP's private CA) to one collector
+# │       (Grafana Alloy), which fans out: metrics -> Prometheus (its native OTLP receiver), traces
+# │       -> Tempo, logs -> Loki (its native OTLP endpoint). Nothing connects INTO EWP's pods, so
+# │       their "who may connect to me" rules are unchanged. Grafana is the only way in: public at
+# │       grafana.<domain> through the Gateway (re-encrypted to the pod), signed in through EWP's
+# │       IDP; only operations_administrator (Viewer) and platform_administrator (Admin) get in.
+# │       One instance each, data on emptyDir: the demo lives a few hours and is torn down.
+# │       DEBT: inside this namespace the backends talk plain HTTP (NetworkPolicies are the
+# │       control); the Node tier, Kafka and Temporal write to stdout only (kubectl logs) -
+# │       doc/Cloud-Demo.md "Observability" lists both.
+# │ Ref : doc/Cloud-Demo.md (observability) | doc/Kubernetes.md | Features 1.7.3 |
+# │       OpenTelemetry OTLP | Prometheus OTLP receiver | Loki OTLP ingestion
+# └────────────────────────────────────────────────────────────────────────────────────────────────
+
+# Required: EWP's public domain - Grafana is grafana.<domain>, the IDP idp.<domain>.
+domain: ""
+
+# The namespaces whose pods may push OTLP to the collector (EWP's chart).
+clientNamespaces: [ewp]
+
+grafana:
+  host: grafana
+  image: docker.io/grafana/grafana:13.2.4@sha256:dbbc38ea21103cefb50396340cd88afec779c7e070b0a7bf5a75b4ce46651d3f
+  uid: 472
+  # CONTRACT: the IDP's client (src/IDP ObservabilityGrafana; deploy/helm/ewp global.observability).
+  oidc:
+    clientId: Grafana.ClientID
+    # The Secret (deploy/helm/keyvault-secrets, from Key Vault) with key client-secret.
+    secret: ewp-grafana-oidc
+    # SEC: who gets in, from the ID token's role claim(s); anyone else is refused (strict).
+    roleAttributePath: "contains(to_array(role), 'platform_administrator') && 'Admin' || contains(to_array(role), 'operations_administrator') && 'Viewer'"
+  resources:
+    requests: {cpu: 25m, memory: 128Mi}
+    limits: {memory: 384Mi}
+
+alloy:
+  image: docker.io/grafana/alloy:v1.20.1@sha256:2aa2099af76c0098d4af7a4d6e48f86cb66dc1a000222ad927a1c67c6542d13f
+  uid: 473
+  resources:
+    requests: {cpu: 25m, memory: 128Mi}
+    limits: {memory: 512Mi}
+
+prometheus:
+  image: docker.io/prom/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e
+  uid: 65534
+  retention: 24h
+  storage: 4Gi
+  resources:
+    requests: {cpu: 50m, memory: 384Mi}
+    limits: {memory: 1Gi}
+
+loki:
+  image: docker.io/grafana/loki:3.7.8@sha256:1107dd5274e0ada47e42472b7a7e71f3b2a2fe878878108f3e2f9e51528f0193
+  uid: 10001
+  retention: 48h
+  storage: 4Gi
+  resources:
+    requests: {cpu: 25m, memory: 256Mi}
+    limits: {memory: 768Mi}
+
+tempo:
+  image: docker.io/grafana/tempo:2.10.8@sha256:f0561deb1c68ec44d6e6e7e4487f30106c4e5e768642077695b37958b105812a
+  uid: 10001
+  retention: 48h
+  storage: 2Gi
+  resources:
+    requests: {cpu: 25m, memory: 192Mi}
+    limits: {memory: 512Mi}
+
+tls:
+  # EWP's private CA (deploy/helm/ewp-cluster): the collector's and Grafana's certificates.
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: ewp-internal-ca
+
+trust:
+  # ConfigMaps (key ca.crt) trust-manager copies into namespaces labelled ewp.dev/trust=true.
+  caBundle: ewp-internal-ca
+  fullBundle: ewp-trust-bundle
+
+gateway:
+  # The Gateway listener that ends the browser's TLS (as the EWP chart's global.gateway.parentRefs).
+  parentRefs:
+    - name: ewp-gateway
+      namespace: gateway-system
+      sectionName: https
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: gateway-system
+
+egress:
+  # Required: the Gateway's public IP - Grafana reaches the IDP by its public name.
+  gatewayIp: ""
+  dns:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: kube-system
+    podSelector:
+      matchLabels:
+        k8s-app: kube-dns

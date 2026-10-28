@@ -106,7 +106,9 @@ public static class Config
     /// is registered only in Development.
     /// </summary>
     public static IEnumerable<Client> GetClients(bool isDevelopment) =>
-        isDevelopment ? [Bruno.Client, .. Clients] : Clients;
+        [.. isDevelopment ? [Bruno.Client] : Array.Empty<Client>(), .. Clients,
+         // Only where the cloud demo's Grafana exists (ClientBaseUrls:Grafana).
+         .. ObservabilityGrafana.IsConfigured ? [ObservabilityGrafana.Client] : Array.Empty<Client>()];
 
     private static IEnumerable<Client> Clients =>
         [
