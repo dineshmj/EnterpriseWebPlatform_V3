@@ -41,7 +41,7 @@ test.describe('Digital Gold kill switch - resilience', () => {
     await withFlag('digital-gold-sales-paused', 'on', async () => {
       // Act + Assert 1: a new slip is refused, with the reason.
       await test.step('Paused: a new slip is refused with the reason', async () => {
-        await digitalGold.open();
+        // The screen is open already: opening it again would only swap the page under the test.
         await digitalGold.selectCustomer(customerNumber);
         const refused = await digitalGold.tryRecordTransferSlip(formNumber('TS'), '20.00', mobileOnRecord);
         await expect(refused.filter({ hasText: pausedMessage })).toBeVisible({ timeout: 30_000 });
@@ -58,7 +58,6 @@ test.describe('Digital Gold kill switch - resilience', () => {
 
     // Act + Assert 3: sales open again - the waiting slip is sent and paid as usual.
     await test.step('Resumed: the waiting slip is sent and its payment starts', async () => {
-      await digitalGold.open();
       await digitalGold.selectCustomer(customerNumber);
       expect(await digitalGold.sendAndPay(waitingSlip)).toMatch(/^PAY-/);
     });
