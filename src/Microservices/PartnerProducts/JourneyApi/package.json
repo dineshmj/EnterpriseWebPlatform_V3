@@ -42,8 +42,8 @@
         }
       ]
     },
-    "globalSetup": "<rootDir>/support/wiremock-start.ts",
-    "globalTeardown": "<rootDir>/support/wiremock-stop.ts",
+    "globalSetup": "<rootDir>/../../../../../tst/node/wiremock/wiremock-start.ts",
+    "globalTeardown": "<rootDir>/../../../../../tst/node/wiremock/wiremock-stop.ts",
     "testTimeout": 20000
   }
 }

@@ -8,7 +8,7 @@ import {
 import type { JourneyOptions } from '../src/configuration/journey-options';
 import { DomainApiClient } from '../src/services/domain-api.client';
 import { TokenExchangeService } from '../src/services/token-exchange.service';
-import { received, resetWireMock, stub, wireMockUrl } from './support/wiremock';
+import { received, resetWireMock, stub, wireMockUrl } from '../../../../../tst/node/wiremock/wiremock';
 
 // ┌─ :: ARCHITECTURE + SECURITY :: The Journey API's two neighbours, played by WireMock ───────────
 // │ Why : What the counter sees depends on how this API turns the IDP's and the Domain API's
@@ -175,5 +175,33 @@ describe('DomainApiClient - the IDP and the Partner Products Domain API played b
     // Then
     await expect(call).rejects.toBeInstanceOf(ServiceUnavailableException);
     await expect(call).rejects.toThrow('Partner Products is unavailable. Try again shortly.');
+  });
+
+  it('Given the Domain API redirects elsewhere, when it is called, then the redirect is not followed and the exchanged token goes nowhere else', async () => {
+    // Given
+    await idpExchangesFor('exchanged');
+    await stub({ request: { method: 'GET', urlPath: '/v1/partner-products/gold-account-applications' }, response: { status: 302, headers: { Location: `${wireMockUrl()}/elsewhere` } } });
+    await stub({ request: { method: 'GET', urlPath: '/elsewhere' }, response: { status: 200, jsonBody: [] } });
+
+    // When
+    const call = client.get(PERSON_TOKEN, 'partner-products.read', domainUrl('/gold-account-applications'), WHAT);
+
+    // Then
+    await expect(call).rejects.toBeInstanceOf(ServiceUnavailableException);
+    expect(await received('GET', '/elsewhere')).toHaveLength(0);
+  });
+
+  it('Given the IDP\'s token endpoint redirects (307), when a token is exchanged, then the client secret and the person\'s token are not sent on', async () => {
+    // Given: a 307 keeps the method and the body - the form with the client secret.
+    await stub({ request: { method: 'POST', urlPath: '/connect/token' }, response: { status: 307, headers: { Location: `${wireMockUrl()}/elsewhere/token` } } });
+    await stub({ request: { method: 'POST', urlPath: '/elsewhere/token' }, response: { status: 200, jsonBody: { access_token: 'stolen', expires_in: 300 } } });
+
+    // When
+    const call = client.get(PERSON_TOKEN, 'partner-products.read', domainUrl('/gold-account-applications'), WHAT);
+
+    // Then
+    await expect(call).rejects.toThrow('The identity provider is unavailable. Try again shortly.');
+    expect(await received('POST', '/elsewhere/token')).toHaveLength(0);
+    expect(await received('GET', '/v1/partner-products/gold-account-applications')).toHaveLength(0);
   });
 });

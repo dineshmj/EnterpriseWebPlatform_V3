@@ -80,11 +80,16 @@ export class ParkedMessagesService {
     const timer = setTimeout(() => controller.abort(), 10_000);
     let response: Response;
     try {
+      // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+      // │ A domain API never redirects: a redirect is refused (an error, so "unavailable"),
+      // │ never followed - the exchanged token goes to the configured API and nowhere else.
+      // └──────────────────────────────────────────────────────────────────────────────────────
       response = await fetch(`${base[context]}/v1/${context}/outbox${path}`, {
         method,
         headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
         body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal,
+        redirect: 'error',
       });
     } catch (error) {
       this.logger.warn(`${method} ${context} outbox failed: ${(error as Error).message}`);

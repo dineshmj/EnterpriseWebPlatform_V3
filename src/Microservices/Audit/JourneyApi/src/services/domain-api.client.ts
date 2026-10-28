@@ -33,9 +33,14 @@ export class DomainApiClient {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 10_000);
       try {
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ A domain API never redirects: a redirect is refused (an error, so "unavailable"),
+        // │ never followed - the exchanged token goes to the configured API and nowhere else.
+        // └──────────────────────────────────────────────────────────────────────────────────────
         const response = await fetch(url, {
           headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
           signal: controller.signal,
+          redirect: 'error',
         });
 
         if (response.ok) return (await response.json()) as T;

@@ -31,6 +31,10 @@ So every Domain API decides by **Sarah's** permissions (the IDP re-reads them at
 
 A deactivated person's token stops working along the whole chain (the IDP checks the user at every exchange).
 
+## Tests
+
+`pnpm test` - Jest with **WireMock standalone** playing the IDP's token endpoint, the Audit Domain API and the Payments API (`test\domain-api.client.spec.ts`): one token per scope, the one retry for a read, how downstream answers are translated for the auditor, no redirect followed. Install WireMock once with `.\ps\wiremock\Install-WireMock.ps1`; Jest starts it for the run and stops it afterwards - the platform need not be up. Details: `tst\README.md` ("Node.js tests").
+
 ## Endpoints
 
 All require a delegated token: audience `audit-journey-api`, scope `audit-journey.read`, `act` = the Audit web BFF, and the person's permission.
@@ -113,6 +117,7 @@ What this project does to stay secure: each control, what would go wrong without
 | 8 | No default for any security setting: audience, permitted caller and own client must be configured | A copied default could accept tokens meant for another service | Misconfiguration (OWASP A05) | [journey-options.ts](src/configuration/journey-options.ts) |
 | 9 | Container image: CI builds the API from the committed lockfile (`--frozen-lockfile`) - never a local build; production dependencies only; distroless Node runtime (no shell, no package manager - no apt, npm, npx, corepack or yarn), as the non-root user 65532 with its files read-only to it; base images pinned by tag and digest, scanned before it is published (HIGH / CRITICAL with a fix, or any secret, fails); no secret inside - every setting comes from the environment, and `runnow.bat` and key material never enter the build | A developer-built image could carry anything; a package manager in a container helps an attacker who gets in; a secret in a layer stays in the registry for good | Supply-chain tampering (OWASP A08); vulnerable components (A06); hard-coded credentials (CWE-798) | [Dockerfile](Dockerfile), [.dockerignore](../../../../.dockerignore), [container-images.yml](../../../../.github/workflows/container-images.yml), [doc/Containers.md](../../../../doc/Containers.md) |
 | 10 | TLS here or at the platform, never neither by accident: `AUDIT_JOURNEY_PLAIN_HTTP=true` (the image sets it) listens on plain HTTP 8080 - TLS between pods comes from the platform (service mesh mTLS); otherwise the development certificate (`AUDIT_JOURNEY_TLS_PFX_PATH`) is required, and both set refuse to start | A missing setting could quietly open plain HTTP | Misconfiguration (OWASP A05); cleartext transmission (CWE-319) | [listener-tls.ts](src/configuration/listener-tls.ts) |
+| 11 | No redirect followed: the calls to the IDP's token endpoint and to the Audit and Payments APIs refuse a redirect (`redirect: 'error'` - an error, so "unavailable") | A domain API's 302 would carry the exchanged token to its `Location`; an IDP's 307 would re-send the token-exchange form (client secret, the auditor's token) there | Credential leak to another host; SSRF-style redirection (CWE-601) | [domain-api.client.ts](src/services/domain-api.client.ts), [token-exchange.service.ts](src/services/token-exchange.service.ts); `pnpm test` (WireMock) |
 
 ## Not yet
 
