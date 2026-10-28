@@ -1,4 +1,5 @@
 import { request as playwrightRequest, test } from '@playwright/test';
+import { literal, psqlOk } from '../database';
 import { DigitalGoldMfe } from '../pages/mfes';
 import type { ShellPage } from '../pages/ShellPage';
 import type { PersonaName } from '../personas';
@@ -76,15 +77,51 @@ export function goldAccount(signedInAs: SignIn, key: string): Promise<GoldAccoun
   return account;
 }
 
-/** Sophie records a transfer slip for `amount` and presses "Send & pay"; returns the slip number. */
-export async function buyGold(sophie: ShellPage, customerNumber: string, amount: string): Promise<{ digitalGold: DigitalGoldMfe; slipNumber: string }> {
+/** Sophie records a transfer slip for `amount` and presses "Send & pay"; returns the slip and payment numbers. */
+export async function buyGold(sophie: ShellPage, customerNumber: string, amount: string): Promise<{ digitalGold: DigitalGoldMfe; slipNumber: string; paymentNumber: string }> {
   return test.step(`Sophie buys AUD ${amount} of gold for ${customerNumber} (transfer slip, Send & pay)`, async () => {
     const digitalGold = new DigitalGoldMfe(sophie);
     await digitalGold.open();
     await digitalGold.selectCustomer(customerNumber);
     const slipNumber = formNumber('TS');
     await digitalGold.recordTransferSlip(slipNumber, amount, mobileOnRecord);
-    await digitalGold.sendAndPay(slipNumber);
-    return { digitalGold, slipNumber };
+    const paymentNumber = await digitalGold.sendAndPay(slipNumber);
+    return { digitalGold, slipNumber, paymentNumber };
   });
+}
+
+// ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+// │ What the deviation runs read straight from the databases (psql as the superuser, as
+// │ the audit tamper test does): the screens show a purchase's state, not how many times
+// │ an event was written or whether the Outbox has relayed it yet.
+// └──────────────────────────────────────────────────────────────────────────────────────
+const partnerProductsDb = 'EwpPartnerProductsDb';
+
+/** The purchase EWP recorded for a transfer slip: its number (the workflow's and the Outbox's key). */
+export function purchaseNumberOf(slipNumber: string): string {
+  const [number] = psqlOk(partnerProductsDb, `SELECT purchase_number FROM gold_purchases WHERE slip_number = ${literal(slipNumber)};`);
+  if (!number) throw new Error(`No purchase was recorded for slip ${slipNumber}.`);
+  return number;
+}
+
+export interface OutboxRow { id: string; eventType: string; published: boolean; attemptCount: number; redriveCount: number; lastRedrivenBy: string }
+
+/** A Form VII's or a purchase's Outbox messages, oldest first. */
+export function outboxOf(aggregateType: 'GoldPurchase' | 'GoldAccountApplication', aggregateId: string): OutboxRow[] {
+  return psqlOk(partnerProductsDb, `
+    SELECT id, event_type, published_at IS NOT NULL, attempt_count, redrive_count, coalesce(last_redriven_by, '')
+    FROM outbox_messages WHERE aggregate_type = ${literal(aggregateType)} AND aggregate_id = ${literal(aggregateId)}
+    ORDER BY sequence;`).map(row => {
+    const [id, eventType, published, attemptCount, redriveCount, lastRedrivenBy] = row.split('|');
+    return { id, eventType, published: published === 't', attemptCount: Number(attemptCount), redriveCount: Number(redriveCount), lastRedrivenBy };
+  });
+}
+
+/** How many times a purchase's gold was allocated (its GoldPurchaseAllocated events) - must never exceed one. */
+export const allocationsOf = (purchaseNumber: string) =>
+  outboxOf('GoldPurchase', purchaseNumber).filter(m => m.eventType === 'GoldPurchaseAllocated').length;
+
+/** The payment's status at EWP Payments (COMPLETED once debited and sent). */
+export function paymentStatusOf(paymentNumber: string): string {
+  return psqlOk('EwpPaymentsDb', `SELECT status FROM payments WHERE payment_number = ${literal(paymentNumber)};`)[0] ?? '';
 }
