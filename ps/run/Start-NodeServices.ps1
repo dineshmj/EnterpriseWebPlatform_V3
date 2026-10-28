@@ -129,8 +129,9 @@ if ($Stop -or $Restart) {
     Write-Host 'All stopped. Starting again...' -ForegroundColor Yellow
 }
 
-# The Audit, Operations and Partner Products services read the development certificate from the user profile.
-if (($services.Group -contains 'Audit' -or $services.Group -contains 'Operations' -or $services.Group -contains 'PartnerProducts') -and -not (Test-Path "$env:USERPROFILE\.aspnet\https\ewp-v3-dev.pfx")) {
+# SEC: every Node service (the KYC BFF too, since 28-OCT-2026) reads the development certificate from the
+# user profile - never from a copy in the repository.
+if (-not (Test-Path "$env:USERPROFILE\.aspnet\https\ewp-v3-dev.pfx")) {
     Write-Host 'The development certificate is not exported yet. Run once:' -ForegroundColor Red
     Write-Host '  dotnet dev-certs https -ep "$env:USERPROFILE\.aspnet\https\ewp-v3-dev.pfx" -p "dev-password"'
     Write-Host '  dotnet dev-certs https -ep "$env:USERPROFILE\.aspnet\https\ewp-v3-dev.pem" --format Pem --no-password'
