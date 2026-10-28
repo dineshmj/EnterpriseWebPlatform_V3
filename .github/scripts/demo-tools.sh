@@ -26,7 +26,7 @@ trap 'rm -rf "$work"' EXIT
 mkdir -p "$bin"
 
 fetch() { # url file sha256
-  curl -fsSL --retry 3 -o "$work/$2" "$1"
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 -o "$work/$2" "$1"
   echo "$3  $work/$2" | sha256sum --check --strict
 }
 

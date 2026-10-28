@@ -187,7 +187,9 @@ public sealed class DigitalGoldController(PartnerProductsDbContext db, TimeProvi
             throw new DigitalGoldConflictException($"The Partner Bank will not show this account: {answer.Reason}");
 
         var requestUri = (string?)answer.Body?["request_uri"];
-        if (requestUri is null || !System.Text.RegularExpressions.Regex.IsMatch(requestUri, "^urn:partner-bank:staff-view:[A-Za-z0-9_-]{43}$"))
+        // SEC: the Partner Bank's answer is outside input - a match timeout (ReDoS).
+        if (requestUri is null || !System.Text.RegularExpressions.Regex.IsMatch(requestUri, "^urn:partner-bank:staff-view:[A-Za-z0-9_-]{43}$",
+                System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromMilliseconds(100)))
             throw new PartnerBankUnavailableException("The Partner Bank's answer carried no usable request_uri.");
         var expiresIn = answer.Body?["expires_in"]?.GetValue<int>() ?? 60;
         return new PartnerViewLink($"{options.StaffViewUrl}?request_uri={Uri.EscapeDataString(requestUri)}", expiresIn);

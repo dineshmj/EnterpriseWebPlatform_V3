@@ -12,7 +12,8 @@
 # │       Terraform: the cloud demo's code formatted and valid (no Azure needed).
 # │       "CI result" sums them up: it is the ONE check branch protection requires. No path
 # │       filter, so it reports on every commit (a required check that never runs would block).
-# │       Actions are pinned to commit SHAs; the job token can only read.
+# │       Actions are pinned to commit SHAs; the job token can only read. Downloads are HTTPS
+# │       only, redirects included (curl --proto =https), and checksum-verified.
 # │ Ref : doc/CI.md | OWASP A06, A08 | SLSA Build L2
 # └────────────────────────────────────────────────────────────────────────────────────────────────
 name: CI
@@ -183,7 +184,7 @@ jobs:
         run: |
           set -euo pipefail
           jar="$RUNNER_TEMP/wiremock-standalone-$WIREMOCK_VERSION.jar"
-          curl -fsSL -o "$jar" "https://repo1.maven.org/maven2/org/wiremock/wiremock-standalone/$WIREMOCK_VERSION/wiremock-standalone-$WIREMOCK_VERSION.jar"
+          curl -fsSL --proto '=https' --tlsv1.2 -o "$jar" "https://repo1.maven.org/maven2/org/wiremock/wiremock-standalone/$WIREMOCK_VERSION/wiremock-standalone-$WIREMOCK_VERSION.jar"
           echo "$WIREMOCK_SHA256  $jar" | sha256sum --check --strict
           echo "WIREMOCK_JAR=$jar" >> "$GITHUB_ENV"
 
@@ -225,9 +226,9 @@ jobs:
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP"
-          curl -fsSL -o helm.tgz "https://get.helm.sh/helm-$HELM_VERSION-linux-amd64.tar.gz"
+          curl -fsSL --proto '=https' --tlsv1.2 -o helm.tgz "https://get.helm.sh/helm-$HELM_VERSION-linux-amd64.tar.gz"
           echo "$HELM_SHA256  helm.tgz" | sha256sum --check --strict
-          curl -fsSL -o kubeconform.tgz "https://github.com/yannh/kubeconform/releases/download/$KUBECONFORM_VERSION/kubeconform-linux-amd64.tar.gz"
+          curl -fsSL --proto '=https' --tlsv1.2 -o kubeconform.tgz "https://github.com/yannh/kubeconform/releases/download/$KUBECONFORM_VERSION/kubeconform-linux-amd64.tar.gz"
           echo "$KUBECONFORM_SHA256  kubeconform.tgz" | sha256sum --check --strict
           mkdir bin
           tar -xzf helm.tgz -C bin --strip-components 1 linux-amd64/helm

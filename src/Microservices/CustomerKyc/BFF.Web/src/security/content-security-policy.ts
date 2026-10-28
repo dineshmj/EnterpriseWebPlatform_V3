@@ -65,7 +65,8 @@ function inlineHashes(root: string, element: RegExp): string[] {
     }
   }
 
-  return [...hashes].sort();
+  // Ordinal order, so the header is the same on every machine (no locale-dependent sort).
+  return [...hashes].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
 function* htmlFiles(dir: string): Generator<string> {

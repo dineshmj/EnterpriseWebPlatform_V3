@@ -136,16 +136,24 @@ async function bootstrap() {
   // │ nested file when the dotted one is missing and the nested one exists (segments of
   // │ letters, digits, "_" and "-" only; express.static still guards the root). Same rule as
   // │ Common/WebUtilities/Helpers/NextExportSegmentFiles.cs for the .NET BFFs.
+  // │ SEC: the file checks themselves stay inside the static root too (a "../" in the path
+  // │ must not probe for files elsewhere on the disk).
   // └──────────────────────────────────────────────────────────────────────────────────────
   const staticRoot = path.resolve(options.staticRoot);
+  const insideStaticRoot = (urlPath: string): string | undefined => {
+    const file = path.resolve(staticRoot, `.${urlPath}`);
+    return file.startsWith(staticRoot + path.sep) ? file : undefined;
+  };
   app.use((req: express.Request, _res: express.Response, next: express.NextFunction) => {
     if (req.method === 'GET' || req.method === 'HEAD') {
       const slash = req.path.lastIndexOf('/');
       const match = /^__next\.([A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+)\.txt$/.exec(req.path.slice(slash + 1));
-      if (match && !fs.existsSync(path.join(staticRoot, req.path))) {
+      const dotted = match ? insideStaticRoot(req.path) : undefined;
+      if (match && dotted && !fs.existsSync(dotted)) {
         const segments = match[1].split('.');
         const nested = `${req.path.slice(0, slash + 1)}__next.${segments[0]}/${segments.slice(1).join('/')}.txt`;
-        if (fs.existsSync(path.join(staticRoot, nested))) req.url = nested + req.url.slice(req.path.length);
+        const nestedFile = insideStaticRoot(nested);
+        if (nestedFile && fs.existsSync(nestedFile)) req.url = nested + req.url.slice(req.path.length);
       }
     }
     next();
