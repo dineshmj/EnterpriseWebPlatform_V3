@@ -262,6 +262,41 @@ An MFE and its BFF are one deployable: the MFE is a static export served by its 
    - Its database migrations are backward compatible with the previous release.
    - It can be rolled back on its own.
 
+### 7.3 Releasing without redeploying: feature flags (OpenFeature, LaunchDarkly)
+
+Deploying and releasing are separate decisions. A new surface can be deployed switched off and switched on later; a product can be stopped at once without a deployment. Flags are the mechanism - within strict limits:
+
+1. **Vendor-neutral in code.** Services ask for a flag through **OpenFeature**, from one shared library; where the flags live is configuration (a provider), never code.
+2. **The default is today's behaviour.** An unreadable flag source, a missing flag or an unreachable flag service changes nothing; the service logs it. Start-up never waits for the flag source.
+3. **A flag switches something off, for everyone.** Release toggles and kill switches only. **Authorization never comes from a flag**: who may do what stays with the policies (RBAC, ABAC, ReBAC, SoD). No percentage roll-outs or per-person targeting in a banking workflow.
+4. **Server-side only.** No browser evaluates a flag; a switched-off endpoint answers 404 before authentication, as if it did not exist.
+5. **A kill switch never strands work.** Pausing a product refuses new work and lets work already under way complete (the Digital Gold kill switch pauses new slips; purchases already ordered or paid carry on).
+
+Two flags exist: `bian-v2-endpoints` (release toggle for the BIAN `/v2` surfaces, §7.4) and `digital-gold-sales-paused` (kill switch).
+
+#### LaunchDarkly
+
+**LaunchDarkly is the flag service, as in the customer's estate; OpenFeature keeps it replaceable.** The same services read:
+
+| Source | When | Change takes effect |
+|---|---|---|
+| **LaunchDarkly** (OpenFeature provider) | an SDK key is configured | seconds (streaming) |
+| a flag file (flagd format, read in-process) | no SDK key - the laptop, or the cloud demo without a LaunchDarkly account | seconds (laptop) / about a minute (Kubernetes ConfigMap) |
+| none | neither | every flag keeps its default |
+
+Posture:
+
+- **The SDK key is a secret** (it reads every flag of its environment): environment variable or secret store only - in the cloud demo a GitHub secret, then Key Vault, then a Kubernetes Secret given only to the five services that read flags.
+- **Egress is the price, and it is contained.** LaunchDarkly is a SaaS whose IP ranges change; a Kubernetes NetworkPolicy cannot name its domains, so only those five services get HTTPS to public addresses, and only while LaunchDarkly is switched on.
+- **Target for a bank's private network:** application pods reach no internet. LaunchDarkly's **Relay Proxy** runs inside the network - the only component that reaches LaunchDarkly (outbound proxy, allowed by domain), or fully offline from exported rules - and the services' SDKs talk only to it. Without LaunchDarkly, a self-hosted flag service (flagd, Unleash, Flagsmith) is another OpenFeature provider, with no change to the code that asks for flags.
+- **Every flag change is visible:** LaunchDarkly's audit log for who changed a flag; the services log the flag source they use at start-up.
+
+Details: [Features 1.9.4](Architectural-And-Security-Features-Demoable-EWP-V3.md#194-feature-flags-release-toggles-and-kill-switches-openfeature-launchdarkly), [feature-flags/README.md](../feature-flags/README.md), [Kubernetes.md](Kubernetes.md) K13.
+
+### 7.4 Industry-standard contracts: BIAN
+
+A bank asks of every new system which BIAN service domain it implements. EWP's answer is **mapping with confidence, not by name**: where a domain API fits a BIAN service domain (release 14.0.0) with confidence, it offers BIAN's contract as **`/v2` beside its own `/v1`**, translated at the edge (an anti-corruption mapper per API) onto the same commands, queries and policies - the domain model and the tables do not change, and EWP's own callers keep `/v1`. Four APIs qualify (Payments → PaymentOrderInitiation, Accounts → CurrentAccount, Customer Onboarding → PartyReferenceDataDirectory, Documents Management → DocumentDirectory); plausible fits and no-fits stay `/v1` with the reason recorded, as a bank would propose a new service domain to BIAN or keep a BIAN-like interface of its own. Conformance is proved against BIAN's published OpenAPI files in the tests; `/v2` is behind a release toggle (§7.3). Details: [doc/bian/README.md](bian/README.md), [Features 1.2.5](Architectural-And-Security-Features-Demoable-EWP-V3.md#125-bian-contracts-beside-ewps-own).
+
 ---
 
 ## 8. Front-End Composition
@@ -380,8 +415,8 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Secrets and keys | Workload / managed identity → secrets and KMS. Rotation, versioning, expiry, access audit; separate keys per environment; no hard-coded secrets. TLS 1.2+ (prefer 1.3). |
 | Service-to-service | Strong client authentication; least-privilege scopes; audience restriction; mTLS or workload identity where justified; short-lived tokens; network segmentation; explicit authorization |
 | Zero trust | Never trust by network location: authenticate, authorize, validate context, least privilege, observe |
-| Supply chain and DevSecOps | SAST, SCA, secret scanning, SBOM, IaC scanning, container scanning, DAST / API testing, signed artifacts and provenance, pinned dependencies — all in the pipeline, with severity and remediation SLAs |
-| Infrastructure and edge | Network segmentation; private subnets; WAF / API gateway; DDoS protection; container hardening; Kubernetes RBAC and network policies; IaC with drift detection. The edge complements application authorization; it never replaces it. |
+| Supply chain and DevSecOps | SAST, SCA, secret scanning, SBOM, IaC scanning, container scanning, DAST / API testing, signed artifacts and provenance, pinned dependencies — all in the pipeline, with severity and remediation SLAs Built: SCA gate in CI (NuGet, pnpm); SBOM and SLSA provenance on every image; Trivy image scan; code scanning on every pull request - CodeQL (C#, TypeScript, the workflows), SonarQube Cloud and Snyk - reported, not yet gating ([CI.md](CI.md)) |
+| Infrastructure and edge | Network segmentation; private subnets; WAF / API gateway; DDoS protection; container hardening; Kubernetes RBAC and network policies; IaC with drift detection. The edge complements application authorization; it never replaces it. Built in the cloud demo: default-deny network policies in both directions - each pod may connect out only to what its own configuration implies (K12) |
 | Rate limiting | Login, token endpoints, uploads, payment initiation, expensive queries, administrative APIs. Keyed by user, client, IP, endpoint and risk. |
 | Security monitoring | Authentication and authorization failures, privilege changes, credential misuse, anomalous data access, document-download and payment anomalies feed SIEM / SOC (Production Concern) |
 | Fraud and risk | Risk signals → allow / challenge / hold / reject / manual review; simulated in the PoC. Built: the payment network's fraud score at payment initiation (allow / review by an officer / decline), within a latency budget and with cautious fallback rules - Features 1.6.7 |
@@ -392,12 +427,12 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 
 | Area | Targets |
 |---|---|
-| Resilience | Bounded retries with exponential backoff and jitter; timeouts; circuit breakers; bulkheads; load shedding; graceful degradation; health checks with liveness / readiness separation. A retry must never turn one payment into two (idempotency keys). |
+| Resilience | Bounded retries with exponential backoff and jitter; timeouts; circuit breakers; bulkheads; load shedding; graceful degradation; health checks with liveness / readiness separation. A retry must never turn one payment into two (idempotency keys). A synchronous check in the user's path gets a **latency budget and a fallback** that is cautious, never blind (the fraud check at payment capture: 250 ms, then rules that send risky payments to an officer and never decline). |
 | Kafka | Explicit topics (no auto-create); keys and ordering documented per event; retry and dead-letter topics; ACLs, authentication and TLS; retention policies; consumer-lag monitoring; schema versioning |
-| Observability | OpenTelemetry logs, metrics and traces; W3C trace context propagated through HTTP **and Kafka headers**; workflow duration and failure rates; circuit-breaker state; retry counts; masked sensitive data |
+| Observability | OpenTelemetry logs, metrics and traces; W3C trace context propagated through HTTP **and Kafka headers**; workflow duration and failure rates; circuit-breaker state; retry counts; masked sensitive data. Built for the cloud demo: services push OTLP to a collector in the cluster; Prometheus, Loki, Tempo and Grafana, signed in through EWP's own IDP, with dashboards as code ([Cloud-Demo.md](Cloud-Demo.md) CD23) |
 | Operational resilience | Operators can find a failed workflow, its initiator, its last successful step and the failed message; inspect Outbox, Inbox and saga state; replay safely; trigger controlled compensation; disable a consumer. All of this is audited. |
 | Availability | HA, replication, backups, PITR, DR (RPO / RTO), multi-zone or multi-region deployment, runbooks (Production Concern; modelled in the PoC) |
-| Configuration | Externalized, validated at start-up, environment-specific, secret-free in source control |
+| Configuration | Externalized, validated at start-up, environment-specific, secret-free in source control; behaviour switched at run time only through feature flags under the rules of §7.3 |
 
 ---
 
@@ -406,13 +441,13 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Level | Scope |
 |---|---|
 | Unit | Aggregates and value objects, state transitions, authorization handlers, idempotency rules |
-| Integration | Database, Outbox / Inbox, Kafka, IDP, downstream APIs |
-| Contract | Event schemas and API contracts, producer / consumer compatibility |
+| Integration | Database, Outbox / Inbox, Kafka, IDP, downstream APIs. External systems and neighbours played by **WireMock** - WireMock.Net in the .NET adapter tests (the real adapter with its real resilience pipeline), WireMock standalone in the NestJS Journey APIs' Jest tests (the customer's pattern) |
+| Contract | Event schemas and API contracts, producer / consumer compatibility; the BIAN `/v2` bodies validated against BIAN's published OpenAPI files |
 | End-to-end | Login, MFE navigation, onboarding, KYC review, notifications |
 | Security | Authorization categories of [Authorization-Model §15](Authorization-Model.md#15-authorization-test-categories); CSRF, XSS, SSRF, injection, token validation, session security |
 | Chaos / failure | Kafka down; duplicate delivery; consumer crash; API timeout; transient and permanent HTTP failures; database failure; stale workflow state; duplicate commands; compensation failure |
 
-**Gap:** there are no automated tests yet (`tst/` is empty).
+**Present:** .NET unit and adapter tests (NUnit, WireMock.Net), Jest + WireMock for the Journey APIs - both in CI on every pull request - and the Playwright end-to-end, resilience and security suite against the running platform ([tst/README.md](../tst/README.md), [Features 1.8](Architectural-And-Security-Features-Demoable-EWP-V3.md#18-testing)). **Gap:** contract tests between producers and consumers of events; DAST.
 
 ---
 
@@ -468,7 +503,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | IDP hardening (lockout, no enumeration, POST logout, front-channel logout, refresh-token rotation) | Present; refresh tokens, PAR requests and signing keys in Duende's operational store (PostgreSQL), so an IDP restart signs nobody out |
 | MFA and step-up | Present, off by default in Development (`Mfa:Enabled`; cannot be switched off elsewhere - the IDP and the APIs refuse to start): TOTP with Google Authenticator for every user, enrolment at sign-in with recovery codes; tokens carry `amr` and `auth_time`, and risky actions (officer decisions, operations' retry, resend, reconciliation, simulator switch) require a RECENT MFA sign-in; a stale one is renewed in the Shell's in-page overlay with the code only, without a pop-up and without signing out (`acr_values=mfa`; only the IDP's step-up code page may be framed, by the Shell only) |
 | Server-side BFF sessions | Present for the .NET BFFs: Duende sessions and Data Protection keys in PostgreSQL (`EwpBffStateDb`, one schema and user per BFF), so restarts and several instances keep sessions; key rings encrypted at rest (certificate, or DPAPI in Development) or the application refuses to start. Present for the Node.js BFFs (KYC, Audit web): their own schema, hashed session key, AES-256-GCM-encrypted session. Present for the IDP: Duende server-side sessions, so sign-out revokes the sign-in cookie |
-| Automated tests | Partial: Playwright end-to-end, resilience and security suite through the real front ends (including the MFA step-up), run against the local platform; .NET unit tests (`tst/dotnet`) and the Partner Products Journey API's Jest tests run in CI on every pull request ([doc/CI.md](CI.md)) |
+| Automated tests | Present: .NET unit tests for every context with decisions (NUnit, Given/When/Then) and adapter tests with **WireMock.Net** (payment network, core banking, screening provider, Partner Bank; the real resilience pipelines), **Jest + WireMock standalone** for the three NestJS Journey APIs - all in CI on every pull request; the Playwright end-to-end, resilience and security suite against the running platform |
 | Document content verification (allow-list + magic bytes) | Present |
 | Direct / pre-signed document upload, malware scanning | Planned / Target |
 | Secrets per deployable, fail closed when missing | Present |
@@ -476,7 +511,13 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Container images | Present: one Dockerfile per deployable (35), built only in CI from a commit; chiseled .NET and distroless Node runtimes, non-root; base images pinned by digest; Trivy scan (vulnerabilities and secrets) and a start check before publishing to GHCR ([Containers.md](Containers.md)) |
 | Kubernetes deployment | Present: one Helm chart over all components ([Kubernetes.md](Kubernetes.md)): restricted pods (non-root, read-only, no token), TLS between pods from a private CA, default-deny network policies in both directions (each pod reaches only what its own entry says it calls: K12), Gateway API with backend TLS, secrets by name only; charts checked in CI (lint, kubeconform strict). Partial: the Kafka broker's (Strimzi) outgoing connections are not limited |
 | Cloud environment as code | Present: the Azure demo ([Azure.md](Azure.md), [Cloud-Demo.md](Cloud-Demo.md)): Terraform (AKS, PostgreSQL, Key Vault, public IP, DNS records), GitHub OIDC sign-in without a stored secret, Demo up / Demo down / a 6-hour watchdog; first full run 25-OCT-2026 (all demo users signed in). Partial: single zone, public API server, one Kafka node, Temporal development server |
-| SBOM, SAST / SCA / DAST, artifact signing | Partial: SCA gate in CI (NuGet, pnpm), SBOM and SLSA provenance attached to every image, image scan with Trivy; SAST, DAST and artifact signing Target |
+| SBOM, SAST / SCA / DAST, artifact signing | Partial: SCA gate in CI (NuGet, pnpm); SAST and a second SCA reported on every pull request (CodeQL, SonarQube Cloud, Snyk - not gating yet); SBOM and SLSA provenance on every image; Trivy image scan; DAST and artifact signing Target |
+| Feature flags (release toggles, kill switches) | Present: OpenFeature in one shared library; **LaunchDarkly** when an SDK key is set, otherwise a flag file (ConfigMap in the cluster); default = today's behaviour, server-side only, never authorization; `bian-v2-endpoints` and `digital-gold-sales-paused` (§7.3) |
+| Industry-standard contracts (BIAN) | Present for four APIs: BIAN release 14.0.0 as `/v2` beside `/v1` (PaymentOrderInitiation, CurrentAccount, PartyReferenceDataDirectory, DocumentDirectory), validated against BIAN's files; other domains stay `/v1` with the reason recorded (§7.4) |
+| Fraud and risk checks | Present (payments): the payment network's fraud score at initiation within a 250 ms budget - allow / review by an officer / decline before any funds move; cautious fallback rules when the score is late (never decline); the decision, its source and score kept on the payment. Target: a real fraud engine, more signals |
+| Centralized logs, metrics and traces | Present in the cloud demo (to verify on its next run): OTLP push to a collector, Prometheus, Loki, Tempo, Grafana signed in through EWP's IDP (operations and platform administrators only), three dashboards as code. Target: alert rules, pod and node metrics, the Node tier's logs |
+| Network policies in both directions | Present in the cluster: default-deny ingress and egress; each pod's outgoing rules derived from its own configuration (K12). Target: FQDN egress filtering at the edge |
+| Code scanning | Partial: CodeQL, SonarQube Cloud and Snyk on every pull request, reported and triaged, not gating |
 | WAF, DDoS, SIEM / SOC, HA, DR, multi-region, regulatory evidence | Production Concern |
 
 ---
@@ -544,8 +585,8 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [x] Step-up in an in-page overlay (no pop-up)
 
 **Phase 6 — Secure delivery**
-- [ ] Automated tests (Partial: Playwright end-to-end, resilience and security suite against the local platform; unit tests and Jest in CI on every pull request)
-- [ ] SAST, SCA, secret scanning (Partial: SCA gate in CI; Trivy's secret scan of every image)
+- [ ] Automated tests (Partial: Playwright end-to-end, resilience and security suite against the local platform; .NET unit and WireMock.Net adapter tests and Jest + WireMock in CI on every pull request)
+- [ ] SAST, SCA, secret scanning (Partial: SCA gate in CI; CodeQL, SonarQube Cloud and Snyk on every pull request, reported; Trivy's secret scan of every image)
 - [x] SBOM (attached to every image)
 - [x] Container scanning (Trivy, before publishing)
 - [ ] IaC scanning (Partial: charts checked against the Kubernetes schemas, Terraform validated, in CI)
@@ -556,9 +597,9 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 **Phase 7 — Operational resilience**
 - [x] OpenTelemetry traces
 - [x] Structured logs (Serilog) and metrics (Prometheus `/metrics`, OTLP)
-- [ ] Centralized logs and metrics (a collector, Grafana / Observe - deployment)
+- [ ] Centralized logs and metrics (Partial: built for the cloud demo - OTLP collector, Prometheus, Loki, Tempo, Grafana; to verify on its next run)
 - [ ] Kafka monitoring
-- [ ] Workflow dashboards (Partial: Operations Platform Health, the Payment Processing Monitor, the Onboarding Workflow Monitor)
+- [ ] Workflow dashboards (Partial: Operations Platform Health, the Payment Processing Monitor, the Onboarding Workflow Monitor; Grafana dashboards for health, requests and errors, messaging and payments in the cloud demo)
 - [ ] Alerting
 - [ ] Backup / restore testing
 - [ ] Chaos testing
@@ -599,9 +640,20 @@ Details: [PartnerProducts-Requirements.md](Requirements/PartnerProducts-Requirem
 - [x] The whole platform and the Partner Bank on AKS; every demo user signed in (2026-10-25, staging certificates)
 - [x] The business journeys walked through in the cloud, with production certificates (2026-10-26)
 - [ ] Egress network policies (built 27-OCT-2026 for EWP, ewp-infra and the Partner Bank - K12; to verify in the next cloud demo; Strimzi's pods excepted)
-- [ ] Centralized logs and metrics for the cloud demo (Grafana / Observe)
+- [ ] Centralized logs and metrics for the cloud demo (built 28-OCT-2026: in the cluster, Grafana through EWP's IDP; to verify in the next cloud demo)
 
 Details: [Containers.md](Containers.md), [Kubernetes.md](Kubernetes.md), [Azure.md](Azure.md), [Cloud-Demo.md](Cloud-Demo.md).
+
+**Phase 11 — The customer's stack and practices (backlog of 27-OCT-2026)**
+- [x] Feature flags through OpenFeature, LaunchDarkly or a flag file; a release toggle and a kill switch (§7.3)
+- [x] BIAN `/v2` contracts for the four APIs that map with confidence, validated against BIAN's files (§7.4)
+- [x] Code scanning: CodeQL, SonarQube Cloud, Snyk - reported, triaged (gating: Target)
+- [x] Adapter tests with WireMock: WireMock.Net for the external systems, WireMock standalone + Jest for the Journey APIs (they found and fixed a non-JSON answer passing as a screening result, and Journey APIs following redirects with their tokens)
+- [x] Fraud check at payment capture within a latency budget, with a cautious fallback
+- [ ] Observability in the cluster (built; to verify in the next cloud demo)
+- [ ] FAPI 2.0 completion (objective to be agreed)
+
+Details: [Architectural-And-Security-Features-Demoable-EWP-V3.md](Architectural-And-Security-Features-Demoable-EWP-V3.md) (1.2.5, 1.6.7, 1.7.3, 1.8.2, 1.9.4, 2.5.2).
 
 ---
 

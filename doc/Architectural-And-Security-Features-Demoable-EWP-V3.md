@@ -34,6 +34,10 @@ The document answers *how the platform is built and protected*, not *which busin
 | What can Prometheus / Grafana see? Are the logs structured? | [1.7.3](#173-structured-logs-and-metrics) |
 | Can you follow one request through Kafka in a tracing tool? | [1.7.1](#171-distributed-tracing-across-http-and-kafka) |
 | How do you version event contracts? | [1.3.6](#136-tolerant-readers-and-contract-evolution) |
+| Can a feature be switched off without a redeploy? Is LaunchDarkly used? | [1.9.4](#194-feature-flags-release-toggles-and-kill-switches-openfeature-launchdarkly) |
+| The bank must stop selling a product at once. Is anything left half-done? | [1.9.4](#194-feature-flags-release-toggles-and-kill-switches-openfeature-launchdarkly) |
+| Do the APIs follow an industry standard such as BIAN? | [1.2.5](#125-bian-contracts-beside-ewps-own) |
+| Is the code scanned for vulnerabilities, not only the dependencies? | [2.5.2](#252-code-scanning-codeql-sonarqube-cloud-and-snyk) |
 | How do two people editing the same record at once not overwrite each other? | [1.6.4](#164-concurrency-control) |
 | Where are the access tokens kept? Can JavaScript read them? | [2.1.1](#211-oidc-authorization-code--pkce-through-a-bff), [3.3](#33-tokens-in-the-browser) |
 | How do you stop a user from opening someone else's record by changing an ID (IDOR / BOLA)? | [2.2.3](#223-object-level-authorization) |
@@ -77,6 +81,7 @@ The document answers *how the platform is built and protected*, not *which busin
     - [1.2.2 Value objects](#122-value-objects)
     - [1.2.3 Domain events translated into integration events](#123-domain-events-translated-into-integration-events)
     - [1.2.4 Layered APIs with separate commands and queries](#124-layered-apis-with-separate-commands-and-queries)
+    - [1.2.5 BIAN contracts beside EWP's own](#125-bian-contracts-beside-ewps-own)
   - [1.3 Event-driven integration](#13-event-driven-integration)
     - [1.3.1 Transactional Outbox](#131-transactional-outbox)
     - [1.3.2 Idempotent consumers (Inbox)](#132-idempotent-consumers-inbox)
@@ -114,6 +119,7 @@ The document answers *how the platform is built and protected*, not *which busin
     - [1.9.1 Container images built only in CI](#191-container-images-built-only-in-ci)
     - [1.9.2 One Helm chart for the whole platform](#192-one-helm-chart-for-the-whole-platform)
     - [1.9.3 A cloud demo that appears and disappears (Azure)](#193-a-cloud-demo-that-appears-and-disappears-azure)
+    - [1.9.4 Feature flags: release toggles and kill switches (OpenFeature, LaunchDarkly)](#194-feature-flags-release-toggles-and-kill-switches-openfeature-launchdarkly)
 - [2. Security features](#2-security-features)
   - [2.1 Identity](#21-identity)
     - [2.1.1 OIDC Authorization Code + PKCE through a BFF](#211-oidc-authorization-code--pkce-through-a-bff)
@@ -148,6 +154,7 @@ The document answers *how the platform is built and protected*, not *which busin
     - [2.4.10 Integration with another organisation: the Partner Bank](#2410-integration-with-another-organisation-the-partner-bank)
   - [2.5 Supply chain](#25-supply-chain)
     - [2.5.1 Dependency vulnerability scanning](#251-dependency-vulnerability-scanning)
+    - [2.5.2 Code scanning: CodeQL, SonarQube Cloud and Snyk](#252-code-scanning-codeql-sonarqube-cloud-and-snyk)
 - [3. Anti-patterns avoided](#3-anti-patterns-avoided)
   - [3.1 Distributed monolith](#31-distributed-monolith)
   - [3.2 Dual write](#32-dual-write)
@@ -238,6 +245,22 @@ Each API is split into Domain, Application, Infrastructure and API layers. The d
 - Command handlers: [OpenKycCaseCommandHandler.cs](../src/Microservices/CustomerKyc/API/Application/Commands/OpenKycCase/OpenKycCaseCommandHandler.cs), [SubmitOnboardingApplicationCommandHandler.cs](../src/Microservices/CustomerOnboarding/API/Application/Onboarding/Commands/SubmitApplication/SubmitOnboardingApplicationCommandHandler.cs)
 - Queries: [KycCaseQueries.cs](../src/Microservices/CustomerKyc/API/Application/Queries/KycCaseQueries.cs), [CustomerOnboarding/API/Application/Customers/Queries](../src/Microservices/CustomerOnboarding/API/Application/Customers/Queries)
 - Abstractions: [Persistence.cs](../src/Microservices/CustomerKyc/API/Application/Abstractions/Persistence.cs)
+
+#### 1.2.5 BIAN contracts beside EWP's own
+
+Banks describe their services with **BIAN** (Banking Industry Architecture Network) service domains, so a new system is asked "which BIAN service domain is it, and does it speak BIAN's contract?". Four EWP domain APIs answer yes: each offers BIAN's own contract as **`/v2` next to its `/v1`**, on the same command handlers, queries and authorization rules - Payments as **PaymentOrderInitiation** (initiate, retrieve, approve or reject), Accounts as **CurrentAccount** (retrieve, deposit), Customer Onboarding as **PartyReferenceDataDirectory** (retrieve, update) and Documents Management as **DocumentDirectory** (read-only). BIAN release **14.0.0** is used, its OpenAPI files copied unchanged into the repository.
+
+The mapping was rated, not forced: only where BIAN's definition and operations fit **with confidence** is there a `/v2`; plausible fits (account-opening applications as CustomerOffer, onboarding as PartyLifecycleManagement) and no-fits (sanctions screening, notifications, the audit trail, the Partner Bank distribution) stay `/v1`, each with the reason written down - as a bank would propose a new service domain to BIAN, or keep a BIAN-like interface of its own. BIAN's schemas are deliberately general (every property optional, amounts and identifiers as objects), so a **mapper per API translates at the edge** (an anti-corruption layer): the domain, the sagas and the tables do not change, EWP still requires what its business needs, and each BIAN property it does not take is named. EWP's own callers stay on `/v1`.
+
+**Proved with BIAN's own file:** the tests validate every body `/v2` sends or accepts against BIAN's published schema, and a test with a wrong value shows the check can fail. All four `/v2` surfaces sit behind the release toggle `bian-v2-endpoints` ([1.9.4](#194-feature-flags-release-toggles-and-kill-switches-openfeature-launchdarkly)): off, `/v2` answers 404 before authentication; `/v1` is never touched.
+
+**Where to look at:**
+
+- The mapping, every decision and the release used: [doc/bian/README.md](bian/README.md); BIAN's files: [doc/bian/release14.0.0](bian/release14.0.0)
+- Payments: [PaymentOrderInitiationController.cs](../src/Microservices/Payments/API/Controllers/PaymentOrderInitiationController.cs), [PaymentOrderInitiationMapper.cs](../src/Microservices/Payments/API/Bian/PaymentOrderInitiationMapper.cs); the other three APIs' `Bian/` folders and READMEs
+- Tests: [PaymentOrderInitiation_Contract_Happy_ValidAgainstBian.cs](../tst/dotnet/Payments.Api.Tests/Bian/PaymentOrderInitiation_Contract_Happy_ValidAgainstBian.cs) and the `Bian/` tests of the Accounts, Customer Onboarding and Documents Management projects; Playwright `20-functional/bian`
+
+**Not yet:** a BIAN `/v2` for the plausible fits (a decision for the bank); BIAN's semantic events on Kafka.
 
 ### 1.3 Event-driven integration
 
@@ -704,6 +727,46 @@ The whole platform - and the Partner Bank, from its own repository - can be brou
 
 ---
 
+#### 1.9.4 Feature flags: release toggles and kill switches (OpenFeature, LaunchDarkly)
+
+Some changes must take effect **without a redeploy**: hiding a new API surface until it is wanted, or stopping the sale of a product at once (a pricing fault at the Partner Bank, a regulator's request). EWP's services ask for a flag through **OpenFeature**, the vendor-neutral feature-flag API, so where the flags live is configuration, not code. Two flags exist today:
+
+| Flag | Kind | Default (= today's behaviour) | What switching it does |
+|---|---|---|---|
+| `bian-v2-endpoints` | Release toggle | on | Off: every BIAN `/v2` request of the Payments, Accounts, Customer Onboarding and Documents Management APIs answers **404 with no body, before authentication** - as if the route did not exist ([1.2.5](#125-bian-contracts-beside-ewps-own)); `/v1` is untouched |
+| `digital-gold-sales-paused` | Kill switch | off | On: no new Digital Gold transfer slip, and a slip not yet sent is refused with a plain reason; a slip already SENT is still sent again and ORDERED / PAID purchases carry on - **nothing is stranded half-way** at the Partner Bank |
+
+**Safety rules, enforced in one shared library:** the default of every flag is today's behaviour, so a missing or broken flag file, or LaunchDarkly being unreachable, never switches anything by itself (the service logs a warning); a flag only switches something **off, for everyone** - **who may do what stays with the authorization policies, never a flag**; start-up never waits for the flag source. Flags are read on the server only; no browser asks for one.
+
+**Where the flags come from:**
+
+| Source | When | A change arrives |
+|---|---|---|
+| **LaunchDarkly** (the customer's flag service) | `EWP_LAUNCHDARKLY_SDK_KEY` is set | in seconds (a streaming connection) |
+| A flag file (flagd's format, read in-process) | no SDK key: `feature-flags/ewp-flags.json` on the laptop, the ConfigMap `ewp-feature-flags` in the cloud | in about 5 s on the laptop, about a minute in the cluster |
+| nothing | neither | every flag keeps its default |
+
+##### LaunchDarkly
+
+LaunchDarkly is the **OpenFeature provider** chosen when an SDK key is present; nothing else in the code knows about it. The two flags are created in the LaunchDarkly project with exactly the keys above (Boolean, serving the defaults above); each service identifies itself as a context of kind `service` with its own name (`payments-api`, `partner-products-api`, ...), so a flag can target one service.
+
+- **On a laptop:** the SDK key of a development environment, set once as a user environment variable (`setx EWP_LAUNCHDARKLY_SDK_KEY "sdk-..."`); remove it to fall back to the file.
+- **In the cloud demo:** the GitHub secret `LAUNCHDARKLY_SDK_KEY` (another environment's key). Demo up stores it in Key Vault, the Kubernetes Secret `ewp-launchdarkly` brings it to the five APIs that read flags, and only those five get **one extra egress rule: HTTPS to public addresses** (LaunchDarkly's IP ranges change and it advises allowing its domains, which a NetworkPolicy cannot name). Without the secret nothing changes - the demo needs no account.
+- **The SDK key is a secret:** it reads every flag of its environment, so it lives only in an environment variable or a secret store, never in a settings file or a commit.
+- **In a bank's private network** application pods do not talk to the internet: LaunchDarkly runs only as a service, so the bank puts LaunchDarkly's open-source **Relay Proxy** inside its network - the one component that reaches LaunchDarkly (through the outbound proxy, allowed by domain), or fully offline from an exported file on select plans. The services' SDKs then talk only to the Relay Proxy; the code needs only its address. Without LaunchDarkly, a self-hosted service (flagd, Unleash, Flagsmith) is another OpenFeature provider - no change to the code that asks for flags.
+
+Demo: with the file, set `digital-gold-sales-paused` to `on` in `feature-flags/ewp-flags.json` (or `kubectl -n ewp edit configmap ewp-feature-flags` in the cloud); within seconds Sophie cannot record a new transfer slip and sees why, while purchases already under way complete. With LaunchDarkly, flip the same flag in its console. Set `bian-v2-endpoints` off and `/v2` disappears while `/v1` keeps answering.
+
+**Where to look at:**
+
+- The flags, their rules, switching them and the LaunchDarkly set-up: [feature-flags/README.md](../feature-flags/README.md); the committed defaults: [ewp-flags.json](../feature-flags/ewp-flags.json)
+- The shared library (OpenFeature, the LaunchDarkly and file providers, the 404 gate): [EwpFeatureFlags.cs](../src/Common/WebUtilities/FeatureFlags/EwpFeatureFlags.cs) (OpenFeature 2.14.1, the LaunchDarkly server SDK and its OpenFeature provider)
+- The kill switch in the domain: the Partner Products API's purchase commands (Partner Products API README)
+- In the cluster: Kubernetes decision K13 in [Kubernetes.md](Kubernetes.md), `global.featureFlags` in [values.yaml](../deploy/helm/ewp/values.yaml), the Secret `ewp-launchdarkly` (Cloud-Demo CD22)
+- Tests: unit `tst/dotnet/Payments.Api.Tests/FeatureFlags` (on / off / file missing / file broken / the committed file); Playwright `20-functional/bian/bian-release-toggle.spec.ts`, `35-resilience/partner-products/digital-gold-sales-paused.spec.ts` (skipped while an SDK key is set)
+
+**Not yet:** a Relay Proxy in the cloud demo; percentage roll-outs and per-branch targeting (deliberately not used: a flag here switches something off for everyone).
+
 ## 2. Security features
 
 ### 2.1 Identity
@@ -1105,6 +1168,24 @@ One script checks every .NET and npm dependency of the solution against publishe
 **Not yet:** SAST, and signing the images (they carry provenance attestations, not signatures).
 
 ---
+
+#### 2.5.2 Code scanning: CodeQL, SonarQube Cloud and Snyk
+
+Dependency checks (2.5.1) find known-vulnerable packages; they do not read EWP's own code. Three scanners do, on every pull request, every push to `main`, weekly (new queries and advisories find issues in unchanged code) and on demand:
+
+| Scanner | What it looks for |
+|---|---|
+| **CodeQL** (GitHub) | Data-flow analysis of the C#, TypeScript and the GitHub workflows themselves (`security-extended` queries): injection, SSRF, path traversal, unsafe deserialization, script injection in Actions, over-broad tokens. Findings in GitHub's Security tab and on the pull request |
+| **SonarQube Cloud** | Bugs, code smells, security hotspots and duplication across the C# and TypeScript, with a quality gate shown on each pull request |
+| **Snyk Open Source** | The NuGet and pnpm dependency trees (HIGH and above) with Snyk's own advisory database - a second opinion to the CI gate's `dotnet list package --vulnerable` and `pnpm audit` |
+
+They are **reported, not gating** - deliberately for a first run over code never scanned before: a gate set before the findings are triaged would only be switched off again. The first triage removed a committed development key, added match timeouts to regular expressions on request input (ReDoS), updated a vulnerable transitive package Snyk rated higher than GitHub did, and recorded the false positives with their reason. The tokens are repository secrets; the jobs skip themselves (and say so) where a token is missing, as on fork pull requests.
+
+**Where to look at:**
+
+- The workflow: [code-scanning.yml](../.github/workflows/code-scanning.yml); what each job does, the triage and the trade-offs (e.g. a personal SonarQube Cloud token without expiry on the free plan): [CI.md](CI.md#code-scanning-reported-not-gating)
+
+**Not yet:** a gate (e.g. no new HIGH CodeQL alert on a pull request); secret scanning push protection; DAST.
 
 ## 3. Anti-patterns avoided
 
