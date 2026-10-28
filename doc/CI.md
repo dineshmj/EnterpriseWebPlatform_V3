@@ -26,6 +26,8 @@ Not gated here, and why:
 - **Container images**: [container-images.yml](../.github/workflows/container-images.yml) builds
   and scans the images a pull request changes, but it has a path filter, so it cannot be a
   required check. Its scan still stops a vulnerable image from being published on `main`.
+- **Code scanning (CodeQL, SonarQube Cloud, Snyk)**: reported, not gating yet - see
+  [Code scanning](#code-scanning-reported-not-gating) below.
 - **Playwright**: needs the whole platform running (laptop, or the cloud demo later).
 - **Compiler warnings**: reported, not failing (3 nullable warnings in the IDP today).
 - **Azure access check**: [azure-access-check.yml](../.github/workflows/azure-access-check.yml)
@@ -38,6 +40,47 @@ Not gated here, and why:
 A new advisory can turn a gate red without a code change (as body-parser and multer did on
 24-OCT). That is intended: fix the dependency (an update, or an override in
 `pnpm-workspace.yaml` that rewrites only the vulnerable versions) in the next pull request.
+
+## Code scanning (reported, not gating)
+
+[code-scanning.yml](../.github/workflows/code-scanning.yml) runs on every pull request, every
+push to `main`, weekly (Monday 04:17 UTC: new queries and new advisories find issues in unchanged
+code) and by hand. **None of its jobs is part of "CI result": a finding never blocks a merge.**
+That is deliberate for a first run - the existing code has never been scanned, and a gate set
+before the findings are triaged would only be switched off again. Once they are, a gate can be
+added (for example: no new HIGH CodeQL alert on a pull request).
+
+| Job | What it does | Where the findings go |
+|---|---|---|
+| CodeQL (C#, JavaScript/TypeScript, Actions) | GitHub's data-flow analysis, `security-extended` queries, `build-mode: none` (read from source, no build). The workflows are scanned too (script injection, over-broad tokens) | **Security -> Code scanning**; new alerts on a pull request are annotated on its diff |
+| SonarQube Cloud | Scanner for .NET 12.0.0 around the Release build of `EnterpriseWebPlatform.BSS.slnx`; it also analyses the TypeScript outside the .NET projects, so one project shows C# and TypeScript (bugs, code smells, security hotspots, duplication) | sonarcloud.io; its quality gate shows on the pull request as a separate check |
+| Snyk Open Source | Snyk CLI 1.1308.1 (pinned, Snyk's SHA-256 checked): `snyk test --all-projects` over the restored NuGet projects and the pnpm lockfiles, test projects left out (as in the CI gate), HIGH and above. On `main` also `snyk monitor`, so Snyk alerts on a NEW advisory against what `main` ships, without a commit | **Security -> Code scanning** (category `snyk-open-source`) and app.snyk.io |
+
+SonarQube Cloud and Snyk skip themselves (and say so on the run's summary) until their token
+exists. Fork and Dependabot pull requests get no secrets, so they skip there too.
+
+### Setting up SonarQube Cloud (once)
+
+1. [sonarcloud.io](https://sonarcloud.io) -> **Log in with GitHub** -> import the GitHub
+   organisation `dineshmj` (free plan; public projects are free) -> **Analyze new project** ->
+   `EnterpriseWebPlatform_V3`.
+2. In the project: **Administration -> Analysis Method** -> **Automatic Analysis off** (the
+   workflow does the analysis; both together fail).
+3. **My Account -> Security** -> generate a token -> GitHub repository **Settings -> Secrets and
+   variables -> Actions -> New repository secret** `SONAR_TOKEN`.
+4. Only if the organisation key or project key SonarQube Cloud shows differ from `dineshmj` and
+   `dineshmj_EnterpriseWebPlatform_V3`: add them as repository **variables** `SONAR_ORGANIZATION`
+   and `SONAR_PROJECT_KEY`.
+
+### Setting up Snyk (once)
+
+1. [app.snyk.io](https://app.snyk.io) -> sign up with GitHub (free plan).
+2. **Account settings -> Auth Token** (or a service account token in the organisation settings)
+   -> repository secret `SNYK_TOKEN`.
+3. Do not also import the repository through Snyk's GitHub integration: it would open its own
+   fix pull requests next to Dependabot's.
+
+Then **Actions -> Code scanning -> Run workflow** on `main` once, to see the first results.
 
 ## Branch protection: ruleset for `main`
 
