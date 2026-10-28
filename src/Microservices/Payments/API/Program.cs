@@ -11,6 +11,7 @@ using OpenTelemetry.Trace;
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
+using EnterpriseWebPlatform.Common.WebUtilities.FeatureFlags;
 using EnterpriseWebPlatform.Common.WebUtilities.Resilience;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.Payments.Api.Application.Abstractions;
@@ -275,6 +276,12 @@ builder.Services.AddEwpMfaStepUp();   // the step-up requirement and its clear 4
 // :: SECURITY :: Step-up MFA - see Common/WebUtilities/Security/MfaStepUp.cs
 builder.RequireMfaOutsideDevelopment();   // fail closed: MFA can be off on a developer's machine only
 
+// ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+// │ Feature flags (OpenFeature; the BIAN /v2 release toggle): a flag file or LaunchDarkly -
+// │ see Common/WebUtilities/FeatureFlags. Never a permission: a flag only switches OFF.
+// └──────────────────────────────────────────────────────────────────────────────────────
+builder.AddEwpFeatureFlags("payments-api");
+
 var app = builder.Build();
 
 // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
@@ -300,6 +307,8 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 
 app.UseHttpsRedirection();
+// A switched-off /v2 endpoint answers 404 before anything else looks at the request.
+app.UseEwpFeatureGates();
 app.UseAuthentication();
 // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
 // │ Order matters: authentication BEFORE the rate limiter (the budget is per person, read

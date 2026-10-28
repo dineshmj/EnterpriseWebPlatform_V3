@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Net.Http.Headers;
 
+using EnterpriseWebPlatform.Common.WebUtilities.FeatureFlags;
 using EnterpriseWebPlatform.CustomerOnboarding.API.Authorization;
 using EnterpriseWebPlatform.CustomerOnboarding.API.Bian;
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions;
@@ -32,6 +33,7 @@ namespace EnterpriseWebPlatform.CustomerOnboarding.API.Controllers;
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 [ApiController]
 [Route("v2/PartyReferenceDataDirectory")]
+[FeatureGate(FeatureFlagKeys.BianV2Endpoints, defaultValue: true)]   // release toggle: off = 404 (Common/WebUtilities/FeatureFlags)
 public sealed class PartyReferenceDataDirectoryController(
     GetCustomerQueryHandler getCustomerHandler,
     UpdateCustomerCommandHandler updateCustomerHandler,

@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 using Npgsql;
 
+using EnterpriseWebPlatform.Common.WebUtilities.FeatureFlags;
 using EnterpriseWebPlatform.PartnerProducts.Api.Authorization;
 using EnterpriseWebPlatform.PartnerProducts.Api.Domain;
 using EnterpriseWebPlatform.PartnerProducts.Api.Infrastructure;
@@ -20,8 +21,10 @@ namespace EnterpriseWebPlatform.PartnerProducts.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("v1/partner-products")]
-public sealed class DigitalGoldController(PartnerProductsDbContext db, TimeProvider clock, PartnerBankClient partnerBank) : ControllerBase
+public sealed class DigitalGoldController(PartnerProductsDbContext db, TimeProvider clock, PartnerBankClient partnerBank, EwpFeatureFlags flags) : ControllerBase
 {
+    internal const string SalesPausedMessage = "Digital Gold sales are paused by the bank for now: nothing was sent to the Partner Bank and nothing was charged. Purchases already sent carry on.";
+
     public sealed record FormViiRequest(
         string? CustomerNumber, string? CustomerName, bool KycVerified, string? PhoneOnRecord,
         DateOnly DateOfBirth, bool IdentityChecked, string? FormNumber, DateOnly FormSignedOn, bool SignatureChecked,
@@ -217,6 +220,7 @@ public sealed class DigitalGoldController(PartnerProductsDbContext db, TimeProvi
     public async Task<ActionResult<PurchaseView>> RecordTransferSlip(TransferSlipRequest request, CancellationToken cancellationToken)
     {
         var actor = ActorOf(User);
+        await RefuseWhileSalesPausedAsync(cancellationToken);
         var customerNumber = DigitalGoldRules.CustomerNumber(request.CustomerNumber);
         var account = await db.Applications
             .Where(a => a.CustomerNumber == customerNumber && a.BranchCode == actor.BranchCode && a.Status != GoldAccountApplication.Refused)
@@ -249,6 +253,13 @@ public sealed class DigitalGoldController(PartnerProductsDbContext db, TimeProvi
             return NotFound();
         if (purchase.Status != GoldPurchase.Recorded && purchase.Status != GoldPurchase.Sent)
             return View(purchase);   // already ordered (or final): sending again is the "continue" of a purchase - nothing to send
+        // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+        // │ The kill switch stops only what has not left EWP: a RECORDED slip. A SENT one may
+        // │ already be an order at the Partner Bank, so it is always sent again (same
+        // │ instruction, placed once) - pausing sales never strands an order or its payment.
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        if (purchase.Status == GoldPurchase.Recorded)
+            await RefuseWhileSalesPausedAsync(cancellationToken);
 
         var instructionId = purchase.PrepareToSend(actor.LanId, clock.GetUtcNow());
         await SaveOnceAsync($"Purchase {number} is being sent by someone else right now.", cancellationToken);
@@ -314,6 +325,17 @@ public sealed class DigitalGoldController(PartnerProductsDbContext db, TimeProvi
         {
             throw new DigitalGoldConflictException(conflict);
         }
+    }
+
+    // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
+    // │ Kill switch (feature flag digital-gold-sales-paused, default OFF = sales open): the
+    // │ bank pauses NEW purchases for everyone - a product decision, never a permission (who
+    // │ may order stays with DigitalGoldPolicies.Order). Unreadable flag = sales stay open.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    private async Task RefuseWhileSalesPausedAsync(CancellationToken cancellationToken)
+    {
+        if (await flags.IsOnAsync(FeatureFlagKeys.DigitalGoldSalesPaused, defaultValue: false, cancellationToken))
+            throw new DigitalGoldConflictException(SalesPausedMessage);
     }
 
     /// <summary>The staff member, from the token the policy already checked (sub, lan_id, branch).</summary>

@@ -23,6 +23,10 @@ The customer's way of adopting BIAN, in small:
 4. **Prove it** with BIAN's own file: the tests validate every body `/v2` sends or accepts
    against BIAN's published OpenAPI schema, and a test with an invalid value shows the check can
    fail.
+5. **Switch it without a redeploy.** All four `/v2` controllers sit behind the release toggle
+   `bian-v2-endpoints` (default on; [feature-flags/README.md](../../feature-flags/README.md)):
+   off, every `/v2` request answers 404 before authentication, as if it did not exist; `/v1` is
+   never touched.
 
 ## The release used
 
@@ -237,3 +241,5 @@ Code: [Bian/](../../src/Microservices/DocumentsManagement/API/API/Bian),
     Liam, a Sydney KYC officer, sees Sophie's document through BIAN's Retrieve and
     DocumentReferenceProperties as `/v1` shows it; Mia's does not exist for him (404); both
     uploads are removed again.
+  - `bian-release-toggle.spec.ts`: no sign-in - each API's `/v2` is 401 (exists) with the toggle
+    on, 404 with no body with it off, and 401 again once it is back; `/v1` stays 401 throughout.

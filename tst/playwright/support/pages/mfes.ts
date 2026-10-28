@@ -459,12 +459,17 @@ export class DigitalGoldMfe {
   /** Searches the customer by number and selects them; their panel shows EWP's record. */
   async selectCustomer(customerNumber: string): Promise<void> {
     const mfe = this.shell.workspace();
-    const search = mfe.getByRole('button', { name: 'Search', exact: true });
-    // React enables Search once it holds the text: until then the text was typed too early.
-    await typeUntilScreenReacts(mfe.locator('#search'), customerNumber, () => expect(search).toBeEnabled({ timeout: 2_000 }), 30_000);
-    await search.click();
-    await mfe.locator('tbody tr').filter({ hasText: customerNumber }).getByRole('button', { name: 'Select', exact: true }).click();
-    await expect(mfe.getByText(`Customer ${customerNumber} - EWP's record`, { exact: true })).toBeVisible();
+    // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+    // │ The whole search is one attempt - type, Search, Select, the record shows - because
+    // │ the page can still be swapped under it: React taking over the exported page (Search
+    // │ disabled until React holds the text), or the screen opened again while it was open.
+    // │ Searching and selecting change nothing, so an attempt is simply made again.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    await typeUntilScreenReacts(mfe.locator('#search'), customerNumber, async () => {
+      await mfe.getByRole('button', { name: 'Search', exact: true }).click({ timeout: 2_000 });
+      await mfe.locator('tbody tr').filter({ hasText: customerNumber }).getByRole('button', { name: 'Select', exact: true }).first().click({ timeout: 15_000 });
+      await expect(mfe.getByText(`Customer ${customerNumber} - EWP's record`, { exact: true })).toBeVisible({ timeout: 15_000 });
+    });
   }
 
   /** Records the customer's signed Form VII with its scan (both checks ticked). */
@@ -504,6 +509,17 @@ export class DigitalGoldMfe {
 
   /** Records a transfer authorization slip for `amount` from the first paying account. */
   async recordTransferSlip(slipNumber: string, amount: string, mobileOnSlip: string): Promise<void> {
+    await this.submitTransferSlip(slipNumber, amount, mobileOnSlip);
+    await expect(this.shell.workspace().getByText(new RegExp(`^Transfer slip ${slipNumber} recorded`))).toBeVisible({ timeout: 30_000 });
+  }
+
+  /** Fills in and submits a transfer slip that is expected to be REFUSED; returns the screen's errors (role alert). */
+  async tryRecordTransferSlip(slipNumber: string, amount: string, mobileOnSlip: string): Promise<Locator> {
+    await this.submitTransferSlip(slipNumber, amount, mobileOnSlip);
+    return this.shell.workspace().getByRole('alert');
+  }
+
+  private async submitTransferSlip(slipNumber: string, amount: string, mobileOnSlip: string): Promise<void> {
     const mfe = this.shell.workspace();
     await mfe.locator('#slipNumber').fill(slipNumber);
     await mfe.locator('#amount').fill(amount);
@@ -511,7 +527,6 @@ export class DigitalGoldMfe {
     await mfe.locator('#slipScan').setInputFiles(samplePdf(`Slip ${slipNumber}`));
     await mfe.getByLabel(/signature on the slip/).check();
     await mfe.getByRole('button', { name: 'Record transfer slip', exact: true }).click();
-    await expect(mfe.getByText(new RegExp(`^Transfer slip ${slipNumber} recorded`))).toBeVisible({ timeout: 30_000 });
   }
 
   /** The purchase's row in "Transfer authorization slips". */

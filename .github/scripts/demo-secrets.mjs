@@ -23,6 +23,8 @@
 //     EWP_KEY_VAULT, PARTNER_KEY_VAULT, TENANT_ID, EWP_SECRETS_CLIENT_ID, PARTNER_SECRETS_CLIENT_ID,
 //     PARTNER_DOMAIN, POSTGRES_HOST, OUT_DIR (the lists: keyvault-secrets-<ns>.json,
 //     and partner-bank-ca.pem, the public root the Gateway checks the Partner Bank's pods with)
+//     Optional: LAUNCHDARKLY_SDK_KEY (GitHub secret) - then also Secret ewp-launchdarkly, and
+//     demo-platform.sh switches the chart to LaunchDarkly (both --list and the chart: off without it)
 import { createHash, generateKeyPairSync, randomBytes, randomInt } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -149,7 +151,12 @@ const o = {
   partnerServerPfx: 'pki-partner-bank-server-pfx',
   partnerServerPassword: 'pki-partner-bank-server-password',
   windowClient: 'window-client-secret',
+  launchDarklySdkKey: 'launchdarkly-sdk-key',
 };
+
+// SEC: the one secret made OUTSIDE this script (the LaunchDarkly environment's SDK key, a GitHub
+// secret). Optional: without it the APIs read the chart's flag file.
+const launchDarklySdkKey = process.env.LAUNCHDARKLY_SDK_KEY?.trim();
 
 // ── The Secrets per namespace: { secret: { key: [object, encoding?] } } ───────────────────────────
 
@@ -187,6 +194,7 @@ function ewpNamespace() {
     add(`ewp-${simulator}`, 'Simulator__AdminKey', o.simulatorAdminKey);
   }
   add('ewp-operations-journey-api', 'OPERATIONS_JOURNEY_SIMULATOR_ADMIN_KEY', o.simulatorAdminKey);
+  if (launchDarklySdkKey) add('ewp-launchdarkly', 'sdk-key', o.launchDarklySdkKey);
   add('ewp-data-protection', 'certificate.pfx', o.dataProtectionPfx, b64);
   add('ewp-data-protection', 'password', o.dataProtectionPassword);
   add('ewp-tls-keystore-password', 'password', o.keystorePassword);
@@ -476,8 +484,14 @@ await inBatches(Object.entries(derived), async ([name, value]) => {
   }
 });
 
+// The LaunchDarkly SDK key as given (rewritten only when the GitHub secret changed).
+if (launchDarklySdkKey && (await vaultCall(ewpVault, 'GET', o.launchDarklySdkKey)) !== launchDarklySdkKey) {
+  await vaultCall(ewpVault, 'PUT', o.launchDarklySdkKey, { value: launchDarklySdkKey, contentType: 'ewp-demo-given' });
+  made++;
+}
+
 // Every object a list names must now be in its vault (the admin password from Terraform too).
-const known = { ewp: new Set([...Object.keys(values.ewp), ...Object.keys(derived), o.dbAdmin]), partner: new Set(Object.keys(values.partner)) };
+const known = { ewp: new Set([...Object.keys(values.ewp), ...Object.keys(derived), o.dbAdmin, ...(launchDarklySdkKey ? [o.launchDarklySdkKey] : [])]), partner: new Set(Object.keys(values.partner)) };
 if ((await vaultCall(ewpVault, 'GET', o.dbAdmin)) === undefined) throw new Error(`${o.dbAdmin} is missing from ${ewpVault} (Terraform makes it).`);
 
 const settings = {

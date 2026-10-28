@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+using EnterpriseWebPlatform.Common.WebUtilities.FeatureFlags;
 using EnterpriseWebPlatform.DocumentsManagement.API.Authorization;
 using EnterpriseWebPlatform.DocumentsManagement.API.Bian;
 using EnterpriseWebPlatform.DocumentsManagement.Application.Abstractions.Persistence;
@@ -23,6 +24,7 @@ namespace EnterpriseWebPlatform.DocumentsManagement.API.Controllers;
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 [ApiController]
 [Route("v2/DocumentDirectory")]
+[FeatureGate(FeatureFlagKeys.BianV2Endpoints, defaultValue: true)]   // release toggle: off = 404 (Common/WebUtilities/FeatureFlags)
 public sealed class DocumentDirectoryController(
     GetDocumentQueryHandler getDocumentHandler,
     IDocumentRepository repository,

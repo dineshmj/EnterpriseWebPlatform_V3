@@ -171,6 +171,9 @@ mapfile -t ewp_images < <(node -e '
   for (const { image } of JSON.parse(require("fs").readFileSync(process.argv[1])).images) console.log(`${image.replace(/^ewp-/, "")}=${image}`);
 ' "$repo/.github/container-images.json")
 image_values "$work/ewp-images.json" "${ewp_images[@]}"
+# Feature flags: LaunchDarkly when the GitHub secret LAUNCHDARKLY_SDK_KEY is set (demo-secrets.mjs
+# put it in Key Vault -> Secret ewp-launchdarkly), otherwise the chart's flag file.
+launch_darkly=false; [ -n "${LAUNCHDARKLY_SDK_KEY:-}" ] && launch_darkly=true
 helm upgrade --install ewp "$repo/deploy/helm/ewp" --namespace ewp \
   -f "$repo/deploy/helm/ewp/values-demo.yaml" -f "$work/ewp-images.json" \
   --set "global.domain=$EWP_DOMAIN" \
@@ -180,6 +183,7 @@ helm upgrade --install ewp "$repo/deploy/helm/ewp" --namespace ewp \
   --set "global.partnerBank.tokenEndpoint=https://partner-auth.$PARTNER_DOMAIN:47411/connect/token" \
   --set "global.partnerBank.apiBaseUrl=https://partner-api.$PARTNER_DOMAIN:47403" \
   --set "global.partnerBank.staffViewUrl=https://partner-products.$PARTNER_DOMAIN:47402/StaffView" \
+  --set "global.featureFlags.launchDarkly.enabled=$launch_darkly" \
   --wait --timeout 20m
 
 # ┌─ OBS ────────────────────────────────────────────────────────────────────────────────────────

@@ -9,6 +9,7 @@ using OpenTelemetry.Trace;
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
+using EnterpriseWebPlatform.Common.WebUtilities.FeatureFlags;
 using EnterpriseWebPlatform.Common.WebUtilities.Resilience;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.PartnerProducts.Api.Authorization;
@@ -186,6 +187,12 @@ builder.Services.AddHealthChecks()
     .Add(new HealthCheckRegistration("digital-gold-age",
         sp => ActivatorUtilities.CreateInstance<DigitalGoldAgeHealthCheck>(sp),
         HealthStatus.Degraded, [HealthEndpoints.ReadyTag]));
+
+// ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+// │ Feature flags (OpenFeature; the Digital Gold sales kill switch): a flag file or LaunchDarkly -
+// │ see Common/WebUtilities/FeatureFlags. Never a permission: a flag only switches OFF.
+// └──────────────────────────────────────────────────────────────────────────────────────
+builder.AddEwpFeatureFlags("partner-products-api");
 
 var app = builder.Build();
 

@@ -11,7 +11,8 @@ public IP and the two domains' address records. A script then puts the cluster's
 12 databases, every secret (made once per demo, kept in Key Vault only), the Partner Bank from
 its own repository, and EWP's 35 services. Nothing is kept between demos except what the
 bootstrap made ([Azure.md](Azure.md)). No secret is stored in GitHub, the Terraform state or the
-repository.**
+repository** - except one you may add: the LaunchDarkly SDK key (CD22), which LaunchDarkly makes,
+not Demo up.
 
 Step 7 of the cloud demo, in two parts:
 
@@ -85,6 +86,7 @@ Then the platform ([demo-platform.sh](../.github/scripts/demo-platform.sh)):
 | CD19 | **The Partner Bank's browser ports end TLS at the Gateway** with a Let's Encrypt certificate and are re-encrypted to the pod (checked against the demo PKI's root); its **mutual-TLS ports are passed through** untouched. Its deployables' own calls to their issuer address may also chain to Let's Encrypt's roots (the Partner Bank's `Tls:BackchannelTrustRootPaths`, never for client certificates) | A browser would not trust the demo PKI: the consent and staff pages would show a certificate warning. EWP's client certificate must still reach the Partner Bank's pod in the handshake (CD4) |
 | CD20 | **Every image pinned to the digest its `main` tag has when Demo up runs** | Images are built only for the folders a commit changed, so no single commit SHA names all 38 images. A digest cannot move during the demo |
 | CD21 | **A staging run adds Let's Encrypt's staging roots to the pods' trust bundle** (and to the Partner Bank's own calls), never to the private-root bundle the Gateway checks pods with | The pods call the IDP through the Gateway; with an untrusted staging certificate every sign-in would fail, so staging could not test the platform |
+| CD22 | **Feature flags from the chart's flag file - or LaunchDarkly when the GitHub secret `LAUNCHDARKLY_SDK_KEY` exists**: Demo up then writes the key to Key Vault (`launchdarkly-sdk-key` → Secret `ewp-launchdarkly`) and installs EWP with `global.featureFlags.launchDarkly.enabled=true` ([Kubernetes.md](Kubernetes.md) K13) | The demo works without any account (the ConfigMap `ewp-feature-flags`, flipped with `kubectl edit`); with one, flags are flipped in LaunchDarkly's console during a demo, as the customer does. The key is the only secret made outside Demo up, so it is the only one GitHub holds; the five APIs that read flags then may open HTTPS to public addresses (LaunchDarkly's IP ranges change and it advises allowing its domains, which a NetworkPolicy cannot name) |
 
 ## Before the first run
 
@@ -101,6 +103,10 @@ Then the platform ([demo-platform.sh](../.github/scripts/demo-platform.sh)):
    shortfall shows only as an apply error. State on 25-OCT-2026: Central India 20 / 20 requested
    (Total Regional approved, DASv5 under review), Australia East 10 / 10.
 5. **Merge this step** to `main`: the workflows run only from there.
+6. *Optional:* **LaunchDarkly** - add the repository secret `LAUNCHDARKLY_SDK_KEY` (the SDK key of
+   the LaunchDarkly environment the demo should use) and create the two flags there
+   ([feature-flags/README.md](../feature-flags/README.md)). Without it the flags come from the
+   chart (CD22).
 
 ## Running a demo
 

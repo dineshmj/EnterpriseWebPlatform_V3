@@ -43,6 +43,17 @@ for values in "$here"/ewp/values-*.yaml; do
   validate "$out/ewp-$env_name.yaml"
 done
 
+# The demo with LaunchDarkly on (K13): the SDK key from its Secret, the one extra egress rule.
+echo "== ewp with values-demo + LaunchDarkly"
+helm template ewp "$here/ewp" --namespace ewp -f "$here/ewp/values-demo.yaml" \
+  --set global.featureFlags.launchDarkly.enabled=true > "$out/ewp-values-demo-launchdarkly.yaml"
+validate "$out/ewp-values-demo-launchdarkly.yaml"
+if [ "$(grep -c 'name: EWP_LAUNCHDARKLY_SDK_KEY' "$out/ewp-values-demo-launchdarkly.yaml")" != "5" ] \
+  || grep -q 'EWP_LAUNCHDARKLY_SDK_KEY' "$out/ewp-values-demo.yaml"; then
+  echo "::error::The LaunchDarkly SDK key must reach exactly the 5 flag-reading APIs, and only when LaunchDarkly is on."
+  exit 1
+fi
+
 # SEC: the chart refuses to render without the values that must come from the environment.
 values="$here/ewp/values-demo.yaml"
 for missing in global.domain global.image.tag global.kafka.bootstrapServers global.temporal.address global.partnerBank.apiBaseUrl global.egress.gatewayIp global.egress.postgresCidr; do

@@ -11,6 +11,7 @@ using OpenTelemetry.Trace;
 
 using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
+using EnterpriseWebPlatform.Common.WebUtilities.FeatureFlags;
 using EnterpriseWebPlatform.Common.WebUtilities.Resilience;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.DocumentsManagement.API.Authorization;
@@ -211,6 +212,12 @@ builder.Services.AddHealthChecks()
 // └──────────────────────────────────────────────────────────────────────────────────────
 builder.Services.AddEwpRateLimiting(builder.Configuration, "/v1", "/internal");
 
+// ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+// │ Feature flags (OpenFeature; the BIAN /v2 release toggle): a flag file or LaunchDarkly -
+// │ see Common/WebUtilities/FeatureFlags. Never a permission: a flag only switches OFF.
+// └──────────────────────────────────────────────────────────────────────────────────────
+builder.AddEwpFeatureFlags("documents-management-api");
+
 var app = builder.Build();
 
 // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
@@ -245,6 +252,8 @@ app.UseExceptionHandler();
 app.UseEwpOutageAnswer();
 
 app.UseHttpsRedirection();
+// A switched-off /v2 endpoint answers 404 before anything else looks at the request.
+app.UseEwpFeatureGates();
 app.UseAuthentication();
 // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
 // │ Order matters: authentication BEFORE the rate limiter (the budget is per person, read

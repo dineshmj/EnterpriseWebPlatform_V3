@@ -246,6 +246,10 @@ jobs:
 
       - name: The platform (Kafka, Temporal, databases, secrets, Partner Bank, EWP)
         working-directory: .
+        env:
+          # Optional: the LaunchDarkly environment's SDK key - set, the APIs read their feature
+          # flags from LaunchDarkly; unset (or empty), from the chart's flag file.
+          LAUNCHDARKLY_SDK_KEY: ${{ secrets.LAUNCHDARKLY_SDK_KEY }}
         run: bash .github/scripts/demo-platform.sh
 
       - name: Summary

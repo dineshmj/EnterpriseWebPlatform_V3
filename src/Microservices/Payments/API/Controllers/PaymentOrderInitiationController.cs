@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
+using EnterpriseWebPlatform.Common.WebUtilities.FeatureFlags;
 using EnterpriseWebPlatform.Payments.Api.Application.Commands;
 using EnterpriseWebPlatform.Payments.Api.Application.Queries;
 using EnterpriseWebPlatform.Payments.Api.Authorization;
@@ -26,6 +27,7 @@ namespace EnterpriseWebPlatform.Payments.Api.Controllers;
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 [ApiController]
 [Route("v2/PaymentOrderInitiation")]
+[FeatureGate(FeatureFlagKeys.BianV2Endpoints, defaultValue: true)]   // release toggle: off = 404 (Common/WebUtilities/FeatureFlags)
 public sealed class PaymentOrderInitiationController(
     InitiatePaymentCommandHandler initiateHandler,
     DecidePaymentCommandHandler decideHandler,
