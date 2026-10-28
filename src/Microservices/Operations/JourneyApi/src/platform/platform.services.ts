@@ -92,7 +92,7 @@ export class SimulatorService implements OnModuleDestroy {
       let behaviour: SimulatorState['behaviour'] = 'Unknown';
       try {
         const response = await fetch(`${this.options.platform.simulatorBaseUrls[simulator.key]}/admin/behaviour`, {
-          headers: this.adminHeaders(), signal: AbortSignal.timeout(3000),
+          headers: this.adminHeaders(), signal: AbortSignal.timeout(3000), redirect: 'error',
         });
         if (response.ok) behaviour = ((await response.json()) as { behaviour?: Behaviour }).behaviour ?? 'Unknown';
       } catch {
@@ -156,7 +156,8 @@ export class SimulatorService implements OnModuleDestroy {
   // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
   // │ In a cluster the simulators are on other machines: the admin key proves this API is the
   // │ caller (server-side only - never sent to or from the browser). On a laptop it is unset
-  // │ and the simulators accept the switch from loopback.
+  // │ and the simulators accept the switch from loopback. A redirect is refused, never
+  // │ followed: fetch would send this custom header on to any other host.
   // └──────────────────────────────────────────────────────────────────────────────────────
   private adminHeaders(): Record<string, string> {
     return this.options.simulatorAdminKey ? { 'X-Simulator-Admin-Key': this.options.simulatorAdminKey } : {};
@@ -170,6 +171,7 @@ export class SimulatorService implements OnModuleDestroy {
         headers: { 'Content-Type': 'application/json', ...this.adminHeaders() },
         body: JSON.stringify({ behaviour }),
         signal: AbortSignal.timeout(5000),
+        redirect: 'error',
       });
     } catch {
       throw new ServiceUnavailableException('The simulator does not answer. Is it running (Visual Studio)?');

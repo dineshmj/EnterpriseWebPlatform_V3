@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["jest", "node"],
+    "incremental": false,
+    "noEmit": true
+  },
+  "include": ["**/*.ts", "../src/**/*.ts", "../../../../../tst/node/wiremock/*.ts"]
+}

@@ -41,6 +41,10 @@ export class TokenExchangeService {
     const timer = setTimeout(() => controller.abort(), 5000);
     let response: Response;
     try {
+      // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+      // │ The form carries this API's client secret and the person's token: a redirect is
+      // │ refused (an error, so "IDP unavailable"), never followed - a 307 would send the form on.
+      // └──────────────────────────────────────────────────────────────────────────────────────
       response = await fetch(`${this.options.authority}/connect/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -53,6 +57,7 @@ export class TokenExchangeService {
           scope,
         }),
         signal: controller.signal,
+        redirect: 'error',
       });
     } catch (error) {
       // The reason stays in this log: the caller learns only that the IDP is unavailable.

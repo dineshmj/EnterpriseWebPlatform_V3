@@ -110,11 +110,16 @@ export class DomainApiClient {
     let response: Response;
 
     try {
+      // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+      // │ A domain API never redirects: a redirect is refused (an error, so "unavailable"),
+      // │ never followed - the exchanged token goes to the configured API and nowhere else.
+      // └──────────────────────────────────────────────────────────────────────────────────────
       response = await fetch(url, {
         method,
         headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', ...(contentType ? { 'Content-Type': contentType } : {}), ...extraHeaders },
         body,
         signal: controller.signal,
+        redirect: 'error',
       });
     } catch (error) {
       this.logger.warn(`${method} ${url} failed: ${(error as Error).message}`);

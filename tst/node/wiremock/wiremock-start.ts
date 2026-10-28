@@ -11,10 +11,11 @@ const VERSION = '3.13.2';
 // │ Why : The customer's NestJS teams test a service against WireMock - the real Java server, set
 // │       up over its admin API - not against the real neighbours. The laptop already runs the
 // │       whole platform, so the mock must cost nothing outside a test run.
-// │ How : Jest's global set-up starts the jar on 127.0.0.1 and a free port (heap capped at 128 MB),
-// │       waits for its admin API and hands the address to the tests (WIREMOCK_URL); the global
-// │       tear-down stops it. Each test resets it and stages only what it needs.
-// │ Ref : test/support/wiremock.ts | ps/wiremock/Install-WireMock.ps1 | wiremock.org (admin API)
+// │ How : Jest's global set-up (shared by every Node.js service's tests) starts the jar on
+// │       127.0.0.1 and a free port (heap capped at 128 MB), waits for its admin API and hands the
+// │       address to the tests (WIREMOCK_URL); the global tear-down stops it. Each test resets it
+// │       and stages only what it needs.
+// │ Ref : tst/node/wiremock/wiremock.ts | ps/wiremock/Install-WireMock.ps1 | wiremock.org (admin API)
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 export default async function startWireMock(): Promise<void> {
   const jar = process.env.WIREMOCK_JAR ?? join(process.env.LOCALAPPDATA ?? '', 'EWP', 'wiremock', `wiremock-standalone-${VERSION}.jar`);

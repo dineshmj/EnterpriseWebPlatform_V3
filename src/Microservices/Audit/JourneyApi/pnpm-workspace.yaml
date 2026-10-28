@@ -1,3 +1,7 @@
+# Jest (tests only): both ship prebuilt binaries for Windows; their install scripts are not needed.
+allowBuilds:
+  "@parcel/watcher": false
+  unrs-resolver: false
 # Fixed versions of vulnerable transitive packages (pnpm audit, Snyk); only the vulnerable versions are rewritten.
 overrides:
   picomatch@>=4.0.0 <4.0.4: ^4.0.4

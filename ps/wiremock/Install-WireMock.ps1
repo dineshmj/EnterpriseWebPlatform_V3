@@ -3,9 +3,9 @@
     Installs WireMock standalone (one jar) for the Node.js services' tests.
 
 .DESCRIPTION
-    The Partner Products Journey API's tests (Jest, "pnpm test") play the IDP's token endpoint
-    and the Partner Products Domain API with WireMock standalone - the Java server the customer's
-    NestJS teams use. The tests start it themselves (127.0.0.1, a free port, at most 128 MB) and
+    The Journey APIs' tests (Partner Products, Audit, Operations: Jest, "pnpm test") play their
+    neighbours - the IDP's token endpoint, the domain APIs, the simulators, the fault proxy - with
+    WireMock standalone, the Java server the customer's NestJS teams use. The tests start it themselves (127.0.0.1, a free port, at most 128 MB) and
     stop it when they end: nothing keeps running.
 
     This script puts the pinned release (3.13.2) from Maven Central into
