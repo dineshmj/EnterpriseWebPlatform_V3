@@ -115,6 +115,8 @@ updates:
       - /src/Simulators/PaymentNetworkSimulator
       - /src/Simulators/ScreeningProviderSimulator
       - /tst/dotnet/Accounts.Api.Tests
+      - /tst/dotnet/Compliance.Api.Tests
+      - /tst/dotnet/CustomerKyc.Api.Tests
       - /tst/dotnet/CustomerOnboarding.Api.Tests
       - /tst/dotnet/DocumentsManagement.Api.Tests
       - /tst/dotnet/IDP.Tests
