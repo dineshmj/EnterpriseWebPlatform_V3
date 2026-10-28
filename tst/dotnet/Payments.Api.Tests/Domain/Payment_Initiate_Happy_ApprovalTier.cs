@@ -37,7 +37,7 @@ public sealed class Payment_Initiate_Happy_ApprovalTier
         // Given / When
         var payment = Payment.Initiate(
             Guid.NewGuid(), "PAY-261015-TEST02", " CUST-100001 ", PaymentsTestData.Payer, "  Harbour   Plumbing  ", PaymentsTestData.Payee,
-            10m, "   ", PaymentsTestData.Sydney, PaymentsTestData.Sophie, PaymentsTestData.ApprovalThreshold, PaymentsTestData.Now);
+            10m, "   ", PaymentsTestData.Sydney, PaymentsTestData.Sophie, PaymentsTestData.ApprovalThreshold, PaymentsTestData.Allowed, PaymentsTestData.Now);
 
         // Then
         payment.PayeeName.Should().Be("Harbour Plumbing");

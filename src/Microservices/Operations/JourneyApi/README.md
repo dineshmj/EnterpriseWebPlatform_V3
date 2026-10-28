@@ -26,7 +26,7 @@ It holds no data. It needs no further token: the readiness probes are open (they
 |---|---|---|---|
 | `GET /v1/journeys/operations/health` | `operations-journey.read` | `service.health.view` | Every component's readiness: status (Healthy / Degraded / Unhealthy / Unreachable) and response time only |
 | `GET /v1/journeys/operations/simulators` | `operations-journey.read` | `service.health.view` | The simulators' current behaviour (Development only; 404 otherwise) |
-| `PUT /v1/journeys/operations/simulators/{key}/behaviour` | `operations-journey.write` | `simulator.behaviour.manage` + recent MFA when on | Healthy, Slow, Failing, Down or Refusing (Development only) |
+| `PUT /v1/journeys/operations/simulators/{key}/behaviour` | `operations-journey.write` | `simulator.behaviour.manage` + recent MFA when on | Healthy, Slow, Failing, Down or Refusing - each simulator's own list: also LosingAnswers for the Payment Network; Healthy, Slow, Failing or Down for its fraud scoring (`fraud-scoring`) (Development only) |
 | `GET /v1/journeys/operations/fault-routes` | `operations-journey.read` | `service.health.view` | Each API's route at the fault proxy: Open, Slow, Hanging or Cut, who changed it and when it opens again (Development / Test / UAT; 404 otherwise) |
 | `PUT /v1/journeys/operations/fault-routes/{key}/state` | `operations-journey.write` | `simulator.behaviour.manage` + recent MFA when on | `{ "state": "Open" \| "Slow" \| "Hanging" \| "Cut" }` |
 

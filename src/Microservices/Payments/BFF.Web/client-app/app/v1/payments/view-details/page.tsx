@@ -16,7 +16,7 @@ import { Field, Input, Select, Textarea } from '../../../components/ui/form';
 import { getJson, postJson } from '../../../lib/api';
 import {
   type PaymentDetail, type PaymentPolicy, type SagaTimelineEntry, type StaffUser,
-  STEP_LABEL, TIMELINE_KIND, formatMoney, getStaffUser, isInProgress, personLabel,
+  STEP_LABEL, TIMELINE_KIND, formatMoney, fraudCheckLabel, getStaffUser, isInProgress, personLabel,
 } from '../../../lib/payments';
 
 const REFRESH_MS = 2000;
@@ -114,7 +114,8 @@ export default function PaymentDetailsPage() {
                     { label: 'Customer', value: <span className="font-mono text-[13px]">{data.customerNumber}</span> },
                     { label: 'To', value: <><span className="font-medium">{data.payeeName}</span><br /><span className="font-mono text-[13px]">{data.toBsb} {data.toAccountNumber}</span></> },
                     { label: 'Reference', value: data.reference ?? '—' },
-                    { label: 'Approval', value: data.approvalRequired ? 'Needed (above the tier)' : 'Not needed' },
+                    { label: 'Approval', value: !data.approvalRequired ? 'Not needed' : data.fraudCheck?.decision === 'REVIEW' ? 'Needed (fraud check: review)' : 'Needed (above the tier)' },
+                    ...(data.fraudCheck ? [{ label: 'Fraud check', value: fraudCheckLabel(data.fraudCheck) }] : []),
                     { label: 'Network reference', value: data.networkReference ? <span className="font-mono text-[13px]">{data.networkReference}</span> : '—' },
                     { label: 'Started by', value: personLabel(data.initiatedByUserId, data.initiatedByLanId, user?.sub) },
                     { label: 'Branch', value: data.branchCode },

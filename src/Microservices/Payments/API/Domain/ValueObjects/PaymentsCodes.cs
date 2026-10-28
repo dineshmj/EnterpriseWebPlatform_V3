@@ -138,6 +138,27 @@ public static class PaymentsCodes
         catch (ArgumentOutOfRangeException) { outcome = default; return false; }
     }
 
+    public static string ToCode(this FraudDecision decision) => decision switch
+    {
+        FraudDecision.Allow => "ALLOW",
+        FraudDecision.Review => "REVIEW",
+        FraudDecision.Decline => "DECLINE",
+        _ => throw new ArgumentOutOfRangeException(nameof(decision), decision, null)
+    };
+
+    public static FraudDecision ParseFraudDecision(string code) =>
+        Parse<FraudDecision>(code, ToCode, "fraud decision");
+
+    public static string ToCode(this FraudSource source) => source switch
+    {
+        FraudSource.Provider => "PROVIDER",
+        FraudSource.Fallback => "FALLBACK",
+        _ => throw new ArgumentOutOfRangeException(nameof(source), source, null)
+    };
+
+    public static FraudSource ParseFraudSource(string code) =>
+        Parse<FraudSource>(code, ToCode, "fraud source");
+
     private static TEnum Parse<TEnum>(string code, Func<TEnum, string> toCode, string what) where TEnum : struct, Enum
     {
         foreach (var value in Enum.GetValues<TEnum>())

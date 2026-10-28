@@ -12,6 +12,8 @@ export const simulators = {
   screeningProvider: 'https://localhost:46366',
   coreBanking: 'https://localhost:46376',
   paymentNetwork: 'https://localhost:46386',
+  /** The payment network's fraud scoring: the same simulator, its own switch (Healthy, Slow, Failing, Down only). */
+  fraudScoring: 'https://localhost:46386/fraud',
 } as const;
 
 export type SimulatorName = keyof typeof simulators;
@@ -51,4 +53,5 @@ export async function resetAllSimulators(): Promise<void> {
   await put('screeningProvider', { behaviour: 'Healthy', forcedOutcome: null });
   await put('coreBanking', { behaviour: 'Healthy' });
   await put('paymentNetwork', { behaviour: 'Healthy' });
+  await put('fraudScoring', { behaviour: 'Healthy' });
 }

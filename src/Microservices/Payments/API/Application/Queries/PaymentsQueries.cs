@@ -74,7 +74,11 @@ public sealed record PaymentDetail(
     string? DecisionByUserId,
     string? DecisionByLanId,
     DateTimeOffset? DecisionAt,
-    string? DecisionRemarks);
+    string? DecisionRemarks,
+    FraudCheckView? FraudCheck = null);
+
+/// <summary>The fraud check at initiation: decision, who decided (PROVIDER / FALLBACK), the provider's score and the reasons.</summary>
+public sealed record FraudCheckView(string Decision, string Source, int? Score, string? Reasons);
 
 public sealed record PagedResponse<T>(
     IReadOnlyList<T> Items,

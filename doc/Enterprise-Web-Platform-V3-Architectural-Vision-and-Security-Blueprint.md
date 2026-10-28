@@ -384,7 +384,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Infrastructure and edge | Network segmentation; private subnets; WAF / API gateway; DDoS protection; container hardening; Kubernetes RBAC and network policies; IaC with drift detection. The edge complements application authorization; it never replaces it. |
 | Rate limiting | Login, token endpoints, uploads, payment initiation, expensive queries, administrative APIs. Keyed by user, client, IP, endpoint and risk. |
 | Security monitoring | Authentication and authorization failures, privilege changes, credential misuse, anomalous data access, document-download and payment anomalies feed SIEM / SOC (Production Concern) |
-| Fraud and risk | Risk signals → allow / challenge / hold / reject / manual review; simulated in the PoC |
+| Fraud and risk | Risk signals → allow / challenge / hold / reject / manual review; simulated in the PoC. Built: the payment network's fraud score at payment initiation (allow / review by an officer / decline), within a latency budget and with cautious fallback rules - Features 1.6.7 |
 
 ---
 

@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 
 using EnterpriseWebPlatform.Payments.Api.Application.Abstractions;
+using EnterpriseWebPlatform.Payments.Api.Application.Fraud;
 using EnterpriseWebPlatform.Payments.Api.Domain.Aggregates;
 using EnterpriseWebPlatform.Payments.Api.Domain.Exceptions;
 using EnterpriseWebPlatform.Payments.Api.Domain.ValueObjects;
@@ -49,6 +50,7 @@ public sealed class InitiatePaymentCommandHandler(
     IPaymentSagaRepository sagas,
     IPaymentsUnitOfWork unitOfWork,
     ApprovalTier approvalTier,
+    FraudCheck fraudCheck,
     SagaPolicy sagaPolicy,
     TimeProvider clock,
     ILogger<InitiatePaymentCommandHandler> logger)
@@ -59,9 +61,20 @@ public sealed class InitiatePaymentCommandHandler(
         if (existing is not null)
             return Repeat(existing, command);
 
-        // Validated before anything is written: a bad request never starts a saga.
+        // Validated before anything is written: a bad request never starts a saga (nor reaches the fraud scoring).
         var from = BankAccountRef.Create(command.FromBsb, command.FromAccountNumber, "paying");
         var to = BankAccountRef.Create(command.ToBsb, command.ToAccountNumber, "payee");
+        var customerNumber = PaymentRules.ValidCustomerNumber(command.CustomerNumber);
+        var payeeName = PaymentRules.ValidPayeeName(command.PayeeName);
+        var amount = PaymentRules.ValidAmount(command.Amount);
+        var paymentNumber = NewPaymentNumber(clock.GetUtcNow());
+
+        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // │ The fraud check runs BEFORE the transaction, within its latency budget: no database
+        // │ lock is held while an external system is asked. Its answer is stored on the payment.
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        var fraud = await fraudCheck.AssessAsync(
+            new FraudScoringRequestDraft(command.PaymentRef, paymentNumber, customerNumber, from, payeeName, to, amount), cancellationToken);
 
         try
         {
@@ -69,8 +82,8 @@ public sealed class InitiatePaymentCommandHandler(
             var now = clock.GetUtcNow();
 
             var payment = Payment.Initiate(
-                command.PaymentRef, NewPaymentNumber(now), command.CustomerNumber, from, command.PayeeName, to,
-                command.Amount, command.Reference, command.Branch, command.InitiatedByUserId, approvalTier.Threshold, now);
+                command.PaymentRef, paymentNumber, customerNumber, from, payeeName, to,
+                amount, command.Reference, command.Branch, command.InitiatedByUserId, approvalTier.Threshold, fraud, now);
             payments.Add(payment);
             await unitOfWork.SaveAsync(cancellationToken);   // the payment gets its ID
 
@@ -80,9 +93,10 @@ public sealed class InitiatePaymentCommandHandler(
             await transaction.CommitAsync(cancellationToken);
 
             logger.LogInformation(
-                "Payment {PaymentNumber} initiated by {UserId} (branch {Branch}): {Amount} AUD {From} -> {To}; approval required: {ApprovalRequired}. Saga {SagaId} started.",
+                "Payment {PaymentNumber} initiated by {UserId} (branch {Branch}): {Amount} AUD {From} -> {To}; fraud check {FraudDecision} by {FraudSource}; approval required: {ApprovalRequired}; status {Status}. Saga {SagaId} started.",
                 payment.PaymentNumber, command.InitiatedByUserId, command.Branch, payment.Amount,
-                LogMasking.Account(from.Bsb, from.AccountNumber), LogMasking.Account(to.Bsb, to.AccountNumber), payment.ApprovalRequired, saga.Id);
+                LogMasking.Account(from.Bsb, from.AccountNumber), LogMasking.Account(to.Bsb, to.AccountNumber),
+                payment.FraudDecision.ToCode(), payment.FraudSource.ToCode(), payment.ApprovalRequired, payment.Status.ToCode(), saga.Id);
 
             return new InitiatePaymentResult(payment.Id, payment.PaymentNumber, payment.Status.ToCode(), Created: true);
         }

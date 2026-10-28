@@ -12,6 +12,9 @@ public interface IPaymentRepository
     /// <summary>The payment's PaymentRef when it exists (in this branch, when one is given); null otherwise.</summary>
     Task<Guid?> GetRefInBranchAsync(long paymentId, Domain.ValueObjects.BranchCode? branch, CancellationToken cancellationToken);
 
+    /// <summary>Whether this customer already has a COMPLETED payment to this payee account (the fraud check's "new payee").</summary>
+    Task<bool> HasPaidBeforeAsync(string customerNumber, Domain.ValueObjects.BankAccountRef payee, CancellationToken cancellationToken);
+
     void Add(Payment payment);
 }
 
@@ -182,3 +185,36 @@ public sealed class PaymentNetworkUnavailableException(string message, Exception
 
 /// <summary>The network refused the payment (e.g. the payee account is closed): permanent.</summary>
 public sealed class PaymentNetworkRefusedException(string message) : Exception(message);
+
+// ---------------------------------------------------------------------------- The fraud scoring
+
+/// <summary>What the fraud scoring is told about a payment about to be made (nothing about the staff member).</summary>
+public sealed record FraudScoringRequest(
+    Guid PaymentRef,
+    string PaymentNumber,
+    string CustomerNumber,
+    string FromBsb,
+    string FromAccountNumber,
+    string PayeeName,
+    string ToBsb,
+    string ToAccountNumber,
+    decimal Amount,
+    string Currency,
+    bool FirstPaymentToPayee);
+
+/// <summary>The provider's answer: a score 0-999, its decision and the reasons (codes).</summary>
+public sealed record FraudScoringResult(int Score, Domain.ValueObjects.FraudDecision Decision, IReadOnlyList<string> Reasons);
+
+/// <summary>
+/// The payment network's fraud scoring (an anti-corruption layer: its wire format never reaches
+/// the domain). Answers within the latency budget, or throws
+/// <see cref="FraudScoringUnavailableException"/> - late, down, failing, an open circuit, or an
+/// answer it cannot use. The caller then decides by its fallback rules.
+/// </summary>
+public interface IFraudScoring
+{
+    Task<FraudScoringResult> ScoreAsync(FraudScoringRequest request, CancellationToken cancellationToken);
+}
+
+/// <summary>No usable score within the latency budget: the fallback rules decide.</summary>
+public sealed class FraudScoringUnavailableException(string message, Exception? inner = null) : Exception(message, inner);

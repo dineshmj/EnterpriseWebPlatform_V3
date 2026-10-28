@@ -19,6 +19,7 @@ namespace EnterpriseWebPlatform.Payments.Api.Domain.Aggregates;
 /// state people see; the saga owns the workflow (which step, which command, retries).
 ///
 ///   INITIATED → RESERVING_FUNDS → (PENDING_APPROVAL) → SENDING_TO_NETWORK → SETTLING_FUNDS → COMPLETED
+///   INITIATED ✗ (fraud check: DECLINE) → REJECTED        (nothing reserved, nothing sent)
 ///   RESERVING_FUNDS ✗ → REJECTED                         (nothing reserved, nothing to undo)
 ///   after the reservation ✗ → COMPENSATING → FAILED / REJECTED (funds released)
 ///   COMPENSATING ✗✗✗ → COMPENSATION_FAILED               (operations must act)
@@ -70,8 +71,24 @@ public sealed class Payment : AggregateRoot
 
     public string InitiatedByUserId { get; private set; }
 
-    /// <summary>Decided at initiation from the configured tier: above it, a payments officer approves.</summary>
+    /// <summary>
+    /// Decided at initiation: above the configured tier, or when the fraud check says REVIEW, a
+    /// payments officer approves.
+    /// </summary>
     public bool ApprovalRequired { get; private set; }
+
+    /// <summary>The fraud check's decision at initiation (ALLOW / REVIEW / DECLINE).</summary>
+    public FraudDecision FraudDecision { get; private set; }
+
+    /// <summary>Who made it: the payment network's fraud scoring, or the fallback rules.</summary>
+    public FraudSource FraudSource { get; private set; }
+
+    /// <summary>The provider's score, 0-999; none when the fallback decided.</summary>
+    public int? FraudScore { get; private set; }
+
+    public string? FraudReasons { get; private set; }
+
+    public FraudAssessment Fraud => FraudAssessment.Restore(FraudDecision, FraudSource, FraudScore, FraudReasons);
 
     public PaymentStatus Status { get; private set; }
 
@@ -115,8 +132,10 @@ public sealed class Payment : AggregateRoot
         BranchCode branch,
         string initiatedByUserId,
         decimal approvalThreshold,
+        FraudAssessment fraud,
         DateTimeOffset now)
     {
+        ArgumentNullException.ThrowIfNull(fraud);
         if (paymentRef == Guid.Empty)
             throw new DomainRuleViolationException("An Idempotency-Key (the payment's reference) is required.");
         if (string.IsNullOrWhiteSpace(initiatedByUserId))
@@ -138,7 +157,15 @@ public sealed class Payment : AggregateRoot
             Reference = PaymentRules.ValidReference(reference),
             BranchCode = branch,
             InitiatedByUserId = initiatedByUserId.Trim(),
-            ApprovalRequired = validAmount > approvalThreshold,
+            // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+            // │ A REVIEW from the fraud check needs a payments officer even below the tier: the
+            // │ same four eyes and clearance limits as any approval.
+            // └──────────────────────────────────────────────────────────────────────────────────────
+            ApprovalRequired = validAmount > approvalThreshold || fraud.Decision == FraudDecision.Review,
+            FraudDecision = fraud.Decision,
+            FraudSource = fraud.Source,
+            FraudScore = fraud.Score,
+            FraudReasons = fraud.Reasons,
             Status = PaymentStatus.Initiated,
             CreatedAt = now,
             UpdatedAt = now,
@@ -149,6 +176,21 @@ public sealed class Payment : AggregateRoot
     public bool IsInBranch(BranchCode? branch) => branch is not null && BranchCode == branch;
 
     internal void StartReservingFunds(DateTimeOffset now) => Move(PaymentStatus.Initiated, PaymentStatus.ReservingFunds, now);
+
+    /// <summary>The fraud check declined the payment: it ends here, before any funds are reserved.</summary>
+    internal void DeclineForFraud(DateTimeOffset now)
+    {
+        if (FraudDecision != FraudDecision.Decline)
+            throw new DomainConflictException($"Payment {PaymentNumber}: the fraud check did not decline it.");
+
+        Move(PaymentStatus.Initiated, PaymentStatus.Rejected, now);
+        const string reason = "The payment network's fraud check declined this payment; nothing was reserved or sent.";
+        End(FraudDeclinedCode, reason, now);
+        RaiseDomainEvent(new PaymentRejectedDomainEvent(FraudDeclinedCode, reason, now));
+    }
+
+    /// <summary>The outcome code of a payment the fraud check declined.</summary>
+    public const string FraudDeclinedCode = "FRAUD_DECLINED";
 
     internal void FundsReserved(DateTimeOffset now)
     {

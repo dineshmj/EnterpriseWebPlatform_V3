@@ -27,10 +27,26 @@ Nothing waits in memory. `POST /v1/payments` saves the payment, the saga and the
 
 The payment network call is the exception: no transaction stays open across it. The step runner **claims** the attempt (short transaction: the saga's timer moves on by a 60-second lease, so no other instance takes it), **calls** the network with no lock held, then **records** the answer (short transaction, applied only if the saga's Version is still the claimed one). If the process dies mid-call, the lease runs out and the attempt is repeated - safely, because the PaymentRef is the network's Idempotency-Key.
 
+## The fraud check
+
+Before a payment is accepted (`POST /v1/payments`, and the BIAN `/v2` initiation, which uses the same handler), the payment network's **fraud scoring** (`POST /v1/fraud-scores` on the Payment Network simulator; same address and API key as the payments) scores it - within a **latency budget**, while the staff member waits:
+
+| Answer | What happens to the payment |
+|---|---|
+| `ALLOW` | Follows its tier (approval above AUD 1,000) |
+| `REVIEW` | A payments officer must approve it, **even below the tier** (same four eyes and clearance limits) |
+| `DECLINE` | Ends **REJECTED** (`FRAUD_DECLINED`) at once: no funds reserved, nothing sent; the saga records it and `PaymentRejected` is published |
+| No usable answer within the budget (late, down, 4xx / 5xx, redirect, not JSON, unknown decision, score outside 0-999, circuit open) | The **fallback rules** decide: a payee this customer never paid (no COMPLETED payment to that account) or an amount at or above `FallbackReviewAmount` → `REVIEW`; otherwise `ALLOW`. **Never** `DECLINE` |
+
+The provider is asked once (no retry: it would not fit in the budget), before the database transaction; a circuit breaker (half of at least 5 calls in 30 s failing) sends payments straight to the fallback for 15 s. The payment stores the decision, who made it (`PROVIDER` / `FALLBACK`), the score and the reasons; `GET /v1/payments/{id}` returns them as `fraudCheck`, and the timeline has a `FRAUD_CHECK` line. Metrics: `ewp_payments_fraud_checks_total{decision,source}`, `ewp_payments_fraud_check_duration_seconds`.
+
+Configuration (`Payments:FraudCheck`, required - the API refuses to start without it): `BudgetMilliseconds` (250; 50-2000), `FallbackReviewAmount` (500.00; keep it below `ApprovalThreshold`, or it changes nothing).
+
 ## The saga
 
 ```text
 RESERVE_FUNDS ─FundsReserved─► (AWAIT_APPROVAL ─approved─►) SEND_TO_NETWORK ─accepted─► SETTLE_FUNDS ─FundsSettled─► DONE   payment COMPLETED
+(fraud check: DECLINE) ─► DONE                                                                                   payment REJECTED (nothing reserved, nothing sent)
 RESERVE_FUNDS ─FundsReservationFailed─► DONE                                                                     payment REJECTED (nothing to undo)
 SEND_TO_NETWORK ─refused─► RELEASE_FUNDS ─FundsReleased─► DONE                                                   payment FAILED (funds released)
 SEND_TO_NETWORK ─no answer after 4 tries─► CONFIRM_WITH_NETWORK (status enquiry, repeated until the network answers)
@@ -146,3 +162,4 @@ What this project does to stay secure: each control, what would go wrong without
 | 22 | The BIAN contract (`/v2`) is a second door to the SAME rules: the same command handlers, queries and policies as `/v1` (branch scope, step-up, separation of duties, approval limits, `Idempotency-Key`); the Exchange checks the approve or reject policy chosen by its body; BIAN's all-optional fields are checked by EWP (each missing one named), only AUD accepted | A second API generation that drifts from the first - looser checks on the new route | Authorization bypass through an alternative endpoint (OWASP A01); mass assignment (API6) | [PaymentOrderInitiationController.cs](Controllers/PaymentOrderInitiationController.cs), [PaymentOrderInitiationMapper.cs](Bian/PaymentOrderInitiationMapper.cs) |
 | 23 | Regular expressions on request input (BSB, account number, payee name, reference) are source-generated with a 100 ms match timeout | A crafted input could keep a thread busy matching (catastrophic backtracking) | ReDoS (CWE-1333, OWASP A05) | [PaymentDetails.cs](Domain/ValueObjects/PaymentDetails.cs) |
 | 24 | The BIAN contract (`/v2`) is behind the release toggle `bian-v2-endpoints` (Common/WebUtilities/FeatureFlags; default on): switched off, every `/v2` request answers 404 with no body before authentication - as if the route did not exist; `/v1` is never gated | A new API surface could only be withdrawn by a redeploy; a withdrawn one answering 401 / 403 would still show it exists | Exposure of an unreleased or withdrawn endpoint (OWASP A05, API9 improper inventory) | [PaymentOrderInitiationController.cs](Controllers/PaymentOrderInitiationController.cs) (`[FeatureGate]`), [Program.cs](Program.cs) (`UseEwpFeatureGates` before authentication) |
+| 25 | Fraud check at initiation within a latency budget: the provider's REVIEW sends the payment to a payments officer below the tier, DECLINE ends it before any funds are held; an answer that cannot be fully read (unknown decision, score outside 0-999, not JSON, redirect - its client follows none) is never read as ALLOW; without a usable score the fallback rules send a new payee or AUD 500+ to an officer and can never decline (also a CHECK in the database); the staff member's identity is not sent to the provider | A slow provider would make every payment slow, an outage would stop payments or let them through unchecked, a garbled answer could pass as "allow" | Fraudulent payments (mule accounts, account takeover); a provider outage used as a window (OWASP API6 business flows) | [FraudCheck.cs](Application/Fraud/FraudCheck.cs), [FraudScoringClient.cs](Infrastructure/PaymentNetwork/FraudScoringClient.cs), [FraudScoringRegistration.cs](Infrastructure/PaymentNetwork/FraudScoringRegistration.cs), [FraudAssessment.cs](Domain/ValueObjects/FraudAssessment.cs), `ck_payments_fraud_*` in [EwpPaymentsDb.sql](PaymentsDb/EwpPaymentsDb.sql) |

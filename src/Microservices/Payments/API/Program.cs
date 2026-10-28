@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 using Npgsql;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
@@ -16,6 +17,7 @@ using EnterpriseWebPlatform.Common.WebUtilities.Resilience;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.Payments.Api.Application.Abstractions;
 using EnterpriseWebPlatform.Payments.Api.Application.Commands;
+using EnterpriseWebPlatform.Payments.Api.Application.Fraud;
 using EnterpriseWebPlatform.Payments.Api.Application.Queries;
 using EnterpriseWebPlatform.Payments.Api.Authorization;
 using EnterpriseWebPlatform.Payments.Api.Domain.Aggregates;
@@ -216,6 +218,28 @@ builder.Services.AddOptions<PaymentNetworkOptions>()
 
 // RESIL: timeouts, retries and a circuit breaker per service (payments / lookups) - PaymentNetworkRegistration.cs
 builder.Services.AddPaymentNetworkClient();
+
+// ---------------------------------------------------------------- The fraud check (the network's fraud scoring)
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ Fail closed: no budget or no fallback limit stops the start-up - the fraud check never
+// │ silently waits forever, nor falls back to "allow everything".
+// └──────────────────────────────────────────────────────────────────────────────────────
+var fraudSection = payments.GetSection("FraudCheck");
+var fraudPolicy = new FraudCheckPolicy(
+    TimeSpan.FromMilliseconds(fraudSection.GetValue<int?>("BudgetMilliseconds")
+        ?? throw new InvalidOperationException("Payments:FraudCheck:BudgetMilliseconds is not configured.")),
+    fraudSection.GetValue<decimal?>("FallbackReviewAmount")
+        ?? throw new InvalidOperationException("Payments:FraudCheck:FallbackReviewAmount is not configured."));
+if (fraudPolicy.Budget < FraudCheckPolicy.MinBudget || fraudPolicy.Budget > FraudCheckPolicy.MaxBudget)
+    throw new InvalidOperationException($"Payments:FraudCheck:BudgetMilliseconds must be {FraudCheckPolicy.MinBudget.TotalMilliseconds} to {FraudCheckPolicy.MaxBudget.TotalMilliseconds}.");
+if (fraudPolicy.FallbackReviewAmount <= 0)
+    throw new InvalidOperationException("Payments:FraudCheck:FallbackReviewAmount must be positive.");
+builder.Services.AddSingleton(fraudPolicy);
+builder.Services.AddScoped<FraudCheck>();
+builder.Services.ConfigureOpenTelemetryMeterProvider(metrics => metrics.AddMeter(FraudCheck.MeterName));
+
+// RESIL: the latency budget as a timeout, a circuit breaker, no retry - FraudScoringRegistration.cs
+builder.Services.AddFraudScoringClient();
 
 // ---------------------------------------------------------------- Saga step runner (in-process)
 builder.Services.AddKeyedSingleton<LoopHeartbeat>(SagaStepRunner.HeartbeatKey);

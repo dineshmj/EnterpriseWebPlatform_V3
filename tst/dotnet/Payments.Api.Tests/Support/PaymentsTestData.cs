@@ -43,12 +43,15 @@ internal static class PaymentsTestData
 
     public static BankAccountRef Payee => BankAccountRef.Create("083-004", "12345678", "payee");
 
+    /// <summary>The fraud check's usual answer: the provider allows the payment (score 120).</summary>
+    public static FraudAssessment Allowed => FraudAssessment.FromProvider(FraudDecision.Allow, 120, []);
+
     /// <summary>A payment as the API saves it (with its database ID), started by Sophie.</summary>
-    public static Payment NewPayment(decimal amount = 140m, string initiatedBy = Sophie, Guid? paymentRef = null)
+    public static Payment NewPayment(decimal amount = 140m, string initiatedBy = Sophie, Guid? paymentRef = null, FraudAssessment? fraud = null)
     {
         var payment = Payment.Initiate(
             paymentRef ?? Guid.NewGuid(), "PAY-261015-TEST01", "CUST-100001", Payer, "Harbour Plumbing Pty Ltd", Payee,
-            amount, "Invoice 42", Sydney, initiatedBy, ApprovalThreshold, Now);
+            amount, "Invoice 42", Sydney, initiatedBy, ApprovalThreshold, fraud ?? Allowed, Now);
         // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
         // │ The database assigns the ID (a saga only starts for a saved payment): set it the way
         // │ EF Core does, through the private setter.

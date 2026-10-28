@@ -805,6 +805,8 @@ components:
     role: web
     simulator: true
     simulatorKey: payment-network
+    # The network's fraud scoring: its own behaviour switch, in the same pod (Operations lists it apart).
+    extraSimulators: {fraud-scoring: /fraud}
     probes: {live: /health, ready: /health}
     allowFrom: [payments-api]
     platformHealth: {name: Payment Network (simulator), group: Simulators}
