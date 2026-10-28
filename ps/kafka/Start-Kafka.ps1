@@ -54,8 +54,13 @@ if (Test-Path $metadata) {
     if ($readOnly.Count -gt 0) { Write-Host "Cleared the read-only flag on $($readOnly.Count) metadata snapshot file(s)." }
 }
 
-$startCommand = if (Test-Path (Join-Path $KafkaHome 'StartKafka.bat')) { 'StartKafka.bat' }
-                else { 'bin\windows\kafka-server-start.bat config\server.properties' }
+# ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+# │ ".\" on purpose: with NoDefaultCurrentDirectoryInExePath set (some tools set it, a
+# │ guard against planted programs), cmd.exe does not look in the current folder for a
+# │ bare "StartKafka.bat" - Kafka would silently never start.
+# └──────────────────────────────────────────────────────────────────────────────────────
+$startCommand = if (Test-Path (Join-Path $KafkaHome 'StartKafka.bat')) { '.\StartKafka.bat' }
+                else { '.\bin\windows\kafka-server-start.bat config\server.properties' }
 
 # conhost.exe: a classic console window of its own, whichever host runs this script.
 Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\conhost.exe') -WorkingDirectory $KafkaHome `

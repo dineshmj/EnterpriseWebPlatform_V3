@@ -29,13 +29,15 @@
     .\ps\run\Start-NodeServices.ps1 -Only Audit        # only the two Audit services
     .\ps\run\Start-NodeServices.ps1 -Only Operations   # only the two Operations services
     .\ps\run\Start-NodeServices.ps1 -Only PartnerProducts   # only the three Partner Products services
+    .\ps\run\Start-NodeServices.ps1 -Only PartnerProductsWorker -Stop   # only the Temporal worker (the Digital Gold
+                                                       # deviation runs stop and start it this way)
     .\ps\run\Start-NodeServices.ps1 -Stop              # stop all eight (the processes listening on their ports) and close
                                                        # their windows; the fault proxy, Kafka and Temporal keep running
     .\ps\run\Start-NodeServices.ps1 -Restart           # stop, wait until the ports are free, start again (picks up changed code;
                                                        # the web apps rebuild as they start). Works with -Only too.
 #>
 param(
-    [ValidateSet('All', 'Kyc', 'Audit', 'Operations', 'PartnerProducts')]
+    [ValidateSet('All', 'Kyc', 'Audit', 'Operations', 'PartnerProducts', 'PartnerProductsWorker')]
     [string] $Only = 'All',
     [switch] $Stop,
     [switch] $Restart
@@ -59,14 +61,16 @@ $services = @(
     # │ Temporal first (ps\temporal\Start-Temporal.ps1); -Stop stops it by this port.
     # └──────────────────────────────────────────────────────────────────────────────────────
     [pscustomobject]@{ Name = 'Partner Products Worker';      Group = 'PartnerProducts'; Port = 46383; Folder = 'src\Microservices\PartnerProducts\Worker' }
-) | Where-Object { $Only -eq 'All' -or $_.Group -eq $Only }
+) | Where-Object { $Only -eq 'All' -or $_.Group -eq $Only -or ($Only -eq 'PartnerProductsWorker' -and $_.Name -eq 'Partner Products Worker') }
 
 function Get-Listener([int] $port) {
     Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
 }
 
 # The command line each service window is started with (below) - also how -Stop finds that window.
-function Get-WindowCommand([string] $name) { "title $name && runnow.bat" }
+# ".\runnow.bat", not "runnow.bat": with NoDefaultCurrentDirectoryInExePath set (some tools set it),
+# cmd.exe does not look in the current folder for a bare name, and the window would start nothing.
+function Get-WindowCommand([string] $name) { "title $name && .\runnow.bat" }
 
 # ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
 # │ Each service runs in "cmd /k ...", which keeps its window open after the service has

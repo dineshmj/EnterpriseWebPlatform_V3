@@ -265,7 +265,11 @@ export class PaymentsMfe {
     const mfe = this.shell.workspace();
     await mfe.locator('#payer-search').fill(customerNumber);
     const account = mfe.getByRole('list', { name: 'Matching accounts' }).getByRole('button').filter({ hasText: customerNumber });
-    await expect(account.first()).toBeVisible({ timeout: 15_000 });
+    // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+    // │ Wait longer than the Payments BFF may take (10 s per attempt, 30 s in total): right
+    // │ after a restart the first search can need a retry, and that is not a failure.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    await expect(account.first()).toBeVisible({ timeout: 35_000 });
     await account.first().click();
   }
 
@@ -354,7 +358,11 @@ export class CashDepositMfe {
     const mfe = this.shell.workspace();
     await mfe.locator('#deposit-search').fill(customerNumber);
     const account = mfe.getByRole('list', { name: 'Matching accounts' }).getByRole('button').filter({ hasText: customerNumber });
-    await expect(account.first()).toBeVisible({ timeout: 15_000 });
+    // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+    // │ Wait longer than the Payments BFF may take (10 s per attempt, 30 s in total): right
+    // │ after a restart the first search can need a retry, and that is not a failure.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    await expect(account.first()).toBeVisible({ timeout: 35_000 });
     await account.first().click();
   }
 
@@ -492,10 +500,12 @@ export class DigitalGoldMfe {
     return this.shell.workspace().locator('tbody tr').filter({ hasText: slipNumber });
   }
 
-  /** "Send & pay": the signed order goes to the Partner Bank, the payment starts as Sophie, the workflow follows it. */
-  async sendAndPay(slipNumber: string): Promise<void> {
+  /** "Send & pay": the signed order goes to the Partner Bank, the payment starts as Sophie, the workflow follows it. Returns the payment's number. */
+  async sendAndPay(slipNumber: string): Promise<string> {
     await this.purchaseRow(slipNumber).getByRole('button', { name: 'Send & pay', exact: true }).click();
-    await expect(this.shell.workspace().getByText(/^Order \S+ placed at the Partner Bank; payment PAY-/)).toBeVisible({ timeout: 60_000 });
+    const placed = this.shell.workspace().getByText(/^Order \S+ placed at the Partner Bank; payment PAY-/);
+    await expect(placed).toBeVisible({ timeout: 60_000 });
+    return /; payment (PAY-\S+) started/.exec((await placed.textContent()) ?? '')?.[1] ?? '';
   }
 
   /** Selects the customer again until the purchase shows `label` (the workflow moves it on). */

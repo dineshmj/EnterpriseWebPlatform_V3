@@ -31,7 +31,23 @@ $brokerIds = @(Get-CimInstance Win32_Process -Filter "Name='java.exe'" |
 $portOwnerIds = @(Get-NetTCPConnection -LocalPort $Ports -State Listen -ErrorAction SilentlyContinue |
     Select-Object -ExpandProperty OwningProcess)
 
-$ids = @($brokerIds + $portOwnerIds | Where-Object { $_ -and $_ -ne 0 } | Sort-Object -Unique)
+# ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
+# │ Windows does not always show a process's command line (then no broker is found by it
+# │ above), and the broker's java.exe can itself be started by another java.exe. So also
+# │ take every java.exe above a port owner: stopping only the child can leave its parent
+# │ running and the ports in use.
+# └──────────────────────────────────────────────────────────────────────────────────────
+$javaParents = foreach ($ownerId in $portOwnerIds) {
+    $current = Get-CimInstance Win32_Process -Filter "ProcessId=$ownerId" -ErrorAction SilentlyContinue
+    while ($current) {
+        $parent = Get-CimInstance Win32_Process -Filter "ProcessId=$($current.ParentProcessId)" -ErrorAction SilentlyContinue
+        if (-not $parent -or $parent.Name -ne 'java.exe') { break }
+        $parent.ProcessId
+        $current = $parent
+    }
+}
+
+$ids = @($brokerIds + $javaParents + $portOwnerIds | Where-Object { $_ -and $_ -ne 0 } | Sort-Object -Unique)
 
 if ($ids.Count -eq 0) {
     Write-Host 'Kafka is not running.' -ForegroundColor Green
@@ -42,12 +58,21 @@ else {
         if ($p) {
             Write-Host "Stopping $($p.ProcessName) (PID $id, started $($p.StartTime))"
             # ┌─ NOTE ───────────────────────────────────────────────────────────────────────
-            # │ The list is taken up front, and stopping one process can end another on it
-            # │ (the broker's own child): one that is already gone is what we wanted - not an
-            # │ error that aborts the stop half-way.
+            # │ taskkill, not Stop-Process: Windows PowerShell's Stop-Process also asks to read
+            # │ the process, which the broker's java.exe can refuse ("Access is denied") while
+            # │ still allowing it to be terminated - taskkill asks for terminate only, and /T
+            # │ ends the processes it started too. The list is taken up front, and stopping one
+            # │ process can end another on it: one that is already gone is what we wanted.
             # └──────────────────────────────────────────────────────────────────────────────
-            try { Stop-Process -Id $id -Force -ErrorAction Stop }
-            catch [Microsoft.PowerShell.Commands.ProcessCommandException] { Write-Host "  (PID $id had already ended)" -ForegroundColor DarkGray }
+            # Through cmd.exe: Windows PowerShell 5.1 turns a native program's error text into a
+            # terminating error under $ErrorActionPreference = 'Stop' - even "not found", which is fine here.
+            $output = cmd.exe /c "taskkill.exe /PID $id /T /F 2>&1"
+            if ($LASTEXITCODE -ne 0) {
+                if (Get-Process -Id $id -ErrorAction SilentlyContinue) {
+                    throw "Cannot stop PID $id ($($p.ProcessName)): $output Stop Kafka from an administrator window, or start it again from a normal one."
+                }
+                Write-Host "  (PID $id had already ended)" -ForegroundColor DarkGray
+            }
         }
     }
 
@@ -70,3 +95,6 @@ if (Test-Path $metadata) {
     foreach ($f in $readOnly) { $f.Attributes = $f.Attributes -band (-bnot [IO.FileAttributes]::ReadOnly) }
     if ($readOnly.Count -gt 0) { Write-Host "Cleared the read-only flag on $($readOnly.Count) metadata snapshot file(s)." }
 }
+
+# Stopped: success, whatever taskkill answered for a process that had already ended (128).
+exit 0
