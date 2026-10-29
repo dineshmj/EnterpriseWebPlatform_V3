@@ -111,6 +111,15 @@ describe('ParkedMessagesService - the IDP and three Domain APIs played by WireMo
     // Then
     expect(error).toBeInstanceOf(ForbiddenException);
     expect(error.message).toBe('You are not allowed to do this.');
+
+    // NOTE: listAll asks the three contexts at once and fails on the 403 while the other two
+    // calls may still be on their way; wait for them, or they land in the NEXT test's journal.
+    for (const context of ['accounts', 'partner-products']) {
+      for (let tries = 0; (await received('GET', parked(context))).length === 0; tries++) {
+        if (tries === 50) throw new Error(`The call to ${context} never arrived.`);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+    }
   });
 
   it('Given the IDP refuses to delegate (400), when the messages are listed, then it is forbidden and no Domain API is called', async () => {
