@@ -126,6 +126,14 @@ jobs:
         if: env.SONAR_TOKEN != ''
         run: dotnet tool install dotnet-sonarscanner --version "$SONARSCANNER_VERSION" --tool-path "$RUNNER_TEMP/sonar"
 
+      # ┌─ ARCH ─────────────────────────────────────────────────────────────────────────────────────
+      # │ Duplication by design: every micro front end, BFF and API is its squad's own deployable,
+      # │ built on the stack that squad chose, so their start-up and plumbing files look alike and
+      # │ are deliberately NOT shared through a central project. sonar.cpd.exclusions takes only
+      # │ those scaffold files out of the DUPLICATION count; every bug, vulnerability and hotspot
+      # │ rule still runs on them. Named file by file, so copy-paste in business code still shows.
+      # │ (NOSONAR and #pragma cannot do this: they silence issues, not duplication.)
+      # └────────────────────────────────────────────────────────────────────────────────────────────
       - name: Build and analyse
         if: env.SONAR_TOKEN != ''
         run: |
@@ -134,7 +142,8 @@ jobs:
           "$scanner" begin \
             /k:"$SONAR_PROJECT_KEY" /o:"$SONAR_ORGANIZATION" \
             /d:sonar.host.url=https://sonarcloud.io /d:sonar.token="$SONAR_TOKEN" \
-            /d:sonar.exclusions='**/node_modules/**,**/.next/**,**/wwwroot/lib/**,test-results/**,db/**,**/*.sql'
+            /d:sonar.exclusions='**/node_modules/**,**/.next/**,**/wwwroot/lib/**,test-results/**,db/**,**/*.sql' \
+            /d:sonar.cpd.exclusions='**/Program.cs,**/AuthController.cs,**/*DbContext.cs,**/*OutboxPublisher.cs,**/MfeShell.tsx,**/components/ui/feedback.tsx,**/lib/server/oidc.ts,**/lib/server/session-store.ts'
           dotnet build EnterpriseWebPlatform.BSS.slnx --configuration Release
           "$scanner" end /d:sonar.token="$SONAR_TOKEN"
 
