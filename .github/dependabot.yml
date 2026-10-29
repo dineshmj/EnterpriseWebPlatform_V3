@@ -133,14 +133,6 @@ updates:
     ignore:
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
-      # ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────────
-      # │ Flagd needs Humanizer.Core >= 3 (via JsonPointer.Net); WireMock.Net (2.21) pins it at exactly
-      # │ 2.14.1. With 0.7.x NuGet settles on 3 (warning NU1608); 0.8's deeper path turns it into a
-      # │ conflict the test projects cannot restore (NU1107). Stay on 0.7.x until WireMock.Net moves
-      # │ to Humanizer 3 - then drop this rule.
-      # └──────────────────────────────────────────────────────────────────────────────────────────
-      - dependency-name: 'OpenFeature.Providers.Flagd'
-        versions: ['>= 0.8.0']
     groups:
       nuget-packages:
         patterns: ['*']
