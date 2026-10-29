@@ -30,19 +30,20 @@
     "typescript": "5.9.2"
   },
   "jest": {
-    "rootDir": "test",
+    "rootDir": ".",
+    "roots": ["<rootDir>/test"],
     "testEnvironment": "node",
     "testRegex": "\\.spec\\.ts$",
     "transform": {
       "^.+\\.ts$": [
         "ts-jest",
         {
-          "tsconfig": "<rootDir>/tsconfig.json"
+          "tsconfig": "<rootDir>/test/tsconfig.json"
         }
       ]
     },
-    "globalSetup": "<rootDir>/../../../../../tst/node/wiremock/wiremock-start.ts",
-    "globalTeardown": "<rootDir>/../../../../../tst/node/wiremock/wiremock-stop.ts",
+    "globalSetup": "<rootDir>/../../../../tst/node/wiremock/wiremock-start.ts",
+    "globalTeardown": "<rootDir>/../../../../tst/node/wiremock/wiremock-stop.ts",
     "testTimeout": 20000
   }
 }
