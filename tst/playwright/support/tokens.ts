@@ -107,16 +107,27 @@ export function customerKycWebSignInToken(person: ShellPage, http: APIRequestCon
   return webSignInToken(person, http, clientIds.customerKycWeb, `${urls.kycMfe}/api/auth/callback`, 'openid profile roles organization customer-kyc.read');
 }
 
-/** A BFF client's sign-in token for the signed-in person (Authorization Code + PKCE, prompt=none). */
+/** A BFF client's sign-in token for the signed-in person (PAR + Authorization Code + PKCE, prompt=none). */
 async function webSignInToken(person: ShellPage, http: APIRequestContext, clientId: string, redirectUri: string, scope: string): Promise<string> {
   const verifier = randomBytes(32).toString('base64url');
   const state = randomBytes(16).toString('base64url');
+
+  // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+  // │ PAR first, like the BFFs: the staff clients REQUIRE it (RFC 9126, FAPI 2.0), so the
+  // │ request is pushed with the client's secret and the browser leg carries only client_id
+  // │ and the one-time request_uri.
+  // └──────────────────────────────────────────────────────────────────────────────────────
+  const pushed = await http.post(`${urls.idp}/connect/par`, {
+    form: {
+      client_id: clientId, client_secret: devSecretOf(clientId), redirect_uri: redirectUri, response_type: 'code', scope,
+      state, nonce: randomBytes(16).toString('base64url'), prompt: 'none',
+      code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256',
+    },
+  });
+  expect(pushed.status(), `the authorization request is pushed: ${await pushed.text()}`).toBe(201);
   const authorize = new URL(`${urls.idp}/connect/authorize`);
-  for (const [name, value] of Object.entries({
-    client_id: clientId, redirect_uri: redirectUri, response_type: 'code', scope,
-    state, nonce: randomBytes(16).toString('base64url'), prompt: 'none',
-    code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256',
-  })) authorize.searchParams.set(name, value);
+  authorize.searchParams.set('client_id', clientId);
+  authorize.searchParams.set('request_uri', (await pushed.json() as { request_uri: string }).request_uri);
 
   // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
   // │ prompt=none: the person must already be signed in at the IDP (no password typed here);
