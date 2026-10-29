@@ -112,13 +112,21 @@ still run on them, and copy-paste anywhere else still counts. A comment cannot d
 and `#pragma` silence issues, not duplication. Start-up stays inline in each `Program.cs` (no
 `builder.AddXxx()` helpers) so a reader sees the whole pipeline in one file.
 
-**SonarQube Cloud's quality gate is red on every pull request - by decision.** The free plan
-allows only the built-in "Sonar way" gate, which wants 80 % test coverage on new code, and no
-coverage is sent to SonarQube Cloud, so it reads 0 %. The check is not required (the branch rule
-asks only for **CI result**), so it never blocks a merge; bugs, vulnerabilities and hotspots are
-still reported on each pull request. To make it green: send coverage (coverlet OpenCover from the
-.NET tests, lcov from Jest) and exclude what has no unit tests (`Program.cs`, the simulators, the
-Next.js BFFs) - a step of its own.
+**SonarQube Cloud's quality gate is not required.** The free plan allows only the built-in "Sonar
+way" gate (80 % test coverage and at most 3 % duplication on new code, no new issues). The check
+is not required (the branch rule asks only for **CI result**), so it never blocks a merge; bugs,
+vulnerabilities and hotspots are still reported on each pull request.
+
+**Test coverage for SonarQube Cloud (since 29-OCT-2026).** The SonarQube Cloud job runs the unit
+tests a second time, for coverage only: the .NET tests (`tst/dotnet/EwpTests.slnx`) inside the
+scanner with coverlet writing OpenCover, and the Jest tests of every Node project with a `test`
+script writing lcov (the Journey APIs' Jest `rootDir` is the project, `roots` is `test`, so the
+code under `src` is measured). Left out of the coverage count (`sonar.coverage.exclusions`):
+start-up (`Program.cs`, the Journey APIs' `main.ts`), the BFFs and their client apps and the
+Shell (tested end to end by Playwright, which SonarQube Cloud cannot count), the simulators, the
+tests, scripts and deployment files. Domain APIs and workflows without unit tests stay in the
+count: that gap is real. A pull request that adds logic without a test turns the gate red - read
+it as a reminder, not a blocker. The tests are written for decisions, not for a percentage.
 
 ### Setting up SonarQube Cloud (once)
 

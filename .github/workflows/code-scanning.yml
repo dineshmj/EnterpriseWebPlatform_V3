@@ -35,6 +35,8 @@ concurrency:
 env:
   DOTNET_SDK_VERSION: '10.0.403'
   NODE_VERSION: '24.22.1'
+  # NOTE: same pnpm as ci.yml (the lockfiles are written by it).
+  PNPM_VERSION: '12.11.2'
   DOTNET_NOLOGO: 'true'
   DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
 
@@ -90,7 +92,7 @@ jobs:
   sonarqube:
     name: SonarQube Cloud
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 40
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION || 'dineshmj' }}
@@ -126,6 +128,50 @@ jobs:
         if: env.SONAR_TOKEN != ''
         run: dotnet tool install dotnet-sonarscanner --version "$SONARSCANNER_VERSION" --tool-path "$RUNNER_TEMP/sonar"
 
+      - name: Set up pnpm
+        if: env.SONAR_TOKEN != ''
+        run: npm install --global --ignore-scripts "pnpm@${PNPM_VERSION}"
+
+      # ┌─ SEC ────────────────────────────────────────────────────────────────────────────────────
+      # │ The pinned WireMock release the Jest tests start, kept only when its SHA-256 is the one
+      # │ recorded here. NOTE: same version and checksum as ci.yml - change both together.
+      # └──────────────────────────────────────────────────────────────────────────────────────────
+      - name: Get WireMock
+        if: env.SONAR_TOKEN != ''
+        env:
+          WIREMOCK_VERSION: '3.13.2'
+          WIREMOCK_SHA256: 'd097b19bd483c5038479b13a5c71e9faf8f2f5106584f0c120a7770ab0bdb367'
+        run: |
+          set -euo pipefail
+          jar="$RUNNER_TEMP/wiremock-standalone-$WIREMOCK_VERSION.jar"
+          curl -fsSL --proto '=https' --tlsv1.2 -o "$jar" "https://repo1.maven.org/maven2/org/wiremock/wiremock-standalone/$WIREMOCK_VERSION/wiremock-standalone-$WIREMOCK_VERSION.jar"
+          echo "$WIREMOCK_SHA256  $jar" | sha256sum --check --strict
+          echo "WIREMOCK_JAR=$jar" >> "$GITHUB_ENV"
+
+      # ┌─ ARCH ─────────────────────────────────────────────────────────────────────────────────────
+      # │ Coverage for SonarQube Cloud: the same Jest tests as ci.yml, found the same way (every
+      # │ project under src whose package.json has a "test" script), run with lcov output. Jest
+      # │ writes paths relative to its project, so each report's SF: lines get the project folder
+      # │ in front - SonarQube Cloud matches them from the repository root.
+      # └────────────────────────────────────────────────────────────────────────────────────────────
+      - name: TypeScript unit tests with coverage
+        if: env.SONAR_TOKEN != ''
+        run: |
+          set -euo pipefail
+          reports=()
+          while read -r file; do
+            dir=$(dirname "$file")
+            [[ $(jq -r '.scripts.test // empty' "$file") ]] || continue
+            echo "::group::$dir"
+            (cd "$dir" \
+              && pnpm install --frozen-lockfile --ignore-scripts \
+              && pnpm test --coverage --coverageReporters=lcov --coverageDirectory=coverage)
+            sed -i "s#^SF:#SF:$dir/#" "$dir/coverage/lcov.info"
+            reports+=("$dir/coverage/lcov.info")
+            echo "::endgroup::"
+          done < <(git ls-files 'src/**/package.json')
+          echo "LCOV_REPORTS=$(IFS=,; echo "${reports[*]}")" >> "$GITHUB_ENV"
+
       # ┌─ ARCH ─────────────────────────────────────────────────────────────────────────────────────
       # │ Duplication by design: every micro front end, BFF and API is its squad's own deployable,
       # │ built on the stack that squad chose, so their start-up and plumbing files look alike and
@@ -133,8 +179,15 @@ jobs:
       # │ those scaffold files out of the DUPLICATION count; every bug, vulnerability and hotspot
       # │ rule still runs on them. Named file by file, so copy-paste in business code still shows.
       # │ (NOSONAR and #pragma cannot do this: they silence issues, not duplication.)
+      # ├─ ARCH ─────────────────────────────────────────────────────────────────────────────────────
+      # │ Coverage: the .NET unit tests (tst/dotnet/EwpTests.slnx) run INSIDE begin/end with
+      # │ coverlet writing OpenCover; the Jest lcov reports come from the step above.
+      # │ sonar.coverage.exclusions leaves out only what is tested another way or not meant for
+      # │ unit tests: start-up (Program.cs, Nest main.ts), the BFFs and client apps and the Shell
+      # │ (Playwright), the simulators, the tests themselves, scripts and deployment. Domain APIs
+      # │ and workflows WITHOUT unit tests stay in the count - that gap is real.
       # └────────────────────────────────────────────────────────────────────────────────────────────
-      - name: Build and analyse
+      - name: Build, test and analyse
         if: env.SONAR_TOKEN != ''
         run: |
           set -euo pipefail
@@ -142,9 +195,15 @@ jobs:
           "$scanner" begin \
             /k:"$SONAR_PROJECT_KEY" /o:"$SONAR_ORGANIZATION" \
             /d:sonar.host.url=https://sonarcloud.io /d:sonar.token="$SONAR_TOKEN" \
-            /d:sonar.exclusions='**/node_modules/**,**/.next/**,**/wwwroot/lib/**,test-results/**,db/**,**/*.sql' \
-            /d:sonar.cpd.exclusions='**/Program.cs,**/AuthController.cs,**/*DbContext.cs,**/*OutboxPublisher.cs,**/MfeShell.tsx,**/components/ui/feedback.tsx,**/lib/server/oidc.ts,**/lib/server/session-store.ts'
+            /d:sonar.exclusions='**/node_modules/**,**/.next/**,**/wwwroot/lib/**,test-results/**,db/**,**/*.sql,**/coverage/**' \
+            /d:sonar.cpd.exclusions='**/Program.cs,**/AuthController.cs,**/*DbContext.cs,**/*OutboxPublisher.cs,**/MfeShell.tsx,**/components/ui/feedback.tsx,**/lib/server/oidc.ts,**/lib/server/session-store.ts' \
+            /d:sonar.cs.opencover.reportsPaths="$RUNNER_TEMP/coverage/**/coverage.opencover.xml" \
+            /d:sonar.javascript.lcov.reportPaths="$LCOV_REPORTS" \
+            /d:sonar.coverage.exclusions='**/Program.cs,src/Microservices/*/JourneyApi/src/main.ts,src/Microservices/*/BFF.Web/**,src/Shell/**,src/Simulators/**,tst/**,ps/**,deploy/**,.github/**'
           dotnet build EnterpriseWebPlatform.BSS.slnx --configuration Release
+          dotnet test tst/dotnet/EwpTests.slnx --configuration Release \
+            --collect:"XPlat Code Coverage" --results-directory "$RUNNER_TEMP/coverage" \
+            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
           "$scanner" end /d:sonar.token="$SONAR_TOKEN"
 
   # ┌─ SEC ──────────────────────────────────────────────────────────────────────────────────────────

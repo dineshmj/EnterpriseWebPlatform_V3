@@ -101,3 +101,6 @@ src/Microservices/*/BFF.Web/wwwroot/
 crash.log
 # Playwright run state when it is started from the repository root (the suite lives in tst/playwright)
 /test-results/
+# Unit-test coverage reports (jest --coverage, coverlet) - made in CI for SonarQube Cloud
+coverage/
+TestResults/
