@@ -1,5 +1,5 @@
 // ┌─ :: SECURITY :: Fail-closed configuration and __Host- cookies ─────────────────────────────────
-// │ Why : A web tier running without its client secret or session key would be silently insecure.
+// │ Why : A web tier running without its client key or session key would be silently insecure.
 // │ How : Every required setting is read at start-up and a missing one stops it; the session and
 // │       sign-in cookies are __Host- (Secure, path /, no domain).
 // │ Ref : Features 1.6.5, 2.3.3 | OWASP A05
@@ -21,7 +21,9 @@ export const config = {
   get shellOrigin() { return required('AUDIT_WEB_SHELL_ORIGIN').replace(/\/$/, ''); },
   get authority() { return required('AUDIT_WEB_IDP_AUTHORITY').replace(/\/$/, ''); },
   get clientId() { return required('AUDIT_WEB_CLIENT_ID'); },
-  get clientSecret() { return required('AUDIT_WEB_CLIENT_SECRET'); },
+  /** This BFF's private_key_jwt key (encrypted PKCS#8 PEM) and the file holding its password. */
+  get clientKeyPath() { return required('AUDIT_WEB_CLIENT_KEY_PATH'); },
+  get clientKeyPasswordPath() { return required('AUDIT_WEB_CLIENT_KEY_PASSWORD_PATH'); },
   /** 32 random bytes, base64: encrypts the tokens stored in the session table. */
   get sessionKey() { return Buffer.from(required('AUDIT_WEB_SESSION_KEY'), 'base64'); },
   get databaseUrl() { return required('AUDIT_WEB_DATABASE_URL'); },

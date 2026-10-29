@@ -33,5 +33,5 @@ Deployable: `src/Microservices/CustomerKyc/BFF.Web` (NestJS + `openid-client`) Â
 
 ## 5. Production (open)
 
-- [ ] **Secret store.** The client secret and the session key come from a secret store; `runnow.bat` values are for Development only (R-10).
+- [ ] **Secret store.** The client key (private_key_jwt) and the session key come from a secret store; `runnow.bat` values are for Development only (R-10).
 - [ ] **Shared token fixtures.** The token rules are tested against fixtures shared with the .NET stack (R-11).

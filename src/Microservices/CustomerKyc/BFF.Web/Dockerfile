@@ -5,7 +5,7 @@
 # ┌─ :: ARCHITECTURE + SECURITY :: Customer KYC BFF (NestJS + its micro front end) container image ───
 # │ Why : The BFF serves the KYC micro front end and holds the officer's session; the image must
 # │       build the front end from source - never from a developer's local export - and carry no
-# │       client secret, session key or certificate.
+# │       client key, session key or certificate.
 # │ How : Four stages. (1) Node builds the Next.js static export from its lockfile. (2) Node
 # │       compiles the NestJS BFF. (3) A second install takes its production dependencies only.
 # │       (4) A distroless Node runtime (no shell, no package manager) runs dist/main.js as the

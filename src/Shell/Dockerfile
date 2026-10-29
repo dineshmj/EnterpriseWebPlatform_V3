@@ -9,9 +9,10 @@
 # │ How : Three stages. (1) Node builds the Next.js static export from the committed lockfile
 # │       (CompileAndExportBFFClients_V3.ps1 locally, without the copy to wwwroot). (2) The .NET
 # │       SDK publishes the Shell with that export in wwwroot. (3) A chiseled, non-root ASP.NET
-# │       runtime runs it on plain HTTP 8080; TLS ends at the ingress. Oidc__ClientSecret,
+# │       runtime runs it on plain HTTP 8080; TLS ends at the ingress.
 # │       ConnectionStrings__MenuDbConnection, ConnectionStrings__BffStateDbConnection and the
-# │       origins (ShellOrigin, MfeOrigins, NotificationsApiBaseUrl) come from the environment.
+# │       origins (ShellOrigin, MfeOrigins, NotificationsApiBaseUrl) come from the environment;
+# │       the private_key_jwt key (Oidc__ClientKey__*) is a file mounted at run time.
 # │ Ref : doc/Containers.md | Features 2.3.3, 2.4.5 | OWASP A05, A08
 # └────────────────────────────────────────────────────────────────────────────────────────────────
 

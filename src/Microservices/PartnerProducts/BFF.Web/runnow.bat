@@ -28,7 +28,9 @@ set "PARTNER_PRODUCTS_WEB_SHELL_ORIGIN=https://shell.dev.localhost:46367"
 set "PARTNER_PRODUCTS_WEB_IDP_AUTHORITY=https://idp.dev.localhost:46392"
 REM Must equal ClientIds:PartnerProductsWeb in src\IDP\appsettings.json (where the IDP registers that client).
 set "PARTNER_PRODUCTS_WEB_CLIENT_ID=PartnerProducts.Microservice.Web.ClientID"
-set "PARTNER_PRODUCTS_WEB_CLIENT_SECRET=b98a234e-733a-4b09-a379-932af220853e"
+REM private_key_jwt: this BFF's own key (ps\pki\New-EwpLocalPki.ps1 makes it, outside the repository).
+set "PARTNER_PRODUCTS_WEB_CLIENT_KEY_PATH=%USERPROFILE%\.ewp-pki\partner-products-web-client.key.pem"
+set "PARTNER_PRODUCTS_WEB_CLIENT_KEY_PASSWORD_PATH=%USERPROFILE%\.ewp-pki\partner-products-web-client.key.pem.password"
 REM Encrypts the tokens in the session table (32 random bytes, base64). Changing it signs everybody out.
 set "PARTNER_PRODUCTS_WEB_SESSION_KEY=zaaQFPq0pUTLD4PDmZaL4oQL5nBMNJRvnSTSUGw+osE="
 set "PARTNER_PRODUCTS_WEB_DATABASE_URL=postgres://ewp_partner_products_web:ewp-partner-products-web-dev@localhost:5432/EwpBffStateDb"

@@ -19,7 +19,12 @@ public sealed class MfePayments
                 {
                     ClientId = ClientSettings.Ids.PaymentsWeb,
                     ClientName = "Payments Microservice BFF Client",
-                    ClientSecrets = { ClientSecretStore.For(ClientSettings.Ids.PaymentsWeb) },
+                    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+                    // │ private_key_jwt (RFC 7523, FAPI 2.0): the BFF signs a one-minute assertion with
+                    // │ its own EC P-256 key (ES256); the IDP holds only the PUBLIC key - no shared secret
+                    // │ to leak, or to rotate on both sides.
+                    // └──────────────────────────────────────────────────────────────────────────────────────
+                    ClientSecrets = { ClientKeyStore.For(ClientSettings.Ids.PaymentsWeb) },
 
                     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
                     // │ Authorization Code (+ PKCE) for a confidential BFF: tokens are issued to the server,

@@ -25,7 +25,7 @@
 //     and partner-bank-ca.pem, the public root the Gateway checks the Partner Bank's pods with)
 //     Optional: LAUNCHDARKLY_SDK_KEY (GitHub secret) - then also Secret ewp-launchdarkly, and
 //     demo-platform.sh switches the chart to LaunchDarkly (both --list and the chart: off without it)
-import { createHash, generateKeyPairSync, randomBytes, randomInt } from 'node:crypto';
+import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, randomBytes, randomInt } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -50,19 +50,11 @@ const kafkaUsers = [
   'ewp-payments-saga-reply-subscriber', 'ewp-notifications-subscriber', 'ewp-audit-api',
 ];
 
-// The IDP's confidential clients (deploy/helm/ewp values.yaml, idp.secretEnv) and who holds each.
+// The IDP's confidential clients with a shared secret (deploy/helm/ewp values.yaml, idp.secretEnv) and
+// who holds each: the machines (Journey APIs, the worker, the Kafka subscribers).
 const clients = {
-  'BSS.Shell.BFF.ClientID': ['shell', 'Oidc__ClientSecret'],
-  'CustomerOnboarding.Microservice.BFF.ClientID': ['customer-onboarding-bff-web', 'Oidc__ClientSecret'],
-  'CustomerKYC.Microservice.BFF.ClientID': ['customer-kyc-bff-web', 'KYC_BFF_CLIENT_SECRET'],
-  'Compliance.Microservice.BFF.ClientID': ['compliance-bff-web', 'Oidc__ClientSecret'],
-  'Accounts.Microservice.BFF.ClientID': ['accounts-bff-web', 'Oidc__ClientSecret'],
-  'Payments.Microservice.BFF.ClientID': ['payments-bff-web', 'Oidc__ClientSecret'],
-  'Audit.Microservice.Web.ClientID': ['audit-bff-web', 'AUDIT_WEB_CLIENT_SECRET'],
   'Audit.JourneyApi.ClientID': ['audit-journey-api', 'AUDIT_JOURNEY_CLIENT_SECRET'],
-  'Operations.Microservice.Web.ClientID': ['operations-bff-web', 'OPERATIONS_WEB_CLIENT_SECRET'],
   'Operations.JourneyApi.ClientID': ['operations-journey-api', 'OPERATIONS_JOURNEY_CLIENT_SECRET'],
-  'PartnerProducts.Microservice.Web.ClientID': ['partner-products-bff-web', 'PARTNER_PRODUCTS_WEB_CLIENT_SECRET'],
   'PartnerProducts.JourneyApi.ClientID': ['partner-products-journey-api', 'PARTNER_PRODUCTS_JOURNEY_CLIENT_SECRET'],
   'PartnerProducts.Worker.M2M.ClientID': ['partner-products-worker', 'PARTNER_PRODUCTS_WORKER_CLIENT_SECRET'],
   'CustomerKyc.CaseOpeningSubscriber.To.CustomerKycApi.M2M.ClientID': ['kyc-case-opening-subscriber', 'KycCaseOpeningSubscriber__ClientSecret'],
@@ -73,6 +65,23 @@ const clients = {
   'Notifications.Subscriber.To.NotificationsApi.M2M.ClientID': ['notifications-subscriber', 'NotificationsSubscriber__ClientSecret'],
   'Accounts.CommandSubscriber.To.AccountsApi.M2M.ClientID': ['accounts-command-subscriber', 'AccountsCommandSubscriber__ClientSecret'],
   'Payments.SagaReplySubscriber.To.PaymentsApi.M2M.ClientID': ['payments-saga-reply-subscriber', 'PaymentsSagaReplySubscriber__ClientSecret'],
+};
+
+// ┌─ SEC ──────────────────────────────────────────────────────────────────────────────────────────
+// │ The staff web apps prove themselves with private_key_jwt (FAPI 2.0), not a secret: each has
+// │ its own EC P-256 key. Its private key (encrypted PEM + password) goes only to that app's
+// │ Secret ewp-<component>-client-key; the IDP gets only the PUBLIC key (ewp-idp-client-keys).
+// └────────────────────────────────────────────────────────────────────────────────────────────────
+const webClients = {
+  'BSS.Shell.BFF.ClientID': 'shell',
+  'CustomerOnboarding.Microservice.BFF.ClientID': 'customer-onboarding-bff-web',
+  'CustomerKYC.Microservice.BFF.ClientID': 'customer-kyc-bff-web',
+  'Compliance.Microservice.BFF.ClientID': 'compliance-bff-web',
+  'Accounts.Microservice.BFF.ClientID': 'accounts-bff-web',
+  'Payments.Microservice.BFF.ClientID': 'payments-bff-web',
+  'Audit.Microservice.Web.ClientID': 'audit-bff-web',
+  'Operations.Microservice.Web.ClientID': 'operations-bff-web',
+  'PartnerProducts.Microservice.Web.ClientID': 'partner-products-bff-web',
 };
 
 // Each component's database (key, role, database) and Kafka user (key, user).
@@ -145,6 +154,8 @@ const o = {
   idpSigningPfx: 'pki-idp-signing-pfx',
   idpSigningPassword: 'pki-idp-signing-password',
   clientKey: (name) => `idp-client-key-${name}`,
+  clientPrivateKey: (name) => `client-private-key-${name}`,
+  clientPrivateKeyPassword: (name) => `client-private-key-password-${name}`,
   trustRoot: 'pki-trust-root-cer',
   partnerClientPfx: 'pki-ewp-partner-client-pfx',
   partnerClientPassword: 'pki-ewp-partner-client-password',
@@ -206,6 +217,11 @@ function ewpNamespace() {
   add('ewp-idp-signing', 'signing.pfx', o.idpSigningPfx, b64);
   add('ewp-idp-client-keys', 'SelfService.Web.ClientID.jwk', o.clientKey('selfservice-web'));
   add('ewp-idp-client-keys', 'SelfService.JourneyApi.ClientID.jwk', o.clientKey('selfservice-journeyapi'));
+  for (const [id, component] of Object.entries(webClients)) {
+    add('ewp-idp-client-keys', `${id}.jwk`, o.clientKey(component));
+    add(`ewp-${component}-client-key`, 'client-key.pem', o.clientPrivateKey(component));
+    add(`ewp-${component}-client-key`, 'client-key.pem.password', o.clientPrivateKeyPassword(component));
+  }
   add('ewp-partner-pki', 'ewp-partner-client.pfx', o.partnerClientPfx, b64);
   add('ewp-partner-pki', 'ewp-partner-client.pfx.password', o.partnerClientPassword);
   add('ewp-partner-pki', 'ewp-request-signing.pfx', o.requestSigningPfx, b64);
@@ -266,13 +282,23 @@ function ecPkcs8() {
   return privateKey.export({ type: 'pkcs8', format: 'der' }).toString('base64');
 }
 
-// A public JWK only (the customers' channel is not deployed: its private keys are thrown away).
-function publicJwk() {
-  const { publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+// An EC P-256 key pair for private_key_jwt, in the shapes of ps/pki/New-EwpClientKeys.mjs: the
+// public key as a JWK (RFC 7638 thumbprint as kid), the private key as PKCS#8 PEM encrypted with a
+// random password.
+function clientKeyPair() {
+  const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
   const jwk = publicKey.export({ format: 'jwk' });
   const kid = createHash('sha256').update(JSON.stringify({ crv: jwk.crv, kty: jwk.kty, x: jwk.x, y: jwk.y })).digest('base64url');
-  return JSON.stringify({ kty: 'EC', crv: 'P-256', x: jwk.x, y: jwk.y, kid, use: 'sig', alg: 'ES256' });
+  const keyPassword = password(40);
+  return {
+    publicJwk: JSON.stringify({ kty: 'EC', crv: 'P-256', x: jwk.x, y: jwk.y, kid, use: 'sig', alg: 'ES256' }),
+    privatePem: privateKey.export({ type: 'pkcs8', format: 'pem', cipher: 'aes-256-cbc', passphrase: keyPassword }),
+    keyPassword,
+  };
 }
+
+// A public JWK only (the customers' channel is not deployed: its private keys are thrown away).
+const publicJwk = () => clientKeyPair().publicJwk;
 
 // ┌─ SEC ──────────────────────────────────────────────────────────────────────────────────────────
 // │ The demo's PKI, in the shapes of ps/pki/New-EwpLocalPki.ps1, valid for 7 days (a demo lives 6
@@ -385,7 +411,15 @@ if (process.argv.includes('--check-pki')) {
       throw new Error('The Partner Bank must get the same root and the public request-signing certificate.');
     if (Object.keys(pki.partner).some((n) => n.includes('client') || n.includes('signing-pfx')))
       throw new Error("The Partner Bank must not get any of EWP's private keys.");
-    console.log('PKI OK: 5 .pfx open with their passwords; server and client chain to the root; Partner hosts named; client subject as the Partner Bank expects.');
+    // A staff web app's private_key_jwt pair: the private key opens with its password and IS the
+    // public JWK's key (same point, same RFC 7638 kid) - else the IDP refuses every assertion.
+    const pair = clientKeyPair();
+    const jwk = JSON.parse(pair.publicJwk);
+    const opened = createPublicKey(createPrivateKey({ key: pair.privatePem, format: 'pem', passphrase: pair.keyPassword })).export({ format: 'jwk' });
+    const kid = createHash('sha256').update(JSON.stringify({ crv: opened.crv, kty: opened.kty, x: opened.x, y: opened.y })).digest('base64url');
+    if (opened.x !== jwk.x || opened.y !== jwk.y || kid !== jwk.kid || 'd' in jwk)
+      throw new Error('A client key pair does not match its public JWK (or the JWK holds the private part).');
+    console.log('PKI OK: 5 .pfx open with their passwords; server and client chain to the root; Partner hosts named; client subject as the Partner Bank expects; client key pairs match.');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -457,6 +491,24 @@ for (const [side, vault] of [['ewp', ewpVault], ['partner', partnerVault]]) {
     values[side][name] = value;
   });
 }
+
+// Each staff web app's key pair: all three parts or none (a re-run after a half-written pair
+// issues a new one; the IDP and the app read it at their next start).
+await inBatches(Object.values(webClients), async (component) => {
+  const names = [o.clientKey(component), o.clientPrivateKey(component), o.clientPrivateKeyPassword(component)];
+  const found = await Promise.all(names.map((name) => vaultCall(ewpVault, 'GET', name)));
+  if (found.every((v) => v !== undefined)) {
+    names.forEach((name, i) => { values.ewp[name] = found[i]; });
+    return;
+  }
+  const pair = clientKeyPair();
+  const made3 = [pair.publicJwk, pair.privatePem, pair.keyPassword];
+  for (const [i, name] of names.entries()) {
+    await vaultCall(ewpVault, 'PUT', name, { value: made3[i], contentType: 'ewp-demo-client-key' });
+    values.ewp[name] = made3[i];
+  }
+  made += names.length;
+}, 3);
 
 // The PKI: all or nothing (a re-run after a half-written PKI issues a complete new one).
 const pkiNames = {

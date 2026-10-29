@@ -82,6 +82,8 @@ export class DocumentsManagementTokenService {
   private async exchange(subjectToken: string): Promise<TokenResponse> {
     let response: globalThis.Response;
     try {
+      // A new client assertion for this one call (the IDP takes each one once).
+      const clientAuthentication = await this.oidc.clientAuthentication();
       response = await resilientFetch(
         breakers.identityProvider,
         `${this.options.authority}/connect/token`,
@@ -91,7 +93,7 @@ export class DocumentsManagementTokenService {
           body: new URLSearchParams({
             grant_type: TOKEN_EXCHANGE,
             client_id: this.options.clientId,
-            client_secret: this.options.clientSecret,
+            ...clientAuthentication,
             subject_token: subjectToken,
             subject_token_type: ACCESS_TOKEN_TYPE,
             scope: 'documents-management.read',

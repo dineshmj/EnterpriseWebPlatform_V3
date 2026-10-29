@@ -651,7 +651,7 @@ Details: [Containers.md](Containers.md), [Kubernetes.md](Kubernetes.md), [Azure.
 - [x] Adapter tests with WireMock: WireMock.Net for the external systems, WireMock standalone + Jest for the Journey APIs (they found and fixed a non-JSON answer passing as a screening result, and Journey APIs following redirects with their tokens)
 - [x] Fraud check at payment capture within a latency budget, with a cautious fallback
 - [ ] Observability in the cluster (built; to verify in the next cloud demo)
-- [ ] FAPI 2.0 completion for the staff channel - part 1 done 29-OCT-2026: PAR required for the Shell and all web apps; next: `private_key_jwt` and DPoP-bound tokens for the staff BFFs
+- [ ] FAPI 2.0 completion for the staff channel - part 1 done 29-OCT-2026: PAR required for the Shell and all web apps; part 2a done 29-OCT-2026: `private_key_jwt` for the Shell and all web apps (no client secret left in the staff channel); next: DPoP-bound tokens for the staff BFFs
 
 Details: [Architectural-And-Security-Features-Demoable-EWP-V3.md](Architectural-And-Security-Features-Demoable-EWP-V3.md) (1.2.5, 1.6.7, 1.7.3, 1.8.2, 1.9.4, 2.5.2).
 

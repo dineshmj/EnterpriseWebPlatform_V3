@@ -4,7 +4,7 @@ Deployables: `src/Microservices/{CustomerOnboarding,Compliance,Accounts,Payments
 
 ## 1. Sign-in (OIDC client)
 
-- [x] **Each BFF is a confidential client using Authorization Code + PKCE.** The code is exchanged on the server with the client secret, which is read from configuration; without it the BFF does not start.
+- [x] **Each BFF is a confidential client using Authorization Code + PKCE.** The code is exchanged on the server with a client assertion (`private_key_jwt`, its own EC key read from configuration); without the key the BFF does not start.
 - [x] **Its scopes are its own API's read and write scopes,** plus only the read scopes it needs. For example, Payments adds `accounts.read` (and `accounts.write`, which the Accounts API admits for this client's cash deposits only). *Because* a stolen token should reach as little as possible.
 - [x] **Tokens are kept in the server-side session** (`SaveTokens`) and refreshed there; they are never sent to the browser.
 - [x] **Claim names are kept as issued** (`MapInboundClaims = false`).

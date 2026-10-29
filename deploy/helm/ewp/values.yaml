@@ -244,6 +244,16 @@ components:
       ClientBaseUrls__AuditWeb: '{{ include "ewp.public" (list . "audit-bff-web") }}'
       ClientBaseUrls__OperationsWeb: '{{ include "ewp.public" (list . "operations-bff-web") }}'
       ClientBaseUrls__PartnerProductsWeb: '{{ include "ewp.public" (list . "partner-products-bff-web") }}'
+      # private_key_jwt: the staff web apps' PUBLIC keys (their private keys are in each app's own Secret).
+      ClientKeys__BSS.Shell.BFF.ClientID: /etc/ewp/idp-client-keys/BSS.Shell.BFF.ClientID.jwk
+      ClientKeys__CustomerOnboarding.Microservice.BFF.ClientID: /etc/ewp/idp-client-keys/CustomerOnboarding.Microservice.BFF.ClientID.jwk
+      ClientKeys__CustomerKYC.Microservice.BFF.ClientID: /etc/ewp/idp-client-keys/CustomerKYC.Microservice.BFF.ClientID.jwk
+      ClientKeys__Compliance.Microservice.BFF.ClientID: /etc/ewp/idp-client-keys/Compliance.Microservice.BFF.ClientID.jwk
+      ClientKeys__Accounts.Microservice.BFF.ClientID: /etc/ewp/idp-client-keys/Accounts.Microservice.BFF.ClientID.jwk
+      ClientKeys__Payments.Microservice.BFF.ClientID: /etc/ewp/idp-client-keys/Payments.Microservice.BFF.ClientID.jwk
+      ClientKeys__Audit.Microservice.Web.ClientID: /etc/ewp/idp-client-keys/Audit.Microservice.Web.ClientID.jwk
+      ClientKeys__Operations.Microservice.Web.ClientID: /etc/ewp/idp-client-keys/Operations.Microservice.Web.ClientID.jwk
+      ClientKeys__PartnerProducts.Microservice.Web.ClientID: /etc/ewp/idp-client-keys/PartnerProducts.Microservice.Web.ClientID.jwk
       # The customers' self-service channel (not deployed yet); its clients are registered.
       ClientBaseUrls__SelfServiceWeb: 'https://my.{{ .Values.global.domain }}'
       ClientKeys__SelfService.Web.ClientID: /etc/ewp/idp-client-keys/SelfService.Web.ClientID.jwk
@@ -253,17 +263,8 @@ components:
     secretEnv:
       - ConnectionStrings__IdentityDbConnection
       - SigningCredential__CertificatePassword
-      - ClientSecrets__BSS.Shell.BFF.ClientID
-      - ClientSecrets__CustomerOnboarding.Microservice.BFF.ClientID
-      - ClientSecrets__CustomerKYC.Microservice.BFF.ClientID
-      - ClientSecrets__Compliance.Microservice.BFF.ClientID
-      - ClientSecrets__Accounts.Microservice.BFF.ClientID
-      - ClientSecrets__Payments.Microservice.BFF.ClientID
-      - ClientSecrets__Audit.Microservice.Web.ClientID
       - ClientSecrets__Audit.JourneyApi.ClientID
-      - ClientSecrets__Operations.Microservice.Web.ClientID
       - ClientSecrets__Operations.JourneyApi.ClientID
-      - ClientSecrets__PartnerProducts.Microservice.Web.ClientID
       - ClientSecrets__PartnerProducts.JourneyApi.ClientID
       - ClientSecrets__PartnerProducts.Worker.M2M.ClientID
       - ClientSecrets__CustomerKyc.CaseOpeningSubscriber.To.CustomerKycApi.M2M.ClientID
@@ -289,6 +290,8 @@ components:
     platformHealth: {name: Shell, group: Front ends}
     env:
       Oidc__Authority: '{{ include "ewp.public" (list . "idp") }}'
+      Oidc__ClientKey__Path: /etc/ewp/client-key/client-key.pem
+      Oidc__ClientKey__PasswordPath: /etc/ewp/client-key/client-key.pem.password
       ShellOrigin: '{{ include "ewp.public" (list . "shell") }}'
       MfeOrigins__CustomerOnboarding: '{{ include "ewp.public" (list . "customer-onboarding-bff-web") }}'
       MfeOrigins__CustomerKyc: '{{ include "ewp.public" (list . "customer-kyc-bff-web") }}'
@@ -302,7 +305,9 @@ components:
     secretEnv:
       - ConnectionStrings__MenuDbConnection
       - ConnectionStrings__BffStateDbConnection
-      - Oidc__ClientSecret
+    secretFiles:
+      # private_key_jwt: this app's own key (encrypted PEM) and its password - nobody else's.
+      - {name: client-key, secret: ewp-shell-client-key, mountPath: /etc/ewp/client-key}
 
   customer-onboarding-bff-web:
     stack: dotnet
@@ -312,6 +317,8 @@ components:
     platformHealth: {name: Customer Onboarding BFF, group: Front ends}
     env:
       Oidc__Authority: '{{ include "ewp.public" (list . "idp") }}'
+      Oidc__ClientKey__Path: /etc/ewp/client-key/client-key.pem
+      Oidc__ClientKey__PasswordPath: /etc/ewp/client-key/client-key.pem.password
       ShellOrigin: '{{ include "ewp.public" (list . "shell") }}'
       CustomerOnboardingBff__SpaBaseUrl: '{{ include "ewp.public" (list . "customer-onboarding-bff-web") }}'
       CustomerOnboardingBff__IdentityServerAuthority: '{{ include "ewp.public" (list . "idp") }}'
@@ -319,7 +326,9 @@ components:
       CustomerOnboardingBff__DocumentsManagementApiBaseUrl: '{{ include "ewp.internal" (list . "documents-management-api") }}'
     secretEnv:
       - ConnectionStrings__BffStateDbConnection
-      - Oidc__ClientSecret
+    secretFiles:
+      # private_key_jwt: this app's own key (encrypted PEM) and its password - nobody else's.
+      - {name: client-key, secret: ewp-customer-onboarding-bff-web-client-key, mountPath: /etc/ewp/client-key}
 
   customer-kyc-bff-web:
     stack: node
@@ -335,11 +344,15 @@ components:
       KYC_BFF_SHELL_ORIGIN: '{{ include "ewp.public" (list . "shell") }}'
       KYC_API_BASE_URL: '{{ include "ewp.internal" (list . "customer-kyc-api") }}'
       KYC_DOCUMENTS_MANAGEMENT_API_BASE_URL: '{{ include "ewp.internal" (list . "documents-management-api") }}'
+      KYC_BFF_CLIENT_KEY_PATH: /etc/ewp/client-key/client-key.pem
+      KYC_BFF_CLIENT_KEY_PASSWORD_PATH: /etc/ewp/client-key/client-key.pem.password
     secretEnv:
-      - KYC_BFF_CLIENT_SECRET
       - KYC_BFF_SESSION_SECRET
       - KYC_BFF_SESSION_KEY
       - KYC_BFF_DATABASE_URL
+    secretFiles:
+      # private_key_jwt: this app's own key (encrypted PEM) and its password - nobody else's.
+      - {name: client-key, secret: ewp-customer-kyc-bff-web-client-key, mountPath: /etc/ewp/client-key}
 
   compliance-bff-web:
     stack: dotnet
@@ -349,11 +362,15 @@ components:
     platformHealth: {name: Compliance BFF, group: Front ends}
     env:
       Oidc__Authority: '{{ include "ewp.public" (list . "idp") }}'
+      Oidc__ClientKey__Path: /etc/ewp/client-key/client-key.pem
+      Oidc__ClientKey__PasswordPath: /etc/ewp/client-key/client-key.pem.password
       ShellOrigin: '{{ include "ewp.public" (list . "shell") }}'
       ComplianceBff__ComplianceApiBaseUrl: '{{ include "ewp.internal" (list . "compliance-api") }}'
     secretEnv:
       - ConnectionStrings__BffStateDbConnection
-      - Oidc__ClientSecret
+    secretFiles:
+      # private_key_jwt: this app's own key (encrypted PEM) and its password - nobody else's.
+      - {name: client-key, secret: ewp-compliance-bff-web-client-key, mountPath: /etc/ewp/client-key}
 
   accounts-bff-web:
     stack: dotnet
@@ -363,11 +380,15 @@ components:
     platformHealth: {name: Accounts BFF, group: Front ends}
     env:
       Oidc__Authority: '{{ include "ewp.public" (list . "idp") }}'
+      Oidc__ClientKey__Path: /etc/ewp/client-key/client-key.pem
+      Oidc__ClientKey__PasswordPath: /etc/ewp/client-key/client-key.pem.password
       ShellOrigin: '{{ include "ewp.public" (list . "shell") }}'
       AccountsBff__AccountsApiBaseUrl: '{{ include "ewp.internal" (list . "accounts-api") }}'
     secretEnv:
       - ConnectionStrings__BffStateDbConnection
-      - Oidc__ClientSecret
+    secretFiles:
+      # private_key_jwt: this app's own key (encrypted PEM) and its password - nobody else's.
+      - {name: client-key, secret: ewp-accounts-bff-web-client-key, mountPath: /etc/ewp/client-key}
 
   payments-bff-web:
     stack: dotnet
@@ -377,12 +398,16 @@ components:
     platformHealth: {name: Payments BFF, group: Front ends}
     env:
       Oidc__Authority: '{{ include "ewp.public" (list . "idp") }}'
+      Oidc__ClientKey__Path: /etc/ewp/client-key/client-key.pem
+      Oidc__ClientKey__PasswordPath: /etc/ewp/client-key/client-key.pem.password
       ShellOrigin: '{{ include "ewp.public" (list . "shell") }}'
       PaymentsBff__PaymentsApiBaseUrl: '{{ include "ewp.internal" (list . "payments-api") }}'
       PaymentsBff__AccountsApiBaseUrl: '{{ include "ewp.internal" (list . "accounts-api") }}'
     secretEnv:
       - ConnectionStrings__BffStateDbConnection
-      - Oidc__ClientSecret
+    secretFiles:
+      # private_key_jwt: this app's own key (encrypted PEM) and its password - nobody else's.
+      - {name: client-key, secret: ewp-payments-bff-web-client-key, mountPath: /etc/ewp/client-key}
 
   audit-bff-web:
     stack: node
@@ -396,10 +421,14 @@ components:
       AUDIT_WEB_IDP_AUTHORITY: '{{ include "ewp.public" (list . "idp") }}'
       AUDIT_WEB_CLIENT_ID: Audit.Microservice.Web.ClientID
       AUDIT_JOURNEY_API_BASE_URL: '{{ include "ewp.internal" (list . "audit-journey-api") }}'
+      AUDIT_WEB_CLIENT_KEY_PATH: /etc/ewp/client-key/client-key.pem
+      AUDIT_WEB_CLIENT_KEY_PASSWORD_PATH: /etc/ewp/client-key/client-key.pem.password
     secretEnv:
-      - AUDIT_WEB_CLIENT_SECRET
       - AUDIT_WEB_SESSION_KEY
       - AUDIT_WEB_DATABASE_URL
+    secretFiles:
+      # private_key_jwt: this app's own key (encrypted PEM) and its password - nobody else's.
+      - {name: client-key, secret: ewp-audit-bff-web-client-key, mountPath: /etc/ewp/client-key}
 
   operations-bff-web:
     stack: node
@@ -413,10 +442,14 @@ components:
       OPERATIONS_WEB_IDP_AUTHORITY: '{{ include "ewp.public" (list . "idp") }}'
       OPERATIONS_WEB_CLIENT_ID: Operations.Microservice.Web.ClientID
       OPERATIONS_JOURNEY_API_BASE_URL: '{{ include "ewp.internal" (list . "operations-journey-api") }}'
+      OPERATIONS_WEB_CLIENT_KEY_PATH: /etc/ewp/client-key/client-key.pem
+      OPERATIONS_WEB_CLIENT_KEY_PASSWORD_PATH: /etc/ewp/client-key/client-key.pem.password
     secretEnv:
-      - OPERATIONS_WEB_CLIENT_SECRET
       - OPERATIONS_WEB_SESSION_KEY
       - OPERATIONS_WEB_DATABASE_URL
+    secretFiles:
+      # private_key_jwt: this app's own key (encrypted PEM) and its password - nobody else's.
+      - {name: client-key, secret: ewp-operations-bff-web-client-key, mountPath: /etc/ewp/client-key}
 
   partner-products-bff-web:
     stack: node
@@ -430,10 +463,14 @@ components:
       PARTNER_PRODUCTS_WEB_IDP_AUTHORITY: '{{ include "ewp.public" (list . "idp") }}'
       PARTNER_PRODUCTS_WEB_CLIENT_ID: PartnerProducts.Microservice.Web.ClientID
       PARTNER_PRODUCTS_JOURNEY_API_BASE_URL: '{{ include "ewp.internal" (list . "partner-products-journey-api") }}'
+      PARTNER_PRODUCTS_WEB_CLIENT_KEY_PATH: /etc/ewp/client-key/client-key.pem
+      PARTNER_PRODUCTS_WEB_CLIENT_KEY_PASSWORD_PATH: /etc/ewp/client-key/client-key.pem.password
     secretEnv:
-      - PARTNER_PRODUCTS_WEB_CLIENT_SECRET
       - PARTNER_PRODUCTS_WEB_SESSION_KEY
       - PARTNER_PRODUCTS_WEB_DATABASE_URL
+    secretFiles:
+      # private_key_jwt: this app's own key (encrypted PEM) and its password - nobody else's.
+      - {name: client-key, secret: ewp-partner-products-bff-web-client-key, mountPath: /etc/ewp/client-key}
 
   # ── Domain APIs ──────────────────────────────────────────────────────────────────────────────
   customer-onboarding-api:

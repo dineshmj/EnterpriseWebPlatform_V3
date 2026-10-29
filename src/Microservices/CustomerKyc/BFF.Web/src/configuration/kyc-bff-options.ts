@@ -2,7 +2,7 @@ import { listenerTls, type ListenerTls } from './listener-tls';
 import { trustedProxies } from '../security/trusted-proxies';
 
 // ┌─ :: SECURITY :: Fail-closed configuration ─────────────────────────────────────────────────────
-// │ Why : A BFF running without its secret, session key or audience would be silently insecure.
+// │ Why : A BFF running without its client key, session key or audience would be silently insecure.
 // │ How : Every required setting is read once at start-up; a missing one stops the BFF. Addresses
 // │       have no development defaults either: a container must not quietly call localhost.
 // │ Ref : Features 1.6.5 | OWASP A05
@@ -11,7 +11,9 @@ export interface KycBffOptions {
   port: number;
   authority: string;
   clientId: string;
-  clientSecret: string;
+  /** This BFF's private_key_jwt key (encrypted PKCS#8 PEM) and the file holding its password. */
+  clientKeyPath: string;
+  clientKeyPasswordPath: string;
   callbackUrl: string;
   postLogoutRedirectUri: string;
   apiBaseUrl: string;
@@ -46,7 +48,8 @@ export function loadOptions(): KycBffOptions {
     port: Number(process.env.KYC_BFF_PORT ?? '33800'),
     authority: required('KYC_IDP_AUTHORITY'),
     clientId: required('KYC_BFF_CLIENT_ID'),
-    clientSecret: required('KYC_BFF_CLIENT_SECRET'),
+    clientKeyPath: required('KYC_BFF_CLIENT_KEY_PATH'),
+    clientKeyPasswordPath: required('KYC_BFF_CLIENT_KEY_PASSWORD_PATH'),
     callbackUrl: required('KYC_BFF_CALLBACK_URL'),
     postLogoutRedirectUri: required('KYC_BFF_POST_LOGOUT_REDIRECT_URI'),
     apiBaseUrl: required('KYC_API_BASE_URL'),

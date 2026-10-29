@@ -28,7 +28,9 @@ set "OPERATIONS_WEB_SHELL_ORIGIN=https://shell.dev.localhost:46367"
 set "OPERATIONS_WEB_IDP_AUTHORITY=https://idp.dev.localhost:46392"
 REM Must equal ClientIds:OperationsWeb in src\IDP\appsettings.json (where the IDP registers that client).
 set "OPERATIONS_WEB_CLIENT_ID=Operations.Microservice.Web.ClientID"
-set "OPERATIONS_WEB_CLIENT_SECRET=8c743ece-8834-4906-a324-6f9cdc6a8492"
+REM private_key_jwt: this BFF's own key (ps\pki\New-EwpLocalPki.ps1 makes it, outside the repository).
+set "OPERATIONS_WEB_CLIENT_KEY_PATH=%USERPROFILE%\.ewp-pki\operations-web-client.key.pem"
+set "OPERATIONS_WEB_CLIENT_KEY_PASSWORD_PATH=%USERPROFILE%\.ewp-pki\operations-web-client.key.pem.password"
 REM Encrypts the tokens in the session table (32 random bytes, base64). Changing it signs everybody out.
 set "OPERATIONS_WEB_SESSION_KEY=Dz6g08V7I2ESb3t6UIfJhTfd19OUPwDcNNsTr4Wyitw="
 set "OPERATIONS_WEB_DATABASE_URL=postgres://ewp_operations_web:ewp-operations-web-dev@localhost:5432/EwpBffStateDb"
