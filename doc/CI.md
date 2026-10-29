@@ -80,11 +80,21 @@ a match timeout, a locale-dependent sort, a file check outside the KYC BFF's sta
 `curl` downloads that could follow a redirect to plain HTTP, `qs` 6.16.0. Dismissed as false
 positives, with the reason on each alert: CSRF on the Domain APIs (bearer tokens only - no
 cookie, so no cross-site request can carry credentials), reflected XSS in the Journey APIs'
-Problem Details (sent as `application/problem+json`, never HTML), log forging (.NET services log
-JSON everywhere but Development, where a newline cannot start a fake entry; the Journey APIs log
-`req.path`, which Express does not URL-decode, so it cannot hold a newline), SQL injection in the Shell's
+Problem Details (sent as `application/problem+json` with `nosniff`, never HTML), log forging (the
+.NET services log JSON everywhere but Development; Development's text console escapes control
+characters in every value since 29-OCT-2026 - before that, a typed reason with a line break could
+add a fake entry there; the Journey APIs log `req.path`, which Express does not URL-decode and
+Node's HTTP parser refuses with a raw line break), SQL injection in the Shell's
 `MenuRepository` (only `@p0..` placeholders are formatted in; the values are parameters).
 `db/` is excluded from SonarQube Cloud: it reads T-SQL as Oracle PL/SQL.
+
+**SonarQube Cloud's quality gate is red on every pull request - by decision.** The free plan
+allows only the built-in "Sonar way" gate, which wants 80 % test coverage on new code, and no
+coverage is sent to SonarQube Cloud, so it reads 0 %. The check is not required (the branch rule
+asks only for **CI result**), so it never blocks a merge; bugs, vulnerabilities and hotspots are
+still reported on each pull request. To make it green: send coverage (coverlet OpenCover from the
+.NET tests, lcov from Jest) and exclude what has no unit tests (`Program.cs`, the simulators, the
+Next.js BFFs) - a step of its own.
 
 ### Setting up SonarQube Cloud (once)
 

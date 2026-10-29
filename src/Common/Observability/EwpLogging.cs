@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -61,7 +62,15 @@ public static class EwpLogging
         if (json)
             logger.WriteTo.Console(new RenderedCompactJsonFormatter());   // @t, @l, @m, @tr, @sp, properties
         else
-            logger.Enrich.With<TraceSuffixEnricher>().WriteTo.Console(outputTemplate: TextTemplate);
+        {
+            // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+            // │ Log forging (CWE-117): the text format writes values as they are ({Message:lj}), so
+            // │ a value with a line break - an operator's typed reason, a header - could add a fake
+            // │ entry. Control characters in string values are escaped first; JSON escapes them itself.
+            // └──────────────────────────────────────────────────────────────────────────────────────
+            logger.Enrich.With<TraceSuffixEnricher>().Enrich.With<LineBreakEscapingEnricher>()
+                .WriteTo.Console(outputTemplate: TextTemplate);
+        }
 
         if (!string.IsNullOrWhiteSpace(otlpEndpoint))
         {
@@ -141,5 +150,38 @@ public static class EwpLogging
         public void Enrich(LogEvent logEvent, Serilog.Core.ILogEventPropertyFactory factory) =>
             logEvent.AddPropertyIfAbsent(factory.CreateProperty(
                 "TraceSuffix", logEvent.TraceId is { } trace ? $"  trace={trace}" : string.Empty));
+    }
+
+    /// <summary>
+    /// Text format only: string values with control characters (CR, LF, tab, ESC ...) are
+    /// written escaped (\n, \r, \t, \u001b), so one entry stays one line on the console.
+    /// </summary>
+    internal sealed class LineBreakEscapingEnricher : Serilog.Core.ILogEventEnricher
+    {
+        public void Enrich(LogEvent logEvent, Serilog.Core.ILogEventPropertyFactory factory)
+        {
+            foreach (var (name, value) in logEvent.Properties.ToArray())
+            {
+                if (value is ScalarValue { Value: string text } && text.Any(char.IsControl))
+                    logEvent.AddOrUpdateProperty(new LogEventProperty(name, new ScalarValue(Escape(text))));
+            }
+        }
+
+        internal static string Escape(string text)
+        {
+            var escaped = new StringBuilder(text.Length + 8);
+            foreach (var c in text)
+            {
+                escaped.Append(c switch
+                {
+                    '\n' => @"\n",
+                    '\r' => @"\r",
+                    '\t' => @"\t",
+                    _ when char.IsControl(c) => $@"\u{(int)c:x4}",
+                    _ => c.ToString()
+                });
+            }
+            return escaped.ToString();
+        }
     }
 }
