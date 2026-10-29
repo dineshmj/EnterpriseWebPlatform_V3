@@ -105,6 +105,44 @@ for missing in database.host database.adminLogin database.cidr; do
   echo "refused without $missing (as it must)"
 done
 
+echo "== ewp-observability"
+obs_values="$here/ewp-observability/values-demo.yaml"
+helm lint --strict "$here/ewp-observability" -f "$obs_values"
+helm template ewp-observability "$here/ewp-observability" --namespace observability -f "$obs_values" > "$out/ewp-observability.yaml"
+validate "$out/ewp-observability.yaml"
+for missing in domain egress.gatewayIp; do
+  if helm template ewp-observability "$here/ewp-observability" -f "$obs_values" --set "$missing=" > /dev/null 2>&1; then
+    echo "::error::The ewp-observability chart rendered without $missing - it must refuse."
+    exit 1
+  fi
+  echo "refused without $missing (as it must)"
+done
+
+# CONTRACT: Grafana's host is in the Gateway's public certificate, and the EWP chart (the IDP's
+# client, the OTLP endpoint) names the same host, client ID and collector.
+grafana_host="$(sed -n '/^grafana:/,/^[a-z]/s/^  host: *\([a-z0-9-]*\)$/\1/p' "$here/ewp-observability/values.yaml")"
+if ! sed -n '/^observabilityHosts:/,/^[a-z]/p' "$here/ewp-gateway/values.yaml" | grep -q "^  - $grafana_host$"; then
+  echo "::error::Grafana's host '$grafana_host' is not in ewp-gateway's observabilityHosts (the public certificate)."
+  exit 1
+fi
+if ! grep -q "grafanaHost: $grafana_host$" "$here/ewp/values.yaml" \
+  || ! grep -q "grafanaClientId: $(sed -n 's/^    clientId: *\(.*\)$/\1/p' "$here/ewp-observability/values.yaml")$" "$here/ewp/values.yaml"; then
+  echo "::error::The EWP chart's global.observability (grafanaHost, grafanaClientId) differs from ewp-observability's grafana."
+  exit 1
+fi
+echo "Grafana's host and client agree across ewp, ewp-gateway and ewp-observability: $grafana_host"
+
+# The EWP chart with observability off: no OTLP endpoint, no Grafana client, no rule to the collector.
+helm template ewp "$here/ewp" --namespace ewp -f "$here/ewp/values-demo.yaml" \
+  --set global.observability.enabled=false > "$out/ewp-values-demo-no-observability.yaml"
+validate "$out/ewp-values-demo-no-observability.yaml"
+if grep -q 'OTEL_EXPORTER_OTLP_ENDPOINT\|ClientBaseUrls__Grafana' "$out/ewp-values-demo-no-observability.yaml" \
+  || [ "$(grep -c 'name: ClientBaseUrls__Grafana' "$out/ewp-values-demo.yaml")" != "1" ]; then
+  echo "::error::Observability must reach the IDP (Grafana's client) and the .NET services only while it is on."
+  exit 1
+fi
+echo "observability reaches the EWP chart only while it is on"
+
 echo "== keyvault-secrets"
 kvs_values="$here/keyvault-secrets/values-check.yaml"
 helm lint --strict "$here/keyvault-secrets" -f "$kvs_values"
@@ -119,7 +157,7 @@ for missing in keyVault.name keyVault.tenantId keyVault.clientId; do
 done
 
 echo "== cloud demo contracts"
-node "$here/check-contracts.mjs" "$out/ewp-values-demo.yaml" "$out/ewp-infra.yaml"
+node "$here/check-contracts.mjs" "$out/ewp-values-demo.yaml" "$out/ewp-infra.yaml" "$out/ewp-observability.yaml"
 node "$here/../../.github/scripts/demo-secrets.mjs" --check-pki
 
 echo "Helm charts OK"

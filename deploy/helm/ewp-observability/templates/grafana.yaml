@@ -1,0 +1,322 @@
+{{- /*
+┌─ :: SECURITY + OBSERVABILITY :: Grafana: the one way in, signed in through EWP's IDP ──────────
+│ Why : Dashboards on the internet must be no weaker than the platform: the same sign-in, MFA
+│       and roles as every EWP screen, no password of Grafana's own, and nothing a stranger can see.
+│ How : Generic OAuth (Authorization Code + PKCE) with EWP's IDP; the ID token's role claim(s)
+│       decide: platform_administrator -> Admin, operations_administrator -> Viewer, anyone else
+│       is refused (role_attribute_strict). No login form, no basic auth, no anonymous access, no
+│       initial admin user, no sign-up outside the IDP, no snapshots or update checks (nothing
+│       leaves the cluster). TLS on the pod (EWP's private CA) - the Gateway re-encrypts to it
+│       and checks it (BackendTLSPolicy). Data sources and dashboards are provisioned from this
+│       chart (read-only in the UI): dashboards are code in the repository.
+│       Grafana calls the IDP by its public name (token, userinfo) with the full trust bundle,
+│       which on a staging run also trusts Let's Encrypt's staging roots.
+│ Ref : doc/Cloud-Demo.md (observability) | src/IDP ObservabilityGrafana | Grafana "Generic OAuth" |
+│       OWASP A01, A07
+└────────────────────────────────────────────────────────────────────────────────────────────────
+*/ -}}
+{{- $gr := .Values.grafana -}}
+{{- $ctx := dict "root" . "name" "grafana" -}}
+{{- $domain := required "domain is required (EWP's public domain)" .Values.domain -}}
+{{- $idp := printf "https://idp.%s" $domain -}}
+{{- $public := printf "https://%s.%s" $gr.host $domain -}}
+{{ include "obs.certificate" $ctx }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-provisioning
+  labels:
+    {{- include "obs.labels" $ctx | nindent 4 }}
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        uid: prometheus
+        type: prometheus
+        access: proxy
+        url: http://{{ include "obs.fqdn" (list . "prometheus") }}:9090
+        isDefault: true
+        editable: false
+        jsonData:
+          timeInterval: 30s
+      - name: Loki
+        uid: loki
+        type: loki
+        access: proxy
+        url: http://{{ include "obs.fqdn" (list . "loki") }}:3100
+        editable: false
+        jsonData:
+          # A log line's trace ID (OTLP structured metadata) opens its trace in Tempo.
+          derivedFields:
+            - name: Trace
+              matcherType: label
+              matcherRegex: trace_id
+              datasourceUid: tempo
+              url: "$${__value.raw}"
+      - name: Tempo
+        uid: tempo
+        type: tempo
+        access: proxy
+        url: http://{{ include "obs.fqdn" (list . "tempo") }}:3200
+        editable: false
+        jsonData:
+          # A span opens its logs in Loki (same trace ID).
+          tracesToLogsV2:
+            datasourceUid: loki
+            filterByTraceID: true
+            spanStartTimeShift: -5m
+            spanEndTimeShift: 5m
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: ewp
+        folder: EWP
+        type: file
+        disableDeletion: true
+        allowUiUpdates: false
+        options:
+          path: /var/lib/grafana-dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  labels:
+    {{- include "obs.labels" $ctx | nindent 4 }}
+data:
+  {{- (.Files.Glob "dashboards/*.json").AsConfig | nindent 2 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  labels:
+    {{- include "obs.labels" $ctx | nindent 4 }}
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      {{- include "obs.selector" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "obs.labels" $ctx | nindent 8 }}
+      annotations:
+        checksum/dashboards: {{ (.Files.Glob "dashboards/*.json").AsConfig | sha256sum }}
+    spec:
+      {{- include "obs.podSecurity" $gr | nindent 6 }}
+      containers:
+        - name: grafana
+          image: {{ $gr.image }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: GF_SERVER_PROTOCOL
+              value: https
+            - name: GF_SERVER_HTTP_PORT
+              value: "3000"
+            - name: GF_SERVER_CERT_FILE
+              value: /etc/grafana/tls/tls.crt
+            - name: GF_SERVER_CERT_KEY
+              value: /etc/grafana/tls/tls.key
+            - name: GF_SERVER_DOMAIN
+              value: {{ $gr.host }}.{{ $domain }}
+            - name: GF_SERVER_ROOT_URL
+              value: {{ $public }}/
+            - name: GF_PATHS_DATA
+              value: /var/lib/grafana
+            - name: GF_PATHS_PROVISIONING
+              value: /etc/grafana/provisioning
+            - name: GF_LOG_MODE
+              value: console
+            # ┌─ SEC ────────────────────────────────────────────────────────────────────────
+            # │ Only the IDP signs people in; nothing of Grafana's own to guess or forget.
+            # └──────────────────────────────────────────────────────────────────────────────
+            - name: GF_SECURITY_DISABLE_INITIAL_ADMIN_CREATION
+              value: "true"
+            - name: GF_AUTH_DISABLE_LOGIN_FORM
+              value: "true"
+            - name: GF_AUTH_BASIC_ENABLED
+              value: "false"
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "false"
+            - name: GF_USERS_ALLOW_SIGN_UP
+              value: "false"
+            - name: GF_AUTH_OAUTH_AUTO_LOGIN
+              value: "true"
+            - name: GF_AUTH_SIGNOUT_REDIRECT_URL
+              value: {{ $idp }}/connect/endsession
+            - name: GF_AUTH_GENERIC_OAUTH_ENABLED
+              value: "true"
+            - name: GF_AUTH_GENERIC_OAUTH_NAME
+              value: EWP
+            - name: GF_AUTH_GENERIC_OAUTH_CLIENT_ID
+              value: {{ $gr.oidc.clientId | quote }}
+            - name: GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $gr.oidc.secret }}
+                  key: client-secret
+            - name: GF_AUTH_GENERIC_OAUTH_SCOPES
+              value: openid profile roles
+            - name: GF_AUTH_GENERIC_OAUTH_AUTH_URL
+              value: {{ $idp }}/connect/authorize
+            - name: GF_AUTH_GENERIC_OAUTH_TOKEN_URL
+              value: {{ $idp }}/connect/token
+            - name: GF_AUTH_GENERIC_OAUTH_API_URL
+              value: {{ $idp }}/connect/userinfo
+            - name: GF_AUTH_GENERIC_OAUTH_USE_PKCE
+              value: "true"
+            - name: GF_AUTH_GENERIC_OAUTH_ALLOW_SIGN_UP
+              value: "true"
+            - name: GF_AUTH_GENERIC_OAUTH_LOGIN_ATTRIBUTE_PATH
+              value: preferred_username
+            - name: GF_AUTH_GENERIC_OAUTH_NAME_ATTRIBUTE_PATH
+              value: name
+            - name: GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH
+              value: {{ $gr.oidc.roleAttributePath | quote }}
+            - name: GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_STRICT
+              value: "true"
+            - name: GF_AUTH_GENERIC_OAUTH_ALLOW_ASSIGN_GRAFANA_ADMIN
+              value: "false"
+            - name: GF_AUTH_GENERIC_OAUTH_TLS_CLIENT_CA
+              value: /etc/ewp/trust/ca.crt
+            - name: SSL_CERT_FILE
+              value: /etc/ewp/trust/ca.crt
+            - name: GF_SECURITY_COOKIE_SECURE
+              value: "true"
+            - name: GF_SECURITY_COOKIE_SAMESITE
+              value: lax
+            - name: GF_SECURITY_STRICT_TRANSPORT_SECURITY
+              value: "true"
+            - name: GF_SECURITY_CONTENT_SECURITY_POLICY
+              value: "true"
+            - name: GF_SECURITY_DISABLE_GRAVATAR
+              value: "true"
+            # SEC: nothing leaves the cluster - no snapshots, update checks, news or plugin downloads.
+            - name: GF_SNAPSHOTS_EXTERNAL_ENABLED
+              value: "false"
+            - name: GF_PUBLIC_DASHBOARDS_ENABLED
+              value: "false"
+            - name: GF_ANALYTICS_REPORTING_ENABLED
+              value: "false"
+            - name: GF_ANALYTICS_CHECK_FOR_UPDATES
+              value: "false"
+            - name: GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES
+              value: "false"
+            - name: GF_NEWS_NEWS_FEED_ENABLED
+              value: "false"
+            - name: GF_PLUGINS_PREINSTALL_DISABLED
+              value: "true"
+          ports:
+            - name: https
+              containerPort: 3000
+          securityContext:
+            {{- include "obs.containerSecurity" . | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: https
+              scheme: HTTPS
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: https
+              scheme: HTTPS
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            {{- toYaml $gr.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/grafana
+            - name: tmp
+              mountPath: /tmp
+            - name: tls
+              mountPath: /etc/grafana/tls
+              readOnly: true
+            - name: trust
+              mountPath: /etc/ewp/trust
+              readOnly: true
+            - name: provisioning
+              mountPath: /etc/grafana/provisioning/datasources/datasources.yaml
+              subPath: datasources.yaml
+              readOnly: true
+            - name: provisioning
+              mountPath: /etc/grafana/provisioning/dashboards/dashboards.yaml
+              subPath: dashboards.yaml
+              readOnly: true
+            - name: dashboards
+              mountPath: /var/lib/grafana-dashboards
+              readOnly: true
+      volumes:
+        - name: data
+          emptyDir:
+            sizeLimit: 256Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: tls
+          secret:
+            secretName: grafana-tls
+        - name: trust
+          configMap:
+            name: {{ .Values.trust.fullBundle }}
+        - name: provisioning
+          configMap:
+            name: grafana-provisioning
+        - name: dashboards
+          configMap:
+            name: grafana-dashboards
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  labels:
+    {{- include "obs.labels" $ctx | nindent 4 }}
+spec:
+  selector:
+    {{- include "obs.selector" $ctx | nindent 4 }}
+  ports:
+    - name: https
+      port: 443
+      targetPort: https
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: grafana
+  labels:
+    {{- include "obs.labels" $ctx | nindent 4 }}
+spec:
+  parentRefs:
+    {{- toYaml .Values.gateway.parentRefs | nindent 4 }}
+  hostnames:
+    - {{ $gr.host }}.{{ $domain }}
+  rules:
+    - backendRefs:
+        - name: grafana
+          port: 443
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata:
+  name: grafana
+  labels:
+    {{- include "obs.labels" $ctx | nindent 4 }}
+spec:
+  targetRefs:
+    - group: ""
+      kind: Service
+      name: grafana
+      sectionName: https
+  validation:
+    caCertificateRefs:
+      - group: ""
+        kind: ConfigMap
+        name: {{ .Values.trust.caBundle }}
+    hostname: {{ include "obs.fqdn" (list . "grafana") }}

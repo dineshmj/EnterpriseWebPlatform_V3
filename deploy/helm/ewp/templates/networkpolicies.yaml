@@ -15,6 +15,7 @@
 │         - PostgreSQL (its subnet, 5432) - a connection string among its secrets;
 │         - Kafka's brokers (9093)        - a kafka entry;
 │         - Temporal (7233)               - TEMPORAL_ADDRESS in its settings;
+│         - the OTLP collector (4317)     - a .NET service, while global.observability is on;
 │         - LaunchDarkly (443, public addresses only) - featureFlags, and only while
 │           global.featureFlags.launchDarkly.enabled: its IP ranges change and it advises
 │           allowing its domains, which a NetworkPolicy cannot name, so this one rule names
@@ -128,6 +129,18 @@ spec:
             cidr: {{ $g.egress.postgresCidr }}
       ports:
         - {port: 5432, protocol: TCP}
+    {{- end }}
+    {{- if and $g.observability.enabled (eq $c.stack "dotnet") }}
+    # OBS: OTLP to the collector only (ewp-observability); nothing else in that namespace.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $g.observability.namespace }}
+          podSelector:
+            matchLabels:
+              {{- toYaml $g.observability.collectorPods | nindent 14 }}
+      ports:
+        - {port: 4317, protocol: TCP}
     {{- end }}
     {{- if hasKey $c "kafka" }}
     - to:

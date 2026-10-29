@@ -19,9 +19,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const [ewpFile, infraFile] = process.argv.slice(2);
+const [ewpFile, infraFile, observabilityFile] = process.argv.slice(2);
 const ewp = readFileSync(ewpFile, 'utf8');
 const infra = readFileSync(infraFile, 'utf8');
+const observability = readFileSync(observabilityFile, 'utf8');
 
 let failures = 0;
 const fail = (message) => { console.log(`::error::${message}`); failures++; };
@@ -49,7 +50,7 @@ function reads(rendered) {
   return { keys, mounted };
 }
 
-for (const [ns, rendered] of [['ewp', ewp], ['ewp-infra', infra]]) {
+for (const [ns, rendered] of [['ewp', ewp], ['ewp-infra', infra], ['observability', observability]]) {
   const { keys, mounted } = reads(rendered);
   const generated = made[ns];
   for (const key of keys) if (!generated.has(key)) fail(`${ns}: the chart reads "${key}", which demo-secrets.mjs does not make`);

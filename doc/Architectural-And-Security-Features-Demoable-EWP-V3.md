@@ -4,63 +4,7 @@ A living catalogue of the architectural patterns, security controls and avoided 
 
 The document answers *how the platform is built and protected*, not *which business functions it offers*. Where a closely related capability is still missing, the entry says so in a **Not yet** line; planned work lives in the [Blueprint roadmap](Enterprise-Web-Platform-V3-Architectural-Vision-and-Security-Blueprint.md#16-roadmap).
 
----
-
-## Common questions
-
-| Question | Answered in |
-|---|---|
-| What happens if a publisher or subscriber pod is killed (AKS / EKS) and another one starts? | [1.6.1](#161-pod-replacement-and-horizontal-scaling) |
-| Can I run several instances of a worker at once? | [1.6.1](#161-pod-replacement-and-horizontal-scaling), [1.3.1](#131-transactional-outbox) |
-| How do you handle dead-letter queues? | [1.6.2](#162-dead-letter-handling) |
-| What if Kafka delivers the same message twice? | [1.3.2](#132-idempotent-consumers-inbox) |
-| What happens to the uploaded documents when an application is rejected? Are they deleted? | [1.4.2](#142-compensation-on-rejection-retain-dont-delete) |
-| Can an agent onboard the same customer twice, or change a verified name afterwards? | [1.2.1](#121-aggregates-that-enforce-their-own-invariants) |
-| What if a downstream API is down for an hour? | [1.6.3](#163-timeouts-retries-and-circuit-breakers), [1.3.3](#133-reliable-subscriber-pipeline) |
-| What if an external provider (e.g. sanctions screening) is slow or down? Does a case slip through? | [1.6.3](#163-timeouts-retries-and-circuit-breakers) |
-| What if the fraud provider is slow or down? Do payments stop, or go through unchecked? | [1.6.7](#167-a-fraud-check-within-a-latency-budget-with-a-fallback) |
-| How do you avoid losing an event when the database commit succeeds but Kafka is down? | [1.3.1](#131-transactional-outbox) |
-| What if a payment fails halfway, after the money was reserved? Can the money be lost? | [1.4.3](#143-orchestration-the-payments-saga) |
-| Can a double-click or a retried request send a payment twice? | [1.4.3](#143-orchestration-the-payments-saga) |
-| The payment network took the payment but its answer was lost. Is the money released anyway? | [1.4.3](#143-orchestration-the-payments-saga) |
-| The network cannot say for hours what happened to a payment. Who decides, and can one person do it alone? | [1.4.3](#143-orchestration-the-payments-saga), [2.2.6](#226-separation-of-duties-makerchecker) |
-| Kafka was down for long and messages were parked. How are they sent again without doing anything twice? | [1.6.2](#162-dead-letter-handling) |
-| How do operations see the whole platform's health, and show what happens when a provider is down? | [1.7.4](#174-operations-platform-health-and-the-simulator-switch) |
-| A purchase waits hours for an approval and the worker restarts. Is the gold still allocated - once? | [1.4.4](#144-long-running-workflow-on-temporal-the-digital-gold-purchase) |
-| How does EWP talk to another bank? Could someone pose as EWP, or replay its token or an instruction? | [2.4.10](#2410-integration-with-another-organisation-the-partner-bank) |
-| Is PAR used? Why not at the counter? | [2.4.10](#2410-integration-with-another-organisation-the-partner-bank) |
-| Are events processed in order? | [1.3.5](#135-ordering-guarantees) |
-| How do you trace one business transaction across services? | [1.3.4](#134-workflow-correlation-and-causation-identity), [1.7.1](#171-distributed-tracing-across-http-and-kafka) |
-| What can Prometheus / Grafana see? Are the logs structured? | [1.7.3](#173-structured-logs-and-metrics) |
-| Can you follow one request through Kafka in a tracing tool? | [1.7.1](#171-distributed-tracing-across-http-and-kafka) |
-| How do you version event contracts? | [1.3.6](#136-tolerant-readers-and-contract-evolution) |
-| How do two people editing the same record at once not overwrite each other? | [1.6.4](#164-concurrency-control) |
-| Where are the access tokens kept? Can JavaScript read them? | [2.1.1](#211-oidc-authorization-code--pkce-through-a-bff), [3.3](#33-tokens-in-the-browser) |
-| How do you stop a user from opening someone else's record by changing an ID (IDOR / BOLA)? | [2.2.3](#223-object-level-authorization) |
-| Is authorization only role-based? | [2.2](#22-authorization-beyond-rbac) |
-| How do you stop one person from both initiating and approving? | [2.2.6](#226-separation-of-duties-makerchecker) |
-| Is it safe to retry a POST to an external system? Could a timeout open two bank accounts? | [1.6.3](#163-timeouts-retries-and-circuit-breakers) |
-| Can a junior officer approve a high-risk customer, or a large payment? | [2.2.4](#224-abac-department-clearance-and-stage-permissions) |
-| How do services authenticate to each other? | [2.1.2](#212-separate-human-and-machine-identities) |
-| Is an MFA sign-in from this morning enough to approve a payment this afternoon? Must the officer sign out to enter a fresh code? | [2.1.5](#215-step-up-mfa-for-risky-actions) |
-| Does signing out of one application sign the user out everywhere? | [2.1.4](#214-single-sign-out) |
-| How are XSS, clickjacking and CSRF handled? | [2.3](#23-browser-and-session-security) |
-| What stops a malicious file upload? Are KYC documents encrypted on disk? | [2.4.4](#244-file-upload-security) |
-| What does an attacker learn from an error response? | [2.4.1](#241-error-responses-that-leak-nothing) |
-| If one service is compromised, what can it reach in the database? | [2.4.3](#243-least-privilege-database-users) |
-| Is Kafka secured? Could someone publish a fake event? | [2.4.6](#246-kafka-authentication-and-per-topic-acls) |
-| Can one user or a script flood an API? | [2.4.7](#247-rate-limiting) |
-| Could a wrong or tampered setting send an API key, or customer data, to the wrong server? | [2.4.9](#249-calls-to-external-systems) |
-| Who did what, and can the record be trusted? Could an administrator quietly change it? | [2.4.8](#248-tamper-evident-audit-trail) |
-| A service calls another for a person - does the second one still know who it is? | [2.1.2](#212-separate-human-and-machine-identities) |
-| Does restarting a BFF sign everybody out? | [2.3.4](#234-session-management), [1.6.1](#161-pod-replacement-and-horizontal-scaling) |
-| How does Kubernetes know a pod is healthy, or ready for traffic? | [1.7.2](#172-health-endpoints-for-liveness-and-readiness) |
-| How are vulnerable dependencies caught? | [2.5.1](#251-dependency-vulnerability-scanning) |
-| What does a user see when the database or the IDP is down - a white frame, a stack trace? | [1.6.6](#166-dependency-outages-answered-quickly-and-plainly) |
-| Can the IDP run as several instances? Could a DPoP proof be replayed against a second one? | [1.6.1](#161-pod-replacement-and-horizontal-scaling) |
-| How are the images built, and can one hold a secret? | [1.9.1](#191-container-images-built-only-in-ci) |
-| How does the platform run on Kubernetes? Is traffic between pods encrypted? | [1.9.2](#192-one-helm-chart-for-the-whole-platform) |
-| Can the whole platform be brought up in the cloud, and removed again, without a stored secret? | [1.9.3](#193-a-cloud-demo-that-appears-and-disappears-azure) |
+> **Looking for a specific concern?** [Section 4 - Common questions](#4-common-questions) maps the questions architects and reviewers usually ask - failures halfway, duplicate messages, scaling out, tracing, access control, outages of a provider - to the sections that show how EWP V3 answers them.
 
 ---
 
@@ -77,6 +21,7 @@ The document answers *how the platform is built and protected*, not *which busin
     - [1.2.2 Value objects](#122-value-objects)
     - [1.2.3 Domain events translated into integration events](#123-domain-events-translated-into-integration-events)
     - [1.2.4 Layered APIs with separate commands and queries](#124-layered-apis-with-separate-commands-and-queries)
+    - [1.2.5 BIAN contracts beside EWP's own](#125-bian-contracts-beside-ewps-own)
   - [1.3 Event-driven integration](#13-event-driven-integration)
     - [1.3.1 Transactional Outbox](#131-transactional-outbox)
     - [1.3.2 Idempotent consumers (Inbox)](#132-idempotent-consumers-inbox)
@@ -114,6 +59,7 @@ The document answers *how the platform is built and protected*, not *which busin
     - [1.9.1 Container images built only in CI](#191-container-images-built-only-in-ci)
     - [1.9.2 One Helm chart for the whole platform](#192-one-helm-chart-for-the-whole-platform)
     - [1.9.3 A cloud demo that appears and disappears (Azure)](#193-a-cloud-demo-that-appears-and-disappears-azure)
+    - [1.9.4 Feature flags: release toggles and kill switches (OpenFeature, LaunchDarkly)](#194-feature-flags-release-toggles-and-kill-switches-openfeature-launchdarkly)
 - [2. Security features](#2-security-features)
   - [2.1 Identity](#21-identity)
     - [2.1.1 OIDC Authorization Code + PKCE through a BFF](#211-oidc-authorization-code--pkce-through-a-bff)
@@ -148,6 +94,7 @@ The document answers *how the platform is built and protected*, not *which busin
     - [2.4.10 Integration with another organisation: the Partner Bank](#2410-integration-with-another-organisation-the-partner-bank)
   - [2.5 Supply chain](#25-supply-chain)
     - [2.5.1 Dependency vulnerability scanning](#251-dependency-vulnerability-scanning)
+    - [2.5.2 Code scanning: CodeQL, SonarQube Cloud and Snyk](#252-code-scanning-codeql-sonarqube-cloud-and-snyk)
 - [3. Anti-patterns avoided](#3-anti-patterns-avoided)
   - [3.1 Distributed monolith](#31-distributed-monolith)
   - [3.2 Dual write](#32-dual-write)
@@ -158,6 +105,7 @@ The document answers *how the platform is built and protected*, not *which busin
   - [3.7 Retry storms and unsafe retries](#37-retry-storms-and-unsafe-retries)
   - [3.8 Anaemic domain model](#38-anaemic-domain-model)
   - [3.9 Trusting the UI](#39-trusting-the-ui)
+- [4. Common questions](#4-common-questions)
 
 ---
 
@@ -238,6 +186,22 @@ Each API is split into Domain, Application, Infrastructure and API layers. The d
 - Command handlers: [OpenKycCaseCommandHandler.cs](../src/Microservices/CustomerKyc/API/Application/Commands/OpenKycCase/OpenKycCaseCommandHandler.cs), [SubmitOnboardingApplicationCommandHandler.cs](../src/Microservices/CustomerOnboarding/API/Application/Onboarding/Commands/SubmitApplication/SubmitOnboardingApplicationCommandHandler.cs)
 - Queries: [KycCaseQueries.cs](../src/Microservices/CustomerKyc/API/Application/Queries/KycCaseQueries.cs), [CustomerOnboarding/API/Application/Customers/Queries](../src/Microservices/CustomerOnboarding/API/Application/Customers/Queries)
 - Abstractions: [Persistence.cs](../src/Microservices/CustomerKyc/API/Application/Abstractions/Persistence.cs)
+
+#### 1.2.5 BIAN contracts beside EWP's own
+
+Banks describe their services with **BIAN** (Banking Industry Architecture Network) service domains, so a new system is asked "which BIAN service domain is it, and does it speak BIAN's contract?". Four EWP domain APIs answer yes: each offers BIAN's own contract as **`/v2` next to its `/v1`**, on the same command handlers, queries and authorization rules - Payments as **PaymentOrderInitiation** (initiate, retrieve, approve or reject), Accounts as **CurrentAccount** (retrieve, deposit), Customer Onboarding as **PartyReferenceDataDirectory** (retrieve, update) and Documents Management as **DocumentDirectory** (read-only). BIAN release **14.0.0** is used, its OpenAPI files copied unchanged into the repository.
+
+The mapping was rated, not forced: only where BIAN's definition and operations fit **with confidence** is there a `/v2`; plausible fits (account-opening applications as CustomerOffer, onboarding as PartyLifecycleManagement) and no-fits (sanctions screening, notifications, the audit trail, the Partner Bank distribution) stay `/v1`, each with the reason written down - as a bank would propose a new service domain to BIAN, or keep a BIAN-like interface of its own. BIAN's schemas are deliberately general (every property optional, amounts and identifiers as objects), so a **mapper per API translates at the edge** (an anti-corruption layer): the domain, the sagas and the tables do not change, EWP still requires what its business needs, and each BIAN property it does not take is named. EWP's own callers stay on `/v1`.
+
+**Proved with BIAN's own file:** the tests validate every body `/v2` sends or accepts against BIAN's published schema, and a test with a wrong value shows the check can fail. All four `/v2` surfaces sit behind the release toggle `bian-v2-endpoints` ([1.9.4](#194-feature-flags-release-toggles-and-kill-switches-openfeature-launchdarkly)): off, `/v2` answers 404 before authentication; `/v1` is never touched.
+
+**Where to look at:**
+
+- The mapping, every decision and the release used: [doc/bian/README.md](bian/README.md); BIAN's files: [doc/bian/release14.0.0](bian/release14.0.0)
+- Payments: [PaymentOrderInitiationController.cs](../src/Microservices/Payments/API/Controllers/PaymentOrderInitiationController.cs), [PaymentOrderInitiationMapper.cs](../src/Microservices/Payments/API/Bian/PaymentOrderInitiationMapper.cs); the other three APIs' `Bian/` folders and READMEs
+- Tests: [PaymentOrderInitiation_Contract_Happy_ValidAgainstBian.cs](../tst/dotnet/Payments.Api.Tests/Bian/PaymentOrderInitiation_Contract_Happy_ValidAgainstBian.cs) and the `Bian/` tests of the Accounts, Customer Onboarding and Documents Management projects; Playwright `20-functional/bian`
+
+**Not yet:** a BIAN `/v2` for the plausible fits (a decision for the bank); BIAN's semantic events on Kafka.
 
 ### 1.3 Event-driven integration
 
@@ -612,7 +576,11 @@ The three signals are set up once, in the shared observability library, and ever
 
 The KYC BFF (NestJS) follows the same rules: the same log formats and request line, and `/metrics` with the same metric names plus its circuit breakers and token exchanges ([logger.ts](../src/Microservices/CustomerKyc/BFF.Web/src/observability/logger.ts), [metrics.ts](../src/Microservices/CustomerKyc/BFF.Web/src/observability/metrics.ts)).
 
-**Not yet:** dashboards and alert rules (they belong to the deployment's Grafana / Observe); logs and metrics in the Audit Journey API and Audit web app.
+**In the cloud demo** the three signals reach Grafana ([Cloud-Demo.md](Cloud-Demo.md) CD23): every .NET service pushes them over OTLP (TLS) to one collector in its own namespace, which feeds Prometheus, Loki and Tempo - nothing connects into EWP's pods. Grafana at `grafana.<domain>` signs people in through EWP's own IDP (only operations and platform administrators get in) and opens with three dashboards kept as code in the repository: **Platform health** (every health check, memory, CPU, GC, exceptions, error log lines), **Requests and errors** (rates, 5xx share, p95 by service and route, 429s, retries, timeouts and open circuit breakers) and **Messaging and payments** (published / consumed / dead-lettered by topic, Outbox backlog and parked messages, the Payments saga's running / overdue / stuck counts, the fraud check's fallback share and p95 against its 250 ms budget). A log line's trace ID opens its trace; a span opens its logs.
+
+- The chart: [ewp-observability](../deploy/helm/ewp-observability) (collector, stores, Grafana, NetworkPolicies, route); the dashboards: [dashboards/](../deploy/helm/ewp-observability/dashboards); Grafana's client at the IDP: [ObservabilityGrafana.cs](../src/IDP/ConfigRegistration/Clients/ObservabilityGrafana.cs)
+
+**Not yet:** alert rules; pod and node metrics (kube-state-metrics); the Node tier's, Kafka's and Temporal's logs in Loki (stdout only); logs and metrics in the Audit Journey API and Audit web app.
 
 #### 1.7.4 Operations: Platform Health and the simulator switch
 
@@ -699,6 +667,46 @@ The whole platform - and the Partner Bank, from its own repository - can be brou
 **Not yet:** a private cluster and private endpoints; high availability (one Kafka node, Temporal's development server, one gateway proxy).
 
 ---
+
+#### 1.9.4 Feature flags: release toggles and kill switches (OpenFeature, LaunchDarkly)
+
+Some changes must take effect **without a redeploy**: hiding a new API surface until it is wanted, or stopping the sale of a product at once (a pricing fault at the Partner Bank, a regulator's request). EWP's services ask for a flag through **OpenFeature**, the vendor-neutral feature-flag API, so where the flags live is configuration, not code. Two flags exist today:
+
+| Flag | Kind | Default (= today's behaviour) | What switching it does |
+|---|---|---|---|
+| `bian-v2-endpoints` | Release toggle | on | Off: every BIAN `/v2` request of the Payments, Accounts, Customer Onboarding and Documents Management APIs answers **404 with no body, before authentication** - as if the route did not exist ([1.2.5](#125-bian-contracts-beside-ewps-own)); `/v1` is untouched |
+| `digital-gold-sales-paused` | Kill switch | off | On: no new Digital Gold transfer slip, and a slip not yet sent is refused with a plain reason; a slip already SENT is still sent again and ORDERED / PAID purchases carry on - **nothing is stranded half-way** at the Partner Bank |
+
+**Safety rules, enforced in one shared library:** the default of every flag is today's behaviour, so a missing or broken flag file, or LaunchDarkly being unreachable, never switches anything by itself (the service logs a warning); a flag only switches something **off, for everyone** - **who may do what stays with the authorization policies, never a flag**; start-up never waits for the flag source. Flags are read on the server only; no browser asks for one.
+
+**Where the flags come from:**
+
+| Source | When | A change arrives |
+|---|---|---|
+| **LaunchDarkly** (the customer's flag service) | `EWP_LAUNCHDARKLY_SDK_KEY` is set | in seconds (a streaming connection) |
+| A flag file (flagd's format, read in-process) | no SDK key: `feature-flags/ewp-flags.json` on the laptop, the ConfigMap `ewp-feature-flags` in the cloud | in about 5 s on the laptop, about a minute in the cluster |
+| nothing | neither | every flag keeps its default |
+
+##### LaunchDarkly
+
+LaunchDarkly is the **OpenFeature provider** chosen when an SDK key is present; nothing else in the code knows about it. The two flags are created in the LaunchDarkly project with exactly the keys above (Boolean, serving the defaults above); each service identifies itself as a context of kind `service` with its own name (`payments-api`, `partner-products-api`, ...), so a flag can target one service.
+
+- **On a laptop:** the SDK key of a development environment, set once as a user environment variable (`setx EWP_LAUNCHDARKLY_SDK_KEY "sdk-..."`); remove it to fall back to the file.
+- **In the cloud demo:** the GitHub secret `LAUNCHDARKLY_SDK_KEY` (another environment's key). Demo up stores it in Key Vault, the Kubernetes Secret `ewp-launchdarkly` brings it to the five APIs that read flags, and only those five get **one extra egress rule: HTTPS to public addresses** (LaunchDarkly's IP ranges change and it advises allowing its domains, which a NetworkPolicy cannot name). Without the secret nothing changes - the demo needs no account.
+- **The SDK key is a secret:** it reads every flag of its environment, so it lives only in an environment variable or a secret store, never in a settings file or a commit.
+- **In a bank's private network** application pods do not talk to the internet: LaunchDarkly runs only as a service, so the bank puts LaunchDarkly's open-source **Relay Proxy** inside its network - the one component that reaches LaunchDarkly (through the outbound proxy, allowed by domain), or fully offline from an exported file on select plans. The services' SDKs then talk only to the Relay Proxy; the code needs only its address. Without LaunchDarkly, a self-hosted service (flagd, Unleash, Flagsmith) is another OpenFeature provider - no change to the code that asks for flags.
+
+Demo: with the file, set `digital-gold-sales-paused` to `on` in `feature-flags/ewp-flags.json` (or `kubectl -n ewp edit configmap ewp-feature-flags` in the cloud); within seconds Sophie cannot record a new transfer slip and sees why, while purchases already under way complete. With LaunchDarkly, flip the same flag in its console. Set `bian-v2-endpoints` off and `/v2` disappears while `/v1` keeps answering.
+
+**Where to look at:**
+
+- The flags, their rules, switching them and the LaunchDarkly set-up: [feature-flags/README.md](../feature-flags/README.md); the committed defaults: [ewp-flags.json](../feature-flags/ewp-flags.json)
+- The shared library (OpenFeature, the LaunchDarkly and file providers, the 404 gate): [EwpFeatureFlags.cs](../src/Common/WebUtilities/FeatureFlags/EwpFeatureFlags.cs) (OpenFeature 2.14.1, the LaunchDarkly server SDK and its OpenFeature provider)
+- The kill switch in the domain: the Partner Products API's purchase commands (Partner Products API README)
+- In the cluster: Kubernetes decision K13 in [Kubernetes.md](Kubernetes.md), `global.featureFlags` in [values.yaml](../deploy/helm/ewp/values.yaml), the Secret `ewp-launchdarkly` (Cloud-Demo CD22)
+- Tests: unit `tst/dotnet/Payments.Api.Tests/FeatureFlags` (on / off / file missing / file broken / the committed file); Playwright `20-functional/bian/bian-release-toggle.spec.ts`, `35-resilience/partner-products/digital-gold-sales-paused.spec.ts` (skipped while an SDK key is set)
+
+**Not yet:** a Relay Proxy in the cloud demo; percentage roll-outs and per-branch targeting (deliberately not used: a flag here switches something off for everyone).
 
 ## 2. Security features
 
@@ -1102,6 +1110,24 @@ One script checks every .NET and npm dependency of the solution against publishe
 
 ---
 
+#### 2.5.2 Code scanning: CodeQL, SonarQube Cloud and Snyk
+
+Dependency checks (2.5.1) find known-vulnerable packages; they do not read EWP's own code. Three scanners do, on every pull request, every push to `main`, weekly (new queries and advisories find issues in unchanged code) and on demand:
+
+| Scanner | What it looks for |
+|---|---|
+| **CodeQL** (GitHub) | Data-flow analysis of the C#, TypeScript and the GitHub workflows themselves (`security-extended` queries): injection, SSRF, path traversal, unsafe deserialization, script injection in Actions, over-broad tokens. Findings in GitHub's Security tab and on the pull request |
+| **SonarQube Cloud** | Bugs, code smells, security hotspots and duplication across the C# and TypeScript, with a quality gate shown on each pull request |
+| **Snyk Open Source** | The NuGet and pnpm dependency trees (HIGH and above) with Snyk's own advisory database - a second opinion to the CI gate's `dotnet list package --vulnerable` and `pnpm audit` |
+
+They are **reported, not gating** - deliberately for a first run over code never scanned before: a gate set before the findings are triaged would only be switched off again. The first triage removed a committed development key, added match timeouts to regular expressions on request input (ReDoS), updated a vulnerable transitive package Snyk rated higher than GitHub did, and recorded the false positives with their reason. The tokens are repository secrets; the jobs skip themselves (and say so) where a token is missing, as on fork pull requests.
+
+**Where to look at:**
+
+- The workflow: [code-scanning.yml](../.github/workflows/code-scanning.yml); what each job does, the triage and the trade-offs (e.g. a personal SonarQube Cloud token without expiry on the free plan): [CI.md](CI.md#code-scanning-reported-not-gating)
+
+**Not yet:** a gate (e.g. no new HIGH CodeQL alert on a pull request); secret scanning push protection; DAST.
+
 ## 3. Anti-patterns avoided
 
 ### 3.1 Distributed monolith
@@ -1198,3 +1224,67 @@ One script checks every .NET and npm dependency of the solution against publishe
 **Where to look at:**
 
 - [2.2 Authorization beyond RBAC](#22-authorization-beyond-rbac)
+
+---
+
+## 4. Common questions
+
+Typical architecture and security questions, each with the sections that answer it.
+
+| Question | Answered in |
+|---|---|
+| What happens if a publisher or subscriber pod is killed (AKS / EKS) and another one starts? | [1.6.1](#161-pod-replacement-and-horizontal-scaling) |
+| Can I run several instances of a worker at once? | [1.6.1](#161-pod-replacement-and-horizontal-scaling), [1.3.1](#131-transactional-outbox) |
+| How do you handle dead-letter queues? | [1.6.2](#162-dead-letter-handling) |
+| What if Kafka delivers the same message twice? | [1.3.2](#132-idempotent-consumers-inbox) |
+| What happens to the uploaded documents when an application is rejected? Are they deleted? | [1.4.2](#142-compensation-on-rejection-retain-dont-delete) |
+| Can an agent onboard the same customer twice, or change a verified name afterwards? | [1.2.1](#121-aggregates-that-enforce-their-own-invariants) |
+| What if a downstream API is down for an hour? | [1.6.3](#163-timeouts-retries-and-circuit-breakers), [1.3.3](#133-reliable-subscriber-pipeline) |
+| What if an external provider (e.g. sanctions screening) is slow or down? Does a case slip through? | [1.6.3](#163-timeouts-retries-and-circuit-breakers) |
+| What if the fraud provider is slow or down? Do payments stop, or go through unchecked? | [1.6.7](#167-a-fraud-check-within-a-latency-budget-with-a-fallback) |
+| How do you avoid losing an event when the database commit succeeds but Kafka is down? | [1.3.1](#131-transactional-outbox) |
+| What if a payment fails halfway, after the money was reserved? Can the money be lost? | [1.4.3](#143-orchestration-the-payments-saga) |
+| Can a double-click or a retried request send a payment twice? | [1.4.3](#143-orchestration-the-payments-saga) |
+| The payment network took the payment but its answer was lost. Is the money released anyway? | [1.4.3](#143-orchestration-the-payments-saga) |
+| The network cannot say for hours what happened to a payment. Who decides, and can one person do it alone? | [1.4.3](#143-orchestration-the-payments-saga), [2.2.6](#226-separation-of-duties-makerchecker) |
+| Kafka was down for long and messages were parked. How are they sent again without doing anything twice? | [1.6.2](#162-dead-letter-handling) |
+| How do operations see the whole platform's health, and show what happens when a provider is down? | [1.7.4](#174-operations-platform-health-and-the-simulator-switch) |
+| A purchase waits hours for an approval and the worker restarts. Is the gold still allocated - once? | [1.4.4](#144-long-running-workflow-on-temporal-the-digital-gold-purchase) |
+| How does EWP talk to another bank? Could someone pose as EWP, or replay its token or an instruction? | [2.4.10](#2410-integration-with-another-organisation-the-partner-bank) |
+| Is PAR used? Why not at the counter? | [2.4.10](#2410-integration-with-another-organisation-the-partner-bank) |
+| Are events processed in order? | [1.3.5](#135-ordering-guarantees) |
+| How do you trace one business transaction across services? | [1.3.4](#134-workflow-correlation-and-causation-identity), [1.7.1](#171-distributed-tracing-across-http-and-kafka) |
+| What can Prometheus / Grafana see? Are the logs structured? | [1.7.3](#173-structured-logs-and-metrics) |
+| Can you follow one request through Kafka in a tracing tool? | [1.7.1](#171-distributed-tracing-across-http-and-kafka) |
+| How do you version event contracts? | [1.3.6](#136-tolerant-readers-and-contract-evolution) |
+| Can a feature be switched off without a redeploy? Is LaunchDarkly used? | [1.9.4](#194-feature-flags-release-toggles-and-kill-switches-openfeature-launchdarkly) |
+| The bank must stop selling a product at once. Is anything left half-done? | [1.9.4](#194-feature-flags-release-toggles-and-kill-switches-openfeature-launchdarkly) |
+| Do the APIs follow an industry standard such as BIAN? | [1.2.5](#125-bian-contracts-beside-ewps-own) |
+| Is the code scanned for vulnerabilities, not only the dependencies? | [2.5.2](#252-code-scanning-codeql-sonarqube-cloud-and-snyk) |
+| How do two people editing the same record at once not overwrite each other? | [1.6.4](#164-concurrency-control) |
+| Where are the access tokens kept? Can JavaScript read them? | [2.1.1](#211-oidc-authorization-code--pkce-through-a-bff), [3.3](#33-tokens-in-the-browser) |
+| How do you stop a user from opening someone else's record by changing an ID (IDOR / BOLA)? | [2.2.3](#223-object-level-authorization) |
+| Is authorization only role-based? | [2.2](#22-authorization-beyond-rbac) |
+| How do you stop one person from both initiating and approving? | [2.2.6](#226-separation-of-duties-makerchecker) |
+| Is it safe to retry a POST to an external system? Could a timeout open two bank accounts? | [1.6.3](#163-timeouts-retries-and-circuit-breakers) |
+| Can a junior officer approve a high-risk customer, or a large payment? | [2.2.4](#224-abac-department-clearance-and-stage-permissions) |
+| How do services authenticate to each other? | [2.1.2](#212-separate-human-and-machine-identities) |
+| Is an MFA sign-in from this morning enough to approve a payment this afternoon? Must the officer sign out to enter a fresh code? | [2.1.5](#215-step-up-mfa-for-risky-actions) |
+| Does signing out of one application sign the user out everywhere? | [2.1.4](#214-single-sign-out) |
+| How are XSS, clickjacking and CSRF handled? | [2.3](#23-browser-and-session-security) |
+| What stops a malicious file upload? Are KYC documents encrypted on disk? | [2.4.4](#244-file-upload-security) |
+| What does an attacker learn from an error response? | [2.4.1](#241-error-responses-that-leak-nothing) |
+| If one service is compromised, what can it reach in the database? | [2.4.3](#243-least-privilege-database-users) |
+| Is Kafka secured? Could someone publish a fake event? | [2.4.6](#246-kafka-authentication-and-per-topic-acls) |
+| Can one user or a script flood an API? | [2.4.7](#247-rate-limiting) |
+| Could a wrong or tampered setting send an API key, or customer data, to the wrong server? | [2.4.9](#249-calls-to-external-systems) |
+| Who did what, and can the record be trusted? Could an administrator quietly change it? | [2.4.8](#248-tamper-evident-audit-trail) |
+| A service calls another for a person - does the second one still know who it is? | [2.1.2](#212-separate-human-and-machine-identities) |
+| Does restarting a BFF sign everybody out? | [2.3.4](#234-session-management), [1.6.1](#161-pod-replacement-and-horizontal-scaling) |
+| How does Kubernetes know a pod is healthy, or ready for traffic? | [1.7.2](#172-health-endpoints-for-liveness-and-readiness) |
+| How are vulnerable dependencies caught? | [2.5.1](#251-dependency-vulnerability-scanning) |
+| What does a user see when the database or the IDP is down - a white frame, a stack trace? | [1.6.6](#166-dependency-outages-answered-quickly-and-plainly) |
+| Can the IDP run as several instances? Could a DPoP proof be replayed against a second one? | [1.6.1](#161-pod-replacement-and-horizontal-scaling) |
+| How are the images built, and can one hold a secret? | [1.9.1](#191-container-images-built-only-in-ci) |
+| How does the platform run on Kubernetes? Is traffic between pods encrypted? | [1.9.2](#192-one-helm-chart-for-the-whole-platform) |
+| Can the whole platform be brought up in the cloud, and removed again, without a stored secret? | [1.9.3](#193-a-cloud-demo-that-appears-and-disappears-azure) |

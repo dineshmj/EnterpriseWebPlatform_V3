@@ -69,7 +69,8 @@ Component Secrets (`ewp-<component>`; each key = the setting's name):
 
 | Secret | Keys |
 |---|---|
-| `ewp-idp` | `ConnectionStrings__IdentityDbConnection`, `SigningCredential__CertificatePassword`, and `ClientSecrets__<client id>` for each of the 21 confidential clients ([values.yaml](../deploy/helm/ewp/values.yaml), `idp.secretEnv`) |
+| `ewp-idp` | `ConnectionStrings__IdentityDbConnection`, `SigningCredential__CertificatePassword`, and `ClientSecrets__<client id>` for each of the 21 confidential clients ([values.yaml](../deploy/helm/ewp/values.yaml), `idp.secretEnv`), plus Grafana's (`ClientSecrets__Grafana.ClientID`) while `global.observability.enabled` |
+| `ewp-grafana-oidc` (namespace `observability`) | `client-secret`: Grafana's client secret at the IDP - the same value as `ewp-idp`'s `ClientSecrets__Grafana.ClientID` ([ewp-observability](../deploy/helm/ewp-observability), only with `global.observability.enabled`) |
 | `ewp-shell` | `ConnectionStrings__MenuDbConnection`, `ConnectionStrings__BffStateDbConnection`, `Oidc__ClientSecret` |
 | `ewp-customer-onboarding-bff-web`, `ewp-compliance-bff-web`, `ewp-accounts-bff-web`, `ewp-payments-bff-web` | `ConnectionStrings__BffStateDbConnection`, `Oidc__ClientSecret` |
 | `ewp-customer-kyc-bff-web` | `KYC_BFF_CLIENT_SECRET`, `KYC_BFF_SESSION_SECRET`, `KYC_BFF_SESSION_KEY`, `KYC_BFF_DATABASE_URL` |

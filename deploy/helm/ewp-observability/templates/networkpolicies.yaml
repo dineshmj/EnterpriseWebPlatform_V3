@@ -1,0 +1,142 @@
+{{- /*
+┌─ :: SECURITY :: Who may connect to whom in the observability namespace - in AND out ───────────
+│ Why : The stores hold every service's logs and traces (personal data in log lines is masked,
+│       but still): only the collector may write and only Grafana may read; and none of them may
+│       reach the internet, the VNet or another namespace.
+│ How : Deny all, in and out, then exactly:
+│         EWP's pods (clientNamespaces) -> alloy 4317                  (OTLP, TLS)
+│         alloy   -> prometheus 9090, loki 3100, tempo 4317            (write)
+│         grafana -> prometheus 9090, loki 3100, tempo 3200            (read)
+│         the Gateway's namespace -> grafana 3000                      (the browser, re-encrypted)
+│         grafana -> the Gateway (pods, and the public IP on 443)      (the IDP by its public name)
+│         everyone -> the cluster DNS
+│       The kubelet's probes come from the node; the CNI admits them (as in the EWP chart).
+│ Ref : deploy/helm/ewp/templates/networkpolicies.yaml | doc/Kubernetes.md K6, K12 | OWASP A01, A10
+└────────────────────────────────────────────────────────────────────────────────────────────────
+*/ -}}
+{{- $root := . -}}
+{{- $v := .Values -}}
+{{- $gatewayIp := required "egress.gatewayIp is required (the Gateway's public IP: Grafana reaches the IDP by its public name)" $v.egress.gatewayIp -}}
+{{- define "obs.peer" -}}
+- podSelector:
+    matchLabels:
+      {{- include "obs.selector" . | nindent 6 }}
+{{- end -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: observability-default-deny
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress", "Egress"]
+---
+# Every pod: the cluster DNS.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: observability-dns
+spec:
+  podSelector: {}
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - namespaceSelector:
+            {{- toYaml $v.egress.dns.namespaceSelector | nindent 12 }}
+          podSelector:
+            {{- toYaml $v.egress.dns.podSelector | nindent 12 }}
+      ports:
+        - {port: 53, protocol: UDP}
+        - {port: 53, protocol: TCP}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: alloy
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "obs.selector" (dict "root" $root "name" "alloy") | nindent 6 }}
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        {{- range $v.clientNamespaces }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . }}
+        {{- end }}
+      ports:
+        - {port: 4317, protocol: TCP}
+  egress:
+    - to:
+        {{- include "obs.peer" (dict "root" $root "name" "prometheus") | nindent 8 }}
+      ports:
+        - {port: 9090, protocol: TCP}
+    - to:
+        {{- include "obs.peer" (dict "root" $root "name" "loki") | nindent 8 }}
+      ports:
+        - {port: 3100, protocol: TCP}
+    - to:
+        {{- include "obs.peer" (dict "root" $root "name" "tempo") | nindent 8 }}
+      ports:
+        - {port: 4317, protocol: TCP}
+{{- range $name, $ports := dict "prometheus" (dict "write" 9090 "read" 9090) "loki" (dict "write" 3100 "read" 3100) "tempo" (dict "write" 4317 "read" 3200) }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "obs.selector" (dict "root" $root "name" $name) | nindent 6 }}
+  # SEC: in only (from the collector and Grafana); out: nothing but DNS (observability-dns).
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        {{- include "obs.peer" (dict "root" $root "name" "alloy") | nindent 8 }}
+      ports:
+        - {port: {{ $ports.write }}, protocol: TCP}
+    - from:
+        {{- include "obs.peer" (dict "root" $root "name" "grafana") | nindent 8 }}
+      ports:
+        - {port: {{ $ports.read }}, protocol: TCP}
+{{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: grafana
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "obs.selector" (dict "root" $root "name" "grafana") | nindent 6 }}
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            {{- toYaml $v.gateway.namespaceSelector | nindent 12 }}
+      ports:
+        - {port: 3000, protocol: TCP}
+  egress:
+    - to:
+        {{- include "obs.peer" (dict "root" $root "name" "prometheus") | nindent 8 }}
+      ports:
+        - {port: 9090, protocol: TCP}
+    - to:
+        {{- include "obs.peer" (dict "root" $root "name" "loki") | nindent 8 }}
+      ports:
+        - {port: 3100, protocol: TCP}
+    - to:
+        {{- include "obs.peer" (dict "root" $root "name" "tempo") | nindent 8 }}
+      ports:
+        - {port: 3200, protocol: TCP}
+    # The IDP by its public name: the Gateway's pods (Cilium hands a connection to the load
+    # balancer's IP straight to them) and the public IP itself (as the EWP chart does).
+    - to:
+        - namespaceSelector:
+            {{- toYaml $v.gateway.namespaceSelector | nindent 12 }}
+    - to:
+        - ipBlock:
+            cidr: {{ $gatewayIp }}/32
+      ports:
+        - {port: 443, protocol: TCP}

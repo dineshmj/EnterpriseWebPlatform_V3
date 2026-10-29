@@ -109,6 +109,23 @@ global:
         matchLabels:
           k8s-app: kube-dns
 
+  # ┌─ OBS + SEC ──────────────────────────────────────────────────────────────────────────────
+  # │ Observability (deploy/helm/ewp-observability, its own namespace): on, every .NET service
+  # │ PUSHES its metrics, traces and logs over OTLP (gRPC, TLS with EWP's private CA) to the
+  # │ collector - one more egress rule; nothing connects INTO EWP's pods (no scraping). The IDP
+  # │ then also registers Grafana as a client (sign-in with EWP's IDP); its secret comes from
+  # │ the IDP's own Secret. Off: no OTLP endpoint, no Grafana client - as before.
+  # └──────────────────────────────────────────────────────────────────────────────────────────
+  observability:
+    enabled: false
+    namespace: observability
+    otlpEndpoint: https://alloy.observability.svc.cluster.local:4317
+    collectorPods:
+      app.kubernetes.io/name: alloy
+    # Grafana's public host (<host>.<global.domain>) and its client ID at the IDP.
+    grafanaHost: grafana
+    grafanaClientId: Grafana.ClientID
+
   # SEC: step-up with the authenticator code. Outside Development the Operations Journey API
   # refuses to start without it; the IDP and the APIs get the same value.
   mfa:

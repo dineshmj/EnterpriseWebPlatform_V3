@@ -40,6 +40,10 @@ global:
   temporal:
     address: temporal.ewp-infra.svc:7233
 
+  # On by default (Demo up's "observability" input; unticked, the pipeline sets it false).
+  observability:
+    enabled: true
+
   partnerBank:
     # <set by the pipeline>: the Partner Bank's own chart and host names.
     tokenEndpoint: https://partner-auth.demo.ewp.example:47411/connect/token

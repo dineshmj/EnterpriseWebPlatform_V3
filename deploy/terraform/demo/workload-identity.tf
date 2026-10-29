@@ -7,7 +7,7 @@
 # │       Entra ID exchanges it for an Azure token. The service account is used by one pod per
 # │       namespace only, the secret sync pod (deploy/helm/keyvault-secrets): the CSI driver
 # │       asks Kubernetes for that pod's token; no pod has a Kubernetes token mounted.
-# │         id-ewp-demo-secrets  <- ewp/keyvault-secrets, ewp-infra/keyvault-secrets
+# │         id-ewp-demo-secrets  <- ewp/, ewp-infra/, observability/keyvault-secrets
 # │         id-pb-demo-secrets   <- partner-bank/keyvault-secrets
 # │ Ref : doc/Cloud-Demo.md CD14-CD15 | Microsoft "Use Microsoft Entra Workload ID with AKS" |
 # │       OWASP ASVS V13.3
@@ -17,7 +17,7 @@ locals {
   # CONTRACT: deploy/helm/keyvault-secrets names its service account keyvault-secrets.
   secrets_service_account = "keyvault-secrets"
 
-  ewp_secret_namespaces = ["ewp", "ewp-infra"]
+  ewp_secret_namespaces = ["ewp", "ewp-infra", "observability"]
 }
 
 resource "azurerm_user_assigned_identity" "ewp_secrets" {

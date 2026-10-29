@@ -1,0 +1,5 @@
+# The cloud demo: only what the pipeline knows at install time (demo-observability.sh --set).
+# <set by the pipeline>: --set domain=... --set egress.gatewayIp=... (Terraform output gateway_ip)
+domain: demo.ewp.example
+egress:
+  gatewayIp: 192.0.2.10

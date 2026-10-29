@@ -16,7 +16,11 @@
 # │         5. the Partner Bank: its chart from its own repository (PARTNER_CHART), browser ports
 # │            ending at the Gateway, its PKI's root for the Gateway, Let's Encrypt's roots for its
 # │            own calls
-# │         6. EWP: the chart with every image pinned to the digest its "main" tag has now
+# │         6. observability (OBSERVABILITY=true, Demo up's input): deploy/helm/ewp-observability
+# │            in its own namespace - collector, Prometheus, Loki, Tempo, Grafana at grafana.<domain>
+# │         7. EWP: the chart with every image pinned to the digest its "main" tag has now (with
+# │            observability on, the .NET services push OTLP to the collector; the IDP registers
+# │            Grafana)
 # │       then checks from outside: the IDP's and the Partner Bank's discovery documents through
 # │       the Gateway; and from inside, EWP's own token at the
 # │       Partner Bank over mutual TLS. Nothing secret is printed; values pass only through Key Vault.
@@ -30,6 +34,9 @@ set -euo pipefail
 : "${POSTGRES_HOST:?}" "${POSTGRES_ADMIN_LOGIN:?}" "${PARTNER_CHART:?}"
 # SEC: the two outside addresses the charts' egress rules allow (doc/Kubernetes.md K12).
 : "${GATEWAY_IP:?}" "${POSTGRES_CIDR:?}"
+# Optional: false leaves observability out (Demo up's "observability" input; default true).
+OBSERVABILITY="${OBSERVABILITY:-true}"
+[ "$OBSERVABILITY" = "true" ] || [ "$OBSERVABILITY" = "false" ] || { echo "OBSERVABILITY must be true or false."; exit 2; }
 export EWP_KEY_VAULT PARTNER_KEY_VAULT TENANT_ID EWP_SECRETS_CLIENT_ID PARTNER_SECRETS_CLIENT_ID PARTNER_DOMAIN POSTGRES_HOST
 
 STRIMZI_VERSION='1.2.0'
@@ -101,7 +108,9 @@ step "Secrets in Key Vault"
 node "$repo/.github/scripts/demo-secrets.mjs"
 
 step "Namespaces"
-for namespace in ewp-infra ewp partner-bank; do
+namespaces=(ewp-infra ewp partner-bank)
+[ "$OBSERVABILITY" = "true" ] && namespaces+=(observability)
+for namespace in "${namespaces[@]}"; do
   kubectl create namespace "$namespace" --dry-run=client -o yaml | kubectl apply -f -
 done
 # trust-manager copies the bundles into these two; EWP's routes may use the https listener; the
@@ -109,17 +118,20 @@ done
 kubectl label namespace ewp-infra ewp.dev/trust=true --overwrite
 kubectl label namespace ewp ewp.dev/trust=true ewp.dev/gateway-routes=true --overwrite
 kubectl label namespace partner-bank ewp.dev/partner-bank-routes=true --overwrite
+# Observability: the trust bundles (Grafana's and the collector's certificates, the IDP's roots)
+# and Grafana's route on the https listener.
+[ "$OBSERVABILITY" = "true" ] && kubectl label namespace observability ewp.dev/trust=true ewp.dev/gateway-routes=true --overwrite
 
 step "Strimzi $STRIMZI_VERSION"
 helm upgrade --install strimzi oci://quay.io/strimzi-helm/strimzi-kafka-operator --version "$STRIMZI_VERSION" \
   --namespace strimzi --create-namespace -f "$repo/deploy/cluster-addons/strimzi.yaml" --wait --timeout 10m
 
 step "Secrets: Key Vault -> namespaces"
-for namespace in ewp-infra ewp partner-bank; do
+for namespace in "${namespaces[@]}"; do
   retry helm upgrade --install keyvault-secrets "$repo/deploy/helm/keyvault-secrets" --namespace "$namespace" \
     -f "$work/keyvault-secrets-$namespace.json" --wait --timeout 5m
 done
-for namespace in ewp-infra ewp partner-bank; do
+for namespace in "${namespaces[@]}"; do
   wait_for_secrets "$namespace" "$work/keyvault-secrets-$namespace.json"
 done
 
@@ -166,6 +178,15 @@ helm upgrade --install partner-bank "$PARTNER_CHART" --namespace partner-bank \
   --set "global.egress.gatewayIp=$GATEWAY_IP" \
   --wait --timeout 10m
 
+if [ "$OBSERVABILITY" = "true" ]; then
+  step "Observability: collector, Prometheus, Loki, Tempo, Grafana"
+  helm upgrade --install ewp-observability "$repo/deploy/helm/ewp-observability" --namespace observability \
+    -f "$repo/deploy/helm/ewp-observability/values-demo.yaml" \
+    --set "domain=$EWP_DOMAIN" \
+    --set "egress.gatewayIp=$GATEWAY_IP" \
+    --wait --timeout 10m
+fi
+
 step "EWP"
 mapfile -t ewp_images < <(node -e '
   for (const { image } of JSON.parse(require("fs").readFileSync(process.argv[1])).images) console.log(`${image.replace(/^ewp-/, "")}=${image}`);
@@ -184,6 +205,7 @@ helm upgrade --install ewp "$repo/deploy/helm/ewp" --namespace ewp \
   --set "global.partnerBank.apiBaseUrl=https://partner-api.$PARTNER_DOMAIN:47403" \
   --set "global.partnerBank.staffViewUrl=https://partner-products.$PARTNER_DOMAIN:47402/StaffView" \
   --set "global.featureFlags.launchDarkly.enabled=$launch_darkly" \
+  --set "global.observability.enabled=$OBSERVABILITY" \
   --wait --timeout 20m
 
 # ┌─ OBS ────────────────────────────────────────────────────────────────────────────────────────
@@ -193,6 +215,16 @@ helm upgrade --install ewp "$repo/deploy/helm/ewp" --namespace ewp \
 # └──────────────────────────────────────────────────────────────────────────────────────────────
 step "Checks through the Gateway"
 trust=""; [ "$CERT_ISSUER" = "letsencrypt-staging" ] && trust="--insecure"
+# OBS: Grafana's own health through the Gateway (anonymous; everything else needs a sign-in).
+if [ "$OBSERVABILITY" = "true" ]; then
+  for attempt in $(seq 1 30); do
+    if curl -fsS $trust --max-time 15 "https://grafana.$EWP_DOMAIN/api/health" | grep -q '"database": *"ok"'; then
+      echo "ok  https://grafana.$EWP_DOMAIN (health)"; break
+    fi
+    [ "$attempt" -eq 30 ] && { echo "::error::https://grafana.$EWP_DOMAIN/api/health did not answer ok."; exit 1; }
+    echo "waiting for Grafana ($attempt/30)"; sleep 10
+  done
+fi
 for issuer in "https://idp.$EWP_DOMAIN" "https://partner-auth.$PARTNER_DOMAIN:47401"; do
   for attempt in $(seq 1 30); do
     found="$(curl -fsS $trust --max-time 15 "$issuer/.well-known/openid-configuration" 2>/dev/null \

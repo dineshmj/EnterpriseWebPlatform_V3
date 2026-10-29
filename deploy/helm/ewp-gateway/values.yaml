@@ -27,6 +27,11 @@ hosts:
   - operations
   - ewp-partner
 
+# The cloud demo's Grafana (deploy/helm/ewp-observability, its own namespace): in the same
+# certificate, so turning observability on or off never needs a new order from Let's Encrypt.
+observabilityHosts:
+  - grafana
+
 gateway:
   name: ewp-gateway
   className: ewp-envoy

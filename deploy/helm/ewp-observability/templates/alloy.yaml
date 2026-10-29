@@ -1,0 +1,167 @@
+{{- /*
+┌─ :: ARCHITECTURE + SECURITY :: The collector: one OTLP door for every .NET service ────────────
+│ Why : The services export all three signals to ONE endpoint (OTEL_EXPORTER_OTLP_ENDPOINT); the
+│       backends each speak their own protocol. A collector between them batches, and is the
+│       only thing EWP's pods may reach in this namespace.
+│ How : Grafana Alloy: OTLP gRPC on 4317 with TLS (its certificate from EWP's private CA, which
+│       the services trust) -> batch -> metrics to Prometheus's OTLP receiver, logs to Loki's
+│       OTLP endpoint, traces to Tempo (OTLP). No Kubernetes API access, no host path: it only
+│       receives. Its own UI (12345) has no route - kubectl port-forward only.
+│ Ref : Grafana Alloy otelcol.* components | OpenTelemetry OTLP | values.yaml (box)
+└────────────────────────────────────────────────────────────────────────────────────────────────
+*/ -}}
+{{- define "obs.alloyConfig" -}}
+// OTLP from EWP's .NET services (gRPC, TLS).
+otelcol.receiver.otlp "apps" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+    tls {
+      cert_file = "/etc/alloy/tls/tls.crt"
+      key_file  = "/etc/alloy/tls/tls.key"
+    }
+  }
+  output {
+    metrics = [otelcol.processor.batch.default.input]
+    logs    = [otelcol.processor.batch.default.input]
+    traces  = [otelcol.processor.batch.default.input]
+  }
+}
+
+otelcol.processor.batch "default" {
+  output {
+    metrics = [otelcol.exporter.otlphttp.prometheus.input]
+    logs    = [otelcol.exporter.otlphttp.loki.input]
+    traces  = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+// Prometheus's native OTLP receiver (--web.enable-otlp-receiver): /api/v1/otlp/v1/metrics.
+otelcol.exporter.otlphttp "prometheus" {
+  client {
+    endpoint = "http://{{ include "obs.fqdn" (list . "prometheus") }}:9090/api/v1/otlp"
+  }
+}
+
+// Loki's native OTLP endpoint: /otlp/v1/logs (resource attributes become labels / metadata).
+otelcol.exporter.otlphttp "loki" {
+  client {
+    endpoint = "http://{{ include "obs.fqdn" (list . "loki") }}:3100/otlp"
+  }
+}
+
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "{{ include "obs.fqdn" (list . "tempo") }}:4317"
+    tls {
+      insecure = true
+    }
+  }
+}
+{{- end -}}
+{{- $a := .Values.alloy -}}
+{{- $ctx := dict "root" . "name" "alloy" -}}
+{{ include "obs.certificate" $ctx }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alloy
+  labels:
+    {{- include "obs.labels" $ctx | nindent 4 }}
+data:
+  config.alloy: |
+    {{- include "obs.alloyConfig" . | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alloy
+  labels:
+    {{- include "obs.labels" $ctx | nindent 4 }}
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      {{- include "obs.selector" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "obs.labels" $ctx | nindent 8 }}
+      annotations:
+        checksum/config: {{ include "obs.alloyConfig" . | sha256sum }}
+    spec:
+      {{- include "obs.podSecurity" $a | nindent 6 }}
+      containers:
+        - name: alloy
+          image: {{ $a.image }}
+          imagePullPolicy: IfNotPresent
+          args:
+            - run
+            - /etc/alloy/config.alloy
+            - --server.http.listen-addr=0.0.0.0:12345
+            - --storage.path=/var/lib/alloy/data
+            - --disable-reporting
+          ports:
+            - name: otlp-grpc
+              containerPort: 4317
+            - name: http
+              containerPort: 12345
+          securityContext:
+            {{- include "obs.containerSecurity" . | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            {{- toYaml $a.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alloy/config.alloy
+              subPath: config.alloy
+              readOnly: true
+            - name: tls
+              mountPath: /etc/alloy/tls
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/alloy/data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: alloy
+        - name: tls
+          secret:
+            secretName: alloy-tls
+        - name: data
+          emptyDir:
+            sizeLimit: 256Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alloy
+  labels:
+    {{- include "obs.labels" $ctx | nindent 4 }}
+spec:
+  selector:
+    {{- include "obs.selector" $ctx | nindent 4 }}
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: otlp-grpc
+      appProtocol: grpc
+    - name: http
+      port: 12345
+      targetPort: http
