@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,17 +11,17 @@ using EnterpriseWebPlatform.Compliance.Api.Domain.ValueObjects;
 namespace EnterpriseWebPlatform.Compliance.Api.Controllers;
 
 public sealed record OpenComplianceCaseRequest(
-    Guid ApplicationRef,
+    [property: JsonRequired] Guid ApplicationRef,
     string ApplicationNumber,
     string CustomerNumber,
-    long KycCaseId,
+    [property: JsonRequired] long KycCaseId,
     string BranchCode,
     string? InitiatedByUserId,
     string? KycIdentityDecidedByUserId,
     string? KycDocumentDecidedByUserId,
     Guid? WorkflowId,
     Guid? CorrelationId,
-    Guid CausationId,
+    [property: JsonRequired] Guid CausationId,
     ApplicantContract? Applicant,
     string? InitiatedByLanId,
     string? KycIdentityDecidedByLanId,

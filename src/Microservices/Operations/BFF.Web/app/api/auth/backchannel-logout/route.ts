@@ -26,7 +26,7 @@ async function handlePost(request: NextRequest) {
     // │ A logout token must carry the back-channel-logout event and no nonce - an ID token
     // │ replayed here is refused.
     // └──────────────────────────────────────────────────────────────────────────────────────
-    if (!events?.['http://schemas.openid.net/event/backchannel-logout'] || payload.nonce !== undefined) {
+    if (!events?.['http://schemas.openid.net/event/backchannel-logout'] || payload.nonce !== undefined) {   // NOSONAR - the OIDC event's name (a URI by the spec), never fetched
       return new NextResponse(null, { status: 400 });
     }
     await deleteSessionsOf(

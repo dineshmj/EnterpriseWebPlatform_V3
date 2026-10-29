@@ -25,7 +25,7 @@ export default async function startWireMock(): Promise<void> {
 
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
-  const child = spawn('java', [
+  const child = spawn('java', [   // NOSONAR - a build / test tool found on PATH of a CI runner or a developer's machine, never on a server
     '-Xmx128m', '-jar', jar,
     '--bind-address', '127.0.0.1', '--port', String(port),
     '--root-dir', mkdtempSync(join(tmpdir(), 'ewp-wiremock-')),   // no stub files of its own: every test stages its answers

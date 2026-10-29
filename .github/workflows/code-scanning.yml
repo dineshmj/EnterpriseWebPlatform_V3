@@ -134,7 +134,7 @@ jobs:
           "$scanner" begin \
             /k:"$SONAR_PROJECT_KEY" /o:"$SONAR_ORGANIZATION" \
             /d:sonar.host.url=https://sonarcloud.io /d:sonar.token="$SONAR_TOKEN" \
-            /d:sonar.exclusions='**/node_modules/**,**/.next/**,**/wwwroot/lib/**,test-results/**,db/**'
+            /d:sonar.exclusions='**/node_modules/**,**/.next/**,**/wwwroot/lib/**,test-results/**,db/**,**/*.sql'
           dotnet build EnterpriseWebPlatform.BSS.slnx --configuration Release
           "$scanner" end /d:sonar.token="$SONAR_TOKEN"
 

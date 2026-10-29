@@ -137,7 +137,7 @@ public sealed class MfaService(IdentityDbContext db, IDataProtectionProvider dat
     /// fifth locks the account for 15 minutes and starts the count again. Every SET reads the
     /// row's values from before the UPDATE.
     /// </summary>
-    private Task CountFailureAsync(long userId, DateTimeOffset now, CancellationToken cancellationToken)
+    private Task<int> CountFailureAsync(long userId, DateTimeOffset now, CancellationToken cancellationToken)
     {
         DateTimeOffset? lockoutEnd = now.Add(LockoutDuration);
         return db.Users

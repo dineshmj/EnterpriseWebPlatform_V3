@@ -268,4 +268,4 @@ app.MapEwpApiControllers("ApiScope");
 app.MapEwpHealthEndpoints();
 app.MapEwpMetricsEndpoint();   // Prometheus scrape (GET /metrics)
 
-app.Run();
+await app.RunAsync();

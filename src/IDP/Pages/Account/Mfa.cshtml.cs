@@ -99,7 +99,7 @@ public sealed class MfaModel(
     // │ code is even looked at - and the person is told plainly to wait. This person has
     // │ already proved the password, so saying "locked" reveals nothing to a stranger.
     // └──────────────────────────────────────────────────────────────────────────────────────
-    private IActionResult LockedOut()
+    private PageResult LockedOut()
     {
         PendingSignIn.Clear(HttpContext);
         ModelState.AddModelError(string.Empty, "Too many wrong codes: this account is locked for 15 minutes. Wait, then sign in again - or ask an administrator.");

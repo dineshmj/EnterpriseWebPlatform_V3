@@ -465,7 +465,7 @@ app.MapRemoteBffApiEndpoint(NotificationsHubPath, new Uri($"{notificationsApiBas
 app.MapEwpHealthEndpoints();
 app.MapEwpMetricsEndpoint();   // Prometheus scrape (GET /metrics)
 
-app.Run();
+await app.RunAsync();
 
 public partial class Program
 {

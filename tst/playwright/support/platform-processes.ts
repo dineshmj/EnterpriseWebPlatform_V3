@@ -28,7 +28,7 @@ const workerReadiness = services.find(s => s.name === 'Partner Products Worker')
 
 /** Runs one of the repository's ps\ scripts (Windows PowerShell, no profile) and waits for it. */
 function runScript(script: string, args: string[] = [], timeoutMs = 180_000): void {
-  const run = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-File', path.join(repositoryRoot, script), ...args], {
+  const run = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-File', path.join(repositoryRoot, script), ...args], {   // NOSONAR - a build / test tool found on PATH of a CI runner or a developer's machine, never on a server
     cwd: repositoryRoot,
     encoding: 'utf-8',
     timeout: timeoutMs,
@@ -61,7 +61,7 @@ const kafkaSubscribers = services.filter(s => /^http:\/\/localhost:51\d\d\//.tes
 // └──────────────────────────────────────────────────────────────────────────────────────
 /** Why this run could not stop Kafka or the worker, or undefined when it can. */
 export function kafkaNotStoppableReason(): string | undefined {
-  const probe = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+  const probe = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',   // NOSONAR - a build / test tool found on PATH of a CI runner or a developer's machine, never on a server
     "foreach ($port in 9092, 46383) { " +
     "$id = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess; " +
     "if (-not $id) { \"$port=not-running\" } elseif ((Get-CimInstance Win32_Process -Filter \"ProcessId=$id\").CommandLine) { \"$port=ok\" } else { \"$port=elevated\" } }"],

@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -28,7 +30,7 @@ public sealed class InternalGoldPurchasesController(
     public sealed record PurchaseState(string Number, string Status, decimal AmountAud, Guid PaymentRef, string? PartnerOrderNumber, string? PaymentNumber);
 
     public sealed record PaymentAdviceRequest(
-        Guid PaymentRef, string? NetworkReference, decimal Amount, string? PayeeBsb, string? PayeeAccountNumber);
+        [property: JsonRequired] Guid PaymentRef, string? NetworkReference, [property: JsonRequired] decimal Amount, string? PayeeBsb, string? PayeeAccountNumber);
 
     public sealed record CancelRequest(string? Reason);
 

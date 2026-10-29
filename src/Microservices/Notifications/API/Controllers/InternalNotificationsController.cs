@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -8,7 +9,7 @@ using EnterpriseWebPlatform.Notifications.Api.Application;
 namespace EnterpriseWebPlatform.Notifications.Api.Controllers;
 
 /// <summary>A workflow event as consumed from Kafka: its identity, type and the full envelope.</summary>
-public sealed record WorkflowEventRequest(Guid MessageId, string EventType, JsonElement Envelope);
+public sealed record WorkflowEventRequest([property: JsonRequired] Guid MessageId, string EventType, [property: JsonRequired] JsonElement Envelope);
 
 /// <summary>
 /// Machine-only endpoint: the Notifications Subscriber (pinned M2M client) hands each

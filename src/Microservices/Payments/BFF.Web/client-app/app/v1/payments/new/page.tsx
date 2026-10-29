@@ -128,7 +128,7 @@ export default function NewPaymentPage() {
   };
 
   // ---- validation (the API checks everything again; this explains it early)
-  const amountValue = AMOUNT_PATTERN.test(amount.trim()) ? Number(amount.trim()) : NaN;
+  const amountValue = AMOUNT_PATTERN.test(amount.trim()) ? Number(amount.trim()) : Number.NaN;
   const amountValid = Number.isFinite(amountValue) && amountValue > 0 && (!policy || amountValue <= policy.maxAmount);
   const insufficient = !!payer && amountValid && amountValue > payer.available;
   const needsApproval = !!policy && amountValid && amountValue > policy.approvalThreshold;

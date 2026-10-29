@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -61,4 +63,4 @@ public sealed class InternalCustomerOnlineIdentityController(
 
 public sealed record OnlineIdentityCheckRequest(string CustomerNumber, string Email);
 
-public sealed record OnlineIdentityLinkRequest(string CustomerNumber, string Email, Guid SubjectId);
+public sealed record OnlineIdentityLinkRequest(string CustomerNumber, string Email, [property: JsonRequired] Guid SubjectId);

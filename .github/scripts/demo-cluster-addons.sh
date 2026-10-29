@@ -36,7 +36,7 @@ step() { echo; echo "== $1"; }
 retry() {
   for attempt in 1 2 3; do
     "$@" && return 0
-    [ "$attempt" -lt 3 ] && { echo "retrying in 20 s ($attempt/3)"; sleep 20; }
+    [[ "$attempt" -lt 3 ]] && { echo "retrying in 20 s ($attempt/3)"; sleep 20; }
   done
   return 1
 }
@@ -64,7 +64,7 @@ step "ewp-cluster (private CA, trust bundles)"
 # SEC: staging certificates are untrusted by design; only a staging run adds their roots, and
 # only to the full bundle (never to the private-root bundle the Gateway checks pods against).
 extra_roots="$(mktemp)"
-if [ "$CERT_ISSUER" = "letsencrypt-staging" ]; then
+if [[ "$CERT_ISSUER" = "letsencrypt-staging" ]]; then
   cat "$repo"/deploy/demo-platform/letsencrypt-roots/staging-root-x*.pem > "$extra_roots"
 fi
 retry helm upgrade --install ewp-cluster "$repo/deploy/helm/ewp-cluster" --set-file "extraRoots=$extra_roots" --wait --timeout 5m
@@ -94,8 +94,8 @@ step "Waiting for the gateway on $GATEWAY_IP"
 selector="gateway.envoyproxy.io/owning-gateway-name=ewp-gateway"
 for attempt in $(seq 1 60); do
   address="$(kubectl get service -n gateway-system -l "$selector" -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)"
-  [ "$address" = "$GATEWAY_IP" ] && break
-  [ "$attempt" -eq 60 ] && { echo "The gateway's Service has address '${address:-none}', not $GATEWAY_IP."; kubectl describe service -n gateway-system -l "$selector" || true; exit 1; }
+  [[ "$address" = "$GATEWAY_IP" ]] && break
+  [[ "$attempt" -eq 60 ]] && { echo "The gateway's Service has address '${address:-none}', not $GATEWAY_IP."; kubectl describe service -n gateway-system -l "$selector" || true; exit 1; }
   sleep 10
 done
 echo "gateway on $address"

@@ -36,7 +36,7 @@ set -euo pipefail
 : "${GATEWAY_IP:?}" "${POSTGRES_CIDR:?}"
 # Optional: false leaves observability out (Demo up's "observability" input; default true).
 OBSERVABILITY="${OBSERVABILITY:-true}"
-[ "$OBSERVABILITY" = "true" ] || [ "$OBSERVABILITY" = "false" ] || { echo "OBSERVABILITY must be true or false."; exit 2; }
+[[ "$OBSERVABILITY" = "true" ]] || [[ "$OBSERVABILITY" = "false" ]] || { echo "OBSERVABILITY must be true or false."; exit 2; }
 export EWP_KEY_VAULT PARTNER_KEY_VAULT TENANT_ID EWP_SECRETS_CLIENT_ID PARTNER_SECRETS_CLIENT_ID PARTNER_DOMAIN POSTGRES_HOST
 
 STRIMZI_VERSION='1.2.0'
@@ -54,7 +54,7 @@ step() { echo; echo "== $1"; }
 retry() {
   for attempt in 1 2 3; do
     "$@" && return 0
-    [ "$attempt" -lt 3 ] && { echo "retrying in 20 s ($attempt/3)"; sleep 20; }
+    [[ "$attempt" -lt 3 ]] && { echo "retrying in 20 s ($attempt/3)"; sleep 20; }
   done
   return 1
 }
@@ -67,7 +67,7 @@ wait_for_secrets() {
     for secret in $(node -e 'for (const s of JSON.parse(require("fs").readFileSync(process.argv[1])).secrets) console.log(s.name)' "$list"); do
       kubectl get secret "$secret" -n "$namespace" > /dev/null 2>&1 || missing="$missing $secret"
     done
-    [ -z "$missing" ] && { echo "all Secrets of $namespace synced from Key Vault"; return 0; }
+    [[ -z "$missing" ]] && { echo "all Secrets of $namespace synced from Key Vault"; return 0; }
     echo "waiting for$missing ($attempt/30)"; sleep 10
   done
   kubectl describe pod -n "$namespace" -l app.kubernetes.io/name=keyvault-secrets || true
@@ -94,7 +94,7 @@ image_values() {
   for entry in "$@"; do
     component="${entry%%=*}"; image="${entry#*=}"
     digest="$(digest_of "$image")"
-    [ -n "$digest" ] || { echo "No image $IMAGE_OWNER/$image:$IMAGE_TAG on GHCR."; return 1; }
+    [[ -n "$digest" ]] || { echo "No image $IMAGE_OWNER/$image:$IMAGE_TAG on GHCR."; return 1; }
     pairs+=("$component=$digest")
   done
   node -e '
@@ -109,7 +109,7 @@ node "$repo/.github/scripts/demo-secrets.mjs"
 
 step "Namespaces"
 namespaces=(ewp-infra ewp partner-bank)
-[ "$OBSERVABILITY" = "true" ] && namespaces+=(observability)
+[[ "$OBSERVABILITY" = "true" ]] && namespaces+=(observability)
 for namespace in "${namespaces[@]}"; do
   kubectl create namespace "$namespace" --dry-run=client -o yaml | kubectl apply -f -
 done
@@ -120,7 +120,7 @@ kubectl label namespace ewp ewp.dev/trust=true ewp.dev/gateway-routes=true --ove
 kubectl label namespace partner-bank ewp.dev/partner-bank-routes=true --overwrite
 # Observability: the trust bundles (Grafana's and the collector's certificates, the IDP's roots)
 # and Grafana's route on the https listener.
-[ "$OBSERVABILITY" = "true" ] && kubectl label namespace observability ewp.dev/trust=true ewp.dev/gateway-routes=true --overwrite
+[[ "$OBSERVABILITY" = "true" ]] && kubectl label namespace observability ewp.dev/trust=true ewp.dev/gateway-routes=true --overwrite
 
 step "Strimzi $STRIMZI_VERSION"
 helm upgrade --install strimzi oci://quay.io/strimzi-helm/strimzi-kafka-operator --version "$STRIMZI_VERSION" \
@@ -165,7 +165,7 @@ step "Partner Bank (chart: $PARTNER_CHART)"
 kubectl create configmap partner-bank-ca -n partner-bank --from-file="ca.crt=$work/partner-bank-ca.pem" \
   --dry-run=client -o yaml | kubectl apply -f -
 # The roots of the Gateway's public certificate, for the Partner Bank's calls to its own issuer.
-roots="production-isrg-root"; [ "$CERT_ISSUER" = "letsencrypt-staging" ] && roots="staging-root"
+roots="production-isrg-root"; [[ "$CERT_ISSUER" = "letsencrypt-staging" ]] && roots="staging-root"
 kubectl create configmap partner-bank-backchannel-roots -n partner-bank \
   --from-file="letsencrypt-root-x1.pem=$repo/deploy/demo-platform/letsencrypt-roots/$roots-x1.pem" \
   --from-file="letsencrypt-root-x2.pem=$repo/deploy/demo-platform/letsencrypt-roots/$roots-x2.pem" \
@@ -178,7 +178,7 @@ helm upgrade --install partner-bank "$PARTNER_CHART" --namespace partner-bank \
   --set "global.egress.gatewayIp=$GATEWAY_IP" \
   --wait --timeout 10m
 
-if [ "$OBSERVABILITY" = "true" ]; then
+if [[ "$OBSERVABILITY" = "true" ]]; then
   step "Observability: collector, Prometheus, Loki, Tempo, Grafana"
   helm upgrade --install ewp-observability "$repo/deploy/helm/ewp-observability" --namespace observability \
     -f "$repo/deploy/helm/ewp-observability/values-demo.yaml" \
@@ -194,7 +194,7 @@ mapfile -t ewp_images < <(node -e '
 image_values "$work/ewp-images.json" "${ewp_images[@]}"
 # Feature flags: LaunchDarkly when the GitHub secret LAUNCHDARKLY_SDK_KEY is set (demo-secrets.mjs
 # put it in Key Vault -> Secret ewp-launchdarkly), otherwise the chart's flag file.
-launch_darkly=false; [ -n "${LAUNCHDARKLY_SDK_KEY:-}" ] && launch_darkly=true
+launch_darkly=false; [[ -n "${LAUNCHDARKLY_SDK_KEY:-}" ]] && launch_darkly=true
 helm upgrade --install ewp "$repo/deploy/helm/ewp" --namespace ewp \
   -f "$repo/deploy/helm/ewp/values-demo.yaml" -f "$work/ewp-images.json" \
   --set "global.domain=$EWP_DOMAIN" \
@@ -214,14 +214,14 @@ helm upgrade --install ewp "$repo/deploy/helm/ewp" --namespace ewp \
 # │ re-encryption to the pod and the service itself in one request each.
 # └──────────────────────────────────────────────────────────────────────────────────────────────
 step "Checks through the Gateway"
-trust=""; [ "$CERT_ISSUER" = "letsencrypt-staging" ] && trust="--insecure"
+trust=""; [[ "$CERT_ISSUER" = "letsencrypt-staging" ]] && trust="--insecure"
 # OBS: Grafana's own health through the Gateway (anonymous; everything else needs a sign-in).
-if [ "$OBSERVABILITY" = "true" ]; then
+if [[ "$OBSERVABILITY" = "true" ]]; then
   for attempt in $(seq 1 30); do
     if curl -fsS $trust --max-time 15 "https://grafana.$EWP_DOMAIN/api/health" | grep -q '"database": *"ok"'; then
       echo "ok  https://grafana.$EWP_DOMAIN (health)"; break
     fi
-    [ "$attempt" -eq 30 ] && { echo "::error::https://grafana.$EWP_DOMAIN/api/health did not answer ok."; exit 1; }
+    [[ "$attempt" -eq 30 ]] && { echo "::error::https://grafana.$EWP_DOMAIN/api/health did not answer ok."; exit 1; }
     echo "waiting for Grafana ($attempt/30)"; sleep 10
   done
 fi
@@ -229,8 +229,8 @@ for issuer in "https://idp.$EWP_DOMAIN" "https://partner-auth.$PARTNER_DOMAIN:47
   for attempt in $(seq 1 30); do
     found="$(curl -fsS $trust --max-time 15 "$issuer/.well-known/openid-configuration" 2>/dev/null \
       | node -e 'let d = ""; process.stdin.on("data", c => d += c).on("end", () => { try { process.stdout.write(JSON.parse(d).issuer ?? "") } catch { } })' || true)"
-    [ "$found" = "$issuer" ] && { echo "ok  $issuer (discovery document)"; break; }
-    [ "$attempt" -eq 30 ] && { echo "::error::$issuer/.well-known/openid-configuration did not answer with its issuer."; exit 1; }
+    [[ "$found" = "$issuer" ]] && { echo "ok  $issuer (discovery document)"; break; }
+    [[ "$attempt" -eq 30 ]] && { echo "::error::$issuer/.well-known/openid-configuration did not answer with its issuer."; exit 1; }
     echo "waiting for $issuer ($attempt/30)"; sleep 10
   done
 done
@@ -297,7 +297,7 @@ for attempt in $(seq 1 30); do
 done
 kubectl logs partner-token-check -n ewp 2>/dev/null || true
 kubectl delete pod partner-token-check -n ewp --ignore-not-found --wait=false > /dev/null
-if [ "$phase" != "Succeeded" ]; then
+if [[ "$phase" != "Succeeded" ]]; then
   echo "::error::EWP could not get its token from the Partner Bank ($token_url; pod phase: ${phase:-unknown}). The Partner Products and Partner Bank log lines follow."
   bash "$repo/.github/scripts/demo-logs.sh" 'partner'
   exit 1

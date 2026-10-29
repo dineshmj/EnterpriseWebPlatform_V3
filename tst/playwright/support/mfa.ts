@@ -140,7 +140,7 @@ function base32Decode(text: string): Buffer {
   let bits = 0;
   let value = 0;
   const bytes: number[] = [];
-  for (const char of text.replace(/=+$/, '')) {
+  for (const char of text.split('=')[0]) {   // base32 padding ('=') is only ever at the end
     const index = alphabet.indexOf(char);
     if (index < 0) throw new Error(`Not a base32 setup key: "${char}".`);
     value = (value << 5) | index;

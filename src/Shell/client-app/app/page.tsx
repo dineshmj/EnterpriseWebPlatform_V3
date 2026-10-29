@@ -372,7 +372,7 @@ function HomeContent() {
   };
 
   useEffect(() => {
-    loadMenu();
+    void loadMenu();
   }, []);
 
   if (!user) return null;

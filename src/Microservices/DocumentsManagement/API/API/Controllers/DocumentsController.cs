@@ -85,13 +85,13 @@ public sealed class DocumentsController(
             document.ContentType,
             document.FileName.Value,
             lastModified: document.UpdatedAt,
-            entityTag: null,
+            entityTag: null!,   // no ETag: documents are fetched by ID and never cached (no-store)
             enableRangeProcessing: true);
     }
 
     [HttpPost]
     [Authorize(Policy = "DocumentWrite")]
-    [RequestSizeLimit(25 * 1024 * 1024)]
+    [RequestSizeLimit(25 * 1024 * 1024)]   // NOSONAR - one identity document (scan or photo); the limit is deliberate
     public async Task<ActionResult<UploadDocumentResult>> Upload(
         [FromForm] UploadDocumentRequest request,
         [FromHeader(Name = "X-Document-Type")] string? documentType,

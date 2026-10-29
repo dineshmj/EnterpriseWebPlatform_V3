@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,10 +15,10 @@ namespace EnterpriseWebPlatform.DocumentsManagement.API.Controllers;
 public sealed class AttachDocumentsRequest
 {
     [Required]
-    public Guid MessageId { get; init; }
+    [JsonRequired] public Guid MessageId { get; init; }
 
     [Required]
-    public Guid ApplicationRef { get; init; }
+    [JsonRequired] public Guid ApplicationRef { get; init; }
 
     [Required]
     [MaxLength(30)]

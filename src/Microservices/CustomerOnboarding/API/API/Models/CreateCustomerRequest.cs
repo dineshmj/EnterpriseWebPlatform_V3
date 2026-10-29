@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Enums;
 
@@ -25,7 +26,7 @@ public sealed class CreateCustomerRequest
 
     [Required]
     [EnumDataType(typeof(CustomerType))]
-    public CustomerType CustomerType { get; init; }
+    [JsonRequired] public CustomerType CustomerType { get; init; }
 
     // SubjectId and BranchId are intentionally NOT accepted from the caller:
     // a staff user must not be able to link a customer to an arbitrary identity

@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,16 +11,16 @@ using EnterpriseWebPlatform.Accounts.Api.Domain.ValueObjects;
 namespace EnterpriseWebPlatform.Accounts.Api.Controllers;
 
 public sealed record OpenAccountApplicationRequest(
-    Guid ApplicationRef,
+    [property: JsonRequired] Guid ApplicationRef,
     string ApplicationNumber,
     string CustomerNumber,
-    long ComplianceCaseId,
+    [property: JsonRequired] long ComplianceCaseId,
     string BranchCode,
     string? InitiatedByUserId,
     string? ComplianceApprovedByUserId,
     Guid? WorkflowId,
     Guid? CorrelationId,
-    Guid CausationId,
+    [property: JsonRequired] Guid CausationId,
     ApplicantNameContract? Applicant,
     string? InitiatedByLanId,
     string? ComplianceApprovedByLanId);

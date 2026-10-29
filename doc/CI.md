@@ -88,6 +88,23 @@ Node's HTTP parser refuses with a raw line break), SQL injection in the Shell's
 `MenuRepository` (only `@p0..` placeholders are formatted in; the values are parameters).
 `db/` is excluded from SonarQube Cloud: it reads T-SQL as Oracle PL/SQL.
 
+**SonarQube Cloud clean-up, 29-OCT-2026.** Before: 51 vulnerabilities, 45 bugs, 213 code smells,
+14.6 % duplication. Fixed in the code: install scripts off in every image and CI install
+(`--ignore-scripts`, see [Containers.md](Containers.md) 3b); the Payments BFF forwards decisions
+with constant path segments; `[JsonRequired]` on the values a request must carry (under-posting);
+`crypto.randomInt` for the BFFs' session clean-up; cookies deleted with `HttpOnly`; request
+cancellation passed to response writes; `await app.RunAsync()`; namespaces for the simulators'
+types and the IDP's `Config`; fixed log templates; backtracking-free regular expressions; `[[ ]]`
+in the bash scripts; `autofocus` removed from the IDP's pages. Marked `NOSONAR` with the reason on
+the line (deliberate, and reviewed): the upload size limits for identity documents, the Shell's
+menu query (placeholders only), tools found on `PATH` in CI and test scripts, Key Vault purge
+protection off in the demo (Demo down deletes everything), `http://` in the gateway's redirect
+check and in the OIDC back-channel-logout event name, `ToUpper()` inside an EF query (it becomes
+SQL `UPPER`), the launcher's own `Clear-Host`. Turned off: CA1873 (logging arguments are plain
+values - see [.editorconfig](../.editorconfig)). Excluded: `**/*.sql` (SonarQube Cloud reads T-SQL and
+PostgreSQL as Oracle PL/SQL). **Duplication stays by design**: each micro front end and its BFF is
+its squad's own deployable, so their start-up code is not shared through a central project.
+
 **SonarQube Cloud's quality gate is red on every pull request - by decision.** The free plan
 allows only the built-in "Sonar way" gate, which wants 80 % test coverage on new code, and no
 coverage is sent to SonarQube Cloud, so it reads 0 %. The check is not required (the branch rule

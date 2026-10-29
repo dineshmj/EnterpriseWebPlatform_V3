@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json.Serialization;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -25,15 +26,35 @@ public sealed class DigitalGoldController(PartnerProductsDbContext db, TimeProvi
 {
     internal const string SalesPausedMessage = "Digital Gold sales are paused by the bank for now: nothing was sent to the Partner Bank and nothing was charged. Purchases already sent carry on.";
 
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Under-posting: a flag, date, amount or document ID left out of the request would arrive
+    // │ as false / 0001-01-01 / 0 / Guid.Empty and look like a real answer. [JsonRequired] turns
+    // │ a missing one into a 400 instead.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     public sealed record FormViiRequest(
-        string? CustomerNumber, string? CustomerName, bool KycVerified, string? PhoneOnRecord,
-        DateOnly DateOfBirth, bool IdentityChecked, string? FormNumber, DateOnly FormSignedOn, bool SignatureChecked,
-        Guid FormDocumentId, string? FormScanSha256);
+        string? CustomerNumber,
+        string? CustomerName,
+        [property: JsonRequired] bool KycVerified,
+        string? PhoneOnRecord,
+        [property: JsonRequired] DateOnly DateOfBirth,
+        [property: JsonRequired] bool IdentityChecked,
+        string? FormNumber,
+        [property: JsonRequired] DateOnly FormSignedOn,
+        [property: JsonRequired] bool SignatureChecked,
+        [property: JsonRequired] Guid FormDocumentId,
+        string? FormScanSha256);
 
     public sealed record TransferSlipRequest(
-        string? CustomerNumber, decimal Amount, string? DebtorBsb, string? DebtorAccountNumber,
-        string? SlipNumber, DateOnly SlipSignedOn, string? MobileOnSlip, bool SignatureChecked,
-        Guid SlipDocumentId, string? SlipScanSha256);
+        string? CustomerNumber,
+        [property: JsonRequired] decimal Amount,
+        string? DebtorBsb,
+        string? DebtorAccountNumber,
+        string? SlipNumber,
+        [property: JsonRequired] DateOnly SlipSignedOn,
+        string? MobileOnSlip,
+        [property: JsonRequired] bool SignatureChecked,
+        [property: JsonRequired] Guid SlipDocumentId,
+        string? SlipScanSha256);
 
     public sealed record ApplicationView(
         string Number, string CustomerNumber, string CustomerName, string MobileEnding, string FormNumber, DateOnly FormSignedOn,

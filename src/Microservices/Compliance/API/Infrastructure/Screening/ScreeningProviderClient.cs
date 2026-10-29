@@ -55,6 +55,8 @@ public sealed class ScreeningProviderClient(HttpClient http, IOptions<ScreeningP
 {
     public const string HttpClientName = "ScreeningProvider";
 
+    private static readonly string[] ScreeningLists = ["AML", "SANCTIONS", "PEP"];
+
     public async Task<ScreeningResponse> ScreenAsync(ScreeningRequest request, CancellationToken cancellationToken)
     {
         HttpResponseMessage response;
@@ -77,7 +79,7 @@ public sealed class ScreeningProviderClient(HttpClient http, IOptions<ScreeningP
                         postalCode = request.PostalCode,
                         countryCode = request.CountryCode
                     },
-                    lists = new[] { "AML", "SANCTIONS", "PEP" }
+                    lists = ScreeningLists
                 })
             };
             message.Headers.Add("X-Api-Key", options.Value.ApiKey);

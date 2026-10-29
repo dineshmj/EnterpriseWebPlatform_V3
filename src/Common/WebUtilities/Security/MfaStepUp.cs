@@ -137,7 +137,7 @@ public static class MfaStepUp
                     code = ErrorCode,
                     error = "This action needs a recent confirmation with your authenticator code. Enter the code in the window that opens, then the action continues.",
                     detail = "Risky actions need a confirmation with the authenticator code within the last few minutes. The screen opens a window where you enter the code from Google Authenticator; you stay signed in."
-                }));
+                }), context.RequestAborted);
                 return;
             }
 

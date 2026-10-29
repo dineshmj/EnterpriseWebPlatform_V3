@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -21,7 +23,7 @@ public sealed record InitiatePaymentRequest(
     string? PayeeName,
     string? ToBsb,
     string? ToAccountNumber,
-    decimal Amount,
+    [property: JsonRequired] decimal Amount,
     string? Reference);
 
 /// <summary>

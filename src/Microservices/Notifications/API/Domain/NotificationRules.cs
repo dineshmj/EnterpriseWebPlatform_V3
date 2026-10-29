@@ -116,7 +116,7 @@ public static partial class NotificationRules
     /// The Payments saga's public facts. People are named by LAN ID; the amount, payee and
     /// payment number identify the payment; the target opens its status page.
     /// </summary>
-    private static IReadOnlyList<NotificationDraft> ForPayment(
+    private static List<NotificationDraft> ForPayment(
         string eventType, JsonElement p,
         Func<string, string, string?, NotificationDraft?> progress,
         Func<string, string, string, string?, NotificationDraft?> newWork)

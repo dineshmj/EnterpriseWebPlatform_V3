@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 using EnterpriseWebPlatform.CustomerKyc.Api.Domain.ValueObjects;
 
 namespace EnterpriseWebPlatform.CustomerKyc.Api.Controllers;
@@ -27,14 +29,14 @@ public sealed record KycCaseDecisionResponse(
 public sealed record KycCaseAssignmentResponse(long KycCaseId, string? AssignedOfficerUserId);
 
 public sealed record OpenKycCaseRequest(
-    Guid ApplicationRef,
+    [property: JsonRequired] Guid ApplicationRef,
     string ApplicationNumber,
     string CustomerNumber,
     string BranchCode,
     string? InitiatedByUserId,
     Guid? WorkflowId,
     Guid? CorrelationId,
-    Guid CausationId,
+    [property: JsonRequired] Guid CausationId,
     ApplicantContract? Applicant,
     string? InitiatedByLanId,
     IReadOnlyList<EvidenceDocumentContract>? EvidenceDocuments);

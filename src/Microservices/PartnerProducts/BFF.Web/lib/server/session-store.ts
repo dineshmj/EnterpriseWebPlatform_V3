@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, randomBytes, randomInt } from 'node:crypto';
 import { Pool } from 'pg';
 import { config, SESSION_IDLE_MINUTES } from './config';
 
@@ -105,5 +105,5 @@ export async function deleteSessionsOf(sid: string | undefined, sub: string | un
 
 /** Expired sessions are removed now and then, by whichever request comes along. */
 export async function removeExpiredSessions(): Promise<void> {
-  if (Math.random() < 0.05) await db().query(`DELETE FROM partner_products_bff.sessions WHERE expires_at <= now()`);
+  if (randomInt(20) === 0) await db().query(`DELETE FROM partner_products_bff.sessions WHERE expires_at <= now()`);
 }

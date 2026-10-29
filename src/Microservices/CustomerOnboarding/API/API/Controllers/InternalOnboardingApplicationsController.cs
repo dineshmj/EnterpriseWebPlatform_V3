@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -187,4 +189,4 @@ public sealed class InternalOnboardingApplicationsController(
         ex.InnerException?.Message.Contains("uq_inbox_messages_message_consumer", StringComparison.Ordinal) == true;
 }
 
-public sealed record RecordKycOutcomeRequest(Guid MessageId, string EventType, string ApplicationNumber);
+public sealed record RecordKycOutcomeRequest([property: JsonRequired] Guid MessageId, string EventType, string ApplicationNumber);

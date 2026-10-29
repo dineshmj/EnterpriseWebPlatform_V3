@@ -80,11 +80,22 @@ public sealed class PaymentsApiController(
     [ValidateAntiForgeryToken]
     public Task<IActionResult> Decide(long paymentId, string decision, [FromBody] PaymentDecisionBody? body, CancellationToken cancellationToken = default)
     {
-        if (decision is not ("approve" or "reject" or "retry-release"))
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ The path segment is one of these constants - never the caller's text - so nothing the
+        // │ browser sends can steer the call to another Payments API endpoint.
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        var action = decision switch
+        {
+            "approve" => "approve",
+            "reject" => "reject",
+            "retry-release" => "retry-release",
+            _ => null
+        };
+        if (action is null)
             return Task.FromResult<IActionResult>(NotFound());
 
         return SendAsync(PaymentsBffOptions.PaymentsApiClient,
-            new HttpRequestMessage(HttpMethod.Post, $"/v1/payments/{paymentId}/{decision}") { Content = JsonContent.Create(new PaymentDecisionBody(body?.Remarks)) },
+            new HttpRequestMessage(HttpMethod.Post, $"/v1/payments/{paymentId}/{action}") { Content = JsonContent.Create(new PaymentDecisionBody(body?.Remarks)) },
             cancellationToken);
     }
 
@@ -111,11 +122,18 @@ public sealed class PaymentsApiController(
     [ValidateAntiForgeryToken]
     public Task<IActionResult> DecideNetworkResolution(long paymentId, string decision, [FromBody] PaymentDecisionBody? body, CancellationToken cancellationToken = default)
     {
-        if (decision is not ("approve" or "reject"))
+        // SEC: as above - a constant path segment, never the caller's text.
+        var action = decision switch
+        {
+            "approve" => "approve",
+            "reject" => "reject",
+            _ => null
+        };
+        if (action is null)
             return Task.FromResult<IActionResult>(NotFound());
 
         return SendAsync(PaymentsBffOptions.PaymentsApiClient,
-            new HttpRequestMessage(HttpMethod.Post, $"/v1/payments/{paymentId}/network-resolution/{decision}") { Content = JsonContent.Create(new PaymentDecisionBody(body?.Remarks)) },
+            new HttpRequestMessage(HttpMethod.Post, $"/v1/payments/{paymentId}/network-resolution/{action}") { Content = JsonContent.Create(new PaymentDecisionBody(body?.Remarks)) },
             cancellationToken);
     }
 

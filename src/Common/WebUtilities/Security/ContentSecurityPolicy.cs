@@ -65,13 +65,15 @@ public static partial class ContentSecurityPolicy
     /// <param name="webRoot">Folder of the exported pages served by this BFF.</param>
     /// <param name="frameAncestors">Who may frame this app ("'none'" for a top-level host).</param>
     /// <param name="frameSources">What this app may frame ("'self'", MFE origins, the IDP…); empty = nothing.</param>
+    private static readonly string[] SelfOnly = ["'self'"];
+
     public static string Build(
         string webRoot,
         IEnumerable<string> frameAncestors,
         IEnumerable<string> frameSources)
     {
-        var scriptSources = string.Join(' ', new[] { "'self'" }.Concat(InlineScriptHashes(webRoot)));
-        var styleSources = string.Join(' ', new[] { "'self'" }.Concat(InlineStyleHashes(webRoot)));
+        var scriptSources = string.Join(' ', SelfOnly.Concat(InlineScriptHashes(webRoot)));
+        var styleSources = string.Join(' ', SelfOnly.Concat(InlineStyleHashes(webRoot)));
         var frames = frameSources.ToList();
 
         return string.Join("; ",

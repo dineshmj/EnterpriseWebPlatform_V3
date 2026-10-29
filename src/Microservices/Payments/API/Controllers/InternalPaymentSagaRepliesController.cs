@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,9 +10,9 @@ namespace EnterpriseWebPlatform.Payments.Api.Controllers;
 
 /// <summary>A reply from Accounts as the Payments Saga Reply Subscriber hands it over.</summary>
 public sealed record SagaReplyRequest(
-    Guid MessageId,
+    [property: JsonRequired] Guid MessageId,
     string? ReplyType,
-    Guid PaymentRef,
+    [property: JsonRequired] Guid PaymentRef,
     string? ReasonCode,
     string? Reason,
     bool? NothingWasHeld,

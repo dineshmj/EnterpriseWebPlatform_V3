@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, randomBytes, randomInt } from 'node:crypto';
 import session, { type SessionData } from 'express-session';
 import { Pool } from 'pg';
 
@@ -89,7 +89,7 @@ export class PostgresSessionStore extends session.Store {
   }
 
   private async removeExpiredNowAndThen(): Promise<void> {
-    if (Math.random() < 0.05) await this.pool.query('DELETE FROM kyc_bff.sessions WHERE expires_at <= now()');
+    if (randomInt(20) === 0) await this.pool.query('DELETE FROM kyc_bff.sessions WHERE expires_at <= now()');
   }
 
   private encrypt(plain: string): string {

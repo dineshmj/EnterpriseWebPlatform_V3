@@ -123,7 +123,7 @@ public sealed class CustomerLoginStore(IdentityDbContext db, TimeProvider time)
     public Task RemoveAsync(Guid subjectId, CancellationToken cancellationToken) =>
         db.CustomerLogins.Where(c => c.SubjectId == subjectId).ExecuteDeleteAsync(cancellationToken);
 
-    private Task CountFailureAsync(long id, DateTimeOffset now, CancellationToken cancellationToken)
+    private Task<int> CountFailureAsync(long id, DateTimeOffset now, CancellationToken cancellationToken)
     {
         DateTimeOffset? lockoutEnd = now.Add(LockoutDuration);
         return db.CustomerLogins

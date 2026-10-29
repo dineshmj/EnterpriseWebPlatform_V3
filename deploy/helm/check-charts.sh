@@ -48,7 +48,7 @@ echo "== ewp with values-demo + LaunchDarkly"
 helm template ewp "$here/ewp" --namespace ewp -f "$here/ewp/values-demo.yaml" \
   --set global.featureFlags.launchDarkly.enabled=true > "$out/ewp-values-demo-launchdarkly.yaml"
 validate "$out/ewp-values-demo-launchdarkly.yaml"
-if [ "$(grep -c 'name: EWP_LAUNCHDARKLY_SDK_KEY' "$out/ewp-values-demo-launchdarkly.yaml")" != "5" ] \
+if [[ "$(grep -c 'name: EWP_LAUNCHDARKLY_SDK_KEY' "$out/ewp-values-demo-launchdarkly.yaml")" != "5" ]] \
   || grep -q 'EWP_LAUNCHDARKLY_SDK_KEY' "$out/ewp-values-demo.yaml"; then
   echo "::error::The LaunchDarkly SDK key must reach exactly the 5 flag-reading APIs, and only when LaunchDarkly is on."
   exit 1
@@ -86,7 +86,7 @@ echo "refused an unknown certificate issuer (as it must)"
 # meets a certificate error on the host it lacks.
 ewp_hosts="$(sed -n 's/^ *public: *{host: *\([a-z0-9-]*\)}.*/\1/p' "$here/ewp/values.yaml" | sort | tr '\n' ' ')"
 gateway_hosts="$(sed -n '/^hosts:/,/^[a-z]/s/^  - *\([a-z0-9-]*\)$/\1/p' "$here/ewp-gateway/values.yaml" | sort | tr '\n' ' ')"
-if [ -z "$ewp_hosts" ] || [ "$ewp_hosts" != "$gateway_hosts" ]; then
+if [[ -z "$ewp_hosts" ]] || [[ "$ewp_hosts" != "$gateway_hosts" ]]; then
   echo "::error::ewp-gateway hosts ($gateway_hosts) differ from the ewp chart's public hosts ($ewp_hosts)."
   exit 1
 fi
@@ -137,7 +137,7 @@ helm template ewp "$here/ewp" --namespace ewp -f "$here/ewp/values-demo.yaml" \
   --set global.observability.enabled=false > "$out/ewp-values-demo-no-observability.yaml"
 validate "$out/ewp-values-demo-no-observability.yaml"
 if grep -q 'OTEL_EXPORTER_OTLP_ENDPOINT\|ClientBaseUrls__Grafana' "$out/ewp-values-demo-no-observability.yaml" \
-  || [ "$(grep -c 'name: ClientBaseUrls__Grafana' "$out/ewp-values-demo.yaml")" != "1" ]; then
+  || [[ "$(grep -c 'name: ClientBaseUrls__Grafana' "$out/ewp-values-demo.yaml")" != "1" ]]; then
   echo "::error::Observability must reach the IDP (Grafana's client) and the .NET services only while it is on."
   exit 1
 fi

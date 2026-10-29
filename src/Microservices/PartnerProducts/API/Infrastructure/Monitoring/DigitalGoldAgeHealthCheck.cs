@@ -82,17 +82,16 @@ public sealed class DigitalGoldAgeHealthCheck(
             })
             .SingleOrDefaultAsync(cancellationToken);
 
-        var waiting = new Dictionary<string, object>();
-        void Add(string name, int count) { if (count > 0) waiting[name] = count; }
-        Add("ApplicationSentUnanswered", applicationSentUnanswered);
-        if (purchases is not null)
-        {
-            Add("PurchaseNeedsAttention", purchases.NeedsAttention);
-            Add("PurchaseSentUnanswered", purchases.SentUnanswered);
-            Add("PurchaseOrderedUnpaid", purchases.OrderedUnpaid);
-            Add("PurchasePaymentNotFinal", purchases.PaymentNotFinal);
-            Add("PurchasePaidAdviceOutstanding", purchases.PaidAdviceOutstanding);
-        }
+        (string Name, int Count)[] counts =
+        [
+            ("ApplicationSentUnanswered", applicationSentUnanswered),
+            ("PurchaseNeedsAttention", purchases?.NeedsAttention ?? 0),
+            ("PurchaseSentUnanswered", purchases?.SentUnanswered ?? 0),
+            ("PurchaseOrderedUnpaid", purchases?.OrderedUnpaid ?? 0),
+            ("PurchasePaymentNotFinal", purchases?.PaymentNotFinal ?? 0),
+            ("PurchasePaidAdviceOutstanding", purchases?.PaidAdviceOutstanding ?? 0)
+        ];
+        var waiting = counts.Where(c => c.Count > 0).ToDictionary(c => c.Name, c => (object)c.Count);
 
         // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
         // │ If anything waits too long, report Degraded - never Unhealthy: the API itself works,

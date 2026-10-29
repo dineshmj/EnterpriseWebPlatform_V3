@@ -50,7 +50,7 @@ $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path   # the repository
 # │ parts' output. A function named Clear-Host wins over the cmdlet (and its alias cls)
 # │ for the scripts called from here, so their screens are kept.
 # └──────────────────────────────────────────────────────────────────────────────────────
-function Clear-Host { }
+function Clear-Host { }   # NOSONAR - deliberate: keeps each part's screen output (see above)
 
 $idpPort = 46392   # src\IDP launchSettings: https://idp.dev.localhost:46392
 

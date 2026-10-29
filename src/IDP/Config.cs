@@ -7,6 +7,8 @@ using EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.M2M;
 using EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.MFEs;
 using EnterpriseWebPlatform.IdentityServer.ConfigRegistration.MicroserviceApiScopes;
 
+namespace EnterpriseWebPlatform.IdentityServer;
+
 // ┌─ CONTRACT ───────────────────────────────────────────────────────────────────────────
 // │ The IDP is the source of truth for scope names (ConfigRegistration/MicroserviceApiScopes),
 // │ API resource names / audiences (ConfigRegistration/ApiResources) and client IDs

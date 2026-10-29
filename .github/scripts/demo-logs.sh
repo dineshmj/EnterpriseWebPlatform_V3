@@ -22,13 +22,13 @@ problems='warn|fail|error|exception|refus|unreachable|denied|unauthori|forbidden
 
 for ns in ewp partner-bank ewp-infra; do
   pods="$(kubectl get pods -n "$ns" -o name 2>/dev/null | grep -E "$only" || true)"
-  [ -z "$pods" ] && continue
+  [[ -z "$pods" ]] && continue
   for pod in $pods; do
     lines="$(kubectl logs -n "$ns" "$pod" --all-containers --tail=400 --timestamps 2>/dev/null \
       | grep -iE -A 4 --no-group-separator "$problems" | tail -n 80 || true)"
     restarts="$(kubectl get -n "$ns" "$pod" -o jsonpath='{range .status.containerStatuses[*]}{.restartCount}{" "}{end}' 2>/dev/null || true)"
     echo "::group::$ns/${pod#pod/} (restarts: ${restarts:-?})"
-    if [ -n "$lines" ]; then echo "$lines"; else echo "(no warning or error in the last 400 lines)"; fi
+    if [[ -n "$lines" ]]; then echo "$lines"; else echo "(no warning or error in the last 400 lines)"; fi
     echo "::endgroup::"
   done
 done
