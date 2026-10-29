@@ -20,7 +20,7 @@ resource "azurerm_key_vault" "demo" {
   sku_name                      = "standard"
   rbac_authorization_enabled    = true
   soft_delete_retention_days    = 7
-  purge_protection_enabled      = false   # NOSONAR - deliberate: Demo down deletes the vaults; nothing is kept between demos
+  purge_protection_enabled      = false # NOSONAR - deliberate: Demo down deletes the vaults; nothing is kept between demos
   public_network_access_enabled = true
   tags                          = local.tags
 }
@@ -33,7 +33,7 @@ resource "azurerm_key_vault" "partner_bank" {
   sku_name                      = "standard"
   rbac_authorization_enabled    = true
   soft_delete_retention_days    = 7
-  purge_protection_enabled      = false   # NOSONAR - deliberate: Demo down deletes the vaults; nothing is kept between demos
+  purge_protection_enabled      = false # NOSONAR - deliberate: Demo down deletes the vaults; nothing is kept between demos
   public_network_access_enabled = true
   tags                          = local.tags
 }
