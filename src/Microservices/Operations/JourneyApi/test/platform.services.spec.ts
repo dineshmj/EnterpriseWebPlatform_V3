@@ -9,7 +9,7 @@ import { LoggedRequest, received, resetWireMock, stub, wireMockUrl } from '../..
 // │       answer) without ever passing on a probe's details; the simulators' switch must reach
 // │       only the configured simulator, with its admin key, and must undo itself.
 // │ How : The REAL HealthProbeService and SimulatorService; WireMock plays every readiness probe
-// │       and the three simulators' admin endpoints; each test stages the answers, then checks
+// │       and the four simulators' admin endpoints; each test stages the answers, then checks
 // │       the result and what WireMock received.
 // │ Ref : src/platform/platform.services.ts | Features 1.7.4 | Threat-Model (Operations) | CWE-209
 // └────────────────────────────────────────────────────────────────────────────────────────────────
@@ -85,12 +85,13 @@ describe('HealthProbeService - every readiness probe played by WireMock', () => 
   });
 });
 
-describe('SimulatorService - the three simulators played by WireMock', () => {
+describe('SimulatorService - the four simulators played by WireMock', () => {
   const ADMIN_KEY = 'cluster-admin-key';
   const paths: Record<SimulatorKey, string> = {
     'screening-provider': '/screening-provider',
     'core-banking': '/core-banking',
     'payment-network': '/payment-network',
+    'fraud-scoring': '/fraud-scoring',
   };
   let service: SimulatorService;
 
@@ -134,17 +135,18 @@ describe('SimulatorService - the three simulators played by WireMock', () => {
 
   afterEach(() => service.onModuleDestroy());
 
-  it('Given two simulators answering and one not, when they are listed, then the silent one is "Unknown" - not an error', async () => {
+  it('Given three simulators answering and one not, when they are listed, then the silent one is "Unknown" - not an error', async () => {
     // Given
     await behaviourOf('screening-provider', 200, { behaviour: 'Healthy' });
     await behaviourOf('core-banking', 200, { behaviour: 'Slow' });
     await behaviourOf('payment-network', 500);
+    await behaviourOf('fraud-scoring', 200, { behaviour: 'Failing' });
 
     // When
     const list = await service.list();
 
     // Then
-    expect(list.map(s => [s.key, s.behaviour])).toEqual([['screening-provider', 'Healthy'], ['core-banking', 'Slow'], ['payment-network', 'Unknown']]);
+    expect(list.map(s => [s.key, s.behaviour])).toEqual([['screening-provider', 'Healthy'], ['core-banking', 'Slow'], ['payment-network', 'Unknown'], ['fraud-scoring', 'Failing']]);
   });
 
   it('Given a cluster (admin key set), when the simulators are read and changed, then the key goes with every call; on a laptop (no key), it is absent', async () => {
