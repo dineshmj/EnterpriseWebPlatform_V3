@@ -19,8 +19,8 @@
 
   <!-- Feature flags (OpenFeature): a flag file read in-process (flagd's file mode) or LaunchDarkly. -->
   <ItemGroup>
-    <PackageReference Include="LaunchDarkly.OpenFeature.ServerProvider" Version="2.3.1" />
-    <PackageReference Include="LaunchDarkly.ServerSdk" Version="8.17.1" />
+    <PackageReference Include="LaunchDarkly.OpenFeature.ServerProvider" Version="2.3.2" />
+    <PackageReference Include="LaunchDarkly.ServerSdk" Version="8.17.2" />
     <PackageReference Include="OpenFeature" Version="2.14.1" />
     <PackageReference Include="OpenFeature.Providers.Flagd" Version="0.7.3" />
   </ItemGroup>
