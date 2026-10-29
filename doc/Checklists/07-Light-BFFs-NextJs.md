@@ -41,4 +41,4 @@ Deployables: `src/Microservices/Audit/BFF.Web`, `src/Microservices/Operations/BF
 
 ## 5. Production (open)
 
-- [ ] **Secret store.** The client secret and the session key come from a secret store; `runnow.bat` values are for Development only (R-10).
+- [ ] **Secret store.** The client key (private_key_jwt) and the session key come from a secret store; `runnow.bat` values are for Development only (R-10).

@@ -71,9 +71,9 @@ Component Secrets (`ewp-<component>`; each key = the setting's name):
 |---|---|
 | `ewp-idp` | `ConnectionStrings__IdentityDbConnection`, `SigningCredential__CertificatePassword`, and `ClientSecrets__<client id>` for each of the 21 confidential clients ([values.yaml](../deploy/helm/ewp/values.yaml), `idp.secretEnv`), plus Grafana's (`ClientSecrets__Grafana.ClientID`) while `global.observability.enabled` |
 | `ewp-grafana-oidc` (namespace `observability`) | `client-secret`: Grafana's client secret at the IDP - the same value as `ewp-idp`'s `ClientSecrets__Grafana.ClientID` ([ewp-observability](../deploy/helm/ewp-observability), only with `global.observability.enabled`) |
-| `ewp-shell` | `ConnectionStrings__MenuDbConnection`, `ConnectionStrings__BffStateDbConnection`, `Oidc__ClientSecret` |
-| `ewp-customer-onboarding-bff-web`, `ewp-compliance-bff-web`, `ewp-accounts-bff-web`, `ewp-payments-bff-web` | `ConnectionStrings__BffStateDbConnection`, `Oidc__ClientSecret` |
-| `ewp-customer-kyc-bff-web` | `KYC_BFF_CLIENT_SECRET`, `KYC_BFF_SESSION_SECRET`, `KYC_BFF_SESSION_KEY`, `KYC_BFF_DATABASE_URL` |
+| `ewp-shell` | `ConnectionStrings__MenuDbConnection`, `ConnectionStrings__BffStateDbConnection` |
+| `ewp-customer-onboarding-bff-web`, `ewp-compliance-bff-web`, `ewp-accounts-bff-web`, `ewp-payments-bff-web` | `ConnectionStrings__BffStateDbConnection` |
+| `ewp-customer-kyc-bff-web` | `KYC_BFF_SESSION_SECRET`, `KYC_BFF_SESSION_KEY`, `KYC_BFF_DATABASE_URL` |
 | `ewp-audit-bff-web`, `ewp-operations-bff-web`, `ewp-partner-products-bff-web` | `<PREFIX>_CLIENT_SECRET`, `<PREFIX>_SESSION_KEY`, `<PREFIX>_DATABASE_URL` (`AUDIT_WEB_`, `OPERATIONS_WEB_`, `PARTNER_PRODUCTS_WEB_`) |
 | `ewp-customer-onboarding-api` | `ConnectionStrings__CustomerDbConnection` |
 | `ewp-customer-kyc-api` | `ConnectionStrings__KycDbConnection`, `Kafka__SaslPassword` |
@@ -97,7 +97,8 @@ Shared Secrets and files:
 | `ewp-data-protection` | `certificate.pfx`, `password` | IDP, Shell, the 4 .NET BFFs: encrypts their Data Protection key rings at rest (`DataProtection__CertificatePath` / `__CertificatePassword`, required outside Development) |
 | `ewp-tls-keystore-password` | `password` | cert-manager (writes the Node services' PKCS#12 keystores) and the Node services (read them) |
 | `ewp-idp-signing` | `signing.pfx` | IDP: the token-signing certificate |
-| `ewp-idp-client-keys` | `SelfService.Web.ClientID.jwk`, `SelfService.JourneyApi.ClientID.jwk` | IDP: the private_key_jwt clients' PUBLIC keys |
+| `ewp-idp-client-keys` | `<client id>.jwk` for the Shell, the 8 web apps and the customers' channel (`SelfService.Web.ClientID.jwk`, `SelfService.JourneyApi.ClientID.jwk`) | IDP: the private_key_jwt clients' PUBLIC keys |
+| `ewp-<web app>-client-key` (the Shell and the 8 web apps, one each) | `client-key.pem` (encrypted PKCS#8), `client-key.pem.password` | That web app only, mounted at `/etc/ewp/client-key`: its private_key_jwt key (`Oidc__ClientKey__*`, `<PREFIX>_CLIENT_KEY_*`) |
 | `ewp-partner-pki` | `ewp-partner-client.pfx` (+ `.password`), `ewp-request-signing.pfx` (+ `.password`), `ewp-trust-root.cer` | Partner Products API: mutual TLS and signed instructions to the Partner Bank |
 | ConfigMap `ewp-kafka-trust` | `ca.crt` | Every Kafka client: the Kafka trust root |
 | `ewp-launchdarkly` (only with `global.featureFlags.launchDarkly.enabled`) | `sdk-key` | The 5 APIs that read feature flags: the LaunchDarkly environment's SDK key (`EWP_LAUNCHDARKLY_SDK_KEY`, K13); the chart's own ConfigMap `ewp-feature-flags` holds the flag file |

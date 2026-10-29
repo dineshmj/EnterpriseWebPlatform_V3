@@ -1,7 +1,9 @@
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { Issuer, Client, generators, TokenSet } from 'openid-client';
 import { Request, Response } from 'express';
-import { randomBytes } from 'node:crypto';
+import { createPrivateKey, createPublicKey, KeyObject, randomBytes, randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { calculateJwkThumbprint, exportJWK, SignJWT } from 'jose';
 import { KycBffOptions } from '../configuration/kyc-bff-options';
 import { savePendingSignIn, takePendingSignIn } from './pending-sign-in';
 
@@ -9,8 +11,9 @@ import { savePendingSignIn, takePendingSignIn } from './pending-sign-in';
 // │ Why : A session ID that survives sign-in can be fixed by an attacker; two parallel refreshes
 // │       with a rotating refresh token would revoke each other.
 // │ How : Authorization Code + PKCE, pushed to the IDP first (PAR) (prompt=none in the frame,
-// │       prompt=login + acr_values=mfa for step-up); the session ID is regenerated at sign-in;
-// │       refreshes for the same token share one call.
+// │       prompt=login + acr_values=mfa for step-up); the BFF proves itself with private_key_jwt
+// │       (no client secret); the session ID is regenerated at sign-in; refreshes for the same
+// │       token share one call.
 // │ Ref : Features 2.1.1, 2.3.4, 2.1.5 | RFC 7636 | RFC 9126 (PAR) |
 // │       OWASP Session Fixation | RFC 9700 (rotation)
 // └────────────────────────────────────────────────────────────────────────────────────────────────
@@ -26,14 +29,57 @@ export class OidcService {
    */
   private readonly refreshes = new Map<string, Promise<TokenSet>>();
 
-  constructor(@Inject('KYC_BFF_OPTIONS') private readonly options: KycBffOptions) {}
+  /** This BFF's private_key_jwt key: read at start-up - missing or unreadable = no start-up. */
+  private readonly signingKey: KeyObject;
+  private readonly signingKeyId: Promise<string>;
+
+  constructor(@Inject('KYC_BFF_OPTIONS') private readonly options: KycBffOptions) {
+    this.signingKey = createPrivateKey({
+      key: readFileSync(options.clientKeyPath),
+      format: 'pem',
+      passphrase: readFileSync(options.clientKeyPasswordPath, 'utf-8').trim(),
+    });
+    if (this.signingKey.asymmetricKeyType !== 'ec' || this.signingKey.asymmetricKeyDetails?.namedCurve !== 'prime256v1') {
+      throw new Error('The client key must be an EC P-256 key (ES256).');
+    }
+    this.signingKeyId = exportJWK(createPublicKey(this.signingKey)).then(jwk => calculateJwkThumbprint(jwk));
+  }
+
+  // ┌─ :: SECURITY :: private_key_jwt: this BFF's client assertions ─────────────────────────────────
+  // │ Why : A shared client secret travels with every token request and the IDP knows it too;
+  // │       FAPI 2.0 asks a confidential client to prove itself with an asymmetric key instead.
+  // │ How : Every call to the IDP gets a new assertion: iss = sub = the client ID, aud = the IDP's
+  // │       issuer only, typ client-authentication+jwt (openid-client 5 cannot set it - so this
+  // │       BFF signs it and openid-client sends no client authentication of its own), 60 s, a
+  // │       fresh jti (the IDP takes each one once), ES256, kid = the RFC 7638 thumbprint
+  // │       New-EwpClientKeys.mjs gave the public key.
+  // │ Ref : Features 2.1.1 | FAPI 2.0 Security Profile §5.3.1 | RFC 7523, 7638 |
+  // │       draft-ietf-oauth-rfc7523bis | Threat-Model R-10
+  // └────────────────────────────────────────────────────────────────────────────────────────────────
+  /** The client authentication for ONE call to the IDP (form parameters). */
+  async clientAuthentication(): Promise<{ client_assertion_type: string; client_assertion: string }> {
+    const client = await this.getClient();
+    const now = Math.floor(Date.now() / 1000);
+    const assertion = await new SignJWT({})
+      .setProtectedHeader({ alg: 'ES256', typ: 'client-authentication+jwt', kid: await this.signingKeyId })
+      .setIssuer(this.options.clientId)
+      .setSubject(this.options.clientId)
+      .setAudience(String(client.issuer.metadata.issuer))
+      .setIssuedAt(now)
+      .setNotBefore(now)
+      .setExpirationTime(now + 60)
+      .setJti(randomUUID())
+      .sign(this.signingKey);
+    return { client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer', client_assertion: assertion };
+  }
 
   private getClient(): Promise<Client> {
     this.clientPromise ??= Issuer.discover(this.options.authority)
       .then(issuer =>
         new issuer.Client({
           client_id: this.options.clientId,
-          client_secret: this.options.clientSecret,
+          // No client authentication by openid-client: every call adds clientAuthentication().
+          token_endpoint_auth_method: 'none',
           redirect_uris: [this.options.callbackUrl],
           post_logout_redirect_uris: [this.options.postLogoutRedirectUri],
           response_types: ['code']
@@ -70,10 +116,11 @@ export class OidcService {
     savePendingSignIn(res, this.options.sessionKey, { state, nonce, codeVerifier, returnUrl });
 
     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────────
-    // │ PAR (RFC 9126, FAPI 2.0): the request is pushed to the IDP with the client secret; the
+    // │ PAR (RFC 9126, FAPI 2.0): the request is pushed to the IDP with a client assertion; the
     // │ browser is sent only client_id + a one-time request_uri (60 s) - nothing to read or change.
     // └──────────────────────────────────────────────────────────────────────────────────────────
     const pushed = await client.pushedAuthorizationRequest({
+      ...(await this.clientAuthentication()),
       scope: 'openid profile email roles organization offline_access customer-kyc.read customer-kyc.write',
       response_mode: 'query',
       state,
@@ -102,6 +149,7 @@ export class OidcService {
         nonce: pending.nonce,
         code_verifier: pending.codeVerifier
       },
+      { exchangeBody: await this.clientAuthentication() },
     );
 
     // Session fixation protection: the authenticated session always gets a
@@ -143,7 +191,8 @@ export class OidcService {
       return (await shared).access_token!;
     }
 
-    const refresh = this.getClient().then(client => client.refresh(usedRefreshToken));
+    const refresh = this.getClient().then(async client =>
+      client.refresh(usedRefreshToken, { exchangeBody: await this.clientAuthentication() }));
     this.refreshes.set(usedRefreshToken, refresh);
     // ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
     // │ A success is kept for a minute: a request that loaded the session just before the new
@@ -174,7 +223,9 @@ export class OidcService {
       const client = await this.getClient();
 
       if (refreshToken) {
-        await client.revoke(refreshToken, 'refresh_token').catch(() => undefined);
+        await this.clientAuthentication()
+          .then(revokeBody => client.revoke(refreshToken, 'refresh_token', { revokeBody }))
+          .catch(() => undefined);
       }
 
       endSessionUrl = client.endSessionUrl({

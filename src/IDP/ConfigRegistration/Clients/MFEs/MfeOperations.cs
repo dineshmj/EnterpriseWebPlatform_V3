@@ -20,7 +20,12 @@ public sealed class MfeOperations
         {
             ClientId = ClientSettings.Ids.OperationsWeb,
             ClientName = "Operations Microservice Web (Next.js BFF) Client",
-            ClientSecrets = { ClientSecretStore.For(ClientSettings.Ids.OperationsWeb) },
+            // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+            // │ private_key_jwt (RFC 7523, FAPI 2.0): the BFF signs a one-minute assertion with
+            // │ its own EC P-256 key (ES256); the IDP holds only the PUBLIC key - no shared secret
+            // │ to leak, or to rotate on both sides.
+            // └──────────────────────────────────────────────────────────────────────────────────────
+            ClientSecrets = { ClientKeyStore.For(ClientSettings.Ids.OperationsWeb) },
 
             // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
             // │ Sign-in (Authorization Code + PKCE, tokens on the server) plus token exchange (RFC

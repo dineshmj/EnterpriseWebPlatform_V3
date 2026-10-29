@@ -1,3 +1,6 @@
+import { createPrivateKey, createPublicKey, KeyObject, randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { calculateJwkThumbprint, exportJWK, SignJWT } from 'jose';
 import { Client, generators, Issuer, TokenSet } from 'openid-client';
 import { config } from './config';
 import { SessionData } from './session-store';
@@ -7,7 +10,8 @@ let clientPromise: Promise<Client> | undefined;
 // ┌─ :: SECURITY :: OIDC client and the first token exchange ──────────────────────────────────────
 // │ Why : The browser must never hold a token, and the Journey API must know which person is asking
 // │       through which app.
-// │ How : Authorization Code + PKCE with state and nonce, pushed to the IDP first (PAR); tokens
+// │ How : Authorization Code + PKCE with state and nonce, pushed to the IDP first (PAR); the BFF
+// │       proves itself with private_key_jwt (no client secret); tokens
 // │       stay in the server-side session and are refreshed there; each call exchanges the
 // │       person's token (RFC 8693) for a Journey API token naming this BFF as "act".
 // │ Ref : Features 2.1.1, 2.1.2 | RFC 7636 | RFC 9126 (PAR) | RFC 8693 |
@@ -18,7 +22,8 @@ export function oidcClient(): Promise<Client> {
   clientPromise ??= Issuer.discover(config.authority)
     .then((issuer) => new issuer.Client({
       client_id: config.clientId,
-      client_secret: config.clientSecret,
+      // No client authentication by openid-client: every call adds clientAuthentication() below.
+      token_endpoint_auth_method: 'none',
       redirect_uris: [config.callbackUrl],
       response_types: ['code'],
     }))
@@ -53,10 +58,11 @@ export async function authorizationRequest(returnUrl: string, silent: boolean, s
     returnUrl,
   };
   // ┌─ SEC ──────────────────────────────────────────────────────────────────────────────────────
-  // │ PAR (RFC 9126, FAPI 2.0): the request is pushed to the IDP with the client secret; the
+  // │ PAR (RFC 9126, FAPI 2.0): the request is pushed to the IDP with a client assertion; the
   // │ browser is sent only client_id + a one-time request_uri (60 s) - nothing to read or change.
   // └────────────────────────────────────────────────────────────────────────────────────────────
   const pushed = await client.pushedAuthorizationRequest({
+    ...(await clientAuthentication(client)),
     scope: 'openid profile roles organization offline_access',
     response_mode: 'query',
     state: pending.state,
@@ -92,7 +98,7 @@ export async function freshAccessToken(session: SessionData): Promise<{ token: s
     return { token: session.accessToken };
   }
   const client = await oidcClient();
-  const tokens = await client.refresh(session.refreshToken);
+  const tokens = await client.refresh(session.refreshToken, { exchangeBody: await clientAuthentication(client) });
   const refreshed: SessionData = {
     ...session,
     accessToken: tokens.access_token!,
@@ -110,10 +116,58 @@ export async function freshAccessToken(session: SessionData): Promise<{ token: s
 export async function exchangeForJourneyApi(personAccessToken: string, scope: 'operations-journey.read' | 'operations-journey.write'): Promise<string> {
   const client = await oidcClient();
   const tokens = await client.grant({
+    ...(await clientAuthentication(client)),
     grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
     subject_token: personAccessToken,
     subject_token_type: 'urn:ietf:params:oauth:token-type:access_token',
     scope,   // only what this call needs: read, or write for a simulator change
   });
   return tokens.access_token!;
+}
+
+let signingKeyPromise: Promise<{ key: KeyObject; kid: string }> | undefined;
+
+// ┌─ :: SECURITY :: private_key_jwt: this BFF's client assertions ─────────────────────────────────
+// │ Why : A shared client secret travels with every token request and the IDP knows it too;
+// │       FAPI 2.0 asks a confidential client to prove itself with an asymmetric key instead.
+// │ How : The EC P-256 private key (encrypted PKCS#8 PEM, its password in a second file) is read
+// │       once. Every call to the IDP gets a new assertion: iss = sub = the client ID, aud = the
+// │       IDP's issuer only, typ client-authentication+jwt (openid-client 5 cannot set it - so
+// │       this BFF signs it and openid-client sends no client authentication of its own), 60 s, a
+// │       fresh jti (the IDP takes each one once), ES256, kid = the RFC 7638 thumbprint
+// │       New-EwpClientKeys.mjs gave the public key.
+// │ Ref : Features 2.1.1 | FAPI 2.0 Security Profile §5.3.1 | RFC 7523, 7638 |
+// │       draft-ietf-oauth-rfc7523bis | Threat-Model R-10
+// └────────────────────────────────────────────────────────────────────────────────────────────────
+/** The client authentication for ONE call to the IDP (form parameters). */
+export async function clientAuthentication(client: Client): Promise<{ client_assertion_type: string; client_assertion: string }> {
+  signingKeyPromise ??= loadSigningKey().catch((error) => {
+    signingKeyPromise = undefined;
+    throw error;
+  });
+  const { key, kid } = await signingKeyPromise;
+  const now = Math.floor(Date.now() / 1000);
+  const assertion = await new SignJWT({})
+    .setProtectedHeader({ alg: 'ES256', typ: 'client-authentication+jwt', kid })
+    .setIssuer(config.clientId)
+    .setSubject(config.clientId)
+    .setAudience(String(client.issuer.metadata.issuer))
+    .setIssuedAt(now)
+    .setNotBefore(now)
+    .setExpirationTime(now + 60)
+    .setJti(randomUUID())
+    .sign(key);
+  return { client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer', client_assertion: assertion };
+}
+
+async function loadSigningKey(): Promise<{ key: KeyObject; kid: string }> {
+  const key = createPrivateKey({
+    key: readFileSync(config.clientKeyPath),
+    format: 'pem',
+    passphrase: readFileSync(config.clientKeyPasswordPath, 'utf-8').trim(),
+  });
+  if (key.asymmetricKeyType !== 'ec' || key.asymmetricKeyDetails?.namedCurve !== 'prime256v1') {
+    throw new Error('The client key must be an EC P-256 key (ES256).');
+  }
+  return { key, kid: await calculateJwkThumbprint(await exportJWK(createPublicKey(key))) };
 }

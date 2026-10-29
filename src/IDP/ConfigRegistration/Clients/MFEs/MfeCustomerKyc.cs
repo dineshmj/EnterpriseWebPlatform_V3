@@ -1,4 +1,4 @@
-﻿using Duende.IdentityModel;
+using Duende.IdentityModel;
 using Duende.IdentityServer;
 using Duende.IdentityServer.Models;
 
@@ -20,7 +20,12 @@ public sealed class MfeCustomerKyc
                 {
                     ClientId = ClientSettings.Ids.CustomerKycWeb,
                     ClientName = "Customer KYC Microservice BFF Client",
-                    ClientSecrets = { ClientSecretStore.For(ClientSettings.Ids.CustomerKycWeb) },
+                    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+                    // │ private_key_jwt (RFC 7523, FAPI 2.0): the BFF signs a one-minute assertion with
+                    // │ its own EC P-256 key (ES256); the IDP holds only the PUBLIC key - no shared secret
+                    // │ to leak, or to rotate on both sides.
+                    // └──────────────────────────────────────────────────────────────────────────────────────
+                    ClientSecrets = { ClientKeyStore.For(ClientSettings.Ids.CustomerKycWeb) },
 
                     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
                     // │ Authorization Code (+ PKCE) for the BFF, plus token exchange (RFC 8693) for Documents

@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Security.Cryptography;
 
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -7,8 +8,13 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Tokens;
 
+using Duende.AccessTokenManagement;
 using Duende.AccessTokenManagement.OpenIdConnect;
+using Duende.IdentityModel;
+using Duende.IdentityModel.Client;
 using Duende.Bff.EntityFramework;
 using Duende.Bff;
 using OpenTelemetry.Trace;
@@ -107,6 +113,9 @@ builder.Services.AddBff()
     .AddEntityFrameworkServerSideSessions(options => options.UseNpgsql(DependencyOutage.FailFast(bffStateDb)))
     .AddSessionCleanupBackgroundProcess();
 builder.Services.AddOpenIdConnectAccessTokenManagement();
+// SEC: this BFF's private key, read now - missing or unreadable = no start-up (ClientAssertions).
+builder.Services.AddSingleton(ClientAssertions.LoadKey(builder.Configuration));
+builder.Services.AddSingleton<IClientAssertionService, ClientAssertions>();
 
 builder.Services
     .AddAuthentication(options =>
@@ -142,24 +151,38 @@ builder.Services
 
         // Front-channel logout (/signout-oidc) must clear THIS BFF's session cookie.
         options.SignOutScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-        // From this deployable's configuration / secret store; never compiled in.
         // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
-        // │ Client secret from configuration (Development settings or a secret store); missing =
-        // │ no start-up.
+        // │ No client secret: private_key_jwt (FAPI 2.0). The PAR push and the code exchange each
+        // │ carry a new one-minute assertion signed with this BFF's own key (ClientAssertions,
+        // │ end of this file); refresh and revocation get theirs from the same service.
         // └──────────────────────────────────────────────────────────────────────────────────────
-        options.ClientSecret = builder.Configuration["Oidc:ClientSecret"]
-            ?? throw new InvalidOperationException("Oidc:ClientSecret is not configured.");
+        options.Events.OnPushAuthorization = async context =>
+        {
+            var assertion = await context.HttpContext.RequestServices.GetRequiredService<IClientAssertionService>()
+                .GetClientAssertionAsync(ct: context.HttpContext.RequestAborted);
+            context.ProtocolMessage.ClientAssertionType = assertion!.Type;
+            context.ProtocolMessage.ClientAssertion = assertion.Value;
+            context.HandleClientAuthentication();
+        };
+        options.Events.OnAuthorizationCodeReceived = async context =>
+        {
+            var assertion = await context.HttpContext.RequestServices.GetRequiredService<IClientAssertionService>()
+                .GetClientAssertionAsync(ct: context.HttpContext.RequestAborted);
+            context.TokenEndpointRequest!.ClientAssertionType = assertion!.Type;
+            context.TokenEndpointRequest.ClientAssertion = assertion.Value;
+        };
         // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
-        // │ Authorization Code + PKCE: the code is exchanged on the server with the client secret
-        // │ - tokens never reach the browser.
+        // │ Authorization Code + PKCE: the code is exchanged on the server, with a client
+        // │ assertion - tokens never reach the browser.
         // └──────────────────────────────────────────────────────────────────────────────────────
         options.ResponseType = "code";
         options.ResponseMode = "query";
 
         // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
         // │ PAR required (RFC 9126, FAPI 2.0): the authorization request - scopes, redirect, PKCE
-        // │ challenge, prompt / acr_values - is pushed to the IDP with the client secret; the browser
-        // │ is sent only a one-time request_uri. No silent fallback: an IDP without PAR stops sign-in.
+        // │ challenge, prompt / acr_values - is pushed to the IDP with a client assertion; the
+        // │ browser is sent only a one-time request_uri. No silent fallback: an IDP without PAR
+        // │ stops sign-in.
         // └──────────────────────────────────────────────────────────────────────────────────────
         options.PushedAuthorizationBehavior = PushedAuthorizationBehavior.Require;
         options.UsePkce = true;
@@ -357,3 +380,58 @@ app.MapEwpHealthEndpoints();
 app.MapEwpMetricsEndpoint();   // Prometheus scrape (GET /metrics)
 
 await app.RunAsync();
+
+// ┌─ :: SECURITY :: private_key_jwt: this BFF's client assertions ─────────────────────────────────
+// │ Why : A shared client secret travels with every token request and the IDP knows it too;
+// │       FAPI 2.0 asks a confidential client to prove itself with an asymmetric key instead.
+// │ How : The EC P-256 private key (encrypted PKCS#8 PEM: Oidc:ClientKey:Path, its password in
+// │       Oidc:ClientKey:PasswordPath) is read once at start-up. Every call to the IDP gets a new
+// │       assertion: iss = sub = the client ID, aud = the IDP's issuer only, typ
+// │       client-authentication+jwt, 60 s, a fresh jti (the IDP takes each one once), ES256, and
+// │       kid = the RFC 7638 thumbprint New-EwpClientKeys.mjs gave the public key.
+// │ Ref : Features 2.1.1 | FAPI 2.0 Security Profile §5.3.1 | RFC 7523, 7638 |
+// │       draft-ietf-oauth-rfc7523bis | Threat-Model R-10
+// └────────────────────────────────────────────────────────────────────────────────────────────────
+internal sealed class ClientAssertions(ECDsaSecurityKey key, IOptionsMonitor<OpenIdConnectOptions> oidc, TimeProvider time)
+    : IClientAssertionService
+{
+    public static ECDsaSecurityKey LoadKey(IConfiguration configuration)
+    {
+        var keyPath = RequiredSetting.Text(configuration["Oidc:ClientKey:Path"], "Oidc:ClientKey:Path");
+        var passwordPath = RequiredSetting.Text(configuration["Oidc:ClientKey:PasswordPath"], "Oidc:ClientKey:PasswordPath");
+        var ecdsa = ECDsa.Create();
+        ecdsa.ImportFromEncryptedPem(
+            File.ReadAllText(Environment.ExpandEnvironmentVariables(keyPath)),
+            File.ReadAllText(Environment.ExpandEnvironmentVariables(passwordPath)).Trim());
+        if (ecdsa.ExportParameters(includePrivateParameters: false).Curve.Oid.Value != ECCurve.NamedCurves.nistP256.Oid.Value)
+            throw new InvalidOperationException("The client key must be an EC P-256 key (ES256).");
+
+        var key = new ECDsaSecurityKey(ecdsa);
+        key.KeyId = Base64UrlEncoder.Encode(JsonWebKeyConverter.ConvertFromECDsaSecurityKey(key).ComputeJwkThumbprint());
+        return key;
+    }
+
+    public async Task<ClientAssertion?> GetClientAssertionAsync(
+        ClientCredentialsClientName? clientName = null, TokenRequestParameters? parameters = null, CancellationToken ct = default)
+    {
+        var options = oidc.Get("oidc");
+        var idp = await options.ConfigurationManager!.GetConfigurationAsync(ct);
+        var now = time.GetUtcNow().UtcDateTime;
+        var assertion = new JsonWebTokenHandler { SetDefaultTimesOnTokenCreation = false }.CreateToken(new SecurityTokenDescriptor
+        {
+            TokenType = "client-authentication+jwt",
+            Issuer = options.ClientId,
+            Audience = idp.Issuer,
+            Claims = new Dictionary<string, object>
+            {
+                [JwtClaimTypes.Subject] = options.ClientId!,
+                [JwtClaimTypes.JwtId] = Guid.NewGuid().ToString("N")
+            },
+            IssuedAt = now,
+            NotBefore = now,
+            Expires = now.AddSeconds(60),
+            SigningCredentials = new SigningCredentials(key, SecurityAlgorithms.EcdsaSha256)
+        });
+        return new ClientAssertion { Type = OidcConstants.ClientAssertionTypes.JwtBearer, Value = assertion };
+    }
+}

@@ -19,7 +19,8 @@ public interface IDocumentsManagementTokenService
 // │ Why : Documents Management must know WHICH person uploads, from which branch - a machine token
 // │       or a header asserted by the BFF would not prove it.
 // │ How : The agent's token is exchanged (RFC 8693) for a short-lived documents-management.write
-// │       token; the person stays the subject and this BFF is the acting client.
+// │       token; the person stays the subject and this BFF is the acting client. The BFF proves
+// │       itself with a new private_key_jwt assertion per attempt (each is accepted once).
 // │ Ref : Features 2.1.2 | RFC 8693 | AI review 1 (DM branch from token)
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
@@ -31,6 +32,7 @@ public interface IDocumentsManagementTokenService
 public sealed class DocumentsManagementTokenService(
     IHttpClientFactory httpClientFactory,
     IConfiguration configuration,
+    IClientAssertionService clientAssertions,
     ILogger<DocumentsManagementTokenService> logger) : IDocumentsManagementTokenService
 {
     private const string TokenExchangeGrantType = "urn:ietf:params:oauth:grant-type:token-exchange";
@@ -38,9 +40,6 @@ public sealed class DocumentsManagementTokenService(
 
     // Required at start-up by the OIDC set-up in Program.cs.
     private readonly string _clientId = RequiredSetting.Text(configuration["Oidc:ClientId"], "Oidc:ClientId");
-
-    private readonly string _clientSecret = configuration["Oidc:ClientSecret"]
-        ?? throw new InvalidOperationException("Oidc:ClientSecret is not configured.");
 
     public async Task<string> GetTokenAsync(HttpContext httpContext, CancellationToken cancellationToken)
     {
@@ -55,13 +54,16 @@ public sealed class DocumentsManagementTokenService(
             try
             {
                 var client = httpClientFactory.CreateClient("IdentityServerTokenClient");
+                var assertion = await clientAssertions.GetClientAssertionAsync(ct: cancellationToken)
+                    ?? throw new InvalidOperationException("No client assertion for the token exchange.");
                 using var request = new HttpRequestMessage(HttpMethod.Post, "/connect/token")
                 {
                     Content = new FormUrlEncodedContent(new Dictionary<string, string>
                     {
                         ["grant_type"] = TokenExchangeGrantType,
                         ["client_id"] = _clientId,
-                        ["client_secret"] = _clientSecret,
+                        ["client_assertion_type"] = assertion.Type,
+                        ["client_assertion"] = assertion.Value,
                         ["subject_token"] = userToken.AccessToken,
                         ["subject_token_type"] = AccessTokenType,
                         ["scope"] = "documents-management.write"

@@ -37,7 +37,9 @@ set "KYC_BFF_PORT=33800"
 set "KYC_IDP_AUTHORITY=https://idp.dev.localhost:46392"
 REM Must equal ClientIds:CustomerKycWeb in src\IDP\appsettings.json (where the IDP registers that client).
 set "KYC_BFF_CLIENT_ID=CustomerKYC.Microservice.BFF.ClientID"
-set "KYC_BFF_CLIENT_SECRET=3ac91ab3-7ba0-4727-b4f7-36120bec10c5"
+REM private_key_jwt: this BFF's own key (ps\pki\New-EwpLocalPki.ps1 makes it, outside the repository).
+set "KYC_BFF_CLIENT_KEY_PATH=%USERPROFILE%\.ewp-pki\customer-kyc-web-client.key.pem"
+set "KYC_BFF_CLIENT_KEY_PASSWORD_PATH=%USERPROFILE%\.ewp-pki\customer-kyc-web-client.key.pem.password"
 
 set "KYC_BFF_CALLBACK_URL=https://kyc.dev.localhost:33800/api/auth/callback"
 set "KYC_BFF_POST_LOGOUT_REDIRECT_URI=https://kyc.dev.localhost:33800/signout-callback-oidc"
