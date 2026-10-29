@@ -226,10 +226,10 @@ jobs:
           for attempt in $(seq 1 30); do
             resolved="$(dig +short A "$host" @8.8.8.8 | tail -n 1)"
             if [ "$resolved" = "$GATEWAY_IP" ] && body="$(curl -fsS $trust --max-time 15 "https://$host/")" && [ "$body" = "EWP gateway OK" ]; then
-              redirect="$(curl -s -o /dev/null --max-time 15 -w '%{http_code} %{redirect_url}' "http://$host/")"
-              if [ "$redirect" != "301 https://$host/" ]; then echo "::error::http answered '$redirect', expected a 301 to https."; exit 1; fi
+              redirect="$(curl -s -o /dev/null --max-time 15 -w '%{http_code} %{redirect_url}' "http://$host/")"   # NOSONAR - checks that plain http is redirected to https
+              if [ "$redirect" != "301 https://$host/" ]; then echo "::error::http answered '$redirect', expected a 301 to https."; exit 1; fi   # NOSONAR - the same redirect check
               issuer="$(echo | openssl s_client -connect "$GATEWAY_IP:443" -servername "$host" 2>/dev/null | openssl x509 -noout -issuer)"
-              echo "ok  https://$host/ -> $body ($issuer); http -> $redirect"
+              echo "ok  https://$host/ -> $body ($issuer); http -> $redirect"   # NOSONAR - a log line, no request
               exit 0
             fi
             echo "waiting for https://$host/ (resolves to: ${resolved:-nothing}) ($attempt/30)"; sleep 20

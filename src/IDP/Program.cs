@@ -14,6 +14,7 @@ using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.Common.WebUtilities.Resilience;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
+using EnterpriseWebPlatform.IdentityServer;
 using EnterpriseWebPlatform.IdentityServer.Customers;
 using EnterpriseWebPlatform.IdentityServer.Data;
 using EnterpriseWebPlatform.IdentityServer.Repositories;
@@ -253,7 +254,7 @@ try
     app.MapEwpHealthEndpoints();
     app.MapEwpMetricsEndpoint();   // Prometheus scrape (GET /metrics)
 
-    app.Run();
+    await app.RunAsync();
 }
 catch (Exception ex)
 {
@@ -262,5 +263,5 @@ catch (Exception ex)
 finally
 {
     Log.Information("Shut down complete");
-    Log.CloseAndFlush();
+    await Log.CloseAndFlushAsync();
 }

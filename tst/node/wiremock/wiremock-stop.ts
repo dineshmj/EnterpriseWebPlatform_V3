@@ -10,7 +10,7 @@ export default async function stopWireMock(): Promise<void> {
   const pid = Number(process.env.WIREMOCK_PID);
   if (!pid) return;
   if (process.platform === 'win32') {
-    spawnSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
+    spawnSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });   // NOSONAR - a build / test tool found on PATH of a CI runner or a developer's machine, never on a server
   } else {
     try { process.kill(pid); } catch { /* already gone */ }
   }

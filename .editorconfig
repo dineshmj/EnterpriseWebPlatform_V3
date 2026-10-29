@@ -11,3 +11,9 @@ insert_final_newline = false
 
 [*.cs]
 csharp_style_namespace_declarations = file_scoped:suggestion
+
+# CA1873 ("evaluation of this argument may be expensive if logging is disabled"): EWP logs plain
+# values - IDs, numbers, enum codes, masked account numbers - at Information and above, which are
+# always on. An IsEnabled() guard around each of ~80 calls would add noise, not speed. Revisit if a
+# log call ever builds a large string or walks a collection.
+dotnet_diagnostic.CA1873.severity = none

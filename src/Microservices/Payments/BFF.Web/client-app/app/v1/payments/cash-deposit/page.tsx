@@ -71,7 +71,7 @@ export default function CashDepositPage() {
   };
 
   // ---- validation (the Accounts API checks everything again; this explains it early)
-  const amountValue = AMOUNT_PATTERN.test(amount.trim()) ? Number(amount.trim()) : NaN;
+  const amountValue = AMOUNT_PATTERN.test(amount.trim()) ? Number(amount.trim()) : Number.NaN;
   const amountValid = Number.isFinite(amountValue) && amountValue > 0 && amountValue <= CASH_DEPOSIT_MAX;
 
   const blockers = useMemo(() => [

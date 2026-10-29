@@ -23,7 +23,7 @@ ARG PNPM_VERSION=12.11.2
 # │ environment.
 # └──────────────────────────────────────────────────────────────────────────────────────────────────
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm install --global "pnpm@${PNPM_VERSION}"
+RUN npm install --global --ignore-scripts "pnpm@${PNPM_VERSION}"
 
 WORKDIR /app
 # The design tokens the front end imports from outside its own folder (globals.css).
@@ -31,24 +31,25 @@ COPY src/Common/DesignSystem/ src/Common/DesignSystem/
 
 WORKDIR /app/src/Microservices/CustomerKyc/BFF.Web/client-app
 # ┌─ SEC ────────────────────────────────────────────────────────────────────────────────────────────
-# │ Exactly the versions in pnpm-lock.yaml (with the overrides and install-script rules in
-# │ pnpm-workspace.yaml); the build fails instead of resolving anything new.
+# │ Exactly the versions in pnpm-lock.yaml (with the overrides in pnpm-workspace.yaml); the build
+# │ fails instead of resolving anything new. No install script runs (--ignore-scripts, also for
+# │ pnpm itself): a compromised package cannot execute code while the image is built.
 # └──────────────────────────────────────────────────────────────────────────────────────────────────
 COPY src/Microservices/CustomerKyc/BFF.Web/client-app/package.json \
      src/Microservices/CustomerKyc/BFF.Web/client-app/pnpm-lock.yaml \
      src/Microservices/CustomerKyc/BFF.Web/client-app/pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY src/Microservices/CustomerKyc/BFF.Web/client-app/ ./
 RUN pnpm run build
 
 FROM node:24.22.1-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea AS build
 ARG PNPM_VERSION=12.11.2
-RUN npm install --global "pnpm@${PNPM_VERSION}"
+RUN npm install --global --ignore-scripts "pnpm@${PNPM_VERSION}"
 WORKDIR /app/src/Microservices/CustomerKyc/BFF.Web
 COPY src/Microservices/CustomerKyc/BFF.Web/package.json \
      src/Microservices/CustomerKyc/BFF.Web/pnpm-lock.yaml \
      src/Microservices/CustomerKyc/BFF.Web/pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --ignore-scripts
 # The BFF's own sources only (the front end comes from the "client" stage).
 COPY src/Microservices/CustomerKyc/BFF.Web/nest-cli.json src/Microservices/CustomerKyc/BFF.Web/tsconfig.json ./
 COPY src/Microservices/CustomerKyc/BFF.Web/src/ ./src/
@@ -56,13 +57,13 @@ RUN pnpm run build
 
 FROM node:24.22.1-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea AS deps
 ARG PNPM_VERSION=12.11.2
-RUN npm install --global "pnpm@${PNPM_VERSION}"
+RUN npm install --global --ignore-scripts "pnpm@${PNPM_VERSION}"
 WORKDIR /app/src/Microservices/CustomerKyc/BFF.Web
 COPY src/Microservices/CustomerKyc/BFF.Web/package.json \
      src/Microservices/CustomerKyc/BFF.Web/pnpm-lock.yaml \
      src/Microservices/CustomerKyc/BFF.Web/pnpm-workspace.yaml ./
 # Production dependencies only: no compiler or type definitions in the running image.
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:a6c34457f6da4295807e051411c7783739c65b997a324fed14e4fa292615ae91 AS runtime
 # ┌─ SEC ────────────────────────────────────────────────────────────────────────────────────────────

@@ -167,7 +167,7 @@ public static class DependencyOutage
         if (IsPageLoad(context.Request))
         {
             response.ContentType = "text/html; charset=utf-8";
-            await response.WriteAsync(Page(traceId));
+            await response.WriteAsync(Page(traceId), context.RequestAborted);
             return;
         }
 
@@ -179,7 +179,7 @@ public static class DependencyOutage
             status = StatusCodes.Status503ServiceUnavailable,
             detail = $"A service this request depends on is not answering. Try again in {RetryAfterSeconds} seconds.",
             traceId
-        }));
+        }), context.RequestAborted);
     }
 
     // A browser navigation (top-level or into a frame) gets a page; fetch / XHR calls get JSON.

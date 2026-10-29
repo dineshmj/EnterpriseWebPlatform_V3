@@ -49,7 +49,7 @@ export class ShellPage {
       // TopNavMenu.tsx), so wait for them rather than reading at once.
       const links = this.page.locator('nav li a');
       await expect(links.first()).toBeVisible();
-      for (const item of await links.allInnerTexts()) items.add(item.replace(/\s*\.\.\.$/, '').trim());
+      for (const item of await links.allInnerTexts()) items.add((item.trimEnd().endsWith('...') ? item.trimEnd().slice(0, -3) : item).trim());
     }
     return [...items];
   }

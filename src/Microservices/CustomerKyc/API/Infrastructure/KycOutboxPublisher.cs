@@ -191,15 +191,10 @@ public sealed class KycOutboxPublisher(
                 message.LastAttemptAt = attemptedAt;
                 message.LastError = ex.Message.Length > 2000 ? ex.Message[..2000] : ex.Message;
 
-                logger.Log(
-                    message.AttemptCount >= maxAttempts ? LogLevel.Error : LogLevel.Warning,
-                    ex,
-                    message.AttemptCount >= maxAttempts
-                        ? "KYC outbox message {MessageId} EventType={EventType} failed {AttemptCount} times and is now PARKED."
-                        : "Failed to publish KYC outbox message {MessageId} EventType={EventType}. Attempt {AttemptCount}.",
-                    message.Id,
-                    message.EventType,
-                    message.AttemptCount);
+                if (message.AttemptCount >= maxAttempts)
+                    logger.LogError(ex, "KYC outbox message {MessageId} EventType={EventType} failed {AttemptCount} times and is now PARKED.", message.Id, message.EventType, message.AttemptCount);
+                else
+                    logger.LogWarning(ex, "Failed to publish KYC outbox message {MessageId} EventType={EventType}. Attempt {AttemptCount}.", message.Id, message.EventType, message.AttemptCount);
             }
         }
 

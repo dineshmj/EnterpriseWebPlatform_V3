@@ -34,7 +34,7 @@ export function useAuth(autoRedirect: boolean = true) {
       }
     };
 
-    checkAuth();
+    void checkAuth();
     return () => {
       cancelled = true;
       if (retry) clearTimeout(retry);

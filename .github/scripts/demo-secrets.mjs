@@ -282,7 +282,7 @@ function publicJwk() {
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 function makePki(partnerDomain) {
   const dir = mkdtempSync(join(tmpdir(), 'ewp-pki-'));
-  const openssl = (args, extraEnv = {}) => execFileSync('openssl', args, { cwd: dir, stdio: ['ignore', 'ignore', 'pipe'], env: { ...process.env, ...extraEnv } });
+  const openssl = (args, extraEnv = {}) => execFileSync('openssl', args, { cwd: dir, stdio: ['ignore', 'ignore', 'pipe'], env: { ...process.env, ...extraEnv } });   // NOSONAR - a build / test tool found on PATH of a CI runner or a developer's machine, never on a server
   // CONTRACT: the subjects of the laptop's PKI. The Partner Bank's authorization server knows
   // EWP's client by its certificate's subject, compared as .NET prints it ("CN=..., O=...") -
   // .NET prints the parts in reverse of their encoded order, so O is encoded first.
@@ -357,7 +357,7 @@ function makePki(partnerDomain) {
 if (process.argv.includes('--check-pki')) {
   const pki = makePki('partner.example');
   const dir = mkdtempSync(join(tmpdir(), 'ewp-pki-check-'));
-  const run = (args, extraEnv = {}) => execFileSync('openssl', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ...extraEnv } });
+  const run = (args, extraEnv = {}) => execFileSync('openssl', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ...extraEnv } });   // NOSONAR - a build / test tool found on PATH of a CI runner or a developer's machine, never on a server
   try {
     writeFileSync(join(dir, 'root.pem'), pki.ewp[o.trustRoot]);
     const open = (name, pfx, pw) => {
@@ -394,7 +394,7 @@ if (process.argv.includes('--check-pki')) {
 
 // ── Key Vault (REST API 7.4) ─────────────────────────────────────────────────────────────────────
 
-const token = execFileSync('az', ['account', 'get-access-token', '--resource', 'https://vault.azure.net', '--query', 'accessToken', '-o', 'tsv'],
+const token = execFileSync('az', ['account', 'get-access-token', '--resource', 'https://vault.azure.net', '--query', 'accessToken', '-o', 'tsv'],   // NOSONAR - a build / test tool found on PATH of a CI runner or a developer's machine, never on a server
   { encoding: 'utf8', shell: process.platform === 'win32' }).trim();
 
 async function vaultCall(vault, method, name, body) {

@@ -89,7 +89,7 @@ public static class HealthEndpoints
                 description = e.Value.Description,
                 data = e.Value.Data.Count > 0 ? e.Value.Data : null
             })
-        }));
+        }), context.RequestAborted);
     }
 
     private sealed class WorkerHealthEndpointHostedService(

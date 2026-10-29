@@ -389,4 +389,4 @@ app.MapEwpMfeRuntimeConfig(shellOrigin);   // /ewp-runtime-config.js: the MFE's 
 app.MapEwpHealthEndpoints();
 app.MapEwpMetricsEndpoint();   // Prometheus scrape (GET /metrics)
 
-app.Run();
+await app.RunAsync();

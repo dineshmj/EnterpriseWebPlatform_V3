@@ -81,7 +81,7 @@ public sealed class MenuRepository : IMenuRepository
             MenuSqlQuery,
             string.Join(", ", parameterPlaceholders));
 
-        return await _context.MenuDetails
+        return await _context.MenuDetails   // NOSONAR - only @p0..@pN placeholders are formatted in; the roles go as parameters
             .FromSqlRaw(finalSql, parameters)
             .AsNoTracking()
             .ToListAsync(cancellationToken);

@@ -37,7 +37,7 @@ const matches = (text, regex) => [...text.matchAll(regex)];
 
 // What the generator makes, per namespace: Set of "secret key", and the Secret names.
 const made = {};
-for (const line of execFileSync('node', [join(repo, '.github/scripts/demo-secrets.mjs'), '--list'], { encoding: 'utf8' }).trim().split('\n')) {
+for (const line of execFileSync('node', [join(repo, '.github/scripts/demo-secrets.mjs'), '--list'], { encoding: 'utf8' }).trim().split('\n')) {   // NOSONAR - a build / test tool found on PATH of a CI runner or a developer's machine, never on a server
   const [ns, secret, key] = line.split(' ');
   (made[ns] ??= new Set()).add(`${secret} ${key}`);
 }
@@ -45,8 +45,8 @@ const secretsOf = (set) => new Set([...set].map((x) => x.split(' ')[0]));
 
 // What a rendered chart reads: env/password references (secret + key) and whole mounted Secrets.
 function reads(rendered) {
-  const keys = new Set(matches(rendered, /(?:secretKeyRef|passwordSecretRef):\s*\n\s*name: (\S+)\s*\n\s*key: (\S+)/g).map((m) => `${m[1]} ${m[2]}`));
-  const mounted = new Set(matches(rendered, /secret:\s*\n\s*secretName: (\S+)/g).map((m) => m[1]).filter((n) => !n.endsWith('-tls')));
+  const keys = new Set(matches(rendered, /(?:secretKeyRef|passwordSecretRef):[ \t]*\r?\n[ \t]*name: (\S+)[ \t]*\r?\n[ \t]*key: (\S+)/g).map((m) => `${m[1]} ${m[2]}`));
+  const mounted = new Set(matches(rendered, /secret:[ \t]*\r?\n[ \t]*secretName: (\S+)/g).map((m) => m[1]).filter((n) => !n.endsWith('-tls')));
   return { keys, mounted };
 }
 
@@ -66,8 +66,8 @@ sameSet('database roles (db/EwpServiceDbUsers.sql vs demo-secrets.mjs)',
 
 const ps1 = readFileSync(join(repo, 'ps/kafka/Setup-KafkaSecurity.ps1'), 'utf8');
 const usersBlock = ps1.slice(ps1.indexOf('$Users = [ordered]@{'), ps1.indexOf('$Topics = @('));
-const laptopUsers = new Set(matches(usersBlock, /^\s*'([a-z0-9-]+)'\s*=/gm).map((m) => m[1]).filter((u) => u !== 'admin' && u !== 'ewp-kafka-ui'));
-const kafkaUsers = new Set(matches(infra, /kind: KafkaUser\s*\nmetadata:\s*\n\s*name: (\S+)/g).map((m) => m[1]));
+const laptopUsers = new Set(matches(usersBlock, /^[ \t]*'([a-z0-9-]+)'[ \t]*=/gm).map((m) => m[1]).filter((u) => u !== 'admin' && u !== 'ewp-kafka-ui'));
+const kafkaUsers = new Set(matches(infra, /kind: KafkaUser[ \t]*\r?\nmetadata:[ \t]*\r?\n[ \t]*name: (\S+)/g).map((m) => m[1]));
 sameSet('Kafka users (ps/kafka/Setup-KafkaSecurity.ps1 vs ewp-infra)', laptopUsers, kafkaUsers);
 sameSet('Kafka user passwords (ewp-infra vs demo-secrets.mjs)', kafkaUsers,
   new Set([...made['ewp-infra']].filter((x) => x.startsWith('ewp-kafka-users ')).map((x) => x.split(' ')[1])));
@@ -75,7 +75,7 @@ sameSet('Kafka user passwords (ewp-infra vs demo-secrets.mjs)', kafkaUsers,
 const topicsBlock = ps1.slice(ps1.indexOf('$Topics = @('), ps1.indexOf(')', ps1.indexOf('$Topics = @(') + 12));
 sameSet('Kafka topics (ps/kafka/Setup-KafkaSecurity.ps1 vs ewp-infra)',
   new Set(matches(topicsBlock, /'([a-z0-9.-]+)'/g).map((m) => m[1])),
-  new Set(matches(infra, /kind: KafkaTopic\s*\nmetadata:\s*\n\s*name: (\S+)/g).map((m) => m[1])));
+  new Set(matches(infra, /kind: KafkaTopic[ \t]*\r?\nmetadata:[ \t]*\r?\n[ \t]*name: (\S+)/g).map((m) => m[1])));
 
 if (failures) process.exit(1);
 console.log('Contracts OK');

@@ -150,12 +150,10 @@ public sealed class ComplianceOutboxPublisher(
                 message.AttemptCount++;
                 message.LastAttemptAt = attemptedAt;
                 message.LastError = ex.Message.Length > 2000 ? ex.Message[..2000] : ex.Message;
-                logger.Log(
-                    message.AttemptCount >= MaxAttempts ? LogLevel.Error : LogLevel.Warning, ex,
-                    message.AttemptCount >= MaxAttempts
-                        ? "Compliance outbox message {MessageId} {EventType} failed {AttemptCount} times and is now PARKED."
-                        : "Failed to publish Compliance outbox message {MessageId} {EventType}. Attempt {AttemptCount}.",
-                    message.Id, message.EventType, message.AttemptCount);
+                if (message.AttemptCount >= MaxAttempts)
+                    logger.LogError(ex, "Compliance outbox message {MessageId} {EventType} failed {AttemptCount} times and is now PARKED.", message.Id, message.EventType, message.AttemptCount);
+                else
+                    logger.LogWarning(ex, "Failed to publish Compliance outbox message {MessageId} {EventType}. Attempt {AttemptCount}.", message.Id, message.EventType, message.AttemptCount);
             }
         }
 

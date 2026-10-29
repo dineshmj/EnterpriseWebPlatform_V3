@@ -4,6 +4,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
 
+using EnterpriseWebPlatform.Simulators.CoreBanking;
+
 // =============================================================================
 // Core Banking Simulator - stands in for the bank's EXTERNAL core-banking system
 // (the system of record that actually opens accounts), so the Accounts context can
@@ -135,7 +137,7 @@ app.MapPut("/admin/behaviour", (HttpContext http, BehaviourChange change) =>
 
 app.MapGet("/health", () => Results.Ok(new { status = "Healthy" }));
 
-app.Run();
+await app.RunAsync();
 
 bool IsAdmin(HttpContext http) =>
     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
@@ -158,18 +160,3 @@ static string Masked(string? accountNumber)
     var value = accountNumber?.Trim() ?? string.Empty;
     return value.Length <= 4 ? new string('*', value.Length) : $"****{value[^4..]}";
 }
-
-enum Behaviour { Healthy, Slow, Failing, Down, Refusing }
-
-sealed record SimulatorState(Behaviour Behaviour, int SlowDelaySeconds);
-
-sealed record BehaviourChange(Behaviour Behaviour);
-
-sealed record OpenAccountRequest(string CustomerNumber, string? AccountName, string? BranchCode, string? Product);
-
-sealed record OpenedAccount(
-    string AccountNumber,
-    string Bsb,
-    string Reference,
-    string Product,
-    DateTimeOffset OpenedAt);

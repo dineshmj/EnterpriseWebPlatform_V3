@@ -42,7 +42,7 @@ public sealed class OnboardingController(
     }
 
     [HttpPost("applications")]
-    [RequestSizeLimit(50 * 1024 * 1024)]
+    [RequestSizeLimit(50 * 1024 * 1024)]   // NOSONAR - an application with its identity documents; the limit is deliberate
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> CreateAndSubmit(
         [FromForm] CreateAndSubmitOnboardingRequest request,

@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -10,13 +12,13 @@ namespace EnterpriseWebPlatform.Accounts.Api.Controllers;
 /// <summary>A funds command as the Accounts Command Subscriber hands it over (from accounts.commands).</summary>
 public sealed record FundsCommandRequest(
     string? CommandType,
-    Guid MessageId,
-    Guid PaymentRef,
+    [property: JsonRequired] Guid MessageId,
+    [property: JsonRequired] Guid PaymentRef,
     string? PaymentNumber,
     string? CustomerNumber,
     string? Bsb,
     string? AccountNumber,
-    decimal Amount,
+    [property: JsonRequired] decimal Amount,
     string? Currency,
     string? InitiatedByUserId,
     Guid? WorkflowId,

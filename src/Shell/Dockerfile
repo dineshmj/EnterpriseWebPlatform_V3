@@ -24,7 +24,7 @@ ARG PNPM_VERSION=12.11.2
 # │ environment.
 # └──────────────────────────────────────────────────────────────────────────────────────────────────
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm install --global "pnpm@${PNPM_VERSION}"
+RUN npm install --global --ignore-scripts "pnpm@${PNPM_VERSION}"
 
 WORKDIR /src/src/Shell/client-app
 # ┌─ SEC ────────────────────────────────────────────────────────────────────────────────────────────
@@ -34,7 +34,7 @@ WORKDIR /src/src/Shell/client-app
 COPY src/Shell/client-app/package.json \
      src/Shell/client-app/pnpm-lock.yaml \
      src/Shell/client-app/pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY src/Shell/client-app/ ./
 RUN pnpm run build
 

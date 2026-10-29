@@ -3,6 +3,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
 
+using EnterpriseWebPlatform.Simulators.ScreeningProvider;
+
 // =============================================================================
 // Screening Provider Simulator - stands in for an EXTERNAL AML / sanctions / PEP
 // screening vendor, so the Compliance context can demonstrate how a platform
@@ -109,7 +111,7 @@ app.MapPut("/admin/behaviour", (HttpContext http, BehaviourChange change) =>
 
 app.MapGet("/health", () => Results.Ok(new { status = "Healthy" }));
 
-app.Run();
+await app.RunAsync();
 
 static string OutcomeFor(string customerNumber)
 {
@@ -131,24 +133,3 @@ static bool IsLocal(HttpContext http) =>
     // │ network can switch the provider off.
     // └──────────────────────────────────────────────────────────────────────────────────────
     http.Connection.RemoteIpAddress is { } ip && IPAddress.IsLoopback(ip);
-
-enum Behaviour { Healthy, Slow, Failing, Down }
-
-sealed record SimulatorState(Behaviour Behaviour, string? ForcedOutcome, int SlowDelaySeconds);
-
-sealed record BehaviourChange(Behaviour Behaviour, string? ForcedOutcome);
-
-sealed record ScreeningRequest(string CustomerNumber, string ApplicationNumber, Guid RequestId, string[]? Lists, ScreeningSubject? Subject);
-
-// Who is screened: real providers match the lists on name and address.
-sealed record ScreeningSubject(string? FirstName, string? LastName, string? AddressLine1, string? City, string? State, string? PostalCode, string? CountryCode);
-
-sealed record ScreeningMatch(string List, double Score);
-
-sealed record ScreeningResponse(
-    string ScreeningId,
-    string Provider,
-    string Outcome,
-    string[] ListsChecked,
-    ScreeningMatch[] Matches,
-    DateTimeOffset ScreenedAt);

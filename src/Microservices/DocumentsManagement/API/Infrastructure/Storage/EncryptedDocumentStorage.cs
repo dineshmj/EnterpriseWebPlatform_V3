@@ -64,15 +64,15 @@ public sealed class EncryptedDocumentStorage(IDocumentStorage inner, DocumentKey
 
             using var file = new MemoryStream();
             var keyIdBytes = Encoding.ASCII.GetBytes(keyId);
-            file.Write(Magic);
+            await file.WriteAsync(Magic, cancellationToken);
             file.WriteByte((byte)keyIdBytes.Length);
-            file.Write(keyIdBytes);
-            file.Write(wrapNonce);
-            file.Write(wrappedKey);
-            file.Write(wrapTag);
-            file.Write(contentNonce);
-            file.Write(contentTag);
-            file.Write(ciphertext);
+            await file.WriteAsync(keyIdBytes, cancellationToken);
+            await file.WriteAsync(wrapNonce, cancellationToken);
+            await file.WriteAsync(wrappedKey, cancellationToken);
+            await file.WriteAsync(wrapTag, cancellationToken);
+            await file.WriteAsync(contentNonce, cancellationToken);
+            await file.WriteAsync(contentTag, cancellationToken);
+            await file.WriteAsync(ciphertext, cancellationToken);
             file.Position = 0;
 
             // ".enc": the stored file says what it is; the document's type stays in its record.
@@ -154,7 +154,7 @@ public sealed class EncryptedDocumentStorage(IDocumentStorage inner, DocumentKey
         {
             if (buffer.Length + read > limit)
                 throw new InvalidOperationException("The document is larger than the storage accepts.");
-            buffer.Write(chunk, 0, read);
+            await buffer.WriteAsync(chunk.AsMemory(0, read), cancellationToken);
         }
         return buffer.ToArray();
     }

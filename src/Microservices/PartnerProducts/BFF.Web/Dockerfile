@@ -19,7 +19,7 @@
 FROM node:24.22.1-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea AS build
 ARG PNPM_VERSION=12.11.2
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm install --global "pnpm@${PNPM_VERSION}"
+RUN npm install --global --ignore-scripts "pnpm@${PNPM_VERSION}"
 
 # ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────────────────
 # │ The repository's folder layout under /app, in every stage: Turbopack builds with the src folder
@@ -35,19 +35,19 @@ WORKDIR /app/src/Microservices/PartnerProducts/BFF.Web
 # └──────────────────────────────────────────────────────────────────────────────────────────────────
 COPY src/Microservices/PartnerProducts/BFF.Web/package.json \
      src/Microservices/PartnerProducts/BFF.Web/pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY src/Microservices/PartnerProducts/BFF.Web/ ./
 # The build cache is not needed to run the app.
 RUN pnpm run build && rm -rf .next/cache
 
 FROM node:24.22.1-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea AS deps
 ARG PNPM_VERSION=12.11.2
-RUN npm install --global "pnpm@${PNPM_VERSION}"
+RUN npm install --global --ignore-scripts "pnpm@${PNPM_VERSION}"
 WORKDIR /app/src/Microservices/PartnerProducts/BFF.Web
 COPY src/Microservices/PartnerProducts/BFF.Web/package.json \
      src/Microservices/PartnerProducts/BFF.Web/pnpm-lock.yaml ./
 # Production dependencies only: no compiler, bundler or type definitions in the running image.
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:a6c34457f6da4295807e051411c7783739c65b997a324fed14e4fa292615ae91 AS runtime
 # ┌─ SEC ────────────────────────────────────────────────────────────────────────────────────────────

@@ -110,7 +110,7 @@ export class DigitalGoldController {
     @Body() body: Record<string, unknown>,
     @UploadedFile() scan: UploadedScan | undefined,
   ) {
-    const amount = typeof body.amount === 'string' && /^\d{1,5}(\.\d{1,2})?$/.test(body.amount) ? Number(body.amount) : NaN;
+    const amount = typeof body.amount === 'string' && /^\d{1,5}(\.\d{1,2})?$/.test(body.amount) ? Number(body.amount) : Number.NaN;
     if (!Number.isFinite(amount) || amount <= 0) throw new BadRequestException('The amount must be in AUD, more than 0, with at most two decimals.');
     if (typeof body.debtorAccountNumber !== 'string' || !/^\d{5,9}$/.test(body.debtorAccountNumber)) throw new BadRequestException('Choose the paying account.');
     if (typeof body.mobileOnSlip !== 'string' || body.mobileOnSlip.length > 30) throw new BadRequestException('Enter the phone number written on the slip.');

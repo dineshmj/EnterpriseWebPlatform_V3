@@ -269,5 +269,3 @@ app.MapEwpHealthEndpoints();
 app.MapEwpMetricsEndpoint();   // Prometheus scrape (GET /metrics)
 
 await app.RunAsync();
-
-public partial class Program { }

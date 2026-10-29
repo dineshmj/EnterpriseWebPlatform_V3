@@ -150,12 +150,12 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Set up pnpm
-        run: npm install --global "pnpm@${PNPM_VERSION}"
+        run: npm install --global --ignore-scripts "pnpm@${PNPM_VERSION}"
 
-      # SEC: exactly the committed lockfile (with its overrides and install-script rules);
-      # the job fails instead of resolving anything new.
+      # SEC: exactly the committed lockfile (with its overrides); the job fails instead of
+      # resolving anything new. No install script runs (--ignore-scripts).
       - name: Install from the lockfile
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       # The committed next-env.d.ts imports .next/types, which only a build or typegen writes.
       - name: Generate Next.js route types

@@ -24,7 +24,7 @@ ARG PNPM_VERSION=12.11.2
 # │ environment.
 # └──────────────────────────────────────────────────────────────────────────────────────────────────
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm install --global "pnpm@${PNPM_VERSION}"
+RUN npm install --global --ignore-scripts "pnpm@${PNPM_VERSION}"
 
 WORKDIR /src
 # The design tokens the front end imports from outside its own folder (globals.css).
@@ -38,7 +38,7 @@ WORKDIR /src/src/Microservices/Accounts/BFF.Web/client-app
 COPY src/Microservices/Accounts/BFF.Web/client-app/package.json \
      src/Microservices/Accounts/BFF.Web/client-app/pnpm-lock.yaml \
      src/Microservices/Accounts/BFF.Web/client-app/pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY src/Microservices/Accounts/BFF.Web/client-app/ ./
 RUN pnpm run build
 

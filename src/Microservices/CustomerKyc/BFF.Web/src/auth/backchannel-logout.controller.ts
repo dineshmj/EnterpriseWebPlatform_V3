@@ -5,7 +5,7 @@ import { Issuer } from 'openid-client';
 import { KycBffOptions } from '../configuration/kyc-bff-options';
 import { sessionStore } from './session-store';
 
-const BACKCHANNEL_LOGOUT_EVENT = 'http://schemas.openid.net/event/backchannel-logout';
+const BACKCHANNEL_LOGOUT_EVENT = 'http://schemas.openid.net/event/backchannel-logout';   // NOSONAR - the OIDC event's name (a URI by the spec), never fetched
 
 // ┌─ :: SECURITY :: Back-channel logout ───────────────────────────────────────────────────────────
 // │ Why : A sign-out elsewhere must end this BFF's session even when the browser blocks the

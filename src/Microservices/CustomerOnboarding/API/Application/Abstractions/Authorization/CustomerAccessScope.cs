@@ -52,7 +52,7 @@ public static class CustomerAccessScopeQueryExtensions
         return customers.Where(customer => customer.Addresses.Any(address =>
             address.AddressType == AddressType.Residential &&
             address.IsPrimary &&
-            address.Address.City.ToUpper() == city &&
+            address.Address.City.ToUpper() == city &&   // NOSONAR - runs in SQL (UPPER); string.Equals with a StringComparison cannot be translated
             address.Address.CountryCode == countryCode));
     }
 }

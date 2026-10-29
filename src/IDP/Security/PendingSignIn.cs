@@ -62,7 +62,7 @@ public sealed record PendingSignIn(
         }
     }
 
-    public static void Clear(HttpContext http) => http.Response.Cookies.Delete(CookieName, new CookieOptions { Secure = true, Path = "/" });
+    public static void Clear(HttpContext http) => http.Response.Cookies.Delete(CookieName, new CookieOptions { Secure = true, HttpOnly = true, Path = "/" });
 }
 
 /// <summary>

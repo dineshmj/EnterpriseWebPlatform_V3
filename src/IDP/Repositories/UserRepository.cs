@@ -60,9 +60,9 @@ public sealed class UserRepository : IUserRepository
 		return await _context.Users
 			.AsNoTracking()
 			.Include(user => user.EmploymentProfile)
-				.ThenInclude(profile => profile.Department)
+				.ThenInclude(profile => profile!.Department)
 			.Include(user => user.EmploymentProfile)
-				.ThenInclude(profile => profile.Branch)
+				.ThenInclude(profile => profile!.Branch)
 			.SingleOrDefaultAsync(
 				user => user.SubjectId == subjectGuid,
 				cancellationToken);

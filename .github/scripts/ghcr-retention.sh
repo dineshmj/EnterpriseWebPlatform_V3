@@ -18,7 +18,7 @@ set -euo pipefail
 : "${OWNER:?}" "${KEEP:?}" "${DRY_RUN:?}"
 owner=$(tr '[:upper:]' '[:lower:]' <<< "$OWNER")
 case "$KEEP" in ''|*[!0-9]*) echo "KEEP must be a whole number" >&2; exit 1 ;; esac
-if [ "$KEEP" -lt 3 ]; then echo "KEEP must be at least 3" >&2; exit 1; fi
+if [[ "$KEEP" -lt 3 ]]; then echo "KEEP must be at least 3" >&2; exit 1; fi
 
 # The manifests an image index lists (platform image, attestation); none for a single manifest.
 manifests_of() {
@@ -54,7 +54,7 @@ for package in $packages; do
   # │ takes a manifest a kept image still needs.
   # └────────────────────────────────────────────────────────────────────────────────────────────
   protected=""
-  if [ "$count" -gt 0 ]; then
+  if [[ "$count" -gt 0 ]]; then
     for digest in $(jq -r --argjson drop "$drop" '
         [.[] | select(.metadata.container.tags | length > 0) | .name] - [$drop[].digest] | .[]' <<< "$versions"); do
       protected="$protected $(manifests_of "$digest" | tr '\n' ' ')"
@@ -67,10 +67,10 @@ for package in $packages; do
     for child in $(manifests_of "$digest"); do
       case " $protected " in *" $child "*) continue ;; esac
       id=$(jq -r --arg d "$child" '.[] | select(.name == $d) | .id' <<< "$versions")
-      if [ -n "$id" ]; then ids="$ids $id"; fi
+      if [[ -n "$id" ]]; then ids="$ids $id"; fi
     done
     echo "$package: $(jq -r '.tags | join(",")' <<< "$row") -> versions $ids"
-    if [ "$DRY_RUN" != "true" ]; then
+    if [[ "$DRY_RUN" != "true" ]]; then
       for id in $ids; do
         gh api --method DELETE "/users/$owner/packages/container/$package/versions/$id" --silent
       done

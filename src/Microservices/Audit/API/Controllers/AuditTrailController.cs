@@ -76,7 +76,7 @@ public sealed class AuditTrailController(
         return Ok(result);
     }
 
-    private Task RecordAccessAsync(string eventType, string? recordRef, string? detail, CancellationToken cancellationToken)
+    private Task<AppendResult> RecordAccessAsync(string eventType, string? recordRef, string? detail, CancellationToken cancellationToken)
     {
         var now = AuditChain.ToStoredPrecision(time.GetUtcNow());
         return appender.AppendAsync(new AuditEntry

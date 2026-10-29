@@ -237,7 +237,7 @@ internal sealed class CustomerIntegrationEventMapper(CustomerDbContext db)
         long customerId,
         long applicationId,
         WorkflowRequestContext requestContext,
-        IReadOnlyDictionary<string, Guid> localMessages,
+        Dictionary<string, Guid> localMessages,
         CancellationToken cancellationToken)
     {
         var existingApplicationMessage = await db.OutboxMessages
@@ -277,7 +277,7 @@ internal sealed class CustomerIntegrationEventMapper(CustomerDbContext db)
     private static Guid? ResolveCausationId(
         long applicationId,
         Guid? requestedCausationId,
-        IReadOnlyDictionary<string, Guid> localMessages) =>
+        Dictionary<string, Guid> localMessages) =>
         // When several domain events are raised in one transaction, each later
         // integration event is caused by the earlier one.
         localMessages.TryGetValue(ApplicationKey(applicationId), out var localMessageId)
