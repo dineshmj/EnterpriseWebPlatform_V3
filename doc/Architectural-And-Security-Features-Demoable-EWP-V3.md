@@ -4,67 +4,7 @@ A living catalogue of the architectural patterns, security controls and avoided 
 
 The document answers *how the platform is built and protected*, not *which business functions it offers*. Where a closely related capability is still missing, the entry says so in a **Not yet** line; planned work lives in the [Blueprint roadmap](Enterprise-Web-Platform-V3-Architectural-Vision-and-Security-Blueprint.md#16-roadmap).
 
----
-
-## Common questions
-
-| Question | Answered in |
-|---|---|
-| What happens if a publisher or subscriber pod is killed (AKS / EKS) and another one starts? | [1.6.1](#161-pod-replacement-and-horizontal-scaling) |
-| Can I run several instances of a worker at once? | [1.6.1](#161-pod-replacement-and-horizontal-scaling), [1.3.1](#131-transactional-outbox) |
-| How do you handle dead-letter queues? | [1.6.2](#162-dead-letter-handling) |
-| What if Kafka delivers the same message twice? | [1.3.2](#132-idempotent-consumers-inbox) |
-| What happens to the uploaded documents when an application is rejected? Are they deleted? | [1.4.2](#142-compensation-on-rejection-retain-dont-delete) |
-| Can an agent onboard the same customer twice, or change a verified name afterwards? | [1.2.1](#121-aggregates-that-enforce-their-own-invariants) |
-| What if a downstream API is down for an hour? | [1.6.3](#163-timeouts-retries-and-circuit-breakers), [1.3.3](#133-reliable-subscriber-pipeline) |
-| What if an external provider (e.g. sanctions screening) is slow or down? Does a case slip through? | [1.6.3](#163-timeouts-retries-and-circuit-breakers) |
-| What if the fraud provider is slow or down? Do payments stop, or go through unchecked? | [1.6.7](#167-a-fraud-check-within-a-latency-budget-with-a-fallback) |
-| How do you avoid losing an event when the database commit succeeds but Kafka is down? | [1.3.1](#131-transactional-outbox) |
-| What if a payment fails halfway, after the money was reserved? Can the money be lost? | [1.4.3](#143-orchestration-the-payments-saga) |
-| Can a double-click or a retried request send a payment twice? | [1.4.3](#143-orchestration-the-payments-saga) |
-| The payment network took the payment but its answer was lost. Is the money released anyway? | [1.4.3](#143-orchestration-the-payments-saga) |
-| The network cannot say for hours what happened to a payment. Who decides, and can one person do it alone? | [1.4.3](#143-orchestration-the-payments-saga), [2.2.6](#226-separation-of-duties-makerchecker) |
-| Kafka was down for long and messages were parked. How are they sent again without doing anything twice? | [1.6.2](#162-dead-letter-handling) |
-| How do operations see the whole platform's health, and show what happens when a provider is down? | [1.7.4](#174-operations-platform-health-and-the-simulator-switch) |
-| A purchase waits hours for an approval and the worker restarts. Is the gold still allocated - once? | [1.4.4](#144-long-running-workflow-on-temporal-the-digital-gold-purchase) |
-| How does EWP talk to another bank? Could someone pose as EWP, or replay its token or an instruction? | [2.4.10](#2410-integration-with-another-organisation-the-partner-bank) |
-| Is PAR used? Why not at the counter? | [2.4.10](#2410-integration-with-another-organisation-the-partner-bank) |
-| Are events processed in order? | [1.3.5](#135-ordering-guarantees) |
-| How do you trace one business transaction across services? | [1.3.4](#134-workflow-correlation-and-causation-identity), [1.7.1](#171-distributed-tracing-across-http-and-kafka) |
-| What can Prometheus / Grafana see? Are the logs structured? | [1.7.3](#173-structured-logs-and-metrics) |
-| Can you follow one request through Kafka in a tracing tool? | [1.7.1](#171-distributed-tracing-across-http-and-kafka) |
-| How do you version event contracts? | [1.3.6](#136-tolerant-readers-and-contract-evolution) |
-| Can a feature be switched off without a redeploy? Is LaunchDarkly used? | [1.9.4](#194-feature-flags-release-toggles-and-kill-switches-openfeature-launchdarkly) |
-| The bank must stop selling a product at once. Is anything left half-done? | [1.9.4](#194-feature-flags-release-toggles-and-kill-switches-openfeature-launchdarkly) |
-| Do the APIs follow an industry standard such as BIAN? | [1.2.5](#125-bian-contracts-beside-ewps-own) |
-| Is the code scanned for vulnerabilities, not only the dependencies? | [2.5.2](#252-code-scanning-codeql-sonarqube-cloud-and-snyk) |
-| How do two people editing the same record at once not overwrite each other? | [1.6.4](#164-concurrency-control) |
-| Where are the access tokens kept? Can JavaScript read them? | [2.1.1](#211-oidc-authorization-code--pkce-through-a-bff), [3.3](#33-tokens-in-the-browser) |
-| How do you stop a user from opening someone else's record by changing an ID (IDOR / BOLA)? | [2.2.3](#223-object-level-authorization) |
-| Is authorization only role-based? | [2.2](#22-authorization-beyond-rbac) |
-| How do you stop one person from both initiating and approving? | [2.2.6](#226-separation-of-duties-makerchecker) |
-| Is it safe to retry a POST to an external system? Could a timeout open two bank accounts? | [1.6.3](#163-timeouts-retries-and-circuit-breakers) |
-| Can a junior officer approve a high-risk customer, or a large payment? | [2.2.4](#224-abac-department-clearance-and-stage-permissions) |
-| How do services authenticate to each other? | [2.1.2](#212-separate-human-and-machine-identities) |
-| Is an MFA sign-in from this morning enough to approve a payment this afternoon? Must the officer sign out to enter a fresh code? | [2.1.5](#215-step-up-mfa-for-risky-actions) |
-| Does signing out of one application sign the user out everywhere? | [2.1.4](#214-single-sign-out) |
-| How are XSS, clickjacking and CSRF handled? | [2.3](#23-browser-and-session-security) |
-| What stops a malicious file upload? Are KYC documents encrypted on disk? | [2.4.4](#244-file-upload-security) |
-| What does an attacker learn from an error response? | [2.4.1](#241-error-responses-that-leak-nothing) |
-| If one service is compromised, what can it reach in the database? | [2.4.3](#243-least-privilege-database-users) |
-| Is Kafka secured? Could someone publish a fake event? | [2.4.6](#246-kafka-authentication-and-per-topic-acls) |
-| Can one user or a script flood an API? | [2.4.7](#247-rate-limiting) |
-| Could a wrong or tampered setting send an API key, or customer data, to the wrong server? | [2.4.9](#249-calls-to-external-systems) |
-| Who did what, and can the record be trusted? Could an administrator quietly change it? | [2.4.8](#248-tamper-evident-audit-trail) |
-| A service calls another for a person - does the second one still know who it is? | [2.1.2](#212-separate-human-and-machine-identities) |
-| Does restarting a BFF sign everybody out? | [2.3.4](#234-session-management), [1.6.1](#161-pod-replacement-and-horizontal-scaling) |
-| How does Kubernetes know a pod is healthy, or ready for traffic? | [1.7.2](#172-health-endpoints-for-liveness-and-readiness) |
-| How are vulnerable dependencies caught? | [2.5.1](#251-dependency-vulnerability-scanning) |
-| What does a user see when the database or the IDP is down - a white frame, a stack trace? | [1.6.6](#166-dependency-outages-answered-quickly-and-plainly) |
-| Can the IDP run as several instances? Could a DPoP proof be replayed against a second one? | [1.6.1](#161-pod-replacement-and-horizontal-scaling) |
-| How are the images built, and can one hold a secret? | [1.9.1](#191-container-images-built-only-in-ci) |
-| How does the platform run on Kubernetes? Is traffic between pods encrypted? | [1.9.2](#192-one-helm-chart-for-the-whole-platform) |
-| Can the whole platform be brought up in the cloud, and removed again, without a stored secret? | [1.9.3](#193-a-cloud-demo-that-appears-and-disappears-azure) |
+> **Looking for a specific concern?** [Section 4 - Common questions](#4-common-questions) maps the questions architects and reviewers usually ask - failures halfway, duplicate messages, scaling out, tracing, access control, outages of a provider - to the sections that show how EWP V3 answers them.
 
 ---
 
@@ -165,6 +105,7 @@ The document answers *how the platform is built and protected*, not *which busin
   - [3.7 Retry storms and unsafe retries](#37-retry-storms-and-unsafe-retries)
   - [3.8 Anaemic domain model](#38-anaemic-domain-model)
   - [3.9 Trusting the UI](#39-trusting-the-ui)
+- [4. Common questions](#4-common-questions)
 
 ---
 
@@ -1283,3 +1224,67 @@ They are **reported, not gating** - deliberately for a first run over code never
 **Where to look at:**
 
 - [2.2 Authorization beyond RBAC](#22-authorization-beyond-rbac)
+
+---
+
+## 4. Common questions
+
+Typical architecture and security questions, each with the sections that answer it.
+
+| Question | Answered in |
+|---|---|
+| What happens if a publisher or subscriber pod is killed (AKS / EKS) and another one starts? | [1.6.1](#161-pod-replacement-and-horizontal-scaling) |
+| Can I run several instances of a worker at once? | [1.6.1](#161-pod-replacement-and-horizontal-scaling), [1.3.1](#131-transactional-outbox) |
+| How do you handle dead-letter queues? | [1.6.2](#162-dead-letter-handling) |
+| What if Kafka delivers the same message twice? | [1.3.2](#132-idempotent-consumers-inbox) |
+| What happens to the uploaded documents when an application is rejected? Are they deleted? | [1.4.2](#142-compensation-on-rejection-retain-dont-delete) |
+| Can an agent onboard the same customer twice, or change a verified name afterwards? | [1.2.1](#121-aggregates-that-enforce-their-own-invariants) |
+| What if a downstream API is down for an hour? | [1.6.3](#163-timeouts-retries-and-circuit-breakers), [1.3.3](#133-reliable-subscriber-pipeline) |
+| What if an external provider (e.g. sanctions screening) is slow or down? Does a case slip through? | [1.6.3](#163-timeouts-retries-and-circuit-breakers) |
+| What if the fraud provider is slow or down? Do payments stop, or go through unchecked? | [1.6.7](#167-a-fraud-check-within-a-latency-budget-with-a-fallback) |
+| How do you avoid losing an event when the database commit succeeds but Kafka is down? | [1.3.1](#131-transactional-outbox) |
+| What if a payment fails halfway, after the money was reserved? Can the money be lost? | [1.4.3](#143-orchestration-the-payments-saga) |
+| Can a double-click or a retried request send a payment twice? | [1.4.3](#143-orchestration-the-payments-saga) |
+| The payment network took the payment but its answer was lost. Is the money released anyway? | [1.4.3](#143-orchestration-the-payments-saga) |
+| The network cannot say for hours what happened to a payment. Who decides, and can one person do it alone? | [1.4.3](#143-orchestration-the-payments-saga), [2.2.6](#226-separation-of-duties-makerchecker) |
+| Kafka was down for long and messages were parked. How are they sent again without doing anything twice? | [1.6.2](#162-dead-letter-handling) |
+| How do operations see the whole platform's health, and show what happens when a provider is down? | [1.7.4](#174-operations-platform-health-and-the-simulator-switch) |
+| A purchase waits hours for an approval and the worker restarts. Is the gold still allocated - once? | [1.4.4](#144-long-running-workflow-on-temporal-the-digital-gold-purchase) |
+| How does EWP talk to another bank? Could someone pose as EWP, or replay its token or an instruction? | [2.4.10](#2410-integration-with-another-organisation-the-partner-bank) |
+| Is PAR used? Why not at the counter? | [2.4.10](#2410-integration-with-another-organisation-the-partner-bank) |
+| Are events processed in order? | [1.3.5](#135-ordering-guarantees) |
+| How do you trace one business transaction across services? | [1.3.4](#134-workflow-correlation-and-causation-identity), [1.7.1](#171-distributed-tracing-across-http-and-kafka) |
+| What can Prometheus / Grafana see? Are the logs structured? | [1.7.3](#173-structured-logs-and-metrics) |
+| Can you follow one request through Kafka in a tracing tool? | [1.7.1](#171-distributed-tracing-across-http-and-kafka) |
+| How do you version event contracts? | [1.3.6](#136-tolerant-readers-and-contract-evolution) |
+| Can a feature be switched off without a redeploy? Is LaunchDarkly used? | [1.9.4](#194-feature-flags-release-toggles-and-kill-switches-openfeature-launchdarkly) |
+| The bank must stop selling a product at once. Is anything left half-done? | [1.9.4](#194-feature-flags-release-toggles-and-kill-switches-openfeature-launchdarkly) |
+| Do the APIs follow an industry standard such as BIAN? | [1.2.5](#125-bian-contracts-beside-ewps-own) |
+| Is the code scanned for vulnerabilities, not only the dependencies? | [2.5.2](#252-code-scanning-codeql-sonarqube-cloud-and-snyk) |
+| How do two people editing the same record at once not overwrite each other? | [1.6.4](#164-concurrency-control) |
+| Where are the access tokens kept? Can JavaScript read them? | [2.1.1](#211-oidc-authorization-code--pkce-through-a-bff), [3.3](#33-tokens-in-the-browser) |
+| How do you stop a user from opening someone else's record by changing an ID (IDOR / BOLA)? | [2.2.3](#223-object-level-authorization) |
+| Is authorization only role-based? | [2.2](#22-authorization-beyond-rbac) |
+| How do you stop one person from both initiating and approving? | [2.2.6](#226-separation-of-duties-makerchecker) |
+| Is it safe to retry a POST to an external system? Could a timeout open two bank accounts? | [1.6.3](#163-timeouts-retries-and-circuit-breakers) |
+| Can a junior officer approve a high-risk customer, or a large payment? | [2.2.4](#224-abac-department-clearance-and-stage-permissions) |
+| How do services authenticate to each other? | [2.1.2](#212-separate-human-and-machine-identities) |
+| Is an MFA sign-in from this morning enough to approve a payment this afternoon? Must the officer sign out to enter a fresh code? | [2.1.5](#215-step-up-mfa-for-risky-actions) |
+| Does signing out of one application sign the user out everywhere? | [2.1.4](#214-single-sign-out) |
+| How are XSS, clickjacking and CSRF handled? | [2.3](#23-browser-and-session-security) |
+| What stops a malicious file upload? Are KYC documents encrypted on disk? | [2.4.4](#244-file-upload-security) |
+| What does an attacker learn from an error response? | [2.4.1](#241-error-responses-that-leak-nothing) |
+| If one service is compromised, what can it reach in the database? | [2.4.3](#243-least-privilege-database-users) |
+| Is Kafka secured? Could someone publish a fake event? | [2.4.6](#246-kafka-authentication-and-per-topic-acls) |
+| Can one user or a script flood an API? | [2.4.7](#247-rate-limiting) |
+| Could a wrong or tampered setting send an API key, or customer data, to the wrong server? | [2.4.9](#249-calls-to-external-systems) |
+| Who did what, and can the record be trusted? Could an administrator quietly change it? | [2.4.8](#248-tamper-evident-audit-trail) |
+| A service calls another for a person - does the second one still know who it is? | [2.1.2](#212-separate-human-and-machine-identities) |
+| Does restarting a BFF sign everybody out? | [2.3.4](#234-session-management), [1.6.1](#161-pod-replacement-and-horizontal-scaling) |
+| How does Kubernetes know a pod is healthy, or ready for traffic? | [1.7.2](#172-health-endpoints-for-liveness-and-readiness) |
+| How are vulnerable dependencies caught? | [2.5.1](#251-dependency-vulnerability-scanning) |
+| What does a user see when the database or the IDP is down - a white frame, a stack trace? | [1.6.6](#166-dependency-outages-answered-quickly-and-plainly) |
+| Can the IDP run as several instances? Could a DPoP proof be replayed against a second one? | [1.6.1](#161-pod-replacement-and-horizontal-scaling) |
+| How are the images built, and can one hold a secret? | [1.9.1](#191-container-images-built-only-in-ci) |
+| How does the platform run on Kubernetes? Is traffic between pods encrypted? | [1.9.2](#192-one-helm-chart-for-the-whole-platform) |
+| Can the whole platform be brought up in the cloud, and removed again, without a stored secret? | [1.9.3](#193-a-cloud-demo-that-appears-and-disappears-azure) |
