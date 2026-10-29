@@ -64,7 +64,7 @@ COPY src/Microservices/CustomerKyc/BFF.Web/package.json \
 # Production dependencies only: no compiler or type definitions in the running image.
 RUN pnpm install --frozen-lockfile --prod
 
-FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:cb606325b7ec4af55462cb0b424a53b452a5b4a894ffe841fcf1048d216fb9f8 AS runtime
+FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:a6c34457f6da4295807e051411c7783739c65b997a324fed14e4fa292615ae91 AS runtime
 # ┌─ SEC ────────────────────────────────────────────────────────────────────────────────────────────
 # │ Distroless Node: the Node runtime and the few Debian libraries it needs - no shell, no package
 # │ manager (no apt, npm, npx, corepack or yarn), like the chiseled .NET images. Nothing can be
