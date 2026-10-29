@@ -28,6 +28,7 @@ using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
 using EnterpriseWebPlatform.Common.WebUtilities.Helpers;
 using EnterpriseWebPlatform.Common.WebUtilities.Resilience;
 using EnterpriseWebPlatform.Common.WebUtilities.Security;
+using EnterpriseWebPlatform.BSS.BFFWeb.Authentication;
 
 // ┌─ :: ARCHITECTURE + SECURITY :: Shell BFF: a business-neutral host behind a BFF ────────────────
 // │ Why : The Shell composes every context's MFE; if it held business logic or tokens in the
@@ -497,57 +498,61 @@ public partial class Program
     private const string NotificationsHubPath = "/hubs/notifications";
 }
 
-// ┌─ :: SECURITY :: private_key_jwt: this BFF's client assertions ─────────────────────────────────
-// │ Why : A shared client secret travels with every token request and the IDP knows it too;
-// │       FAPI 2.0 asks a confidential client to prove itself with an asymmetric key instead.
-// │ How : The EC P-256 private key (encrypted PKCS#8 PEM: Oidc:ClientKey:Path, its password in
-// │       Oidc:ClientKey:PasswordPath) is read once at start-up. Every call to the IDP gets a new
-// │       assertion: iss = sub = the client ID, aud = the IDP's issuer only, typ
-// │       client-authentication+jwt, 60 s, a fresh jti (the IDP takes each one once), ES256, and
-// │       kid = the RFC 7638 thumbprint New-EwpClientKeys.mjs gave the public key.
-// │ Ref : Features 2.1.1 | FAPI 2.0 Security Profile §5.3.1 | RFC 7523, 7638 |
-// │       draft-ietf-oauth-rfc7523bis | Threat-Model R-10
-// └────────────────────────────────────────────────────────────────────────────────────────────────
-internal sealed class ClientAssertions(ECDsaSecurityKey key, IOptionsMonitor<OpenIdConnectOptions> oidc, TimeProvider time)
-    : IClientAssertionService
+// A block namespace: a file with top-level statements cannot have a file-scoped one.
+namespace EnterpriseWebPlatform.BSS.BFFWeb.Authentication
 {
-    public static ECDsaSecurityKey LoadKey(IConfiguration configuration)
+    // ┌─ :: SECURITY :: private_key_jwt: this BFF's client assertions ─────────────────────────────────
+    // │ Why : A shared client secret travels with every token request and the IDP knows it too;
+    // │       FAPI 2.0 asks a confidential client to prove itself with an asymmetric key instead.
+    // │ How : The EC P-256 private key (encrypted PKCS#8 PEM: Oidc:ClientKey:Path, its password in
+    // │       Oidc:ClientKey:PasswordPath) is read once at start-up. Every call to the IDP gets a new
+    // │       assertion: iss = sub = the client ID, aud = the IDP's issuer only, typ
+    // │       client-authentication+jwt, 60 s, a fresh jti (the IDP takes each one once), ES256, and
+    // │       kid = the RFC 7638 thumbprint New-EwpClientKeys.mjs gave the public key.
+    // │ Ref : Features 2.1.1 | FAPI 2.0 Security Profile §5.3.1 | RFC 7523, 7638 |
+    // │       draft-ietf-oauth-rfc7523bis | Threat-Model R-10
+    // └────────────────────────────────────────────────────────────────────────────────────────────────
+    internal sealed class ClientAssertions(ECDsaSecurityKey key, IOptionsMonitor<OpenIdConnectOptions> oidc, TimeProvider time)
+        : IClientAssertionService
     {
-        var keyPath = RequiredSetting.Text(configuration["Oidc:ClientKey:Path"], "Oidc:ClientKey:Path");
-        var passwordPath = RequiredSetting.Text(configuration["Oidc:ClientKey:PasswordPath"], "Oidc:ClientKey:PasswordPath");
-        var ecdsa = ECDsa.Create();
-        ecdsa.ImportFromEncryptedPem(
-            File.ReadAllText(Environment.ExpandEnvironmentVariables(keyPath)),
-            File.ReadAllText(Environment.ExpandEnvironmentVariables(passwordPath)).Trim());
-        if (ecdsa.ExportParameters(includePrivateParameters: false).Curve.Oid.Value != ECCurve.NamedCurves.nistP256.Oid.Value)
-            throw new InvalidOperationException("The client key must be an EC P-256 key (ES256).");
-
-        var key = new ECDsaSecurityKey(ecdsa);
-        key.KeyId = Base64UrlEncoder.Encode(JsonWebKeyConverter.ConvertFromECDsaSecurityKey(key).ComputeJwkThumbprint());
-        return key;
-    }
-
-    public async Task<ClientAssertion?> GetClientAssertionAsync(
-        ClientCredentialsClientName? clientName = null, TokenRequestParameters? parameters = null, CancellationToken ct = default)
-    {
-        var options = oidc.Get("oidc");
-        var idp = await options.ConfigurationManager!.GetConfigurationAsync(ct);
-        var now = time.GetUtcNow().UtcDateTime;
-        var assertion = new JsonWebTokenHandler { SetDefaultTimesOnTokenCreation = false }.CreateToken(new SecurityTokenDescriptor
+        public static ECDsaSecurityKey LoadKey(IConfiguration configuration)
         {
-            TokenType = "client-authentication+jwt",
-            Issuer = options.ClientId,
-            Audience = idp.Issuer,
-            Claims = new Dictionary<string, object>
+            var keyPath = RequiredSetting.Text(configuration["Oidc:ClientKey:Path"], "Oidc:ClientKey:Path");
+            var passwordPath = RequiredSetting.Text(configuration["Oidc:ClientKey:PasswordPath"], "Oidc:ClientKey:PasswordPath");
+            var ecdsa = ECDsa.Create();
+            ecdsa.ImportFromEncryptedPem(
+                File.ReadAllText(Environment.ExpandEnvironmentVariables(keyPath)),
+                File.ReadAllText(Environment.ExpandEnvironmentVariables(passwordPath)).Trim());
+            if (ecdsa.ExportParameters(includePrivateParameters: false).Curve.Oid.Value != ECCurve.NamedCurves.nistP256.Oid.Value)
+                throw new InvalidOperationException("The client key must be an EC P-256 key (ES256).");
+
+            var key = new ECDsaSecurityKey(ecdsa);
+            key.KeyId = Base64UrlEncoder.Encode(JsonWebKeyConverter.ConvertFromECDsaSecurityKey(key).ComputeJwkThumbprint());
+            return key;
+        }
+
+        public async Task<ClientAssertion?> GetClientAssertionAsync(
+            ClientCredentialsClientName? clientName = null, TokenRequestParameters? parameters = null, CancellationToken ct = default)
+        {
+            var options = oidc.Get("oidc");
+            var idp = await options.ConfigurationManager!.GetConfigurationAsync(ct);
+            var now = time.GetUtcNow().UtcDateTime;
+            var assertion = new JsonWebTokenHandler { SetDefaultTimesOnTokenCreation = false }.CreateToken(new SecurityTokenDescriptor
             {
-                [JwtClaimTypes.Subject] = options.ClientId!,
-                [JwtClaimTypes.JwtId] = Guid.NewGuid().ToString("N")
-            },
-            IssuedAt = now,
-            NotBefore = now,
-            Expires = now.AddSeconds(60),
-            SigningCredentials = new SigningCredentials(key, SecurityAlgorithms.EcdsaSha256)
-        });
-        return new ClientAssertion { Type = OidcConstants.ClientAssertionTypes.JwtBearer, Value = assertion };
+                TokenType = "client-authentication+jwt",
+                Issuer = options.ClientId,
+                Audience = idp.Issuer,
+                Claims = new Dictionary<string, object>
+                {
+                    [JwtClaimTypes.Subject] = options.ClientId!,
+                    [JwtClaimTypes.JwtId] = Guid.NewGuid().ToString("N")
+                },
+                IssuedAt = now,
+                NotBefore = now,
+                Expires = now.AddSeconds(60),
+                SigningCredentials = new SigningCredentials(key, SecurityAlgorithms.EcdsaSha256)
+            });
+            return new ClientAssertion { Type = OidcConstants.ClientAssertionTypes.JwtBearer, Value = assertion };
+        }
     }
 }
