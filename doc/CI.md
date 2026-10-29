@@ -104,6 +104,13 @@ SQL `UPPER`), the launcher's own `Clear-Host`. Turned off: CA1873 (logging argum
 values - see [.editorconfig](../.editorconfig)). Excluded: `**/*.sql` (SonarQube Cloud reads T-SQL and
 PostgreSQL as Oracle PL/SQL). **Duplication stays by design**: each micro front end and its BFF is
 its squad's own deployable, so their start-up code is not shared through a central project.
+The look-alike scaffold files are therefore left out of SonarQube Cloud's duplication count
+(`sonar.cpd.exclusions` in [code-scanning.yml](../.github/workflows/code-scanning.yml)):
+`Program.cs`, `AuthController.cs`, `*DbContext.cs`, `*OutboxPublisher.cs`, `MfeShell.tsx`,
+`components/ui/feedback.tsx`, `lib/server/oidc.ts`, `lib/server/session-store.ts`. All other rules
+still run on them, and copy-paste anywhere else still counts. A comment cannot do this: `NOSONAR`
+and `#pragma` silence issues, not duplication. Start-up stays inline in each `Program.cs` (no
+`builder.AddXxx()` helpers) so a reader sees the whole pipeline in one file.
 
 **SonarQube Cloud's quality gate is red on every pull request - by decision.** The free plan
 allows only the built-in "Sonar way" gate, which wants 80 % test coverage on new code, and no
