@@ -2,6 +2,7 @@
 
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
@@ -195,6 +196,13 @@ builder.Services
         // │ match what the IDP sends.
         // └──────────────────────────────────────────────────────────────────────────────────────
         options.ResponseMode = "query";
+
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ PAR required (RFC 9126, FAPI 2.0): the authorization request - scopes, redirect, PKCE
+        // │ challenge, prompt / acr_values - is pushed to the IDP with the client secret; the browser
+        // │ is sent only a one-time request_uri. No silent fallback: an IDP without PAR stops sign-in.
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        options.PushedAuthorizationBehavior = PushedAuthorizationBehavior.Require;
 
         // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
         // │ Keep the original claim names in the sign-in principal too (role, branch, lan_id) -

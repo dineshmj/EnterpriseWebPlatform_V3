@@ -8,10 +8,11 @@ import { savePendingSignIn, takePendingSignIn } from './pending-sign-in';
 // ┌─ :: SECURITY :: OIDC client: code + PKCE, fresh session, single-flight refresh ────────────────
 // │ Why : A session ID that survives sign-in can be fixed by an attacker; two parallel refreshes
 // │       with a rotating refresh token would revoke each other.
-// │ How : Authorization Code + PKCE (prompt=none in the frame, prompt=login + acr_values=mfa for
-// │       step-up); the session ID is regenerated at sign-in; refreshes for the same token share
-// │       one call.
-// │ Ref : Features 2.1.1, 2.3.4, 2.1.5 | RFC 7636 | OWASP Session Fixation | RFC 9700 (rotation)
+// │ How : Authorization Code + PKCE, pushed to the IDP first (PAR) (prompt=none in the frame,
+// │       prompt=login + acr_values=mfa for step-up); the session ID is regenerated at sign-in;
+// │       refreshes for the same token share one call.
+// │ Ref : Features 2.1.1, 2.3.4, 2.1.5 | RFC 7636 | RFC 9126 (PAR) |
+// │       OWASP Session Fixation | RFC 9700 (rotation)
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 @Injectable()
 export class OidcService {
@@ -68,7 +69,11 @@ export class OidcService {
     // In its own cookie, not the session (pending-sign-in.ts).
     savePendingSignIn(res, this.options.sessionKey, { state, nonce, codeVerifier, returnUrl });
 
-    return client.authorizationUrl({
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────────
+    // │ PAR (RFC 9126, FAPI 2.0): the request is pushed to the IDP with the client secret; the
+    // │ browser is sent only client_id + a one-time request_uri (60 s) - nothing to read or change.
+    // └──────────────────────────────────────────────────────────────────────────────────────────
+    const pushed = await client.pushedAuthorizationRequest({
       scope: 'openid profile email roles organization offline_access customer-kyc.read customer-kyc.write',
       response_mode: 'query',
       state,
@@ -78,6 +83,10 @@ export class OidcService {
       ...(silent ? { prompt: 'none' } : {}),
       ...(stepUp ? { prompt: 'login', acr_values: 'mfa' } : {})
     });
+    const url = new URL(String(client.issuer.metadata.authorization_endpoint));
+    url.searchParams.set('client_id', this.options.clientId);
+    url.searchParams.set('request_uri', pushed.request_uri);
+    return url.href;
   }
 
   async handleCallback(req: Request, res: Response): Promise<string> {

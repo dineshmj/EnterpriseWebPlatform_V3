@@ -28,6 +28,14 @@ public sealed class BssClient
                     AllowedGrantTypes = GrantTypes.Code,
                     RequirePkce = true,
 
+                    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+                    // │ PAR (RFC 9126, FAPI 2.0): the BFF pushes the authorization request to the IDP over the
+                    // │ back channel, authenticated; the browser carries only a one-time request_uri (60 s), so
+                    // │ no one can read or change the request on its way (scopes, redirect, PKCE challenge).
+                    // └──────────────────────────────────────────────────────────────────────────────────────
+                    RequirePushedAuthorization = true,
+                    PushedAuthorizationLifetime = 60,
+
 
                     RedirectUris = { $"{ClientSettings.BaseUrlOf(nameof(ClientIds.Shell))}/signin-oidc" },
                     PostLogoutRedirectUris = { $"{ClientSettings.BaseUrlOf(nameof(ClientIds.Shell))}/signout-callback-oidc" },

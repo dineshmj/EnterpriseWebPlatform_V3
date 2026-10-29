@@ -716,11 +716,16 @@ Demo: with the file, set `digital-gold-sales-paused` to `on` in `feature-flags/e
 
 Users sign in with OpenID Connect Authorization Code flow plus PKCE, the flow recommended by OAuth 2.1 and RFC 9700. The flow is run by each front end's **Backend-for-Frontend**, a confidential server-side client. Access and refresh tokens stay in the BFF's server-side session and never reach the browser. The browser holds only an HttpOnly session cookie that JavaScript cannot read, so a cross-site scripting bug cannot steal a token. Each MFE signs in silently against the IDP's single sign-on session (`prompt=none`), so the user signs in once for every workspace. Refresh tokens are one-time use (rotation).
 
+**Pushed authorization requests (PAR, FAPI 2.0).** The sign-in request itself never travels through the browser. Each BFF first **pushes** it to the IDP over the back channel, with its client secret: scopes, redirect address, PKCE challenge, and `prompt` / `acr_values` for silent sign-in and step-up. The IDP answers with a one-time `request_uri` (valid 60 s), and the browser is sent to the IDP with nothing but that and the client ID. A browser extension, a proxy log or a doctored link has nothing to read or change. The IDP requires PAR for the Shell and all eight web apps, and the BFFs require it from the IDP (no silent fallback).
+
 **Where to look at:**
 
 - IDP clients: [MfeCustomerKyc.cs](../src/IDP/ConfigRegistration/Clients/MFEs/MfeCustomerKyc.cs) (`RequirePkce`, `RefreshTokenUsage.OneTimeOnly`), [BssShell.cs](../src/IDP/ConfigRegistration/Clients/BssShell.cs)
 - .NET BFFs with Duende BFF and server-side sessions: [CO BFF Program.cs](../src/Microservices/CustomerOnboarding/BFF.Web/Program.cs), [Shell Program.cs](../src/Shell/Program.cs)
 - NestJS BFF: [oidc.service.ts](../src/Microservices/CustomerKyc/BFF.Web/src/auth/oidc.service.ts)
+- PAR: `RequirePushedAuthorization` in the clients above; `PushedAuthorizationBehavior.Require` in the .NET BFFs; `pushedAuthorizationRequest` in the Node BFFs (e.g. [Audit oidc.ts](../src/Microservices/Audit/BFF.Web/lib/server/oidc.ts)); UT [StaffSignInClients_Edge_PushedAuthorizationRequired.cs](../tst/dotnet/IDP.Tests/Clients/StaffSignInClients_Edge_PushedAuthorizationRequired.cs)
+
+**Not yet (FAPI 2.0 for staff):** the staff BFFs still prove themselves with a client secret (not `private_key_jwt`) and hold plain bearer tokens (not DPoP-bound). The customers' channel already has both ([2.1.6](#216-customers-sign-in-to-their-own-channel-my-ewp-fapi-20)).
 
 #### 2.1.2 Separate human and machine identities
 

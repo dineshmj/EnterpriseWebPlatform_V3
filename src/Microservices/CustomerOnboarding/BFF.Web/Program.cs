@@ -160,6 +160,13 @@ builder.Services
         // └──────────────────────────────────────────────────────────────────────────────────────
         options.ResponseType = "code";
         options.ResponseMode = "query";
+
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ PAR required (RFC 9126, FAPI 2.0): the authorization request - scopes, redirect, PKCE
+        // │ challenge, prompt / acr_values - is pushed to the IDP with the client secret; the browser
+        // │ is sent only a one-time request_uri. No silent fallback: an IDP without PAR stops sign-in.
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        options.PushedAuthorizationBehavior = PushedAuthorizationBehavior.Require;
         options.UsePkce = true;
         // ┌─ ARCH + SEC ─────────────────────────────────────────────────────────────────────────
         // │ Tokens kept in the server-side session for the API calls (refreshed when needed) -

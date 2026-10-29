@@ -30,6 +30,14 @@ public sealed class MfeCustomerKyc
                     AllowedGrantTypes = { GrantType.AuthorizationCode, OidcConstants.GrantTypes.TokenExchange },
                     RequirePkce = true,
 
+                    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+                    // │ PAR (RFC 9126, FAPI 2.0): the BFF pushes the authorization request to the IDP over the
+                    // │ back channel, authenticated; the browser carries only a one-time request_uri (60 s), so
+                    // │ no one can read or change the request on its way (scopes, redirect, PKCE challenge).
+                    // └──────────────────────────────────────────────────────────────────────────────────────
+                    RequirePushedAuthorization = true,
+                    PushedAuthorizationLifetime = 60,
+
                     RedirectUris = { $"{ClientSettings.BaseUrlOf(nameof(ClientIds.CustomerKycWeb))}/api/auth/callback" },
                     PostLogoutRedirectUris = { $"{ClientSettings.BaseUrlOf(nameof(ClientIds.CustomerKycWeb))}/signout-callback-oidc" },
                     FrontChannelLogoutUri = $"{ClientSettings.BaseUrlOf(nameof(ClientIds.CustomerKycWeb))}/signout-oidc",

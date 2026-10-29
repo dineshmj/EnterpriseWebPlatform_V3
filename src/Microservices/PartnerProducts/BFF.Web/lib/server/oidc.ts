@@ -7,10 +7,11 @@ let clientPromise: Promise<Client> | undefined;
 // ┌─ :: SECURITY :: OIDC client and the first token exchange ──────────────────────────────────────
 // │ Why : The browser must never hold a token, and the Journey API must know which person is asking
 // │       through which app.
-// │ How : Authorization Code + PKCE with state and nonce; tokens stay in the server-side session
-// │       and are refreshed there; each call exchanges the person's token (RFC 8693) for a Journey
-// │       API token naming this BFF as "act".
-// │ Ref : Features 2.1.1, 2.1.2 | RFC 7636 | RFC 8693 | IETF OAuth for Browser-Based Apps
+// │ How : Authorization Code + PKCE with state and nonce, pushed to the IDP first (PAR); tokens
+// │       stay in the server-side session and are refreshed there; each call exchanges the
+// │       person's token (RFC 8693) for a Journey API token naming this BFF as "act".
+// │ Ref : Features 2.1.1, 2.1.2 | RFC 7636 | RFC 9126 (PAR) | RFC 8693 |
+// │       IETF OAuth for Browser-Based Apps
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 /** The IDP client of this light BFF (discovered once; retried after a failure). */
 export function oidcClient(): Promise<Client> {
@@ -49,7 +50,11 @@ export async function authorizationRequest(returnUrl: string, silent: boolean): 
     codeVerifier: generators.codeVerifier(),
     returnUrl,
   };
-  const url = client.authorizationUrl({
+  // ┌─ SEC ──────────────────────────────────────────────────────────────────────────────────────
+  // │ PAR (RFC 9126, FAPI 2.0): the request is pushed to the IDP with the client secret; the
+  // │ browser is sent only client_id + a one-time request_uri (60 s) - nothing to read or change.
+  // └────────────────────────────────────────────────────────────────────────────────────────────
+  const pushed = await client.pushedAuthorizationRequest({
     scope: 'openid profile roles organization offline_access',
     response_mode: 'query',
     state: pending.state,
@@ -58,7 +63,10 @@ export async function authorizationRequest(returnUrl: string, silent: boolean): 
     code_challenge_method: 'S256',
     ...(silent ? { prompt: 'none' } : {}),
   });
-  return { url, pending };
+  const url = new URL(String(client.issuer.metadata.authorization_endpoint));
+  url.searchParams.set('client_id', config.clientId);
+  url.searchParams.set('request_uri', pushed.request_uri);
+  return { url: url.href, pending };
 }
 
 export function toSession(tokens: TokenSet): SessionData {
