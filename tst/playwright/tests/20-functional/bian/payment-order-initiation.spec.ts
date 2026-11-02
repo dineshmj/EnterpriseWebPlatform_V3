@@ -5,7 +5,7 @@ import { bffSessionFor } from '../../../support/bff';
 import { fundedCustomer, payees } from '../../../support/journeys/payments';
 import { resetAllSimulators } from '../../../support/simulators';
 import { urls } from '../../../support/services';
-import { paymentsWebSignInToken } from '../../../support/tokens';
+import { authorizationFor, paymentsWebSignInToken } from '../../../support/tokens';
 
 /**
  * ┌─ :: ARCHITECTURE :: The Payments API speaks BIAN - shown live, next to its own /v1 ───────────
@@ -35,7 +35,8 @@ interface BianTransaction {
 const v2 = `${urls.paymentsApi}/v2/PaymentOrderInitiation`;
 
 async function retrieve(http: APIRequestContext, token: string, paymentId: number): Promise<BianTransaction> {
-  const response = await http.get(`${v2}/${paymentId}/Retrieve`, { headers: { Authorization: `Bearer ${token}` } });
+  const url = `${v2}/${paymentId}/Retrieve`;
+  const response = await http.get(url, { headers: authorizationFor(token, 'GET', url) });
   expect(response.status(), await response.text()).toBe(200);
   return await response.json() as BianTransaction;
 }
@@ -70,7 +71,7 @@ test.describe('BIAN - Payment Order Initiation (/v2)', () => {
       Amount: { AmountValue: '1100.00', AmountCurrency: { Currencycode: 'AUD' } },
       PaymentPurpose: 'BIAN demo',
     };
-    const initiated = await request.post(`${v2}/Initiate`, { data: order, headers: { Authorization: `Bearer ${sophieToken}`, 'Idempotency-Key': key } });
+    const initiated = await request.post(`${v2}/Initiate`, { data: order, headers: { ...authorizationFor(sophieToken, 'POST', `${v2}/Initiate`), 'Idempotency-Key': key } });
     expect(initiated.status(), await initiated.text()).toBe(202);
     const location = initiated.headers()['location'] ?? '';
     expect(location).toMatch(/^\/v2\/PaymentOrderInitiation\/\d+\/Retrieve$/);
@@ -83,7 +84,8 @@ test.describe('BIAN - Payment Order Initiation (/v2)', () => {
     expect(statusOf(pending).PaymentTransactionStatusType).toBe('Pending');
 
     // Assert 2: /v1 shows the same payment - one payment, two contracts.
-    const v1 = await request.get(`${urls.paymentsApi}/v1/payments/${paymentId}`, { headers: { Authorization: `Bearer ${sophieToken}` } });
+    const v1Payment = `${urls.paymentsApi}/v1/payments/${paymentId}`;
+    const v1 = await request.get(v1Payment, { headers: authorizationFor(sophieToken, 'GET', v1Payment) });
     expect(v1.status()).toBe(200);
     const same = await v1.json() as V1Payment;
     expect(same.paymentNumber).toBe(pending.PaymentTransaction.PaymentTransactionIdentification.PaymentIdentification.IdentifierValue);
@@ -99,18 +101,19 @@ test.describe('BIAN - Payment Order Initiation (/v2)', () => {
         payeeName: payees.matching.name, toBsb: payees.matching.bsb, toAccountNumber: payees.matching.accountNumber,
         amount: 1100, reference: 'BIAN demo',
       },
-      headers: { Authorization: `Bearer ${sophieToken}`, 'Idempotency-Key': key },
+      headers: { ...authorizationFor(sophieToken, 'POST', `${urls.paymentsApi}/v1/payments`), 'Idempotency-Key': key },
     });
     expect(resent.status(), await resent.text()).toBe(200);
     expect((await resent.json() as { paymentId: number }).paymentId).toBe(paymentId);
 
     // Act + Assert 4: BIAN's Exchange keeps /v1's rules - Sophie may not approve.
     const decision = (task: string) => ({ OrderInitiationTaskResult: { Task: task }, PaymentOrderProcedureInstanceStatus: { StatusReason: 'Confirmed with the customer by phone' } });
-    const bySophie = await request.put(`${v2}/${paymentId}/OrderInitiation/approval/Exchange`, { data: decision('Approve'), headers: { Authorization: `Bearer ${sophieToken}` } });
+    const exchange = `${v2}/${paymentId}/OrderInitiation/approval/Exchange`;
+    const bySophie = await request.put(exchange, { data: decision('Approve'), headers: authorizationFor(sophieToken, 'PUT', exchange) });
     expect(bySophie.status(), 'a customer service agent approving through /v2').toBe(403);
 
     // Act + Assert 5: Emily approves through BIAN's Exchange; the payment completes.
-    const byEmily = await request.put(`${v2}/${paymentId}/OrderInitiation/approval/Exchange`, { data: decision('Approve'), headers: { Authorization: `Bearer ${emilyToken}` } });
+    const byEmily = await request.put(exchange, { data: decision('Approve'), headers: authorizationFor(emilyToken, 'PUT', exchange) });
     expect(byEmily.status(), await byEmily.text()).toBe(200);
     expect((await byEmily.json() as { OrderInitiationTaskResult: { Task: string } }).OrderInitiationTaskResult.Task).toBe('Approved');
     await expect.poll(async () => statusOf(await retrieve(request, emilyToken, paymentId)).PaymentTransactionStatusType,

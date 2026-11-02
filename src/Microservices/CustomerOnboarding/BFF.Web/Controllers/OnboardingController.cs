@@ -338,7 +338,8 @@ public sealed class OnboardingController(
         {
             Content = content
         };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", documentsToken);
+        // SEC: the DPoP-bound token with a proof for this very upload (RFC 9449).
+        await documentsTokenService.AuthorizeAsync(request, client.BaseAddress!, documentsToken, cancellationToken);
         request.Headers.Add("X-Document-Type", documentType);
         request.Headers.Add("X-Business-Reference", businessReference);
         // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
@@ -415,7 +416,7 @@ public sealed class OnboardingController(
                 using var request = new HttpRequestMessage(
                     HttpMethod.Delete,
                     $"/v1/documents/{documentId}");
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", documentsToken);
+                await documentsTokenService.AuthorizeAsync(request, client.BaseAddress!, documentsToken, cancellationToken);
 
                 using var response = await client.SendAsync(request, cancellationToken);
                 if (!response.IsSuccessStatusCode)

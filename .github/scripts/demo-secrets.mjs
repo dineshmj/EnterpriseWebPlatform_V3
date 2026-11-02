@@ -84,6 +84,13 @@ const webClients = {
   'PartnerProducts.Microservice.Web.ClientID': 'partner-products-bff-web',
 };
 
+// ┌─ SEC ──────────────────────────────────────────────────────────────────────────────────────────
+// │ DPoP (RFC 9449): the apps whose tokens are bound to a key of their own - a second EC P-256 key,
+// │ not the client key. Its encrypted PEM + password go into the same Secret as the client key
+// │ (ewp-<component>-client-key, keys dpop-key.pem*); nobody else gets it, the IDP never does.
+// └────────────────────────────────────────────────────────────────────────────────────────────────
+const dpopApps = ['shell', 'customer-onboarding-bff-web', 'compliance-bff-web', 'accounts-bff-web', 'payments-bff-web'];
+
 // Each component's database (key, role, database) and Kafka user (key, user).
 const databases = {
   idp: [['ConnectionStrings__IdentityDbConnection', 'ewp_idp', 'EwpIdentityAccessDb']],
@@ -156,6 +163,8 @@ const o = {
   clientKey: (name) => `idp-client-key-${name}`,
   clientPrivateKey: (name) => `client-private-key-${name}`,
   clientPrivateKeyPassword: (name) => `client-private-key-password-${name}`,
+  dpopPrivateKey: (name) => `dpop-private-key-${name}`,
+  dpopPrivateKeyPassword: (name) => `dpop-private-key-password-${name}`,
   trustRoot: 'pki-trust-root-cer',
   partnerClientPfx: 'pki-ewp-partner-client-pfx',
   partnerClientPassword: 'pki-ewp-partner-client-password',
@@ -221,6 +230,10 @@ function ewpNamespace() {
     add('ewp-idp-client-keys', `${id}.jwk`, o.clientKey(component));
     add(`ewp-${component}-client-key`, 'client-key.pem', o.clientPrivateKey(component));
     add(`ewp-${component}-client-key`, 'client-key.pem.password', o.clientPrivateKeyPassword(component));
+  }
+  for (const component of dpopApps) {
+    add(`ewp-${component}-client-key`, 'dpop-key.pem', o.dpopPrivateKey(component));
+    add(`ewp-${component}-client-key`, 'dpop-key.pem.password', o.dpopPrivateKeyPassword(component));
   }
   add('ewp-partner-pki', 'ewp-partner-client.pfx', o.partnerClientPfx, b64);
   add('ewp-partner-pki', 'ewp-partner-client.pfx.password', o.partnerClientPassword);
@@ -295,6 +308,13 @@ function clientKeyPair() {
     privatePem: privateKey.export({ type: 'pkcs8', format: 'pem', cipher: 'aes-256-cbc', passphrase: keyPassword }),
     keyPassword,
   };
+}
+
+// A DPoP key: the private part only (encrypted PKCS#8 PEM + its password) - no one registers the
+// public part, each token names it (cnf.jkt).
+function dpopKey() {
+  const { privatePem, keyPassword } = clientKeyPair();
+  return { privatePem, keyPassword };
 }
 
 // A public JWK only (the customers' channel is not deployed: its private keys are thrown away).
@@ -419,7 +439,11 @@ if (process.argv.includes('--check-pki')) {
     const kid = createHash('sha256').update(JSON.stringify({ crv: opened.crv, kty: opened.kty, x: opened.x, y: opened.y })).digest('base64url');
     if (opened.x !== jwk.x || opened.y !== jwk.y || kid !== jwk.kid || 'd' in jwk)
       throw new Error('A client key pair does not match its public JWK (or the JWK holds the private part).');
-    console.log('PKI OK: 5 .pfx open with their passwords; server and client chain to the root; Partner hosts named; client subject as the Partner Bank expects; client key pairs match.');
+    // A DPoP key opens with its password and is P-256 (ES256) - else the app does not start.
+    const dpop = dpopKey();
+    if (createPrivateKey({ key: dpop.privatePem, format: 'pem', passphrase: dpop.keyPassword }).asymmetricKeyDetails?.namedCurve !== 'prime256v1')
+      throw new Error('A DPoP key is not an EC P-256 key.');
+    console.log('PKI OK: 5 .pfx open with their passwords; server and client chain to the root; Partner hosts named; client subject as the Partner Bank expects; client key pairs match; DPoP keys open.');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -506,6 +530,24 @@ await inBatches(Object.values(webClients), async (component) => {
   for (const [i, name] of names.entries()) {
     await vaultCall(ewpVault, 'PUT', name, { value: made3[i], contentType: 'ewp-demo-client-key' });
     values.ewp[name] = made3[i];
+  }
+  made += names.length;
+}, 3);
+
+// Each DPoP key: both parts or none (a half-written one is issued anew; sessions bound to the old
+// key end at the app's next start - the people sign in again).
+await inBatches(dpopApps, async (component) => {
+  const names = [o.dpopPrivateKey(component), o.dpopPrivateKeyPassword(component)];
+  const found = await Promise.all(names.map((name) => vaultCall(ewpVault, 'GET', name)));
+  if (found.every((v) => v !== undefined)) {
+    names.forEach((name, i) => { values.ewp[name] = found[i]; });
+    return;
+  }
+  const key = dpopKey();
+  const made2 = [key.privatePem, key.keyPassword];
+  for (const [i, name] of names.entries()) {
+    await vaultCall(ewpVault, 'PUT', name, { value: made2[i], contentType: 'ewp-demo-dpop-key' });
+    values.ewp[name] = made2[i];
   }
   made += names.length;
 }, 3);

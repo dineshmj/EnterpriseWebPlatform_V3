@@ -11,6 +11,7 @@ Deployables: `src/Microservices/<Context>/API` for Customer Onboarding, KYC, Doc
   - `ValidTypes = ["at+jwt"]`, so an ID token never passes.
 
   → each `Program.cs`
+- [x] **DPoP-bound tokens need their proof** (RFC 9449, `ConfigureDPoPTokensForScheme`): a token with `cnf.jkt` passes only as `Authorization: DPoP` with a fresh proof for this method and address (~30 s, once); sent as `Bearer` it is refused. Machine tokens stay `Bearer`. *Because* a copied token must be useless without the key. → each `Program.cs`
 - [x] **Claim names are kept as issued** (`MapInboundClaims = false`), and the role claim is `role`.
 
 ## 2. Authorization

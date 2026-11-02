@@ -37,6 +37,11 @@
                                               PEM), the public key as a JWK that the IDP registers. Made by
                                               New-EwpClientKeys.mjs (needs Node.js) - stay on this laptop
 
+        <app>-dpop.key.pem + .password        the DPoP keys (RFC 9449) of the staff web apps and the
+                                              Journey APIs: EC P-256, private part only (no one registers
+                                              the public one - each token names it); apart from the client
+                                              keys. Same script - stay on this laptop
+
     Windows' certificate stores are used only briefly to create and sign the certificates, and are
     cleaned again: the services trust ewp-trust-root.cer through their own configuration. Browsers
     that open Partner Bank pages need the root in "Trusted Root Certification Authorities" - that is a
@@ -187,13 +192,15 @@ finally {
 # ---------------------------------------------------------------------- client keys (private_key_jwt)
 
 # ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
-# │ The customers' channel authenticates to the IDP with private_key_jwt (FAPI 2.0): plain
-# │ key pairs, no certificate - the IDP trusts the registered PUBLIC key, not a CA. Node.js
-# │ writes them (PowerShell 5.1 cannot export PKCS#8 PEM); a new key needs an IDP restart.
+# │ The staff web apps and the customers' channel authenticate to the IDP with private_key_jwt
+# │ (FAPI 2.0): plain key pairs, no certificate - the IDP trusts the registered PUBLIC key,
+# │ not a CA. The DPoP keys (RFC 9449) are made here too. Node.js writes them (PowerShell 5.1
+# │ cannot export PKCS#8 PEM); a new client key needs an IDP restart, a new DPoP key the
+# │ app's (its people sign in again).
 # └──────────────────────────────────────────────────────────────────────────────────────
 $node = Get-Command node -ErrorAction SilentlyContinue
 if ($node) {
-    Write-Host 'Client keys (private_key_jwt):'
+    Write-Host 'Client keys (private_key_jwt) and DPoP keys:'
     $keyArgs = @((Join-Path $PSScriptRoot 'New-EwpClientKeys.mjs'), $OutputFolder)
     if ($Force) { $keyArgs += '--force' }
     & $node.Source @keyArgs

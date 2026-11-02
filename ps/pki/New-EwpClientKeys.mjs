@@ -6,7 +6,9 @@
 // │       so one shape serves every client. The public key is written as a JWK with its RFC 7638
 // │       thumbprint as key ID.
 // │       Existing keys are kept unless --force is given (a new key needs an IDP restart).
-// │ Ref : Features 2.1.6 | FAPI 2.0 Security Profile §5.3.1 | RFC 7523, 7517, 7638 |
+// │       DPoP keys (RFC 9449) are separate pairs, one per staff app that holds tokens: same PEM
+// │       shape, no public file - the IDP never registers them, each token names its key (cnf.jkt).
+// │ Ref : Features 2.1.1, 2.1.6 | FAPI 2.0 Security Profile §5.3.1 | RFC 7523, 7517, 7638, 9449 |
 // │       Threat-Model R-10 (keys in files: development only)
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 // DEVELOPMENT ONLY. Called by New-EwpLocalPki.ps1:  node New-EwpClientKeys.mjs <folder> [--force]
@@ -21,6 +23,18 @@ const clients = [
   'partner-products-web-client',
   // The customers' channel (My EWP).
   'self-service-web-client', 'self-service-journey-api-client',
+];
+
+// ┌─ SEC ──────────────────────────────────────────────────────────────────────────────────────────
+// │ DPoP keys: the staff web apps and the Journey APIs that exchange tokens. A key of its own,
+// │ not the client key: proving "I hold this token" and "I am this client" stay separate, and
+// │ one can be replaced without the other.
+// └────────────────────────────────────────────────────────────────────────────────────────────────
+const dpopKeys = [
+  'shell-web-dpop', 'customer-onboarding-web-dpop', 'customer-kyc-web-dpop', 'compliance-web-dpop',
+  'accounts-web-dpop', 'payments-web-dpop', 'audit-web-dpop', 'operations-web-dpop',
+  'partner-products-web-dpop',
+  'audit-journey-api-dpop', 'operations-journey-api-dpop', 'partner-products-journey-api-dpop',
 ];
 
 const [folder, ...flags] = process.argv.slice(2);
@@ -53,4 +67,20 @@ for (const name of clients) {
   writeFileSync(passwordPath, password);
   writeFileSync(publicPath, JSON.stringify({ kty: 'EC', crv: 'P-256', x: jwk.x, y: jwk.y, kid, use: 'sig', alg: 'ES256' }, null, 2));
   console.log(`  created ${name} (kid ${kid})`);
+}
+
+for (const name of dpopKeys) {
+  const privatePath = join(folder, `${name}.key.pem`);
+  const passwordPath = join(folder, `${name}.key.pem.password`);
+
+  if (!force && existsSync(privatePath) && existsSync(passwordPath)) {
+    console.log(`  kept    ${name} (use -Force to issue a new key)`);
+    continue;
+  }
+
+  const password = randomBytes(32).toString('base64');
+  const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  writeFileSync(privatePath, privateKey.export({ type: 'pkcs8', format: 'pem', cipher: 'aes-256-cbc', passphrase: password }));
+  writeFileSync(passwordPath, password);
+  console.log(`  created ${name}`);
 }

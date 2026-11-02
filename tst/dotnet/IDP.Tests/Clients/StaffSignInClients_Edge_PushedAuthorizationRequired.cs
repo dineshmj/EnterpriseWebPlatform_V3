@@ -18,7 +18,8 @@ namespace EnterpriseWebPlatform.IdentityServer.Tests.Clients;
 // │ FAPI 2.0 for the staff channel: the Shell and every web app sign people in with PAR
 // │ only (RFC 9126) - an authorization request sent through the browser is refused - plus
 // │ PKCE and a short-lived request_uri, and prove themselves with private_key_jwt (a public
-// │ key at the IDP, no shared secret). A new web app copied without either fails here.
+// │ key at the IDP, no shared secret). A new web app copied without either fails here, and
+// │ so does a .NET web app whose tokens are not DPoP-bound (RFC 9449).
 // └──────────────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 [Category("Security")]
@@ -41,6 +42,16 @@ public sealed class StaffSignInClients_Edge_PushedAuthorizationRequired
         yield return new TestCaseData(() => MfeAudit.Client).SetName("Audit");
         yield return new TestCaseData(() => MfeOperations.Client).SetName("Operations");
         yield return new TestCaseData(() => MfePartnerProducts.Client).SetName("Partner Products");
+    }
+
+    // The web apps whose tokens are DPoP-bound (A5 part 2b-1: the .NET BFFs; the Node BFFs follow).
+    private static IEnumerable<TestCaseData> DPoPBoundClients()
+    {
+        yield return new TestCaseData(() => BssClient.Client).SetName("Shell (DPoP)");
+        yield return new TestCaseData(() => MfeCustomerOnboarding.Client).SetName("Customer Onboarding (DPoP)");
+        yield return new TestCaseData(() => MfeCompliance.Client).SetName("Compliance (DPoP)");
+        yield return new TestCaseData(() => MfeAccounts.Client).SetName("Accounts (DPoP)");
+        yield return new TestCaseData(() => MfePayments.Client).SetName("Payments (DPoP)");
     }
 
     private string _keyFolder = string.Empty;
@@ -109,5 +120,15 @@ public sealed class StaffSignInClients_Edge_PushedAuthorizationRequired
         secret.Type.Should().Be(IdentityServerConstants.SecretTypes.JsonWebKey, "private_key_jwt (FAPI 2.0), not a shared secret");
         secret.Value.Should().NotContain("\"d\"", "the IDP holds the public key only");
         client.RequireClientSecret.Should().BeTrue();
+    }
+
+    [TestCaseSource(nameof(DPoPBoundClients))]
+    public void Given_AStaffWebAppHoldingTokens_When_ItsClientIsBuilt_Then_EveryTokenIsBoundToItsDPoPKey(Func<Client> build)
+    {
+        // Given / When
+        var client = build();
+
+        // Then
+        client.RequireDPoP.Should().BeTrue("a bearer token copied from a log or a memory dump must be useless (FAPI 2.0, RFC 9449)");
     }
 }

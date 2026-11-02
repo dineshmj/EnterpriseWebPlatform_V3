@@ -104,9 +104,20 @@ public sealed class TokenExchangeGrantValidator(
             token.ActingClientId == ClientSettings.Ids.SelfServiceWeb
     };
 
-    /// <summary>Clients whose subject tokens are DPoP-bound (RFC 9449): the customers' channel.</summary>
+    /// <summary>
+    /// Clients whose subject tokens are DPoP-bound (RFC 9449): the customers' channel, and the staff
+    /// BFFs that exchange their own sign-in token (Customer Onboarding, for Documents Management).
+    /// </summary>
     private readonly HashSet<string> SenderConstrained =
-        [ClientSettings.Ids.SelfServiceWeb, ClientSettings.Ids.SelfServiceJourneyApi];
+        [ClientSettings.Ids.SelfServiceWeb, ClientSettings.Ids.SelfServiceJourneyApi, ClientSettings.Ids.CustomerOnboardingWeb];
+
+    /// <summary>
+    /// Of those, the clients that exchange the token issued to THEMSELVES at sign-in: its key must be
+    /// the very key they prove on the exchange. (A Journey API's subject token is bound to the BFF
+    /// that called it, so for it the binding is checked, not the key's owner.)
+    /// </summary>
+    private readonly HashSet<string> ExchangesOwnSignInToken =
+        [ClientSettings.Ids.SelfServiceWeb, ClientSettings.Ids.CustomerOnboardingWeb];
 
     public async Task ValidateAsync(ExtensionGrantValidationContext context, CancellationToken cancellationToken)
     {
@@ -154,18 +165,19 @@ public sealed class TokenExchangeGrantValidator(
         }
 
         // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
-        // │ DPoP (RFC 9449) along the customers' chain. The subject token must itself be
-        // │ sender-constrained (cnf.jkt); the BFF must ALSO prove it holds that very key (its
-        // │ proof on this request has the same thumbprint) - a copied customer token cannot be
-        // │ exchanged by anyone else. The Journey API's subject token is bound to the BFF's key
-        // │ (it was the BFF that called it); the new token is bound to the Journey API's own.
+        // │ DPoP (RFC 9449) along the customers' chain and for the staff BFFs that hold DPoP-bound
+        // │ tokens. The subject token must itself be sender-constrained (cnf.jkt); a BFF must
+        // │ ALSO prove it holds that very key (its proof on this request has the same thumbprint)
+        // │ - a copied token cannot be exchanged by anyone else. The Journey API's subject token
+        // │ is bound to the BFF's key (it was the BFF that called it); the new token is bound to
+        // │ the Journey API's own.
         // └──────────────────────────────────────────────────────────────────────────────────────
         if (SenderConstrained.Contains(requester))
         {
             var proofKey = context.Request.ProofKeyThumbprint;
             var bound = token.ConfirmationKeyThumbprint is not null &&
                         !string.IsNullOrEmpty(proofKey) &&
-                        (requester != ClientSettings.Ids.SelfServiceWeb || token.ConfirmationKeyThumbprint == proofKey);
+                        (!ExchangesOwnSignInToken.Contains(requester) || token.ConfirmationKeyThumbprint == proofKey);
             if (!bound)
             {
                 logger.LogWarning("Token exchange refused: {Requester} presented a subject token that is not bound to the expected DPoP key.", requester);

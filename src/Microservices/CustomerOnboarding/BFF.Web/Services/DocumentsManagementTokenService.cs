@@ -1,7 +1,11 @@
+using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using Microsoft.Extensions.Options;
+
 using Duende.AccessTokenManagement;
+using Duende.AccessTokenManagement.DPoP;
 using Duende.AccessTokenManagement.OpenIdConnect;
 
 using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
@@ -13,6 +17,12 @@ public interface IDocumentsManagementTokenService
 {
     /// <summary>A Documents Management token for the signed-in agent (token exchange).</summary>
     Task<string> GetTokenAsync(HttpContext httpContext, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Puts the Documents Management token on a request, with a new DPoP proof for exactly that
+    /// request (its method and address): the token is bound to this BFF's key.
+    /// </summary>
+    Task AuthorizeAsync(HttpRequestMessage request, Uri baseAddress, string documentsToken, CancellationToken cancellationToken);
 }
 
 // ┌─ :: SECURITY :: Token exchange for Documents Management ───────────────────────────────────────
@@ -20,8 +30,11 @@ public interface IDocumentsManagementTokenService
 // │       or a header asserted by the BFF would not prove it.
 // │ How : The agent's token is exchanged (RFC 8693) for a short-lived documents-management.write
 // │       token; the person stays the subject and this BFF is the acting client. The BFF proves
-// │       itself with a new private_key_jwt assertion per attempt (each is accepted once).
-// │ Ref : Features 2.1.2 | RFC 8693 | AI review 1 (DM branch from token)
+// │       itself with a new private_key_jwt assertion per attempt (each is accepted once), and
+// │       proves it holds the agent's DPoP key with a new proof per attempt: the IDP exchanges only
+// │       a token bound to that key, and binds the new token to it too - each call to Documents
+// │       Management then carries a proof of its own.
+// │ Ref : Features 2.1.1, 2.1.2 | RFC 8693, 9449 | AI review 1 (DM branch from token)
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 /// <summary>
 /// OAuth 2.0 Token Exchange (RFC 8693): swaps the signed-in agent's access token for a
@@ -33,6 +46,8 @@ public sealed class DocumentsManagementTokenService(
     IHttpClientFactory httpClientFactory,
     IConfiguration configuration,
     IClientAssertionService clientAssertions,
+    IDPoPProofService proofs,
+    IOptions<UserTokenManagementOptions> tokenManagement,
     ILogger<DocumentsManagementTokenService> logger) : IDocumentsManagementTokenService
 {
     private const string TokenExchangeGrantType = "urn:ietf:params:oauth:grant-type:token-exchange";
@@ -40,6 +55,32 @@ public sealed class DocumentsManagementTokenService(
 
     // Required at start-up by the OIDC set-up in Program.cs.
     private readonly string _clientId = RequiredSetting.Text(configuration["Oidc:ClientId"], "Oidc:ClientId");
+
+    // The BFF's DPoP key (Program.cs, DPoPKey): the agent's token is bound to it.
+    private DPoPProofKey DPoPKey => tokenManagement.Value.DPoPJsonWebKey
+        ?? throw new InvalidOperationException("No DPoP key is configured (Oidc:DPoPKey).");
+
+    public async Task AuthorizeAsync(HttpRequestMessage request, Uri baseAddress, string documentsToken, CancellationToken cancellationToken)
+    {
+        var proof = await ProofAsync(request, baseAddress, documentsToken, cancellationToken);
+        request.Headers.Authorization = new AuthenticationHeaderValue("DPoP", documentsToken);
+        request.Headers.Add("DPoP", proof);
+    }
+
+    // SEC: a proof for exactly this request - method, address without its query, and (on an API
+    // call) the hash of the token it goes with (ath). Never reused: a new jti every time.
+    private async Task<string> ProofAsync(HttpRequestMessage request, Uri baseAddress, string? accessToken, CancellationToken cancellationToken)
+    {
+        var address = new Uri(baseAddress, request.RequestUri!);
+        var proof = await proofs.CreateProofTokenAsync(new DPoPProofRequest
+        {
+            Url = new Uri(address.GetLeftPart(UriPartial.Path)),
+            Method = request.Method,
+            DPoPProofKey = DPoPKey,
+            AccessToken = accessToken is null ? null : AccessToken.Parse(accessToken)
+        }, cancellationToken);
+        return proof?.ToString() ?? throw new InvalidOperationException("No DPoP proof could be made.");
+    }
 
     public async Task<string> GetTokenAsync(HttpContext httpContext, CancellationToken cancellationToken)
     {
@@ -69,6 +110,7 @@ public sealed class DocumentsManagementTokenService(
                         ["scope"] = "documents-management.write"
                     })
                 };
+                request.Headers.Add("DPoP", await ProofAsync(request, client.BaseAddress!, accessToken: null, cancellationToken));
 
                 using var response = await client.SendAsync(request, cancellationToken);
                 var body = await response.Content.ReadAsStringAsync(cancellationToken);

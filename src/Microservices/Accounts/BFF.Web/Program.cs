@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Cryptography;
+using System.Text.Json;
 
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -105,7 +106,9 @@ var bffStateDb = builder.Configuration.GetConnectionString("BffStateDbConnection
 // └──────────────────────────────────────────────────────────────────────────────────────
 builder.AddEwpPersistentDataProtection(bffStateDb, schema: "accounts_bff", applicationName: "ewp-accounts-bff");
 builder.Services.Configure<SessionStoreOptions>(options => options.DefaultSchema = "accounts_bff");
-builder.Services.AddBff()
+// SEC: this BFF's DPoP key, read now - missing or unreadable = no start-up (DPoPKey, end of this file).
+var dpopKey = DPoPKey.Load(builder.Configuration);
+builder.Services.AddBff(options => options.DPoPJsonWebKey = Duende.Bff.AccessTokenManagement.DPoPProofKey.Parse(dpopKey))
     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
     // │ Server-side sessions: the cookie is only a reference, so back-channel logout can end
     // │ the session and the tokens never ride in the cookie.
@@ -156,16 +159,25 @@ builder.Services
         // │ carry a new one-minute assertion signed with this BFF's own key (ClientAssertions,
         // │ end of this file); refresh and revocation get theirs from the same service.
         // └──────────────────────────────────────────────────────────────────────────────────────
+        // ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────
+        // │ Chained, never replaced: Duende's token management hooks these same events (it keeps
+        // │ the DPoP key for the code exchange - without it the IDP refuses the code). Whatever
+        // │ handler was there runs first; this BFF's own assertion is then set.
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        var pushAuthorization = options.Events.OnPushAuthorization;
         options.Events.OnPushAuthorization = async context =>
         {
+            await pushAuthorization(context);
             var assertion = await context.HttpContext.RequestServices.GetRequiredService<IClientAssertionService>()
                 .GetClientAssertionAsync(ct: context.HttpContext.RequestAborted);
             context.ProtocolMessage.ClientAssertionType = assertion!.Type;
             context.ProtocolMessage.ClientAssertion = assertion.Value;
             context.HandleClientAuthentication();
         };
+        var authorizationCodeReceived = options.Events.OnAuthorizationCodeReceived;
         options.Events.OnAuthorizationCodeReceived = async context =>
         {
+            await authorizationCodeReceived(context);
             var assertion = await context.HttpContext.RequestServices.GetRequiredService<IClientAssertionService>()
                 .GetClientAssertionAsync(ct: context.HttpContext.RequestAborted);
             context.TokenEndpointRequest!.ClientAssertionType = assertion!.Type;
@@ -222,7 +234,9 @@ builder.Services
         options.NonceCookie.SameSite = SameSiteMode.None;
         options.NonceCookie.SecurePolicy = CookieSecurePolicy.Always;
 
-        options.Events.OnRedirectToIdentityProvider = context =>
+        // ARCH: chained, never replaced - Duende's token management adds dpop_jkt and keeps the DPoP key here.
+        var redirectToIdentityProvider = options.Events.OnRedirectToIdentityProvider;
+        options.Events.OnRedirectToIdentityProvider = async context =>
         {
             // An API call (fetch) cannot follow a redirect to the IDP ("Failed to fetch"):
             // answer 401 instead, and the MFE signs in again silently and comes back -
@@ -235,7 +249,7 @@ builder.Services
             {
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 context.HandleResponse();
-                return Task.CompletedTask;
+                return;
             }
 
             if (context.Properties.Items.TryGetValue("prompt", out var prompt))
@@ -251,7 +265,7 @@ builder.Services
             {
                 context.ProtocolMessage.AcrValues = acrValues;
             }
-            return Task.CompletedTask;
+            await redirectToIdentityProvider(context);
         };
     });
 
@@ -426,6 +440,44 @@ namespace EnterpriseWebPlatform.Accounts.Bff.Web.Authentication
                 SigningCredentials = new SigningCredentials(key, SecurityAlgorithms.EcdsaSha256)
             });
             return new ClientAssertion { Type = OidcConstants.ClientAssertionTypes.JwtBearer, Value = assertion };
+        }
+    }
+
+    // ┌─ :: SECURITY :: DPoP: the key this BFF's tokens are bound to ─────────────────────────────────
+    // │ Why : A bearer token works for whoever holds it - copied from a log, a memory dump or a proxy,
+    // │       it is as good as the BFF's own. FAPI 2.0 asks for sender-constrained tokens.
+    // │ How : The EC P-256 private key (encrypted PKCS#8 PEM: Oidc:DPoPKey:Path, its password in
+    // │       Oidc:DPoPKey:PasswordPath) is read once at start-up - the same key in every instance, so
+    // │       a session survives a restart and moves between pods. It is NOT the client key: proving
+    // │       "I hold this token" stays apart from "I am this client". Duende's token management sends
+    // │       dpop_jkt with the pushed request and a fresh proof (htm, htu, iat, jti, ath) with the code
+    // │       exchange, each refresh and every API call; the IDP binds each token to it (cnf.jkt).
+    // │ Ref : Features 2.1.1 | FAPI 2.0 Security Profile §5.3.2.2 | RFC 9449 | Threat-Model R-10
+    // └────────────────────────────────────────────────────────────────────────────────────────────────
+    internal static class DPoPKey
+    {
+        /// <summary>The private key as a JWK (JSON), as Duende's token management takes it.</summary>
+        public static string Load(IConfiguration configuration)
+        {
+            var keyPath = RequiredSetting.Text(configuration["Oidc:DPoPKey:Path"], "Oidc:DPoPKey:Path");
+            var passwordPath = RequiredSetting.Text(configuration["Oidc:DPoPKey:PasswordPath"], "Oidc:DPoPKey:PasswordPath");
+            using var ecdsa = ECDsa.Create();
+            ecdsa.ImportFromEncryptedPem(
+                File.ReadAllText(Environment.ExpandEnvironmentVariables(keyPath)),
+                File.ReadAllText(Environment.ExpandEnvironmentVariables(passwordPath)).Trim());
+            var key = ecdsa.ExportParameters(includePrivateParameters: true);
+            if (key.Curve.Oid.Value != ECCurve.NamedCurves.nistP256.Oid.Value)
+                throw new InvalidOperationException("The DPoP key must be an EC P-256 key (ES256).");
+
+            return JsonSerializer.Serialize(new
+            {
+                kty = "EC",
+                crv = "P-256",
+                x = Base64UrlEncoder.Encode(key.Q.X),
+                y = Base64UrlEncoder.Encode(key.Q.Y),
+                d = Base64UrlEncoder.Encode(key.D),
+                alg = SecurityAlgorithms.EcdsaSha256
+            });
         }
     }
 }

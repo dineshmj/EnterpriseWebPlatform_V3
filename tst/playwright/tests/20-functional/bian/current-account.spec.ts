@@ -4,7 +4,7 @@ import { expect, test } from '../../../support/fixtures';
 import { fundedCustomer } from '../../../support/journeys/payments';
 import { resetAllSimulators } from '../../../support/simulators';
 import { urls } from '../../../support/services';
-import { accountsWebSignInToken, paymentsWebSignInToken } from '../../../support/tokens';
+import { accountsWebSignInToken, authorizationFor, paymentsWebSignInToken } from '../../../support/tokens';
 
 /**
  * ┌─ :: ARCHITECTURE :: The Accounts API speaks BIAN - shown live, next to its own /v1 ───────────
@@ -32,10 +32,10 @@ interface Facility {
 interface DepositAnswer { DepositTransaction: { TransactionIdentification: { IdentifierValue: string }; FinancialTransactionTargetAccount: { AccountBalance: Balance } } }
 
 const v2 = `${urls.accountsApi}/v2/CurrentAccount`;
-const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
 async function retrieve(http: APIRequestContext, token: string, accountId: number): Promise<Facility> {
-  const response = await http.get(`${v2}/${accountId}/Retrieve`, { headers: bearer(token) });
+  const url = `${v2}/${accountId}/Retrieve`;
+  const response = await http.get(url, { headers: authorizationFor(token, 'GET', url) });
   expect(response.status(), await response.text()).toBe(200);
   return await response.json() as Facility;
 }
@@ -49,7 +49,8 @@ test.describe('BIAN - Current Account (/v2)', () => {
     const customer = await fundedCustomer(signedInAs, 'BIAN current account');
     const jackToken = await accountsWebSignInToken(await signedInAs('jack.accounts'), request);
     const sophieToken = await paymentsWebSignInToken(await signedInAs('sophie.cs'), request);
-    const list = await request.get(`${urls.accountsApi}/v1/accounts?pageSize=100`, { headers: bearer(jackToken) });
+    const accounts = `${urls.accountsApi}/v1/accounts?pageSize=100`;
+    const list = await request.get(accounts, { headers: authorizationFor(jackToken, 'GET', accounts) });
     expect(list.status()).toBe(200);
     const account = (await list.json() as { items: V1Account[] }).items.find(a => a.customerNumber === customer);
     expect(account, `${customer}'s account in Jack's branch`).toBeTruthy();
@@ -71,7 +72,8 @@ test.describe('BIAN - Current Account (/v2)', () => {
       DepositTransactionSourceReference: customer,
       DepositTransactionAmount: { AmountValue: '250.00', AmountCurrency: { Currencycode: 'AUD' } },
     };
-    const recorded = await request.post(`${v2}/${account!.accountId}/Deposit/Initiate`, { data: deposit, headers: { ...bearer(sophieToken), 'Idempotency-Key': key } });
+    const initiate = `${v2}/${account!.accountId}/Deposit/Initiate`;
+    const recorded = await request.post(initiate, { data: deposit, headers: { ...authorizationFor(sophieToken, 'POST', initiate), 'Idempotency-Key': key } });
     expect(recorded.status(), await recorded.text()).toBe(201);
     const first = await recorded.json() as DepositAnswer;
     const depositNumber = first.DepositTransaction.TransactionIdentification.IdentifierValue;
@@ -79,18 +81,19 @@ test.describe('BIAN - Current Account (/v2)', () => {
     expect(first.DepositTransaction.FinancialTransactionTargetAccount.AccountBalance.BalanceAmount.AmountValue).toBe(after);
 
     // Assert 2: the same key - through /v2 and through /v1 - finds THIS deposit; nothing is credited twice.
-    const again = await request.post(`${v2}/${account!.accountId}/Deposit/Initiate`, { data: deposit, headers: { ...bearer(sophieToken), 'Idempotency-Key': key } });
+    const again = await request.post(initiate, { data: deposit, headers: { ...authorizationFor(sophieToken, 'POST', initiate), 'Idempotency-Key': key } });
     expect(again.status(), await again.text()).toBe(200);
     expect((await again.json() as DepositAnswer).DepositTransaction.TransactionIdentification.IdentifierValue).toBe(depositNumber);
-    const viaV1 = await request.post(`${urls.accountsApi}/v1/accounts/cash-deposits`, {
+    const cashDeposits = `${urls.accountsApi}/v1/accounts/cash-deposits`;
+    const viaV1 = await request.post(cashDeposits, {
       data: { customerNumber: customer, bsb: account!.bsb, accountNumber: account!.accountNumber, amount: 250 },
-      headers: { ...bearer(sophieToken), 'Idempotency-Key': key },
+      headers: { ...authorizationFor(sophieToken, 'POST', cashDeposits), 'Idempotency-Key': key },
     });
     expect(viaV1.status(), await viaV1.text()).toBe(200);
     expect((await viaV1.json() as { depositNumber: string }).depositNumber).toBe(depositNumber);
 
     // Assert 3: BIAN's door keeps /v1's rule - only the counter (the Payments BFF's client) credits cash.
-    const byJack = await request.post(`${v2}/${account!.accountId}/Deposit/Initiate`, { data: deposit, headers: { ...bearer(jackToken), 'Idempotency-Key': randomUUID() } });
+    const byJack = await request.post(initiate, { data: deposit, headers: { ...authorizationFor(jackToken, 'POST', initiate), 'Idempotency-Key': randomUUID() } });
     expect(byJack.status(), 'an account officer recording cash through /v2').toBe(403);
 
     // Assert 4: the balance moved by the deposit, once.
