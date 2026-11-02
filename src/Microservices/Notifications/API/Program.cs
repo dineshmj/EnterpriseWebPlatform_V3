@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 
+using Duende.AspNetCore.Authentication.JwtBearer.DPoP;
 using Npgsql;
 using OpenTelemetry.Trace;
 
@@ -78,6 +79,27 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             RoleClaimType = "role"
         };
     });
+
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ DPoP (RFC 9449, FAPI 2.0): a token bound to a key (cnf.jkt - the staff web apps')
+// │ passes only as "Authorization: DPoP" with a fresh proof signed by that key, for this
+// │ very method and address, carrying the token's hash (ath), at most ~30 s old (5 s +
+// │ 25 s clock skew) and used once. The same bound token sent as Bearer is refused, so a
+// │ copied token is useless without the key. Machine tokens (client credentials) stay
+// │ Bearer.
+// └──────────────────────────────────────────────────────────────────────────────────────
+builder.Services.ConfigureDPoPTokensForScheme(JwtBearerDefaults.AuthenticationScheme, options =>
+{
+    options.AllowBearerTokens = true;
+    options.ProofTokenLifetime = TimeSpan.FromSeconds(5);
+    options.ProofTokenIssuedAtClockSkew = TimeSpan.FromSeconds(25);
+});
+// ┌─ DEBT ───────────────────────────────────────────────────────────────────────────────
+// │ The proofs seen (replay cache) are kept in THIS instance's memory: with several
+// │ instances, a captured proof could be replayed once on another one within its ~30 s.
+// │ Production: a shared cache (HybridCache over Redis / PostgreSQL), no code change here.
+// └──────────────────────────────────────────────────────────────────────────────────────
+builder.Services.AddKeyedHybridCache(ServiceProviderKeys.ProofTokenReplayHybridCache);
 
 // ---------------------------------------------------------------- Authorization
 builder.Services.AddAuthorization(options =>

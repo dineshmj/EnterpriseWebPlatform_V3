@@ -292,6 +292,8 @@ components:
       Oidc__Authority: '{{ include "ewp.public" (list . "idp") }}'
       Oidc__ClientKey__Path: /etc/ewp/client-key/client-key.pem
       Oidc__ClientKey__PasswordPath: /etc/ewp/client-key/client-key.pem.password
+      Oidc__DPoPKey__Path: /etc/ewp/client-key/dpop-key.pem
+      Oidc__DPoPKey__PasswordPath: /etc/ewp/client-key/dpop-key.pem.password
       ShellOrigin: '{{ include "ewp.public" (list . "shell") }}'
       MfeOrigins__CustomerOnboarding: '{{ include "ewp.public" (list . "customer-onboarding-bff-web") }}'
       MfeOrigins__CustomerKyc: '{{ include "ewp.public" (list . "customer-kyc-bff-web") }}'
@@ -306,7 +308,7 @@ components:
       - ConnectionStrings__MenuDbConnection
       - ConnectionStrings__BffStateDbConnection
     secretFiles:
-      # private_key_jwt: this app's own key (encrypted PEM) and its password - nobody else's.
+      # private_key_jwt and DPoP: this app's own two keys (encrypted PEM) and their passwords - nobody else's.
       - {name: client-key, secret: ewp-shell-client-key, mountPath: /etc/ewp/client-key}
 
   customer-onboarding-bff-web:
@@ -319,6 +321,8 @@ components:
       Oidc__Authority: '{{ include "ewp.public" (list . "idp") }}'
       Oidc__ClientKey__Path: /etc/ewp/client-key/client-key.pem
       Oidc__ClientKey__PasswordPath: /etc/ewp/client-key/client-key.pem.password
+      Oidc__DPoPKey__Path: /etc/ewp/client-key/dpop-key.pem
+      Oidc__DPoPKey__PasswordPath: /etc/ewp/client-key/dpop-key.pem.password
       ShellOrigin: '{{ include "ewp.public" (list . "shell") }}'
       CustomerOnboardingBff__SpaBaseUrl: '{{ include "ewp.public" (list . "customer-onboarding-bff-web") }}'
       CustomerOnboardingBff__IdentityServerAuthority: '{{ include "ewp.public" (list . "idp") }}'
@@ -327,7 +331,7 @@ components:
     secretEnv:
       - ConnectionStrings__BffStateDbConnection
     secretFiles:
-      # private_key_jwt: this app's own key (encrypted PEM) and its password - nobody else's.
+      # private_key_jwt and DPoP: this app's own two keys (encrypted PEM) and their passwords - nobody else's.
       - {name: client-key, secret: ewp-customer-onboarding-bff-web-client-key, mountPath: /etc/ewp/client-key}
 
   customer-kyc-bff-web:
@@ -364,12 +368,14 @@ components:
       Oidc__Authority: '{{ include "ewp.public" (list . "idp") }}'
       Oidc__ClientKey__Path: /etc/ewp/client-key/client-key.pem
       Oidc__ClientKey__PasswordPath: /etc/ewp/client-key/client-key.pem.password
+      Oidc__DPoPKey__Path: /etc/ewp/client-key/dpop-key.pem
+      Oidc__DPoPKey__PasswordPath: /etc/ewp/client-key/dpop-key.pem.password
       ShellOrigin: '{{ include "ewp.public" (list . "shell") }}'
       ComplianceBff__ComplianceApiBaseUrl: '{{ include "ewp.internal" (list . "compliance-api") }}'
     secretEnv:
       - ConnectionStrings__BffStateDbConnection
     secretFiles:
-      # private_key_jwt: this app's own key (encrypted PEM) and its password - nobody else's.
+      # private_key_jwt and DPoP: this app's own two keys (encrypted PEM) and their passwords - nobody else's.
       - {name: client-key, secret: ewp-compliance-bff-web-client-key, mountPath: /etc/ewp/client-key}
 
   accounts-bff-web:
@@ -382,12 +388,14 @@ components:
       Oidc__Authority: '{{ include "ewp.public" (list . "idp") }}'
       Oidc__ClientKey__Path: /etc/ewp/client-key/client-key.pem
       Oidc__ClientKey__PasswordPath: /etc/ewp/client-key/client-key.pem.password
+      Oidc__DPoPKey__Path: /etc/ewp/client-key/dpop-key.pem
+      Oidc__DPoPKey__PasswordPath: /etc/ewp/client-key/dpop-key.pem.password
       ShellOrigin: '{{ include "ewp.public" (list . "shell") }}'
       AccountsBff__AccountsApiBaseUrl: '{{ include "ewp.internal" (list . "accounts-api") }}'
     secretEnv:
       - ConnectionStrings__BffStateDbConnection
     secretFiles:
-      # private_key_jwt: this app's own key (encrypted PEM) and its password - nobody else's.
+      # private_key_jwt and DPoP: this app's own two keys (encrypted PEM) and their passwords - nobody else's.
       - {name: client-key, secret: ewp-accounts-bff-web-client-key, mountPath: /etc/ewp/client-key}
 
   payments-bff-web:
@@ -400,13 +408,15 @@ components:
       Oidc__Authority: '{{ include "ewp.public" (list . "idp") }}'
       Oidc__ClientKey__Path: /etc/ewp/client-key/client-key.pem
       Oidc__ClientKey__PasswordPath: /etc/ewp/client-key/client-key.pem.password
+      Oidc__DPoPKey__Path: /etc/ewp/client-key/dpop-key.pem
+      Oidc__DPoPKey__PasswordPath: /etc/ewp/client-key/dpop-key.pem.password
       ShellOrigin: '{{ include "ewp.public" (list . "shell") }}'
       PaymentsBff__PaymentsApiBaseUrl: '{{ include "ewp.internal" (list . "payments-api") }}'
       PaymentsBff__AccountsApiBaseUrl: '{{ include "ewp.internal" (list . "accounts-api") }}'
     secretEnv:
       - ConnectionStrings__BffStateDbConnection
     secretFiles:
-      # private_key_jwt: this app's own key (encrypted PEM) and its password - nobody else's.
+      # private_key_jwt and DPoP: this app's own two keys (encrypted PEM) and their passwords - nobody else's.
       - {name: client-key, secret: ewp-payments-bff-web-client-key, mountPath: /etc/ewp/client-key}
 
   audit-bff-web:

@@ -1,4 +1,4 @@
-import { createHash, createPrivateKey, randomBytes, randomUUID, sign } from 'node:crypto';
+import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, randomBytes, randomUUID, sign, type KeyObject } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, type APIRequestContext, type APIResponse } from '@playwright/test';
@@ -63,6 +63,63 @@ export async function clientAuthenticationOf(http: APIRequestContext, clientId: 
   };
 }
 
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ DPoP (RFC 9449): the clients whose tokens are bound to a key, as their BFFs hold them.
+// │ The test plays the BFF: one key per client for this run (the IDP registers none - each
+// │ token names its key in cnf.jkt), a proof on each of its token requests, and a proof on
+// │ each API call made with a bound token (authorizationFor). Without them the IDP issues
+// │ nothing and the APIs refuse the token.
+// └──────────────────────────────────────────────────────────────────────────────────────
+const dpopClients: ReadonlySet<string> = new Set([clientIds.paymentsWeb, clientIds.accountsWeb, clientIds.customerOnboardingWeb]);
+const dpopKeys = new Map<string, KeyObject>();
+const boundTo = new Map<string, KeyObject>();
+
+function dpopKeyOf(clientId: string): KeyObject | undefined {
+  if (!dpopClients.has(clientId)) return undefined;
+  let key = dpopKeys.get(clientId);
+  if (!key) {
+    key = generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey;
+    dpopKeys.set(clientId, key);
+  }
+  return key;
+}
+
+/** A DPoP proof for ONE request: its method and address (no query), a new jti, now, and the token's hash. */
+function dpopProof(key: KeyObject, method: string, url: string, accessToken?: string): string {
+  const { kty, crv, x, y } = createPublicKey(key).export({ format: 'jwk' });
+  const target = new URL(url);
+  const part = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const unsigned = `${part({ typ: 'dpop+jwt', alg: 'ES256', jwk: { kty, crv, x, y } })}.${part({
+    jti: randomUUID(), htm: method.toUpperCase(), htu: `${target.origin}${target.pathname}`, iat: Math.floor(Date.now() / 1000),
+    ...(accessToken ? { ath: createHash('sha256').update(accessToken).digest('base64url') } : {}),
+  })}`;
+  return `${unsigned}.${sign('sha256', Buffer.from(unsigned), { key, dsaEncoding: 'ieee-p1363' }).toString('base64url')}`;
+}
+
+/** The DPoP header for `clientId`'s POST to the IDP, when its tokens are bound - else none. */
+function dpopHeaderOf(clientId: string, url: string): Record<string, string> {
+  const key = dpopKeyOf(clientId);
+  return key ? { DPoP: dpopProof(key, 'POST', url) } : {};
+}
+
+/** Notes the key a token issued to `clientId` is bound to (none for a bearer client). */
+function held(clientId: string, accessToken: string): string {
+  const key = dpopKeyOf(clientId);
+  if (key) boundTo.set(accessToken, key);
+  return accessToken;
+}
+
+/**
+ * The Authorization header(s) for ONE call with `token`: "DPoP" plus a fresh proof for exactly this
+ * method and URL when the token is bound to a key, else "Bearer".
+ */
+export function authorizationFor(token: string, method: string, url: string): Record<string, string> {
+  const key = boundTo.get(token);
+  return key
+    ? { Authorization: `DPoP ${token}`, DPoP: dpopProof(key, method, url, token) }
+    : { Authorization: `Bearer ${token}` };
+}
+
 /** A machine's own token (client credentials, no person). */
 export async function clientCredentialsToken(http: APIRequestContext, clientId: string, scope: string): Promise<string> {
   const response = await http.post(`${urls.idp}/connect/token`, {
@@ -74,7 +131,9 @@ export async function clientCredentialsToken(http: APIRequestContext, clientId: 
 
 /** RFC 8693 token exchange by `clientId` - the raw answer, so a test can check a refusal. */
 export async function exchange(http: APIRequestContext, clientId: string, subjectToken: string, scope: string): Promise<APIResponse> {
-  return http.post(`${urls.idp}/connect/token`, {
+  const tokenEndpoint = `${urls.idp}/connect/token`;
+  return http.post(tokenEndpoint, {
+    headers: dpopHeaderOf(clientId, tokenEndpoint),
     form: {
       grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
       client_id: clientId,
@@ -90,7 +149,7 @@ export async function exchange(http: APIRequestContext, clientId: string, subjec
 export async function exchanged(http: APIRequestContext, clientId: string, subjectToken: string, scope: string): Promise<string> {
   const response = await exchange(http, clientId, subjectToken, scope);
   expect(response.status(), `${clientId} exchanges for ${scope}: ${await response.text()}`).toBe(200);
-  return (await response.json() as { access_token: string }).access_token;
+  return held(clientId, (await response.json() as { access_token: string }).access_token);
 }
 
 /** The claims of a JWT (decoded, NOT verified - the APIs verify; the tests only read). */
@@ -174,12 +233,14 @@ async function webSignInToken(person: ShellPage, http: APIRequestContext, client
   const code = back.searchParams.get('code');
   expect(code, 'an authorization code from the IDP (silent sign-in)').toBeTruthy();
 
-  const response = await http.post(`${urls.idp}/connect/token`, {
+  const tokenEndpoint = `${urls.idp}/connect/token`;
+  const response = await http.post(tokenEndpoint, {
+    headers: dpopHeaderOf(clientId, tokenEndpoint),
     form: {
       grant_type: 'authorization_code', client_id: clientId, ...await clientAuthenticationOf(http, clientId),
       code: code!, redirect_uri: redirectUri, code_verifier: verifier,
     },
   });
   expect(response.status(), `the code is redeemed: ${await response.text()}`).toBe(200);
-  return (await response.json() as { access_token: string }).access_token;
+  return held(clientId, (await response.json() as { access_token: string }).access_token);
 }

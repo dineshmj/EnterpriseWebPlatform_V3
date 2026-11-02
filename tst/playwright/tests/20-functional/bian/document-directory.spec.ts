@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import type { APIRequestContext, APIResponse } from '@playwright/test';
 import { expect, test } from '../../../support/fixtures';
 import { urls } from '../../../support/services';
-import { clientIds, customerKycWebSignInToken, customerOnboardingWebSignInToken, exchanged } from '../../../support/tokens';
+import { authorizationFor, clientIds, customerKycWebSignInToken, customerOnboardingWebSignInToken, exchanged } from '../../../support/tokens';
 
 /**
  * ┌─ :: ARCHITECTURE :: The Documents Management API speaks BIAN - shown live, next to its own /v1 ─
@@ -25,7 +25,9 @@ interface ReferenceProperties { VersionNumber: string; DocumentDirectoryEntryRef
 
 const v1 = `${urls.documentsManagementApi}/v1/documents`;
 const v2 = `${urls.documentsManagementApi}/v2/DocumentDirectory`;
-const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
+// One call with the token's own authorization: Bearer, or DPoP with a proof for this method and URL.
+const send = (http: APIRequestContext, method: 'GET' | 'DELETE', token: string, url: string): Promise<APIResponse> =>
+  http.fetch(url, { method, headers: authorizationFor(token, method, url) });
 const identityProof = resolve(__dirname, '../../../fixtures/documents/camilla-parker/identity-proof.pdf');
 
 async function ok<T>(response: APIResponse): Promise<T> {
@@ -36,7 +38,7 @@ async function ok<T>(response: APIResponse): Promise<T> {
 async function upload(http: APIRequestContext, token: string): Promise<string> {
   const response = await http.post(v1, {
     multipart: { File: { name: 'identity-proof.pdf', mimeType: 'application/pdf', buffer: readFileSync(identityProof) } },
-    headers: { ...bearer(token), 'X-Document-Type': 'KYCProof' },
+    headers: { ...authorizationFor(token, 'POST', v1), 'X-Document-Type': 'KYCProof' },
   });
   expect(response.status(), await response.text()).toBe(201);
   return (await response.json() as { documentId: string }).documentId;
@@ -55,10 +57,10 @@ test.describe('BIAN - Document Directory (/v2)', () => {
     const miasDocument = await upload(request, miaUpload);
 
     try {
-      const before = await ok<V1Document>(await request.get(`${v1}/${sophiesDocument}`, { headers: bearer(liamRead) }));
+      const before = await ok<V1Document>(await send(request, 'GET', liamRead, `${v1}/${sophiesDocument}`));
 
       // Act + Assert 1: BIAN Retrieve shows what /v1 shows.
-      const entry = await ok<Entry>(await request.get(`${v2}/${sophiesDocument}/Retrieve`, { headers: bearer(liamRead) }));
+      const entry = await ok<Entry>(await send(request, 'GET', liamRead, `${v2}/${sophiesDocument}/Retrieve`));
       expect(entry.DocumentDirectoryEntryIdentification).toBe(sophiesDocument);
       expect(entry.DirectoryEntryDateType).toBe('OpenDate');
       expect(entry.DirectoryEntryDate.DateContent).toBe(new Date(before.createdAt).toISOString().slice(0, 10));
@@ -66,22 +68,22 @@ test.describe('BIAN - Document Directory (/v2)', () => {
 
       // Act + Assert 2: RetrieveDocumentReferenceProperties - the version and the type.
       const reference = await ok<ReferenceProperties>(
-        await request.get(`${v2}/${sophiesDocument}/DocumentReferenceProperties/primary/Retrieve`, { headers: bearer(liamRead) }));
+        await send(request, 'GET', liamRead, `${v2}/${sophiesDocument}/DocumentReferenceProperties/primary/Retrieve`));
       expect(reference.VersionNumber).toBe(String(before.version));
       expect(reference.DocumentReferencePropertiesType).toBe('KYCProof');
       expect(reference.DocumentDirectoryEntryReference.DocumentDirectoryEntryIdentification).toBe(sophiesDocument);
 
       // Act + Assert 3: another branch's document does not exist for Liam - in /v2 as in /v1 (404, not 403).
-      expect((await request.get(`${v2}/${miasDocument}/Retrieve`, { headers: bearer(liamRead) })).status()).toBe(404);
-      expect((await request.get(`${v2}/${miasDocument}/DocumentReferenceProperties/primary/Retrieve`, { headers: bearer(liamRead) })).status()).toBe(404);
-      expect((await request.get(`${v1}/${miasDocument}`, { headers: bearer(liamRead) })).status()).toBe(404);
+      expect((await send(request, 'GET', liamRead, `${v2}/${miasDocument}/Retrieve`)).status()).toBe(404);
+      expect((await send(request, 'GET', liamRead, `${v2}/${miasDocument}/DocumentReferenceProperties/primary/Retrieve`)).status()).toBe(404);
+      expect((await send(request, 'GET', liamRead, `${v1}/${miasDocument}`)).status()).toBe(404);
 
       // Act + Assert 4: EWP keeps one reference record per document - any other id is not found.
-      expect((await request.get(`${v2}/${sophiesDocument}/DocumentReferenceProperties/other/Retrieve`, { headers: bearer(liamRead) })).status()).toBe(404);
+      expect((await send(request, 'GET', liamRead, `${v2}/${sophiesDocument}/DocumentReferenceProperties/other/Retrieve`)).status()).toBe(404);
     } finally {
       // Cleanup: both uploads are still AVAILABLE, so the uploading agent may remove them.
-      expect((await request.delete(`${v1}/${sophiesDocument}`, { headers: bearer(sophieUpload) })).status()).toBe(204);
-      expect((await request.delete(`${v1}/${miasDocument}`, { headers: bearer(miaUpload) })).status()).toBe(204);
+      expect((await send(request, 'DELETE', sophieUpload, `${v1}/${sophiesDocument}`)).status()).toBe(204);
+      expect((await send(request, 'DELETE', miaUpload, `${v1}/${miasDocument}`)).status()).toBe(204);
     }
   });
 });

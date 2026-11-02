@@ -2,7 +2,7 @@ import type { APIRequestContext, APIResponse } from '@playwright/test';
 import { expect, test } from '../../../support/fixtures';
 import { newSydneyCustomer } from '../../../support/data';
 import { urls } from '../../../support/services';
-import { customerOnboardingWebSignInToken } from '../../../support/tokens';
+import { authorizationFor, customerOnboardingWebSignInToken } from '../../../support/tokens';
 
 /**
  * ┌─ :: ARCHITECTURE :: The Customer Onboarding API speaks BIAN - shown live, next to its own /v1 ──
@@ -24,7 +24,9 @@ interface Reference { PartyFullLegalName: { Name: string }; eMailAddress: Contac
 
 const v1 = `${urls.customerOnboardingApi}/v1/customers`;
 const v2 = `${urls.customerOnboardingApi}/v2/PartyReferenceDataDirectory`;
-const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
+// One call with the token's own authorization: Bearer, or DPoP with a proof for this method and URL.
+const send = (http: APIRequestContext, method: 'GET' | 'DELETE', token: string, url: string): Promise<APIResponse> =>
+  http.fetch(url, { method, headers: authorizationFor(token, method, url) });
 
 async function ok<T>(response: APIResponse): Promise<{ body: T; etag: string }> {
   expect(response.status(), await response.text()).toBe(200);
@@ -32,7 +34,8 @@ async function ok<T>(response: APIResponse): Promise<{ body: T; etag: string }> 
 }
 
 function update(http: APIRequestContext, token: string, id: number, body: object, ifMatch?: string): Promise<APIResponse> {
-  return http.put(`${v2}/${id}/Reference/primary/Update`, { data: body, headers: { ...bearer(token), ...(ifMatch ? { 'If-Match': ifMatch } : {}) } });
+  const url = `${v2}/${id}/Reference/primary/Update`;
+  return http.put(url, { data: body, headers: { ...authorizationFor(token, 'PUT', url), ...(ifMatch ? { 'If-Match': ifMatch } : {}) } });
 }
 
 test.describe('BIAN - Party Reference Data Directory (/v2)', () => {
@@ -46,25 +49,25 @@ test.describe('BIAN - Party Reference Data Directory (/v2)', () => {
         firstName: c.firstName, lastName: c.lastName, email: c.email, phoneNumber: c.phoneNumber, customerType: 1,
         residentialAddress: { addressLine1: c.addressLine1, city: c.city, state: c.state, postalCode: c.postalCode, countryCode: c.countryCode },
       },
-      headers: bearer(sophieToken),
+      headers: authorizationFor(sophieToken, 'POST', v1),
     });
     expect(created.status(), await created.text()).toBe(201);
     const { customerId } = await created.json() as { customerId: number };
-    const before = (await ok<V1Customer>(await request.get(`${v1}/${customerId}`, { headers: bearer(sophieToken) }))).body;
+    const before = (await ok<V1Customer>(await send(request, 'GET', sophieToken, `${v1}/${customerId}`))).body;
 
     // Act + Assert 1: BIAN Retrieve and RetrieveReference show what /v1 shows, each with the version as ETag.
-    const entry = await ok<Entry>(await request.get(`${v2}/${customerId}/Retrieve`, { headers: bearer(sophieToken) }));
+    const entry = await ok<Entry>(await send(request, 'GET', sophieToken, `${v2}/${customerId}/Retrieve`));
     expect(entry.body.PartyType).toBe('Person');
     expect(entry.body.PartyReference.PartyName.Name).toBe(`${c.firstName} ${c.lastName}`);
     expect(entry.body.PartyReference.PartyIdentification.PartyIdentification.IdentifierValue).toBe(before.customerNumber);
     expect(entry.etag).toBe(`"${before.version}"`);
-    const reference = await ok<Reference>(await request.get(`${v2}/${customerId}/Reference/primary/Retrieve`, { headers: bearer(sophieToken) }));
+    const reference = await ok<Reference>(await send(request, 'GET', sophieToken, `${v2}/${customerId}/Reference/primary/Retrieve`));
     expect(reference.body.eMailAddress).toEqual({ ContactPointType: 'ElectronicAddress', LocationReference: { LocationAddress: c.email } });
     expect(reference.body.CellPhoneNumber.LocationReference.LocationAddress).toBe(c.phoneNumber);
     expect(reference.body.ResidentialAddress.TownName.Name).toBe('Sydney');
 
     // Assert 2: BIAN's door keeps /v1's branch scope - Mia (Melbourne) finds no such customer.
-    expect((await request.get(`${v2}/${customerId}/Retrieve`, { headers: bearer(miaToken) })).status(), 'another branch reads').toBe(404);
+    expect((await send(request, 'GET', miaToken, `${v2}/${customerId}/Retrieve`)).status(), 'another branch reads').toBe(404);
     expect((await update(request, miaToken, customerId, { eMailAddress: reference.body.eMailAddress }, reference.etag)).status(), 'another branch changes').toBe(404);
 
     // Assert 3: no If-Match, no change - a change made meanwhile must not be overwritten unseen.
@@ -79,7 +82,7 @@ test.describe('BIAN - Party Reference Data Directory (/v2)', () => {
     expect(updated.etag).not.toBe(reference.etag);
 
     // Assert 4: /v1 sees the same change - one customer, one version history.
-    const after = (await ok<V1Customer>(await request.get(`${v1}/${customerId}`, { headers: bearer(sophieToken) }))).body;
+    const after = (await ok<V1Customer>(await send(request, 'GET', sophieToken, `${v1}/${customerId}`))).body;
     expect(after.email).toBe(newEmail);
     expect(updated.etag).toBe(`"${after.version}"`);
 

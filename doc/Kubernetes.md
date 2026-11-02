@@ -98,7 +98,7 @@ Shared Secrets and files:
 | `ewp-tls-keystore-password` | `password` | cert-manager (writes the Node services' PKCS#12 keystores) and the Node services (read them) |
 | `ewp-idp-signing` | `signing.pfx` | IDP: the token-signing certificate |
 | `ewp-idp-client-keys` | `<client id>.jwk` for the Shell, the 8 web apps and the customers' channel (`SelfService.Web.ClientID.jwk`, `SelfService.JourneyApi.ClientID.jwk`) | IDP: the private_key_jwt clients' PUBLIC keys |
-| `ewp-<web app>-client-key` (the Shell and the 8 web apps, one each) | `client-key.pem` (encrypted PKCS#8), `client-key.pem.password` | That web app only, mounted at `/etc/ewp/client-key`: its private_key_jwt key (`Oidc__ClientKey__*`, `<PREFIX>_CLIENT_KEY_*`) |
+| `ewp-<web app>-client-key` (the Shell and the 8 web apps, one each) | `client-key.pem` (encrypted PKCS#8), `client-key.pem.password`; for the Shell and the four .NET web apps also `dpop-key.pem`, `dpop-key.pem.password` | That web app only, mounted at `/etc/ewp/client-key`: its private_key_jwt key (`Oidc__ClientKey__*`, `<PREFIX>_CLIENT_KEY_*`) and its DPoP key (`Oidc__DPoPKey__*`) - two separate keys |
 | `ewp-partner-pki` | `ewp-partner-client.pfx` (+ `.password`), `ewp-request-signing.pfx` (+ `.password`), `ewp-trust-root.cer` | Partner Products API: mutual TLS and signed instructions to the Partner Bank |
 | ConfigMap `ewp-kafka-trust` | `ca.crt` | Every Kafka client: the Kafka trust root |
 | `ewp-launchdarkly` (only with `global.featureFlags.launchDarkly.enabled`) | `sdk-key` | The 5 APIs that read feature flags: the LaunchDarkly environment's SDK key (`EWP_LAUNCHDARKLY_SDK_KEY`, K13); the chart's own ConfigMap `ewp-feature-flags` holds the flag file |

@@ -7,6 +7,7 @@ Deployables: `src/Microservices/{CustomerOnboarding,Compliance,Accounts,Payments
 - [x] **Each BFF is a confidential client using Authorization Code + PKCE.** The code is exchanged on the server with a client assertion (`private_key_jwt`, its own EC key read from configuration); without the key the BFF does not start.
 - [x] **Its scopes are its own API's read and write scopes,** plus only the read scopes it needs. For example, Payments adds `accounts.read` (and `accounts.write`, which the Accounts API admits for this client's cash deposits only). *Because* a stolen token should reach as little as possible.
 - [x] **Tokens are kept in the server-side session** (`SaveTokens`) and refreshed there; they are never sent to the browser.
+- [x] **Its tokens are DPoP-bound** (RFC 9449): bound to the BFF's own DPoP key (not the client key; without it the BFF does not start); every refresh and API call carries a fresh proof. Customer Onboarding's Documents Management exchange proves the same key. → each `Program.cs` (`DPoPKey`)
 - [x] **Claim names are kept as issued** (`MapInboundClaims = false`).
 - [x] **Step-up:** `/api/auth/step-up` sends `prompt=login` with `acr_values=mfa` and returns only to the fixed `/api/auth/step-up-done`. → `Controllers/AuthController.cs`
 - [x] **Silent sign-in inside the Shell's frame uses `prompt=none`.** Without an IDP session, the frame shows "signed out".

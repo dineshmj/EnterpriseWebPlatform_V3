@@ -7,6 +7,7 @@ Deployable: `src/Shell` (ASP.NET Core + Duende BFF) · Databases: `EwpBssShellDb
 - [x] **It is a confidential client using Authorization Code + PKCE.** The code is exchanged on the server, with a client assertion (`private_key_jwt`). → `src/Shell/Program.cs` (`ResponseType = "code"`, `ClientAssertions`)
 - [x] **Its scopes:** `openid profile email roles organization offline_access`, plus `notifications.read` and `notifications.write`, and nothing else. *Because* the Shell is business-neutral; it calls only the Notifications API.
 - [x] **Tokens are kept in the server-side session** (`SaveTokens`) and never sent to the browser.
+- [x] **Its tokens are DPoP-bound** (RFC 9449): bound to the Shell's own DPoP key, read at start-up; the proxy signs a proof for every call it forwards, the notifications hub's WebSocket upgrade included. → `src/Shell/Program.cs` (`DPoPKey`), `tst/playwright/tests/30-journeys/notifications/live-push.spec.ts`
 - [x] **Claim names are kept as issued** (`MapInboundClaims = false`, `DefaultMapInboundClaims = false`).
 
 ## 2. Cookies
@@ -49,5 +50,5 @@ Deployable: `src/Shell` (ASP.NET Core + Duende BFF) · Databases: `EwpBssShellDb
 
 ## 6. Production (open)
 
-- [ ] **Secret store.** The client key (private_key_jwt) and the database password come from a secret store (R-10).
+- [ ] **Secret store.** The client key (private_key_jwt), the DPoP key and the database password come from a secret store (R-10).
 - [ ] **Data Protection keys.** Their certificate moves to a key vault, with rotation.

@@ -12,6 +12,8 @@ secrets:
     keys:
       - {key: client-key.pem, object: client-private-key-shell}
       - {key: client-key.pem.password, object: client-private-key-password-shell}
+      - {key: dpop-key.pem, object: dpop-private-key-shell}
+      - {key: dpop-key.pem.password, object: dpop-private-key-password-shell}
   - name: ewp-idp
     keys:
       - {key: ClientSecrets__Audit.JourneyApi.ClientID, object: client-Audit-JourneyApi-ClientID}
