@@ -8,6 +8,7 @@ import { getJson } from '../lib/api';
 import { Card, CardHeader } from './ui/card';
 import { Table, Td, Th, formatDateTime } from './ui/data';
 import { Alert, EmptyState, StatusBadge } from './ui/feedback';
+import { Pager } from './ui/pager';
 
 export interface KycCase {
   kycCaseId: number;
@@ -38,7 +39,10 @@ interface Props {
   description: string;
 }
 
+const PAGE_SIZE = 50;
+
 export function KycCaseWorkQueue({ title, subtitle, description }: Props) {
+  const [pageNumber, setPageNumber] = useState(1);
   const [data, setData] = useState<PageResult | null>(null);
   // New KYC work for this branch (relayed by the Shell) reloads the queue.
   const [refresh, setRefresh] = useState(0);
@@ -48,10 +52,14 @@ export function KycCaseWorkQueue({ title, subtitle, description }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getJson<PageResult>('/bff/api/kyc/cases?pageNumber=1&pageSize=25&status=PENDING_REVIEW')
-      .then(setData)
+    getJson<PageResult>(`/bff/api/kyc/cases?pageNumber=${pageNumber}&pageSize=${PAGE_SIZE}&status=PENDING_REVIEW`)
+      .then(result => {
+        // The last cases of the last page were decided meanwhile: step back to a page that has some.
+        if (result.items.length === 0 && pageNumber > 1) setPageNumber(Math.max(1, Math.ceil(result.totalCount / PAGE_SIZE)));
+        else setData(result);
+      })
       .catch(error => setError(error instanceof Error ? error.message : 'Unable to load KYC cases.'));
-  }, [refresh]);
+  }, [pageNumber, refresh]);
 
   return (
     <MfeShell title={title} subtitle="Customer KYC">
@@ -106,6 +114,8 @@ export function KycCaseWorkQueue({ title, subtitle, description }: Props) {
             </tbody>
           </Table>
         )}
+
+        {data && <Pager pageNumber={data.pageNumber} pageSize={PAGE_SIZE} totalCount={data.totalCount} onPage={setPageNumber} />}
       </Card>
     </MfeShell>
   );

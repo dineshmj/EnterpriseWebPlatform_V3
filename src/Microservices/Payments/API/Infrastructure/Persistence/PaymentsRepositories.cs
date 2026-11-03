@@ -77,9 +77,15 @@ public sealed class PaymentsQueries(PaymentsDbContext db, SagaPolicy policy, Tim
         if (status is { } s)
             query = query.Where(x => x.Status == s);
 
+        // ARCH: the approval queue is a work queue, so oldest first (the payment waiting longest, its funds
+        //       on hold longest, is decided first). Every other list is newest first. Ties are broken by Id
+        //       so the pages never overlap or skip a payment.
+        var ordered = status == PaymentStatus.PendingApproval
+            ? query.OrderBy(x => x.CreatedAt).ThenBy(x => x.Id)
+            : query.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id);
+
         var total = await query.CountAsync(cancellationToken);
-        var items = await query
-            .OrderByDescending(x => x.CreatedAt)
+        var items = await ordered
             .Skip((pageNumber - 1) * pageSize)
             .Take(pageSize)
             .Select(x => new PaymentSummary(

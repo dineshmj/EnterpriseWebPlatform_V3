@@ -28,8 +28,11 @@ public sealed class KycCaseQueries(KycDbContext db) : IKycCaseQueries
 
         var totalCount = await query.CountAsync(cancellationToken);
 
+        // ARCH: a work queue, so oldest first (first in, first decided); ties broken by Id so the
+        //       pages never overlap or skip a case.
         var items = await query
             .OrderBy(x => x.CreatedAt)
+            .ThenBy(x => x.Id)
             .Skip((pageNumber - 1) * pageSize)
             .Take(pageSize)
             .Select(x => new KycCaseListItem(

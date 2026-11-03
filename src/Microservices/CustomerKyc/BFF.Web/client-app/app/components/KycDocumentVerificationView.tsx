@@ -12,6 +12,7 @@ import { cn } from './ui/cn';
 import { DescriptionList, formatDateTime } from './ui/data';
 import { Alert, Badge, EmptyState, Skeleton, StatusBadge, statusLabel } from './ui/feedback';
 import { Textarea } from './ui/form';
+import { Pager } from './ui/pager';
 
 interface KycCase {
   kycCaseId: number;
@@ -71,6 +72,7 @@ interface Props {
 }
 
 const REMARKS_LIMIT = 4000;
+const PAGE_SIZE = 50;
 
 /** Where the reviewer can go next once a stage decision is recorded. */
 interface LastDecision {
@@ -119,6 +121,8 @@ export function KycDocumentVerificationView({
   verificationStage,
 }: Props) {
   const [cases, setCases] = useState<KycCase[]>([]);
+  const [pageNumber, setPageNumber] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [selectedCaseId, setSelectedCaseId] = useState<number | null>(null);
   const [document, setDocument] = useState<DocumentInfo | null>(null);
   const [decisionRemarks, setDecisionRemarks] = useState('');
@@ -133,6 +137,10 @@ export function KycDocumentVerificationView({
   const [deepLinkNotice, setDeepLinkNotice] = useState<string | null>(null);
   // How the current case was chosen; only a default choice may be replaced by a late context hand-over.
   const selectionSource = useRef<'url' | 'context' | 'default' | 'user'>('default');
+  // The case a link named (?caseId=); dropped once the officer moves to another page of the queue.
+  const [linkedCaseId, setLinkedCaseId] = useState<string | null>(
+    () => (typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('caseId')),
+  );
 
   const selectedCase = cases.find(item => item.kycCaseId === selectedCaseId) ?? null;
   const stageStatus = selectedCase
@@ -155,26 +163,46 @@ export function KycDocumentVerificationView({
   }, []);
 
   useEffect(() => {
+    setLoading(true);
     getJson<PageResult>(
-      `/bff/api/kyc/cases?pageNumber=1&pageSize=25&status=PENDING_REVIEW&stage=${encodeURIComponent(verificationStage)}`,
+      `/bff/api/kyc/cases?pageNumber=${pageNumber}&pageSize=${PAGE_SIZE}&status=PENDING_REVIEW&stage=${encodeURIComponent(verificationStage)}`,
     )
-      .then(result => {
-        setCases(result.items);
-        const rawCaseId = new URLSearchParams(window.location.search).get('caseId');
+      .then(async result => {
+        // The last cases of the last page were decided meanwhile: step back to a page that has some.
+        if (result.items.length === 0 && pageNumber > 1) {
+          setPageNumber(Math.max(1, Math.ceil(result.totalCount / PAGE_SIZE)));
+          return;
+        }
+
+        let items = result.items;
+        const rawCaseId = linkedCaseId;
         const requested = Number(rawCaseId);
-        if (rawCaseId !== null && !result.items.some(x => x.kycCaseId === requested)) {
+
+        // ARCH: the queue is paged, so a linked case may sit past the first page. It is looked up on its
+        //       own (branch scope is still the KYC API's) and shown on top while it awaits this review.
+        if (rawCaseId !== null && Number.isInteger(requested) && requested > 0 && !items.some(x => x.kycCaseId === requested)) {
+          const linked = await getJson<KycCase>(`/bff/api/kyc/cases/${requested}`).catch(() => null);
+          const linkedStage = verificationStage === 'IdentityVerification' ? linked?.identityVerificationStatus : linked?.documentVerificationStatus;
+          if (linked && linked.status === 'PENDING_REVIEW' && linkedStage === 'PENDING_REVIEW') items = [linked, ...items];
+        }
+
+        setCases(items);
+        setTotalCount(result.totalCount);
+
+        if (rawCaseId !== null && !items.some(x => x.kycCaseId === requested)) {
           // Never silently show a different case than the one the link named.
           selectionSource.current = 'user';
+          setSelectedCaseId(null);
           setDeepLinkNotice(
             `KYC case ${rawCaseId} has nothing awaiting ${verificationStage === 'IdentityVerification' ? 'identity' : 'document'} verification: it may be decided already. Choose a case from the queue, or open the case details.`,
           );
           return;
         }
-        if (result.items.length > 0) {
+        if (items.length > 0) {
           const applicationNumber = contextApplicationNumber(getWorkspaceContext());
-          const fromContext = result.items.find(x => applicationNumber !== null && x.applicationNumber === applicationNumber);
+          const fromContext = items.find(x => applicationNumber !== null && x.applicationNumber === applicationNumber);
 
-          if (result.items.some(x => x.kycCaseId === requested)) {
+          if (items.some(x => x.kycCaseId === requested)) {
             selectionSource.current = 'url';
             setSelectedCaseId(requested);
           } else if (fromContext) {
@@ -182,13 +210,15 @@ export function KycDocumentVerificationView({
             setSelectedCaseId(fromContext.kycCaseId);
           } else {
             selectionSource.current = 'default';
-            setSelectedCaseId(result.items[0].kycCaseId);
+            setSelectedCaseId(items[0].kycCaseId);
           }
+        } else {
+          setSelectedCaseId(null);
         }
       })
       .catch(e => setError(e instanceof Error ? e.message : 'Unable to load KYC cases.'))
       .finally(() => setLoading(false));
-  }, [verificationStage]);
+  }, [verificationStage, pageNumber, linkedCaseId]);
 
   // The Shell's hand-over normally arrives before the case list, but can arrive after it.
   useEffect(() => {
@@ -280,6 +310,7 @@ export function KycDocumentVerificationView({
       }
 
       setCases(previous => previous.filter(item => item.kycCaseId !== selectedCaseId));
+      setTotalCount(previous => Math.max(0, previous - 1));
       setSelectedCaseId(null);
       setDocument(null);
       setDecisionRemarks('');
@@ -333,7 +364,7 @@ export function KycDocumentVerificationView({
           <CardHeader
             icon={<Inbox />}
             title="Awaiting review"
-            description={loading ? 'Loading…' : `${cases.length} case${cases.length === 1 ? '' : 's'} in your branch`}
+            description={loading ? 'Loading…' : `${totalCount} case${totalCount === 1 ? '' : 's'} in your branch, oldest first`}
           />
           {loading && <div className="space-y-3 p-4">{[0, 1, 2].map(i => <Skeleton key={i} className="h-16" />)}</div>}
           {!loading && cases.length === 0 && (
@@ -366,6 +397,9 @@ export function KycDocumentVerificationView({
                 );
               })}
             </ul>
+          )}
+          {!loading && (
+            <Pager className="justify-between border-t border-line px-4 py-3" pageNumber={pageNumber} pageSize={PAGE_SIZE} totalCount={totalCount} onPage={p => { setLinkedCaseId(null); setPageNumber(p); }} />
           )}
         </Card>
 

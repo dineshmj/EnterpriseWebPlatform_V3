@@ -7,7 +7,7 @@ export default function KycCasesPage() {
     <KycCaseWorkQueue
       title="KYC work queue"
       subtitle="Awaiting review"
-      description="Cases of your branch awaiting a KYC decision. Open a case to see its details and review the evidence."
+      description="Cases of your branch awaiting a KYC decision, oldest first. Open a case to see its details and review the evidence."
     />
   );
 }
