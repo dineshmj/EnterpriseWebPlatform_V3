@@ -22,7 +22,7 @@ It holds no data and no business rules of its own: it composes the Domain API ca
 
 ## Tests
 
-`pnpm test` - Jest with **WireMock standalone** playing the IDP's token endpoint and the Partner Products Domain API (`test\domain-api.client.spec.ts`): how this API exchanges the person's token and translates the Domain API's answers for the counter. Install WireMock once with `.\ps\wiremock\Install-WireMock.ps1`; Jest starts it for the run and stops it afterwards. Details: `tst\README.md` ("Node.js tests"). `pnpm audit` reports one moderate, dev-only advisory (`sprintf-js`, deep inside Jest's coverage tooling; no fixed version exists) - accepted: never deployed.
+`pnpm test` - Jest with **WireMock standalone** playing the IDP's token endpoint and the Partner Products Domain API (`test\domain-api.client.spec.ts`): how this API exchanges the person's token and translates the Domain API's answers for the counter. Install WireMock once with `.\ps\wiremock\Install-WireMock.ps1`; Jest starts it for the run and stops it afterwards. Details: `tst\README.md` ("Node.js tests"). `pnpm audit` reports one low, dev-only advisory (`deepmerge`, inside Jest's configuration loader; no fixed version exists) - accepted: never deployed. Jest runs with `--experimental-vm-modules`: NestJS 12 ships as ES modules and Jest loads them through Node's require(esm).
 
 ## Endpoints
 

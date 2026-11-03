@@ -1,6 +1,16 @@
 {
+  // ┌─ :: ARCHITECTURE :: TypeScript 6 compiler settings ──────────────────────────────────────
+  // │ Why : TypeScript 6 deprecates moduleResolution "node" (node10) and baseUrl, defaults
+  // │       "types" to none and "rootDir" to this folder - left as they were, the build would
+  // │       warn, lose the Node globals and move main.js to dist/src (Dockerfile + start script
+  // │       run dist/main.js).
+  // │ How : "nodenext" resolves packages the way Node itself does (package.json "exports",
+  // │       require conditions; still CommonJS output - package.json has no "type": "module");
+  // │       rootDir ./src keeps dist/main.js; types names the Node globals the code uses.
+  // └──────────────────────────────────────────────────────────────────────────────────────────
   "compilerOptions": {
-    "module": "commonjs",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "declaration": true,
     "removeComments": true,
     "emitDecoratorMetadata": true,
@@ -8,12 +18,12 @@
     "allowSyntheticDefaultImports": true,
     "target": "ES2022",
     "sourceMap": true,
+    "rootDir": "./src",
     "outDir": "./dist",
-    "baseUrl": "./",
+    "types": ["node"],
     "incremental": true,
     "skipLibCheck": true,
     "strict": true,
-    "moduleResolution": "node",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true
   },
