@@ -107,8 +107,11 @@ its squad's own deployable, so their start-up code is not shared through a centr
 The look-alike scaffold files are therefore left out of SonarQube Cloud's duplication count
 (`sonar.cpd.exclusions` in [code-scanning.yml](../.github/workflows/code-scanning.yml)):
 `Program.cs`, `AuthController.cs`, `*DbContext.cs`, `*OutboxPublisher.cs`, `MfeShell.tsx`,
-`components/ui/feedback.tsx`, `lib/server/oidc.ts`, `lib/server/session-store.ts`. All other rules
-still run on them, and copy-paste anywhere else still counts. A comment cannot do this: `NOSONAR`
+each web app's `components/ui/` folder (its copy of the design system's primitives: button, card,
+feedback, pager ...), `lib/server/oidc.ts`, `lib/server/session-store.ts`, and the DPoP / token
+plumbing (`lib/server/dpop.ts`, `src/auth/dpop-key.service.ts`, `src/auth/dpop-proof.verifier.ts`,
+`src/auth/delegated-token.guard.ts`, `src/services/token-exchange.service.ts`). All other rules
+still run on them, and copy-paste anywhere else - the screens included - still counts. A comment cannot do this: `NOSONAR`
 and `#pragma` silence issues, not duplication. Start-up stays inline in each `Program.cs` (no
 `builder.AddXxx()` helpers) so a reader sees the whole pipeline in one file.
 
