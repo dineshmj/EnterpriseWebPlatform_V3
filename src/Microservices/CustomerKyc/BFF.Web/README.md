@@ -5,7 +5,7 @@ NestJS BFF for the Customer KYC Next.js MFE.
 ## Local topology
 
 - BFF: `https://kyc.dev.localhost:33800`
-- MFE route: `/v1/kyc/cases/view-all/`
+- MFE route: `/v1/kyc/cases/view-all/` - the work queue: the branch's cases awaiting review, oldest first (first in, first decided), 50 a page with *Previous* / *Next* and "Page X of Y · N in all" when there is more than one page. The review pages (`/v1/kyc/identity-verification/view-all`, `/v1/kyc/documents/view-all`) page their case list the same way; a link to a case past the first page (`?caseId=`) still opens it while it awaits that review.
 - Customer KYC API: `https://kyc-api.dev.localhost:46305`
 - IdentityServer: `https://idp.dev.localhost:46392`
 

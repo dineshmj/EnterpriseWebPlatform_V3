@@ -9,6 +9,7 @@ import { buttonVariants } from '../../../components/ui/button';
 import { Card, CardHeader } from '../../../components/ui/card';
 import { cn } from '../../../components/ui/cn';
 import { Alert, EmptyState } from '../../../components/ui/feedback';
+import { Pager } from '../../../components/ui/pager';
 import { getJson } from '../../../lib/api';
 import { type Page, type PaymentSummary, type StaffUser, getStaffUser } from '../../../lib/payments';
 
@@ -21,8 +22,11 @@ const FILTERS = [
   { key: 'COMPENSATION_FAILED', label: 'Action needed', empty: 'No payment needs operations to retry a release.' },
 ] as const;
 
+const PAGE_SIZE = 50;
+
 export default function PaymentsPage() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>(FILTERS[0]);
+  const [pageNumber, setPageNumber] = useState(1);
   const [data, setData] = useState<Page<PaymentSummary> | null>(null);
   const [user, setUser] = useState<StaffUser | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -44,10 +48,14 @@ export default function PaymentsPage() {
   useEffect(() => {
     setError(null);
     const status = filter.key ? `&status=${filter.key}` : '';
-    getJson<Page<PaymentSummary>>(`/bff/api/payments?pageNumber=1&pageSize=50${status}`)
-      .then(setData)
+    getJson<Page<PaymentSummary>>(`/bff/api/payments?pageNumber=${pageNumber}&pageSize=${PAGE_SIZE}${status}`)
+      .then(result => {
+        // The last payments of the last page left this list meanwhile: step back to a page that has some.
+        if (result.items.length === 0 && pageNumber > 1) setPageNumber(Math.max(1, Math.ceil(result.totalCount / PAGE_SIZE)));
+        else setData(result);
+      })
       .catch(e => setError(e instanceof Error ? e.message : 'Unable to load payments.'));
-  }, [filter, refresh]);
+  }, [filter, pageNumber, refresh]);
 
   const mayInitiate = !!user?.roles.includes('customer_service_agent');
 
@@ -70,7 +78,7 @@ export default function PaymentsPage() {
               role="tab"
               type="button"
               aria-selected={f.key === filter.key}
-              onClick={() => setFilter(f)}
+              onClick={() => { setFilter(f); setPageNumber(1); }}
               className={cn(
                 '-mb-px border-b-2 px-3 py-2 text-[13px] font-medium transition-colors',
                 f.key === filter.key ? 'border-accent-600 text-ink' : 'border-transparent text-ink-muted hover:text-ink',
@@ -85,6 +93,7 @@ export default function PaymentsPage() {
         {!data && !error && <p className="px-6 py-8 text-sm text-ink-muted">Loading payments…</p>}
         {data && data.items.length === 0 && <EmptyState icon={<CheckCircle2 />} title="Nothing here">{filter.empty}</EmptyState>}
         {data && data.items.length > 0 && <PaymentsTable items={data.items} me={user?.sub} />}
+        {data && <Pager pageNumber={data.pageNumber} pageSize={PAGE_SIZE} totalCount={data.totalCount} onPage={setPageNumber} />}
       </Card>
     </MfeShell>
   );

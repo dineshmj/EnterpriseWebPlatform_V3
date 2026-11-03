@@ -6,14 +6,18 @@ import { MfeShell, type ShellNotification, useShellNotifications, useVisibleRefr
 import { PaymentsTable } from '../../../../components/PaymentsTable';
 import { Card, CardHeader } from '../../../../components/ui/card';
 import { Alert, EmptyState } from '../../../../components/ui/feedback';
+import { Pager } from '../../../../components/ui/pager';
 import { getJson } from '../../../../lib/api';
 import { type Page, type PaymentPolicy, type PaymentSummary, type StaffUser, formatMoney, getStaffUser } from '../../../../lib/payments';
+
+const PAGE_SIZE = 50;
 
 /**
  * The payments officer's queue: the branch's payments above the approval tier, waiting for
  * a decision. Their funds are already reserved. Opening one shows Approve / Reject.
  */
 export default function PaymentApprovalsPage() {
+  const [pageNumber, setPageNumber] = useState(1);
   const [data, setData] = useState<Page<PaymentSummary> | null>(null);
   const [user, setUser] = useState<StaffUser | null>(null);
   const [policy, setPolicy] = useState<PaymentPolicy | null>(null);
@@ -33,10 +37,14 @@ export default function PaymentApprovalsPage() {
 
   useEffect(() => {
     setError(null);
-    getJson<Page<PaymentSummary>>('/bff/api/payments?pageNumber=1&pageSize=50&status=PENDING_APPROVAL')
-      .then(setData)
+    getJson<Page<PaymentSummary>>(`/bff/api/payments?pageNumber=${pageNumber}&pageSize=${PAGE_SIZE}&status=PENDING_APPROVAL`)
+      .then(result => {
+        // The last payments of the last page left this list meanwhile: step back to a page that has some.
+        if (result.items.length === 0 && pageNumber > 1) setPageNumber(Math.max(1, Math.ceil(result.totalCount / PAGE_SIZE)));
+        else setData(result);
+      })
       .catch(e => setError(e instanceof Error ? e.message : 'Unable to load the approval queue.'));
-  }, [refresh]);
+  }, [pageNumber, refresh]);
 
   const limit = policy?.yourApprovalLimit;
   const limitText = limit === undefined ? null
@@ -58,6 +66,7 @@ export default function PaymentApprovalsPage() {
           <EmptyState icon={<CheckCircle2 />} title="Nothing to approve">No payment of your branch is waiting for a decision.</EmptyState>
         )}
         {data && data.items.length > 0 && <PaymentsTable items={data.items} me={user?.sub} />}
+        {data && <Pager pageNumber={data.pageNumber} pageSize={PAGE_SIZE} totalCount={data.totalCount} onPage={setPageNumber} />}
       </Card>
     </MfeShell>
   );
