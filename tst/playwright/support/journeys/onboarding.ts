@@ -27,7 +27,7 @@ export async function kycDecision(officer: ShellPage, applicationNumber: string,
 export async function complianceDecision(officer: ShellPage, applicationNumber: string, action: 'Approve' | 'Reject'): Promise<void> {
   await test.step(`Compliance officer: ${action}`, async () => {
     const compliance = new ComplianceMfe(officer);
-    await compliance.openCase(applicationNumber);
+    await compliance.openCase(applicationNumber, 'Awaiting decision');
     await compliance.expectCaseStatus('Under review');
     if (action === 'Approve') await compliance.approve('Screening reviewed; no concerns.');
     else await compliance.reject('Adverse information found during review.');
@@ -37,7 +37,7 @@ export async function complianceDecision(officer: ShellPage, applicationNumber: 
 export async function accountDecision(officer: ShellPage, applicationNumber: string, action: 'Approve' | 'Reject'): Promise<void> {
   await test.step(`Account officer: ${action}`, async () => {
     const accounts = new AccountsMfe(officer);
-    await accounts.openCase(applicationNumber);
+    await accounts.openCase(applicationNumber, 'Awaiting decision');
     await accounts.expectCaseStatus('Pending review');
     if (action === 'Approve') {
       // Opening happens a moment later, at core banking. It is proven by Sophie's status
