@@ -4,7 +4,8 @@ import { CheckCircle2, ChevronRight, Inbox } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { MfeShell, type ShellNotification, useShellNotifications } from '../../../../components/MfeShell';
-import { Card, CardHeader } from '../../../../components/ui/card';
+import { Button } from '../../../../components/ui/button';
+import { Card, CardContent, CardHeader } from '../../../../components/ui/card';
 import { cn } from '../../../../components/ui/cn';
 import { Table, Td, Th, formatDateTime } from '../../../../components/ui/data';
 import { Alert, EmptyState, StatusBadge } from '../../../../components/ui/feedback';
@@ -19,8 +20,11 @@ const FILTERS = [
   { key: '', label: 'All', empty: 'Your branch has no account applications yet.' },
 ] as const;
 
+const PAGE_SIZE = 50;
+
 export default function AccountApplicationsPage() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>(FILTERS[0]);
+  const [pageNumber, setPageNumber] = useState(1);
   const [data, setData] = useState<Page<AccountApplication> | null>(null);
   const [officer, setOfficer] = useState<Officer | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -39,10 +43,12 @@ export default function AccountApplicationsPage() {
     setData(null);
     setError(null);
     const status = filter.key ? `&status=${filter.key}` : '';
-    getJson<Page<AccountApplication>>(`/bff/api/accounts/applications?pageNumber=1&pageSize=50${status}`)
+    getJson<Page<AccountApplication>>(`/bff/api/accounts/applications?pageNumber=${pageNumber}&pageSize=${PAGE_SIZE}${status}`)
       .then(setData)
       .catch(e => setError(e instanceof Error ? e.message : 'Unable to load account applications.'));
-  }, [filter, refresh]);
+  }, [filter, pageNumber, refresh]);
+
+  const pages = data ? Math.max(1, Math.ceil(data.totalCount / PAGE_SIZE)) : 1;
 
   const assignee = (id?: string | null, lanId?: string | null) =>
     !id ? 'Unassigned' : id === officer?.sub ? 'You' : (lanId ?? shortId(id));
@@ -63,7 +69,7 @@ export default function AccountApplicationsPage() {
               role="tab"
               type="button"
               aria-selected={f.key === filter.key}
-              onClick={() => setFilter(f)}
+              onClick={() => { setFilter(f); setPageNumber(1); }}
               className={cn(
                 '-mb-px border-b-2 px-3 py-2 text-[13px] font-medium transition-colors',
                 f.key === filter.key ? 'border-accent-600 text-ink' : 'border-transparent text-ink-muted hover:text-ink',
@@ -124,6 +130,15 @@ export default function AccountApplicationsPage() {
               })}
             </tbody>
           </Table>
+        )}
+
+        {/* ARCH: the API pages the list; without these controls anything past the first page could never be opened. */}
+        {data && pages > 1 && (
+          <CardContent className="flex items-center justify-end gap-3">
+            <Button variant="secondary" size="sm" disabled={pageNumber <= 1} onClick={() => setPageNumber(p => p - 1)}>Previous</Button>
+            <span className="text-xs text-ink-muted">Page {data.pageNumber} of {pages} · {data.totalCount.toLocaleString('en-AU')} in all</span>
+            <Button variant="secondary" size="sm" disabled={pageNumber >= pages} onClick={() => setPageNumber(p => p + 1)}>Next</Button>
+          </CardContent>
         )}
       </Card>
     </MfeShell>
