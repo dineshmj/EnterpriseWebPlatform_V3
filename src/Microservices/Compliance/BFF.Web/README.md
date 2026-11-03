@@ -8,7 +8,7 @@ URL: `https://compliance.dev.localhost:46399` (launch profile `https`).
 
 | Path | Purpose |
 |---|---|
-| `/v1/compliance/view-all` | Work queue of the officer's branch: *Awaiting decision*, *On hold*, *Screening*, *All*. Risk rating and the clearance an approval needs are shown per case. |
+| `/v1/compliance/view-all` | Work queue of the officer's branch: *Awaiting decision*, *On hold*, *Screening*, *All*. The work tabs list the oldest case first (first in, first decided); *All* lists the newest first, so a case just raised is on page 1. 50 cases a page, with *Previous* / *Next* and "Page X of Y · N in all" under the table when there is more than one page; changing tab goes back to page 1, a live update reloads the page on screen. Risk rating and the clearance an approval needs are shown per case. |
 | `/v1/compliance/cases/view-details?caseId=…` | One case: details, screening result (or the provider retry state), the people separation of duties excludes, and the officer's actions: claim, release, approve, reject, put on hold, release hold. |
 
 The screens hint at the rules (e.g. "this HIGH case needs clearance 5", "you decided this customer's KYC"), but **every rule is enforced by the Compliance API**: branch scope, assignment, separation of duties and clearance by risk. The API's explanation is shown when it refuses an action.

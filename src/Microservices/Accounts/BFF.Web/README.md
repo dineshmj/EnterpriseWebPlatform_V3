@@ -8,7 +8,7 @@ URL: `https://accounts.dev.localhost:45456` (launch profile `https`).
 
 | Path | Purpose |
 |---|---|
-| `/v1/accounts/applications/view-all` | Work queue of the officer's branch: *Awaiting decision*, *On hold*, *Opening*, *Failed*, *All*. |
+| `/v1/accounts/applications/view-all` | Work queue of the officer's branch: *Awaiting decision*, *On hold*, *Opening*, *Failed*, *All*. The work tabs list the oldest application first (first in, first decided); *All* lists the newest first, so an application just received is on page 1. 50 applications a page, with *Previous* / *Next* and "Page X of Y · N in all" under the table when there is more than one page; changing tab goes back to page 1, a live update reloads the page on screen. |
 | `/v1/accounts/applications/view-details?applicationId=…` | One application: details, the account (product, account number, or the core-banking retry / failure state), the people separation of duties excludes, and the officer's actions: claim, release, **approve (choosing the product)**, reject, put on hold, release hold. While core banking opens the account, the page refreshes itself until it is open. |
 | `/v1/accounts/view-all` | The branch's opened accounts (BSB + account number, holder, product, status, core-banking reference). |
 | `/v1/accounts/lifecycle/view-all` | Accounts by lifecycle state (ACTIVE / FROZEN / CLOSED). Freeze and close are planned; the page is read-only. |
