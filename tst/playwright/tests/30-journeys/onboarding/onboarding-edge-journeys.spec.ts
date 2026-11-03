@@ -115,7 +115,7 @@ test.describe('Customer onboarding - edge situations', () => {
       await complianceDecision(await signedInAs('olivia.compliance'), applicationNumber, 'Approve');
 
       // Assert: the application reaches Accounts.
-      await new AccountsMfe(await signedInAs('jack.accounts')).openCase(applicationNumber);
+      await new AccountsMfe(await signedInAs('jack.accounts')).openCase(applicationNumber, 'Awaiting decision');
     });
   });
 
@@ -128,7 +128,7 @@ test.describe('Customer onboarding - edge situations', () => {
       await kycDecision(ethan, applicationNumber, 'Document verification', 'Approve');
       const olivia = await signedInAs('olivia.compliance');
       const compliance = new ComplianceMfe(olivia);
-      await compliance.openCase(applicationNumber);
+      await compliance.openCase(applicationNumber, 'Awaiting decision');
       await compliance.expectCaseStatus('Under review');
       const mfe = olivia.workspace();
 
@@ -146,7 +146,7 @@ test.describe('Customer onboarding - edge situations', () => {
       await compliance.approve('Source of funds received; no concerns.');
 
       // Assert 2
-      await new AccountsMfe(await signedInAs('jack.accounts')).openCase(applicationNumber);
+      await new AccountsMfe(await signedInAs('jack.accounts')).openCase(applicationNumber, 'Awaiting decision');
     });
   });
 
@@ -161,7 +161,7 @@ test.describe('Customer onboarding - edge situations', () => {
       await complianceDecision(await signedInAs('olivia.compliance'), applicationNumber, 'Approve');
       const jack = await signedInAs('jack.accounts');
       const accounts = new AccountsMfe(jack);
-      await accounts.openCase(applicationNumber);
+      await accounts.openCase(applicationNumber, 'Awaiting decision');
       await accounts.expectCaseStatus('Pending review');
       const mfe = jack.workspace();
 

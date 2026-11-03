@@ -137,7 +137,7 @@ test.describe('Customer onboarding journeys', () => {
       // Act + Assert: Olivia lacks the clearance the case's risk requires.
       await test.step('Olivia (clearance 4) may not approve a HIGH-risk case', async () => {
         const compliance = new ComplianceMfe(await signedInAs('olivia.compliance'));
-        await compliance.openCase(applicationNumber);
+        await compliance.openCase(applicationNumber, 'Awaiting decision');
         await compliance.expectCaseStatus('Under review');
         await expect(compliance.approveButton()).toBeDisabled();
       });

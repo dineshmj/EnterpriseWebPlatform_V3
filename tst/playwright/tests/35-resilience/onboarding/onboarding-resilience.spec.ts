@@ -26,21 +26,20 @@ test.describe('Customer onboarding - resilience', () => {
 
   test('The screening provider is down: the case waits in screening, then proceeds once it is back', async ({ signedInAs }) => {
     // Arrange + Act: KYC approves while the provider is down.
-    const { applicationNumber } = await withSimulator('screeningProvider', { behaviour: 'Down' }, async () => {
+    const olivia = await withSimulator('screeningProvider', { behaviour: 'Down' }, async () => {
       const done = await throughKyc(signedInAs, 'ScreenDown');
-      const olivia = await signedInAs('olivia.compliance');
-      await new ComplianceMfe(olivia).openCase(done.applicationNumber);
+      const officer = await signedInAs('olivia.compliance');
+      await new ComplianceMfe(officer).openCase(done.applicationNumber, 'Screening');
 
       // Assert 1: never decided by default - the case waits.
-      await expect(olivia.workspace().getByText('The case can be decided once screening has completed.')).toBeVisible();
-      return done;
+      await expect(officer.workspace().getByText('The case can be decided once screening has completed.')).toBeVisible();
+      return officer;
     });
 
     // Assert 2: back up (CLEAR forced, so Olivia's clearance suffices) - a retry screens it, then it can be decided.
+    // Olivia stays on the case page: by now the case may have left the "Screening" tab.
     await withSimulator('screeningProvider', { behaviour: 'Healthy', forcedOutcome: 'CLEAR' }, async () => {
-      const olivia = await signedInAs('olivia.compliance');
       const compliance = new ComplianceMfe(olivia);
-      await compliance.openCase(applicationNumber);
       // Retries back off from 15 s up to 5 min: allow for the next one.
       await expect(async () => {
         await olivia.reloadWorkspace();

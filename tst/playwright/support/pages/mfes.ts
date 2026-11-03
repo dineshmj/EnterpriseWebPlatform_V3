@@ -182,22 +182,32 @@ abstract class CaseQueueMfe {
   protected abstract readonly queueTitle: string;
   protected abstract readonly approveLabel: string;
 
-  /** Opens the queue, waits for the application on the "All" tab and opens its case page. */
-  async openCase(applicationNumber: string): Promise<void> {
+  /**
+   * Opens the queue, waits for the application on `tab` and opens its case page. A case waiting
+   * for this officer's decision is opened from "Awaiting decision", as an officer does;
+   * "Screening" (Compliance only) holds a case the provider has not screened yet; "All" is for
+   * the other states (on hold, decided).
+   */
+  async openCase(applicationNumber: string, tab: 'Awaiting decision' | 'Screening' | 'All' = 'All'): Promise<void> {
     await this.shell.openMenuItem(this.context, this.menuItem);
     await this.shell.waitForScreen(this.queueTitle);
     const mfe = this.shell.workspace();
     const link = () => mfe.getByRole('link', { name: applicationNumber, exact: true });
+    // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+    // │ The click is inside the retry: the queue re-renders when new work for the branch is
+    // │ pushed, and in a long list the row can keep moving past one click's wait ("element is
+    // │ not stable") - the next attempt clicks it again. The "All" tab shows only the oldest
+    // │ 50 of the branch, so a new case is waited for on "Awaiting decision" wherever it can be.
+    // └──────────────────────────────────────────────────────────────────────────────────────
     await expect(async () => {
-      await mfe.getByRole('tab', { name: 'All', exact: true }).click();
+      await mfe.getByRole('tab', { name: tab, exact: true }).click();
       if (!(await appears(link()))) {
         await this.shell.reloadWorkspace();
         await this.shell.waitForScreen(this.queueTitle);
-        await mfe.getByRole('tab', { name: 'All', exact: true }).click();
+        await mfe.getByRole('tab', { name: tab, exact: true }).click();
       }
-      await expect(link()).toBeVisible({ timeout: 3_000 });
+      await link().click({ timeout: 5_000 });
     }).toPass(WORKFLOW_WAIT);
-    await link().click();
     await expect(mfe.getByRole('heading', { level: 1 })).toContainText(applicationNumber);
   }
 
