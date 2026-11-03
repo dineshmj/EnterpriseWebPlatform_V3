@@ -59,8 +59,14 @@ public sealed class ComplianceCaseQueries(ComplianceDbContext db) : IComplianceC
         if (status is { } s)
             query = query.Where(x => x.Status == s);
 
+        // ARCH: a status tab is a work queue, so oldest first (first in, first decided). "All" (no status)
+        //       is a lookup list, so newest first - the case just raised is on page 1, not past the last page.
+        var ordered = status is null
+            ? query.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id)
+            : query.OrderBy(x => x.CreatedAt).ThenBy(x => x.Id);
+
         var total = await query.CountAsync(cancellationToken);
-        var items = await Project(query.OrderBy(x => x.CreatedAt).Skip((pageNumber - 1) * pageSize).Take(pageSize))
+        var items = await Project(ordered.Skip((pageNumber - 1) * pageSize).Take(pageSize))
             .ToListAsync(cancellationToken);
 
         return new PagedComplianceCasesResponse(items, pageNumber, pageSize, total);

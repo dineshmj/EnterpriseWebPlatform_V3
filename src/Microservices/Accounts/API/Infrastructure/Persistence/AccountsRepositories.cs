@@ -97,8 +97,14 @@ public sealed class AccountsQueries(AccountsDbContext db) : IAccountsQueries
         if (status is { } s)
             query = query.Where(x => x.Status == s);
 
+        // ARCH: a status tab is a work queue, so oldest first (first in, first decided). "All" (no status)
+        //       is a lookup list, so newest first - the application just received is on page 1.
+        var ordered = status is null
+            ? query.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id)
+            : query.OrderBy(x => x.CreatedAt).ThenBy(x => x.Id);
+
         var total = await query.CountAsync(cancellationToken);
-        var items = await ProjectApplications(query.OrderBy(x => x.CreatedAt).Skip((pageNumber - 1) * pageSize).Take(pageSize))
+        var items = await ProjectApplications(ordered.Skip((pageNumber - 1) * pageSize).Take(pageSize))
             .ToListAsync(cancellationToken);
 
         return new PagedResponse<AccountApplicationDetail>(items, pageNumber, pageSize, total);
