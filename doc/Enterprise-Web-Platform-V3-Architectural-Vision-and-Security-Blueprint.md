@@ -408,7 +408,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 |---|---|
 | Data protection | Data classification; encryption in transit and at rest; key management; field-level protection where justified; PII masking in logs and telemetry; retention and secure deletion; purpose limitation. Secrets, tokens and personal data never appear in logs. |
 | API security | Validation of audience, issuer, lifetime and scope (per operation); object-level authorization; input validation; request-size limits; rate limiting; secure headers; CORS restrictions; idempotency keys for commands; versioning; consistent, non-leaking errors |
-| OAuth direction | Aligned with RFC 9700 and OAuth 2.1: exact redirect URIs; PKCE; no implicit or ROPC flows; refresh-token rotation; sender-constrained tokens (DPoP / mTLS) where justified; key rotation. Evaluate **FAPI 2.0** for high-risk financial APIs. |
+| OAuth direction | Aligned with RFC 9700 and OAuth 2.1: exact redirect URIs; PKCE; no implicit or ROPC flows; refresh-token rotation; sender-constrained tokens (DPoP / mTLS) where justified; key rotation. **FAPI 2.0** adopted (3-NOV-2026): PAR, `private_key_jwt` and DPoP-bound person tokens across the staff and customer channels; mutual TLS with certificate-bound tokens to the Partner Bank. |
 | BFF security | HttpOnly + Secure cookies; deliberate SameSite; anti-forgery; session fixation protection and renewal; server-side session storage; logout propagation; strict origin validation; no generic proxying |
 | Browser security | Strict CSP including `frame-ancestors`; `nosniff`; Referrer-Policy; Permissions-Policy; HSTS; clickjacking and open-redirect protection; `postMessage` origin and source validation |
 | Input and output | Untrusted-by-default input; canonicalization; safe parsing; parameterized queries; output encoding; protection against SSRF, path traversal and deserialization attacks |
@@ -627,7 +627,7 @@ Details: [Saga plan §2](EWP-V3-Saga-Choreography-and-Orchestration-Plans.md#2-o
 - [x] Outbox and audit events for Partner Products (2026-10-20: `partner-products.digital-gold.events`, read by the audit trail)
 - [ ] Temporal with mTLS and namespace authorization (production: from the platform)
 - [x] The purchase's payment followed by events instead of polling (2026-10-20: signal from `payments.payment.events`, 5-minute fallback)
-- [ ] FAPI 2.0 profile end to end (PAR for EWP's own customer channel, DPoP or mTLS everywhere)
+- [ ] FAPI 2.0 profile end to end - left: machine tokens (Kafka subscribers, client credentials) are still bearer, and calls between services are not mutual TLS (Threat-Model R-9). Done: PAR, `private_key_jwt` and DPoP-bound person tokens in both channels
 
 Details: [PartnerProducts-Requirements.md](Requirements/PartnerProducts-Requirements.md).
 

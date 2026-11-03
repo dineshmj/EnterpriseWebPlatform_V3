@@ -1102,7 +1102,7 @@ Demo: Sophie records Camilla's Form VII and sends it (the PC's Partner Bank wind
 - Security controls: [Partner Products API README](../src/Microservices/PartnerProducts/API/README.md) #11-#22
 - Automated proof of the adapter (signed instruction, refusals, lost answer and resend with the same `jti`), with the Partner Bank played by WireMock: [1.8.2](#182-neighbours-played-by-wiremock-c-and-typescript)
 
-**Not yet:** PAR for an EWP channel of the customer's own (EWP's screens are all for staff today); DPoP or mutual TLS on EWP's internal calls (Threat-Model R-9).
+**Not yet:** mutual TLS on EWP's internal calls (Threat-Model R-9). A person's token on those calls is already DPoP-bound, Journey APIs included ([2.1.1](#211-oidc-authorization-code--pkce-through-a-bff)); machine tokens stay bearer.
 
 ### 2.5 Supply chain
 
@@ -1277,6 +1277,8 @@ Typical architecture and security questions, each with the sections that answer 
 | Is the code scanned for vulnerabilities, not only the dependencies? | [2.5.2](#252-code-scanning-codeql-sonarqube-cloud-and-snyk) |
 | How do two people editing the same record at once not overwrite each other? | [1.6.4](#164-concurrency-control) |
 | Where are the access tokens kept? Can JavaScript read them? | [2.1.1](#211-oidc-authorization-code--pkce-through-a-bff), [3.3](#33-tokens-in-the-browser) |
+| A token is copied from a log or a proxy. Can it be used? (DPoP) | [2.1.1](#211-oidc-authorization-code--pkce-through-a-bff) |
+| Is FAPI 2.0 used - PAR, `private_key_jwt`, sender-constrained tokens? | [2.1.1](#211-oidc-authorization-code--pkce-through-a-bff), [2.1.6](#216-customers-sign-in-to-their-own-channel-my-ewp-fapi-20), [2.4.10](#2410-integration-with-another-organisation-the-partner-bank) |
 | How do you stop a user from opening someone else's record by changing an ID (IDOR / BOLA)? | [2.2.3](#223-object-level-authorization) |
 | Is authorization only role-based? | [2.2](#22-authorization-beyond-rbac) |
 | How do you stop one person from both initiating and approving? | [2.2.6](#226-separation-of-duties-makerchecker) |
