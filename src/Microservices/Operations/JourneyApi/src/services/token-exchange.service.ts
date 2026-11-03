@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { ForbiddenException, Inject, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { DPoPKeyService } from '../auth/dpop-key.service';
 import { JOURNEY_OPTIONS, JourneyOptions } from '../configuration/journey-options';
 
 interface TokenResponse {
@@ -28,7 +29,10 @@ export class TokenExchangeService {
   private readonly logger = new Logger(TokenExchangeService.name);
   private readonly cache = new Map<string, { token: string; expiresAt: number }>();
 
-  constructor(@Inject(JOURNEY_OPTIONS) private readonly options: JourneyOptions) {}
+  constructor(
+    @Inject(JOURNEY_OPTIONS) private readonly options: JourneyOptions,
+    private readonly dpop: DPoPKeyService,
+  ) {}
 
   async exchange(subjectToken: string, scope: string): Promise<string> {
     const key = `${scope}|${createHash('sha256').update(subjectToken).digest('hex')}`;
@@ -45,9 +49,11 @@ export class TokenExchangeService {
       // │ The form carries this API's client secret and the person's token: a redirect is
       // │ refused (an error, so "IDP unavailable"), never followed - a 307 would send the form on.
       // └──────────────────────────────────────────────────────────────────────────────────────
-      response = await fetch(`${this.options.authority}/connect/token`, {
+      const tokenEndpoint = `${this.options.authority}/connect/token`;
+      response = await fetch(tokenEndpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        // SEC: a DPoP proof with this API's own key - the IDP binds the new token to it (cnf.jkt).
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', DPoP: await this.dpop.proof('POST', tokenEndpoint) },
         body: new URLSearchParams({
           grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
           client_id: this.options.clientId,

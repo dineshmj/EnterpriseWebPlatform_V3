@@ -5,6 +5,7 @@ Deployable: `src/Microservices/CustomerKyc/BFF.Web` (NestJS + `openid-client`) �
 ## 1. Sign-in (OIDC client)
 
 - [x] **A confidential client using Authorization Code + PKCE, with state and nonce.** Silent sign-in in the frame uses `prompt=none`; step-up uses `prompt=login` with `acr_values=mfa`. → `src/auth/oidc.service.ts`
+- [x] **Its tokens are DPoP-bound** (RFC 9449): bound to the BFF's own DPoP key (not the client key; without it the BFF does not start); `dpop_jkt` in the pushed request, a proof at the code exchange, each refresh and the Documents Management exchange (userinfo takes Bearer only, as for the .NET BFFs); every API call carries a fresh proof, a new one for each retry of a read. → `src/auth/dpop-key.service.ts`, `src/resilience/resilient-fetch.ts` (`perAttemptHeaders`)
 - [x] **The session ID is regenerated at sign-in,** against session fixation. → `oidc.service.ts` (`req.session.regenerate`)
 - [x] **Refreshes are single-flight:** parallel requests share one refresh. *Because* two refreshes with a one-time refresh token would revoke each other.
 - [x] **The OIDC round-trip state** (state, nonce and PKCE verifier) **lives in a short-lived cookie that is encrypted with AES-256-GCM, under a key derived with HKDF.** It is HttpOnly and used once. → `src/auth/pending-sign-in.ts`

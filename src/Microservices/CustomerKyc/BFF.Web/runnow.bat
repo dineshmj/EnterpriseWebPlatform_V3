@@ -40,6 +40,9 @@ set "KYC_BFF_CLIENT_ID=CustomerKYC.Microservice.BFF.ClientID"
 REM private_key_jwt: this BFF's own key (ps\pki\New-EwpLocalPki.ps1 makes it, outside the repository).
 set "KYC_BFF_CLIENT_KEY_PATH=%USERPROFILE%\.ewp-pki\customer-kyc-web-client.key.pem"
 set "KYC_BFF_CLIENT_KEY_PASSWORD_PATH=%USERPROFILE%\.ewp-pki\customer-kyc-web-client.key.pem.password"
+REM DPoP: the key every token of this BFF is bound to (New-EwpClientKeys.mjs; not the client key).
+set "KYC_BFF_DPOP_KEY_PATH=%USERPROFILE%\.ewp-pki\customer-kyc-web-dpop.key.pem"
+set "KYC_BFF_DPOP_KEY_PASSWORD_PATH=%USERPROFILE%\.ewp-pki\customer-kyc-web-dpop.key.pem.password"
 
 set "KYC_BFF_CALLBACK_URL=https://kyc.dev.localhost:33800/api/auth/callback"
 set "KYC_BFF_POST_LOGOUT_REDIRECT_URI=https://kyc.dev.localhost:33800/signout-callback-oidc"

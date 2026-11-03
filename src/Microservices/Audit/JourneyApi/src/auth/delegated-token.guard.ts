@@ -11,6 +11,7 @@ import { SetMetadata } from '@nestjs/common';
 import type { Request } from 'express';
 import { createRemoteJWKSet, jwtVerify, JWTPayload } from 'jose';
 import { JOURNEY_OPTIONS, JourneyOptions } from '../configuration/journey-options';
+import { DPoPProofVerifier } from './dpop-proof.verifier';
 import { RateLimiter, READ_LIMIT } from '../http/rate-limit';
 
 /** The person this request acts for, and the token that proves it (exchanged further downstream). */
@@ -30,10 +31,11 @@ export const RequiresPermission = (permission: string) => SetMetadata(PERMISSION
 // ┌─ :: SECURITY :: Audit Journey API: delegated tokens only ──────────────────────────────────────
 // │ Why : The Journey API must serve a person through its own web app - not a stolen machine token
 // │       or another client holding the scope.
-// │ How : JWT checked against the IDP's keys (issuer, audience, lifetime, at+jwt); a person (sub),
+// │ How : "DPoP <token>" only: JWT checked against the IDP's keys (issuer, audience, lifetime,
+// │       at+jwt), bound to a key (cnf.jkt) the caller proves on this very request; a person (sub),
 // │       the scope, the web BFF as "act" and the endpoint's permission are all required; no rule
 // │       on an endpoint = denied.
-// │ Ref : Features 2.1.2, 2.2.1 | RFC 8693 | RFC 9068 | OWASP API2, API5 |
+// │ Ref : Features 2.1.1, 2.1.2, 2.2.1 | RFC 8693 | RFC 9068 | RFC 9449 | OWASP API2, API5 |
 // │       Threat-Model .NET/NestJS parity
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 /**
@@ -50,16 +52,18 @@ export class DelegatedTokenGuard implements CanActivate {
     @Inject(JOURNEY_OPTIONS) private readonly options: JourneyOptions,
     private readonly reflector: Reflector,
     private readonly limiter: RateLimiter,
+    private readonly proofs: DPoPProofVerifier,
   ) {
     this.jwks = createRemoteJWKSet(new URL(`${options.authority}/.well-known/openid-configuration/jwks`));
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<DelegatedRequest>();
+    // SEC: the DPoP scheme only - a bearer token (no proof of possession) is refused (RFC 9449 §7.1).
     const header = request.headers.authorization ?? '';
-    const token = header.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : '';
+    const token = /^DPoP /i.test(header) ? header.slice('DPoP '.length).trim() : '';
     if (!token) {
-      throw new UnauthorizedException('A bearer token is required.');
+      throw new UnauthorizedException('A DPoP-bound token is required (Authorization: DPoP).');
     }
 
     let payload: JWTPayload;
@@ -72,6 +76,16 @@ export class DelegatedTokenGuard implements CanActivate {
     } catch {
       throw new UnauthorizedException('The token is not valid.');
     }
+
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ The token must be bound to a key (cnf.jkt) and the caller must prove it holds that
+    // │ key on this very request (dpop-proof.verifier.ts): a copied token alone is refused.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    const cnfJkt = (payload.cnf as { jkt?: unknown } | undefined)?.jkt;
+    if (typeof cnfJkt !== 'string') {
+      throw new UnauthorizedException('The token is not DPoP-bound.');
+    }
+    await this.proofs.verify(request, token, cnfJkt);
 
     const scopes = toList(payload.scope);
     const actingClient = (payload.act as { client_id?: unknown } | undefined)?.client_id;

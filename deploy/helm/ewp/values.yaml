@@ -350,12 +350,14 @@ components:
       KYC_DOCUMENTS_MANAGEMENT_API_BASE_URL: '{{ include "ewp.internal" (list . "documents-management-api") }}'
       KYC_BFF_CLIENT_KEY_PATH: /etc/ewp/client-key/client-key.pem
       KYC_BFF_CLIENT_KEY_PASSWORD_PATH: /etc/ewp/client-key/client-key.pem.password
+      KYC_BFF_DPOP_KEY_PATH: /etc/ewp/client-key/dpop-key.pem
+      KYC_BFF_DPOP_KEY_PASSWORD_PATH: /etc/ewp/client-key/dpop-key.pem.password
     secretEnv:
       - KYC_BFF_SESSION_SECRET
       - KYC_BFF_SESSION_KEY
       - KYC_BFF_DATABASE_URL
     secretFiles:
-      # private_key_jwt: this app's own key (encrypted PEM) and its password - nobody else's.
+      # private_key_jwt and DPoP: this app's own two keys (encrypted PEM) and their passwords - nobody else's.
       - {name: client-key, secret: ewp-customer-kyc-bff-web-client-key, mountPath: /etc/ewp/client-key}
 
   compliance-bff-web:
@@ -433,11 +435,13 @@ components:
       AUDIT_JOURNEY_API_BASE_URL: '{{ include "ewp.internal" (list . "audit-journey-api") }}'
       AUDIT_WEB_CLIENT_KEY_PATH: /etc/ewp/client-key/client-key.pem
       AUDIT_WEB_CLIENT_KEY_PASSWORD_PATH: /etc/ewp/client-key/client-key.pem.password
+      AUDIT_WEB_DPOP_KEY_PATH: /etc/ewp/client-key/dpop-key.pem
+      AUDIT_WEB_DPOP_KEY_PASSWORD_PATH: /etc/ewp/client-key/dpop-key.pem.password
     secretEnv:
       - AUDIT_WEB_SESSION_KEY
       - AUDIT_WEB_DATABASE_URL
     secretFiles:
-      # private_key_jwt: this app's own key (encrypted PEM) and its password - nobody else's.
+      # private_key_jwt and DPoP: this app's own two keys (encrypted PEM) and their passwords - nobody else's.
       - {name: client-key, secret: ewp-audit-bff-web-client-key, mountPath: /etc/ewp/client-key}
 
   operations-bff-web:
@@ -454,11 +458,13 @@ components:
       OPERATIONS_JOURNEY_API_BASE_URL: '{{ include "ewp.internal" (list . "operations-journey-api") }}'
       OPERATIONS_WEB_CLIENT_KEY_PATH: /etc/ewp/client-key/client-key.pem
       OPERATIONS_WEB_CLIENT_KEY_PASSWORD_PATH: /etc/ewp/client-key/client-key.pem.password
+      OPERATIONS_WEB_DPOP_KEY_PATH: /etc/ewp/client-key/dpop-key.pem
+      OPERATIONS_WEB_DPOP_KEY_PASSWORD_PATH: /etc/ewp/client-key/dpop-key.pem.password
     secretEnv:
       - OPERATIONS_WEB_SESSION_KEY
       - OPERATIONS_WEB_DATABASE_URL
     secretFiles:
-      # private_key_jwt: this app's own key (encrypted PEM) and its password - nobody else's.
+      # private_key_jwt and DPoP: this app's own two keys (encrypted PEM) and their passwords - nobody else's.
       - {name: client-key, secret: ewp-operations-bff-web-client-key, mountPath: /etc/ewp/client-key}
 
   partner-products-bff-web:
@@ -475,11 +481,13 @@ components:
       PARTNER_PRODUCTS_JOURNEY_API_BASE_URL: '{{ include "ewp.internal" (list . "partner-products-journey-api") }}'
       PARTNER_PRODUCTS_WEB_CLIENT_KEY_PATH: /etc/ewp/client-key/client-key.pem
       PARTNER_PRODUCTS_WEB_CLIENT_KEY_PASSWORD_PATH: /etc/ewp/client-key/client-key.pem.password
+      PARTNER_PRODUCTS_WEB_DPOP_KEY_PATH: /etc/ewp/client-key/dpop-key.pem
+      PARTNER_PRODUCTS_WEB_DPOP_KEY_PASSWORD_PATH: /etc/ewp/client-key/dpop-key.pem.password
     secretEnv:
       - PARTNER_PRODUCTS_WEB_SESSION_KEY
       - PARTNER_PRODUCTS_WEB_DATABASE_URL
     secretFiles:
-      # private_key_jwt: this app's own key (encrypted PEM) and its password - nobody else's.
+      # private_key_jwt and DPoP: this app's own two keys (encrypted PEM) and their passwords - nobody else's.
       - {name: client-key, secret: ewp-partner-products-bff-web-client-key, mountPath: /etc/ewp/client-key}
 
   # ── Domain APIs ──────────────────────────────────────────────────────────────────────────────
@@ -647,11 +655,16 @@ components:
       AUDIT_JOURNEY_IDP_AUTHORITY: '{{ include "ewp.public" (list . "idp") }}'
       AUDIT_JOURNEY_AUDIENCE: audit-journey-api
       AUDIT_JOURNEY_CALLER_CLIENT_ID: Audit.Microservice.Web.ClientID
+      AUDIT_JOURNEY_DPOP_KEY_PATH: /etc/ewp/client-key/dpop-key.pem
+      AUDIT_JOURNEY_DPOP_KEY_PASSWORD_PATH: /etc/ewp/client-key/dpop-key.pem.password
       AUDIT_JOURNEY_CLIENT_ID: Audit.JourneyApi.ClientID
       AUDIT_API_BASE_URL: '{{ include "ewp.internal" (list . "audit-api") }}'
       PAYMENTS_API_BASE_URL: '{{ include "ewp.internal" (list . "payments-api") }}'
     secretEnv:
       - AUDIT_JOURNEY_CLIENT_SECRET
+    secretFiles:
+      # DPoP: this API's own key (encrypted PEM) and its password - every token it obtains is bound to it.
+      - {name: client-key, secret: ewp-audit-journey-api-client-key, mountPath: /etc/ewp/client-key}
 
   operations-journey-api:
     stack: node
@@ -666,6 +679,8 @@ components:
       OPERATIONS_JOURNEY_IDP_AUTHORITY: '{{ include "ewp.public" (list . "idp") }}'
       OPERATIONS_JOURNEY_AUDIENCE: operations-journey-api
       OPERATIONS_JOURNEY_CALLER_CLIENT_ID: Operations.Microservice.Web.ClientID
+      OPERATIONS_JOURNEY_DPOP_KEY_PATH: /etc/ewp/client-key/dpop-key.pem
+      OPERATIONS_JOURNEY_DPOP_KEY_PASSWORD_PATH: /etc/ewp/client-key/dpop-key.pem.password
       OPERATIONS_JOURNEY_CLIENT_ID: Operations.JourneyApi.ClientID
       OPERATIONS_JOURNEY_ACCOUNTS_API: '{{ include "ewp.internal" (list . "accounts-api") }}'
       OPERATIONS_JOURNEY_COMPLIANCE_API: '{{ include "ewp.internal" (list . "compliance-api") }}'
@@ -682,6 +697,9 @@ components:
       - OPERATIONS_JOURNEY_CLIENT_SECRET
       # SEC: sent to the simulators (other pods) for their behaviour switch; Test only.
       - OPERATIONS_JOURNEY_SIMULATOR_ADMIN_KEY
+    secretFiles:
+      # DPoP: this API's own key (encrypted PEM) and its password - every token it obtains is bound to it.
+      - {name: client-key, secret: ewp-operations-journey-api-client-key, mountPath: /etc/ewp/client-key}
 
   partner-products-journey-api:
     stack: node
@@ -695,6 +713,8 @@ components:
       PARTNER_PRODUCTS_JOURNEY_IDP_AUTHORITY: '{{ include "ewp.public" (list . "idp") }}'
       PARTNER_PRODUCTS_JOURNEY_AUDIENCE: partner-products-journey-api
       PARTNER_PRODUCTS_JOURNEY_CALLER_CLIENT_ID: PartnerProducts.Microservice.Web.ClientID
+      PARTNER_PRODUCTS_JOURNEY_DPOP_KEY_PATH: /etc/ewp/client-key/dpop-key.pem
+      PARTNER_PRODUCTS_JOURNEY_DPOP_KEY_PASSWORD_PATH: /etc/ewp/client-key/dpop-key.pem.password
       PARTNER_PRODUCTS_JOURNEY_CLIENT_ID: PartnerProducts.JourneyApi.ClientID
       PARTNER_PRODUCTS_API_BASE_URL: '{{ include "ewp.internal" (list . "partner-products-api") }}'
       CUSTOMER_ONBOARDING_API_BASE_URL: '{{ include "ewp.internal" (list . "customer-onboarding-api") }}'
@@ -706,6 +726,9 @@ components:
       PARTNER_PRODUCTS_TEMPORAL_TASK_QUEUE: partner-products
     secretEnv:
       - PARTNER_PRODUCTS_JOURNEY_CLIENT_SECRET
+    secretFiles:
+      # DPoP: this API's own key (encrypted PEM) and its password - every token it obtains is bound to it.
+      - {name: client-key, secret: ewp-partner-products-journey-api-client-key, mountPath: /etc/ewp/client-key}
 
   # ── Workers ──────────────────────────────────────────────────────────────────────────────────
   customer-outbox-publisher:

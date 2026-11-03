@@ -17,6 +17,7 @@ export const urls = {
   accountsApi: 'https://accounts-api.dev.localhost:48486',
   customerOnboardingApi: 'https://customer-api.dev.localhost:46363',
   documentsManagementApi: 'https://documents-management-api.dev.localhost:49486',
+  partnerProductsJourneyApi: 'https://partner-products-journey.dev.localhost:46385',
 } as const;
 
 export interface Service {

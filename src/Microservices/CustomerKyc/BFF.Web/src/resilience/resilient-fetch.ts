@@ -89,6 +89,11 @@ export interface ResilientFetchOptions {
   timeoutMs: number;
   /** Total attempts; GETs only - a write is never retried (see KycApiService.postOnce). */
   attempts?: number;
+  /**
+   * Headers built anew for EACH attempt: a DPoP proof is good for one request only (its jti is
+   * taken once), so a retried GET needs a new one.
+   */
+  perAttemptHeaders?: () => Promise<Record<string, string>>;
 }
 
 /**
@@ -116,7 +121,11 @@ export async function resilientFetch(
     try {
       const response = await fetch(url, {
         ...init,
-        headers: { ...(init.headers as Record<string, string> | undefined), ...traceHeaders() },
+        headers: {
+          ...(init.headers as Record<string, string> | undefined),
+          ...(options.perAttemptHeaders ? await options.perAttemptHeaders() : {}),
+          ...traceHeaders(),
+        },
         signal: controller.signal,
       });
       end({ http_response_status_code: String(response.status) });

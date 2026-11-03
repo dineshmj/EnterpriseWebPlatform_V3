@@ -14,6 +14,9 @@ export interface KycBffOptions {
   /** This BFF's private_key_jwt key (encrypted PKCS#8 PEM) and the file holding its password. */
   clientKeyPath: string;
   clientKeyPasswordPath: string;
+  /** This BFF's DPoP key (encrypted PKCS#8 PEM) and the file holding its password (dpop-key.service.ts). */
+  dpopKeyPath: string;
+  dpopKeyPasswordPath: string;
   callbackUrl: string;
   postLogoutRedirectUri: string;
   apiBaseUrl: string;
@@ -50,6 +53,8 @@ export function loadOptions(): KycBffOptions {
     clientId: required('KYC_BFF_CLIENT_ID'),
     clientKeyPath: required('KYC_BFF_CLIENT_KEY_PATH'),
     clientKeyPasswordPath: required('KYC_BFF_CLIENT_KEY_PASSWORD_PATH'),
+    dpopKeyPath: required('KYC_BFF_DPOP_KEY_PATH'),
+    dpopKeyPasswordPath: required('KYC_BFF_DPOP_KEY_PASSWORD_PATH'),
     callbackUrl: required('KYC_BFF_CALLBACK_URL'),
     postLogoutRedirectUri: required('KYC_BFF_POST_LOGOUT_REDIRECT_URI'),
     apiBaseUrl: required('KYC_API_BASE_URL'),

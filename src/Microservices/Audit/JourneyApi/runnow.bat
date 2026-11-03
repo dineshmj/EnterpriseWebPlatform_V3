@@ -31,6 +31,9 @@ REM Must equal ClientIds:AuditWeb in src\IDP\appsettings.json (where the IDP reg
 set "AUDIT_JOURNEY_CALLER_CLIENT_ID=Audit.Microservice.Web.ClientID"
 REM Must equal ClientIds:AuditJourneyApi in src\IDP\appsettings.json (where the IDP registers that client).
 set "AUDIT_JOURNEY_CLIENT_ID=Audit.JourneyApi.ClientID"
+REM DPoP: the key every token this API obtains is bound to (New-EwpClientKeys.mjs).
+set "AUDIT_JOURNEY_DPOP_KEY_PATH=%USERPROFILE%\.ewp-pki\audit-journey-api-dpop.key.pem"
+set "AUDIT_JOURNEY_DPOP_KEY_PASSWORD_PATH=%USERPROFILE%\.ewp-pki\audit-journey-api-dpop.key.pem.password"
 set "AUDIT_JOURNEY_CLIENT_SECRET=b749efd3-1000-477e-93df-0fa1fd8eb189"
 
 REM Development: the API addresses below go through the fault proxy (ps\toxiproxy\toxiproxy.json,

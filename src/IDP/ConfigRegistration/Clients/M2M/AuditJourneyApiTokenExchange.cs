@@ -26,6 +26,11 @@ public sealed class AuditJourneyApiTokenExchange
             // │ Domain API as itself, only for a person (read scopes only).
             // └──────────────────────────────────────────────────────────────────────────────────────
             AllowedGrantTypes = { OidcConstants.GrantTypes.TokenExchange },
+            // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+            // │ DPoP (RFC 9449): every token it gets is bound to ITS own DPoP key, so a token taken
+            // │ from the Journey API's memory or logs cannot be replayed by anyone else.
+            // └──────────────────────────────────────────────────────────────────────────────────────
+            RequireDPoP = true,
             AllowedScopes = { "audit.read", "payments.read" },
 
             // Delegated tokens are short-lived: one journey, a few calls.

@@ -2,6 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { config, SESSION_COOKIE } from '@/lib/server/config';
+import { dpopAuthorization } from '@/lib/server/dpop';
 import { exchangeForJourneyApi, freshAccessToken } from '@/lib/server/oidc';
 import { readSession, updateSession } from '@/lib/server/session-store';
 import { isDependencyUnavailable, OUTAGE_MESSAGE } from '@/lib/server/outage';
@@ -66,8 +67,9 @@ async function callJourney<T>(path: string): Promise<ActionResult<T>> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 15_000);
   try {
-    const response = await fetch(`${config.journeyApiBaseUrl}${path}`, {
-      headers: { Authorization: `Bearer ${journeyToken}`, Accept: 'application/json' },
+    const url = `${config.journeyApiBaseUrl}${path}`;
+    const response = await fetch(url, {
+      headers: { ...(await dpopAuthorization(journeyToken, 'GET', url)), Accept: 'application/json' },
       cache: 'no-store',
       signal: controller.signal,
     });

@@ -44,6 +44,14 @@ public sealed class MfeOperations
             RequirePushedAuthorization = true,
             PushedAuthorizationLifetime = 60,
 
+            // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+            // │ DPoP (RFC 9449, FAPI 2.0): every token is bound to the light BFF's own DPoP key
+            // │ (cnf.jkt) - at sign-in, on refresh and on the exchange - and every call carries a
+            // │ fresh proof signed with it: a token copied from a log or a memory dump is useless
+            // │ without that key.
+            // └──────────────────────────────────────────────────────────────────────────────────────
+            RequireDPoP = true,
+
             RedirectUris = { $"{ClientSettings.BaseUrlOf(nameof(ClientIds.OperationsWeb))}/api/auth/callback" },
             PostLogoutRedirectUris = { $"{ClientSettings.BaseUrlOf(nameof(ClientIds.OperationsWeb))}/" },
             FrontChannelLogoutUri = $"{ClientSettings.BaseUrlOf(nameof(ClientIds.OperationsWeb))}/api/auth/frontchannel-logout",

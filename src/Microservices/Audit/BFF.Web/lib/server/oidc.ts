@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { calculateJwkThumbprint, exportJWK, SignJWT } from 'jose';
 import { Client, generators, Issuer, TokenSet } from 'openid-client';
 import { config } from './config';
+import { dpopKey } from './dpop';
 import { SessionData } from './session-store';
 
 let clientPromise: Promise<Client> | undefined;
@@ -12,9 +13,10 @@ let clientPromise: Promise<Client> | undefined;
 // │       through which app.
 // │ How : Authorization Code + PKCE with state and nonce, pushed to the IDP first (PAR); the BFF
 // │       proves itself with private_key_jwt (no client secret); tokens
-// │       stay in the server-side session and are refreshed there; each call exchanges the
+// │       stay in the server-side session and are refreshed there, all bound to this BFF's DPoP
+// │       key (dpop.ts); each call exchanges the
 // │       person's token (RFC 8693) for a Journey API token naming this BFF as "act".
-// │ Ref : Features 2.1.1, 2.1.2 | RFC 7636 | RFC 9126 (PAR) | RFC 8693 |
+// │ Ref : Features 2.1.1, 2.1.2 | RFC 7636 | RFC 9126 (PAR) | RFC 8693 | RFC 9449 (DPoP) |
 // │       IETF OAuth for Browser-Based Apps
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 /** The IDP client of this light BFF (discovered once; retried after a failure). */
@@ -62,6 +64,8 @@ export async function authorizationRequest(returnUrl: string, silent: boolean): 
   const pushed = await client.pushedAuthorizationRequest({
     ...(await clientAuthentication(client)),
     scope: 'openid profile roles organization offline_access',
+    // SEC: dpop_jkt binds the authorization code to this BFF's DPoP key (RFC 9449 §10).
+    dpop_jkt: (await dpopKey()).jkt,
     response_mode: 'query',
     state: pending.state,
     nonce: pending.nonce,
@@ -95,7 +99,10 @@ export async function freshAccessToken(session: SessionData): Promise<{ token: s
     return { token: session.accessToken };
   }
   const client = await oidcClient();
-  const tokens = await client.refresh(session.refreshToken, { exchangeBody: await clientAuthentication(client) });
+  const tokens = await client.refresh(session.refreshToken, {
+    exchangeBody: await clientAuthentication(client),
+    DPoP: (await dpopKey()).privateKey,   // SEC: the new tokens stay bound to the same key
+  });
   const refreshed: SessionData = {
     ...session,
     accessToken: tokens.access_token!,
@@ -118,7 +125,9 @@ export async function exchangeForJourneyApi(personAccessToken: string): Promise<
     subject_token: personAccessToken,
     subject_token_type: 'urn:ietf:params:oauth:token-type:access_token',
     scope: 'audit-journey.read',
-  });
+    // SEC: proof with the key the subject token is bound to - the IDP checks they match; the
+    // Journey API token is bound to it too.
+  }, { DPoP: (await dpopKey()).privateKey });
   return tokens.access_token!;
 }
 

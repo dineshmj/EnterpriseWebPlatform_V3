@@ -1,5 +1,6 @@
 import { Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { Request } from 'express';
+import { DPoPKeyService } from '../auth/dpop-key.service';
 import { OidcService } from '../auth/oidc.service';
 import { KycBffOptions } from '../configuration/kyc-bff-options';
 import { breakers } from '../resilience/breakers';
@@ -16,6 +17,7 @@ import { resilientFetch } from '../resilience/resilient-fetch';
 export class KycApiService {
   constructor(
     private readonly oidc: OidcService,
+    private readonly dpop: DPoPKeyService,
     @Inject('KYC_BFF_OPTIONS') private readonly options: KycBffOptions,
   ) {}
 
@@ -54,8 +56,9 @@ export class KycApiService {
       return await resilientFetch(
         breakers.kycApi,
         url,
-        { method: 'GET', headers: { Authorization: `Bearer ${accessToken}` } },
-        { timeoutMs: 5000, attempts: 3 },
+        { method: 'GET' },
+        // SEC: "DPoP <token>" + a new proof per attempt (DPoP-bound token).
+        { timeoutMs: 5000, attempts: 3, perAttemptHeaders: () => this.dpop.authorization(accessToken, 'GET', url) },
       );
     } catch (error) {
       if (error instanceof ServiceUnavailableException) throw error;
@@ -76,10 +79,10 @@ export class KycApiService {
       url,
       {
         method: 'POST',
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       },
-      { timeoutMs: 10_000 },
+      { timeoutMs: 10_000, perAttemptHeaders: () => this.dpop.authorization(accessToken, 'POST', url) },
     );
   }
 }

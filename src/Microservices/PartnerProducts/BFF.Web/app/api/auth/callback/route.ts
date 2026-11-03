@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AUTH_STATE_COOKIE, config, SESSION_COOKIE, SESSION_IDLE_MINUTES } from '@/lib/server/config';
+import { dpopKey } from '@/lib/server/dpop';
 import { clientAuthentication, oidcClient, PendingSignIn, toSession } from '@/lib/server/oidc';
 import { createSession, decrypt, removeExpiredSessions } from '@/lib/server/session-store';
 import { withOutageAnswer } from '@/lib/server/outage';
@@ -30,7 +31,8 @@ async function handleGet(request: NextRequest) {
     config.callbackUrl,
     client.callbackParams(request.nextUrl.toString()),
     { state: pending.state, nonce: pending.nonce, code_verifier: pending.codeVerifier },
-    { exchangeBody: await clientAuthentication(client) },
+    // SEC: the code is redeemed with a DPoP proof (the IDP requires it): the tokens are bound to this BFF's key.
+    { exchangeBody: await clientAuthentication(client), DPoP: (await dpopKey()).privateKey },
   );
 
   const cookieValue = await createSession(toSession(tokens));

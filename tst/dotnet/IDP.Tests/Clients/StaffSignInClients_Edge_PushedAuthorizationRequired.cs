@@ -9,6 +9,7 @@ using Microsoft.Extensions.Configuration;
 using AwesomeAssertions;
 
 using EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients;
+using EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.M2M;
 using EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients.MFEs;
 using EnterpriseWebPlatform.IdentityServer.Security;
 
@@ -19,7 +20,7 @@ namespace EnterpriseWebPlatform.IdentityServer.Tests.Clients;
 // │ only (RFC 9126) - an authorization request sent through the browser is refused - plus
 // │ PKCE and a short-lived request_uri, and prove themselves with private_key_jwt (a public
 // │ key at the IDP, no shared secret). A new web app copied without either fails here, and
-// │ so does a .NET web app whose tokens are not DPoP-bound (RFC 9449).
+// │ so does any web app or Journey API whose tokens are not DPoP-bound (RFC 9449).
 // └──────────────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 [Category("Security")]
@@ -44,14 +45,16 @@ public sealed class StaffSignInClients_Edge_PushedAuthorizationRequired
         yield return new TestCaseData(() => MfePartnerProducts.Client).SetName("Partner Products");
     }
 
-    // The web apps whose tokens are DPoP-bound (A5 part 2b-1: the .NET BFFs; the Node BFFs follow).
+    private static readonly string[] JourneyApis = ["AuditJourneyApi", "OperationsJourneyApi", "PartnerProductsJourneyApi"];
+
+    // Every client that holds a person's tokens: the Shell, every web app and the three Journey APIs.
     private static IEnumerable<TestCaseData> DPoPBoundClients()
     {
-        yield return new TestCaseData(() => BssClient.Client).SetName("Shell (DPoP)");
-        yield return new TestCaseData(() => MfeCustomerOnboarding.Client).SetName("Customer Onboarding (DPoP)");
-        yield return new TestCaseData(() => MfeCompliance.Client).SetName("Compliance (DPoP)");
-        yield return new TestCaseData(() => MfeAccounts.Client).SetName("Accounts (DPoP)");
-        yield return new TestCaseData(() => MfePayments.Client).SetName("Payments (DPoP)");
+        foreach (var staffClient in StaffClients())
+            yield return staffClient;
+        yield return new TestCaseData(() => AuditJourneyApiTokenExchange.Client).SetName("Audit Journey API");
+        yield return new TestCaseData(() => OperationsJourneyApiTokenExchange.Client).SetName("Operations Journey API");
+        yield return new TestCaseData(() => PartnerProductsJourneyApiTokenExchange.Client).SetName("Partner Products Journey API");
     }
 
     private string _keyFolder = string.Empty;
@@ -67,9 +70,15 @@ public sealed class StaffSignInClients_Edge_PushedAuthorizationRequired
             settings[$"ClientKeys:{app}.ClientID"] = WritePublicJwk(app);
             settings[$"ClientBaseUrls:{app}"] = $"https://{app.ToLowerInvariant()}.ewp.example";
         }
+        foreach (var api in JourneyApis)
+        {
+            settings[$"ClientIds:{api}"] = $"{api}.ClientID";
+            settings[$"ClientSecrets:{api}.ClientID"] = $"{api}-test-secret";
+        }
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
         ClientSettings.Initialize(configuration);
         ClientKeyStore.Initialize(configuration);
+        ClientSecretStore.Initialize(configuration);
     }
 
     [TearDown]
@@ -123,7 +132,7 @@ public sealed class StaffSignInClients_Edge_PushedAuthorizationRequired
     }
 
     [TestCaseSource(nameof(DPoPBoundClients))]
-    public void Given_AStaffWebAppHoldingTokens_When_ItsClientIsBuilt_Then_EveryTokenIsBoundToItsDPoPKey(Func<Client> build)
+    public void Given_AClientHoldingAPersonsTokens_When_ItsClientIsBuilt_Then_EveryTokenIsBoundToItsDPoPKey(Func<Client> build)
     {
         // Given / When
         var client = build();

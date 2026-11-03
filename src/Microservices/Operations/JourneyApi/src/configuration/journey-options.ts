@@ -52,6 +52,9 @@ export interface JourneyOptions {
   /** This API's own client at the IDP: token exchange only, never client credentials. */
   clientId: string;
   clientSecret: string;
+  /** This API's DPoP key (encrypted PKCS#8 PEM) and the file holding its password (dpop-key.service.ts). */
+  dpopKeyPath: string;
+  dpopKeyPasswordPath: string;
   /** The Domain APIs whose parked Outbox messages operations may see and resend. */
   accountsApiBaseUrl: string;
   complianceApiBaseUrl: string;
@@ -160,6 +163,8 @@ export function loadOptions(): JourneyOptions {
     mfaMaxAgeMinutes: minutes('OPERATIONS_MFA_MAX_AGE_MINUTES'),
     clientId: required('OPERATIONS_JOURNEY_CLIENT_ID'),
     clientSecret: required('OPERATIONS_JOURNEY_CLIENT_SECRET'),
+    dpopKeyPath: required('OPERATIONS_JOURNEY_DPOP_KEY_PATH'),
+    dpopKeyPasswordPath: required('OPERATIONS_JOURNEY_DPOP_KEY_PASSWORD_PATH'),
     accountsApiBaseUrl: required('OPERATIONS_JOURNEY_ACCOUNTS_API').replace(/\/$/, ''),
     complianceApiBaseUrl: required('OPERATIONS_JOURNEY_COMPLIANCE_API').replace(/\/$/, ''),
     partnerProductsApiBaseUrl: required('OPERATIONS_JOURNEY_PARTNER_PRODUCTS_API').replace(/\/$/, ''),

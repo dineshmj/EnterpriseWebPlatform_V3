@@ -36,6 +36,9 @@ set "OPERATIONS_JOURNEY_CALLER_CLIENT_ID=Operations.Microservice.Web.ClientID"
 REM This API's own client: token exchange only (parked Outbox messages of Accounts, Compliance and Partner Products).
 REM Must equal ClientIds:OperationsJourneyApi in src\IDP\appsettings.json (where the IDP registers that client).
 set "OPERATIONS_JOURNEY_CLIENT_ID=Operations.JourneyApi.ClientID"
+REM DPoP: the key every token this API obtains is bound to (New-EwpClientKeys.mjs).
+set "OPERATIONS_JOURNEY_DPOP_KEY_PATH=%USERPROFILE%\.ewp-pki\operations-journey-api-dpop.key.pem"
+set "OPERATIONS_JOURNEY_DPOP_KEY_PASSWORD_PATH=%USERPROFILE%\.ewp-pki\operations-journey-api-dpop.key.pem.password"
 set "OPERATIONS_JOURNEY_CLIENT_SECRET=5594deaa-c45c-4299-b628-f877ef42d405"
 REM Development: the API addresses below go through the fault proxy (ps\toxiproxy\toxiproxy.json,
 REM ports 47101-47111) so operations can cut them; elsewhere use each API's own address.

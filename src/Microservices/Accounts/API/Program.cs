@@ -83,6 +83,30 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidTypes = ["at+jwt"],
             RoleClaimType = "role"
         };
+
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ A person's token must be DPoP-bound (cnf): every client that signs a person in, or
+        // │ exchanges a token for one, must use DPoP at the IDP - so a person's token without
+        // │ cnf came from elsewhere (copied, or an unbound client) and is refused. Machine
+        // │ tokens (no sub) stay Bearer. Authentication:BearerPersonTokenClients names the only
+        // │ exceptions: in Development, Bruno (API testing, cannot sign proofs); elsewhere none.
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        var bearerPersonTokenClients = builder.Configuration.GetSection("Authentication:BearerPersonTokenClients").Get<string[]>() ?? [];
+        options.Events = new JwtBearerEvents
+        {
+            // Duende's DPoP checks (ConfigureDPoPTokensForScheme below) are chained around this event, not replacing it.
+            OnTokenValidated = context =>
+            {
+                var principal = context.Principal!;
+                if (principal.HasClaim(c => c.Type == "sub") &&
+                    !principal.HasClaim(c => c.Type == "cnf") &&
+                    !bearerPersonTokenClients.Contains(principal.FindFirst("client_id")?.Value))
+                {
+                    context.Fail("A person's token must be DPoP-bound (cnf).");
+                }
+                return Task.CompletedTask;
+            }
+        };
     });
 
 // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { DPoPKeyService } from '../auth/dpop-key.service';
 import { JOURNEY_OPTIONS, JourneyOptions } from '../configuration/journey-options';
 import { TokenExchangeService } from '../services/token-exchange.service';
 
@@ -45,6 +46,7 @@ export class ParkedMessagesService {
   constructor(
     @Inject(JOURNEY_OPTIONS) private readonly options: JourneyOptions,
     private readonly exchange: TokenExchangeService,
+    private readonly dpop: DPoPKeyService,
   ) {}
 
   async listAll(subjectToken: string): Promise<ContextParkedMessages[]> {
@@ -84,9 +86,11 @@ export class ParkedMessagesService {
       // │ A domain API never redirects: a redirect is refused (an error, so "unavailable"),
       // │ never followed - the exchanged token goes to the configured API and nowhere else.
       // └──────────────────────────────────────────────────────────────────────────────────────
-      response = await fetch(`${base[context]}/v1/${context}/outbox${path}`, {
+      const url = `${base[context]}/v1/${context}/outbox${path}`;
+      response = await fetch(url, {
         method,
-        headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+        // SEC: "DPoP <token>" + a new proof (the exchanged token is bound to this API's key).
+        headers: { ...(await this.dpop.authorization(token, method, url)), ...(body ? { 'Content-Type': 'application/json' } : {}) },
         body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal,
         redirect: 'error',

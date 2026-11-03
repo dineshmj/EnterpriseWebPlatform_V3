@@ -178,6 +178,8 @@ jobs:
       # │ are deliberately NOT shared through a central project. sonar.cpd.exclusions takes only
       # │ those scaffold files out of the DUPLICATION count; every bug, vulnerability and hotspot
       # │ rule still runs on them. Named file by file, so copy-paste in business code still shows.
+      # │ The DPoP / token plumbing (dpop.ts, dpop-key.service.ts, dpop-proof.verifier.ts, the
+      # │ Journey APIs' delegated-token guard and token exchange) is in that list for the same reason.
       # │ (NOSONAR and #pragma cannot do this: they silence issues, not duplication.)
       # ├─ ARCH ─────────────────────────────────────────────────────────────────────────────────────
       # │ Coverage: the .NET unit tests (tst/dotnet/EwpTests.slnx) run INSIDE begin/end with
@@ -196,7 +198,7 @@ jobs:
             /k:"$SONAR_PROJECT_KEY" /o:"$SONAR_ORGANIZATION" \
             /d:sonar.host.url=https://sonarcloud.io /d:sonar.token="$SONAR_TOKEN" \
             /d:sonar.exclusions='**/node_modules/**,**/.next/**,**/wwwroot/lib/**,test-results/**,db/**,**/*.sql,**/coverage/**' \
-            /d:sonar.cpd.exclusions='**/Program.cs,**/AuthController.cs,**/*DbContext.cs,**/*OutboxPublisher.cs,**/MfeShell.tsx,**/components/ui/feedback.tsx,**/lib/server/oidc.ts,**/lib/server/session-store.ts' \
+            /d:sonar.cpd.exclusions='**/Program.cs,**/AuthController.cs,**/*DbContext.cs,**/*OutboxPublisher.cs,**/MfeShell.tsx,**/components/ui/feedback.tsx,**/lib/server/oidc.ts,**/lib/server/session-store.ts,**/lib/server/dpop.ts,**/src/auth/dpop-key.service.ts,**/src/auth/dpop-proof.verifier.ts,**/src/auth/delegated-token.guard.ts,**/src/services/token-exchange.service.ts' \
             /d:sonar.cs.opencover.reportsPaths="$RUNNER_TEMP/coverage/**/coverage.opencover.xml" \
             /d:sonar.javascript.lcov.reportPaths="$LCOV_REPORTS" \
             /d:sonar.coverage.exclusions='**/Program.cs,src/Microservices/*/JourneyApi/src/main.ts,src/Microservices/*/BFF.Web/**,src/Shell/**,src/Simulators/**,tst/**,ps/**,deploy/**,.github/**'

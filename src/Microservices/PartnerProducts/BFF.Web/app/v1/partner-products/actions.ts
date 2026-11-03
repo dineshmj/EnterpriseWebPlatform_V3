@@ -2,6 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { config, SESSION_COOKIE } from '@/lib/server/config';
+import { dpopAuthorization } from '@/lib/server/dpop';
 import { exchangeForJourneyApi, freshAccessToken } from '@/lib/server/oidc';
 import { readSession, updateSession } from '@/lib/server/session-store';
 import { isDependencyUnavailable, OUTAGE_MESSAGE } from '@/lib/server/outage';
@@ -138,10 +139,11 @@ async function callJourney<T>(
   }
 
   try {
-    const response = await fetch(`${config.journeyApiBaseUrl}${path}`, {
+    const url = `${config.journeyApiBaseUrl}${path}`;
+    const response = await fetch(url, {
       method,
       // A FormData body sets its own multipart Content-Type (with the boundary).
-      headers: { Authorization: `Bearer ${journeyToken}`, Accept: 'application/json' },
+      headers: { ...(await dpopAuthorization(journeyToken, method, url)), Accept: 'application/json' },
       body,
       cache: 'no-store',
       // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────

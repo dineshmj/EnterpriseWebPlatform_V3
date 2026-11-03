@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import { KycBffOptions } from '../configuration/kyc-bff-options';
+import { DPoPKeyService } from '../auth/dpop-key.service';
 import { DocumentsManagementTokenService } from './documents-management-token.service';
 import { breakers } from '../resilience/breakers';
 import { resilientFetch } from '../resilience/resilient-fetch';
@@ -41,6 +42,7 @@ export interface SelectedKycDocument extends DocumentListItem {
 export class DocumentsManagementService {
   constructor(
     private readonly tokens: DocumentsManagementTokenService,
+    private readonly dpop: DPoPKeyService,
     @Inject('KYC_BFF_OPTIONS') private readonly options: KycBffOptions,
   ) {}
 
@@ -116,8 +118,9 @@ export class DocumentsManagementService {
       return await resilientFetch(
         breakers.documentsManagement,
         url,
-        { method: 'GET', headers: { Authorization: `Bearer ${accessToken}` } },
-        { timeoutMs: 5000, attempts: 3 },
+        { method: 'GET' },
+        // SEC: "DPoP <token>" + a new proof per attempt (the exchanged token is DPoP-bound too).
+        { timeoutMs: 5000, attempts: 3, perAttemptHeaders: () => this.dpop.authorization(accessToken, 'GET', url) },
       );
     } catch (error) {
       if (error instanceof ServiceUnavailableException) throw error;

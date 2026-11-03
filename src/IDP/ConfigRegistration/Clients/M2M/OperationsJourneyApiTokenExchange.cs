@@ -23,6 +23,11 @@ public sealed class OperationsJourneyApiTokenExchange
             // │ the acting client per endpoint), never on the counter's Digital Gold endpoints.
             // └──────────────────────────────────────────────────────────────────────────────────────
             AllowedGrantTypes = { OidcConstants.GrantTypes.TokenExchange },
+            // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+            // │ DPoP (RFC 9449): every token it gets is bound to ITS own DPoP key, so a token taken
+            // │ from the Journey API's memory or logs cannot be replayed by anyone else.
+            // └──────────────────────────────────────────────────────────────────────────────────────
+            RequireDPoP = true,
             AllowedScopes =
             {
                 "accounts.read", "accounts.write",

@@ -24,6 +24,9 @@ export const config = {
   /** This BFF's private_key_jwt key (encrypted PKCS#8 PEM) and the file holding its password. */
   get clientKeyPath() { return required('AUDIT_WEB_CLIENT_KEY_PATH'); },
   get clientKeyPasswordPath() { return required('AUDIT_WEB_CLIENT_KEY_PASSWORD_PATH'); },
+  /** This BFF's DPoP key (encrypted PKCS#8 PEM) and the file holding its password (dpop.ts). */
+  get dpopKeyPath() { return required('AUDIT_WEB_DPOP_KEY_PATH'); },
+  get dpopKeyPasswordPath() { return required('AUDIT_WEB_DPOP_KEY_PASSWORD_PATH'); },
   /** 32 random bytes, base64: encrypts the tokens stored in the session table. */
   get sessionKey() { return Buffer.from(required('AUDIT_WEB_SESSION_KEY'), 'base64'); },
   get databaseUrl() { return required('AUDIT_WEB_DATABASE_URL'); },

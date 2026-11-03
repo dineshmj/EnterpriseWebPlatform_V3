@@ -24,6 +24,11 @@ public sealed class PartnerProductsJourneyApiTokenExchange
             // │ API still needs the PERSON's payment.initiate and branch - the staff member pays).
             // └──────────────────────────────────────────────────────────────────────────────────────
             AllowedGrantTypes = { OidcConstants.GrantTypes.TokenExchange },
+            // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+            // │ DPoP (RFC 9449): every token it gets is bound to ITS own DPoP key, so a token taken
+            // │ from the Journey API's memory or logs cannot be replayed by anyone else.
+            // └──────────────────────────────────────────────────────────────────────────────────────
+            RequireDPoP = true,
             AllowedScopes =
             {
                 "partner-products.read", "partner-products.write",
