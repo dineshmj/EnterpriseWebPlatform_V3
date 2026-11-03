@@ -7,6 +7,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { DPoPKeyService } from '../auth/dpop-key.service';
 import { TokenExchangeService } from './token-exchange.service';
 
 /** A file the staff member uploaded (the scan of a signed form), held in memory for one request. */
@@ -40,7 +41,10 @@ export interface StoredDocument {
 export class DomainApiClient {
   private readonly logger = new Logger(DomainApiClient.name);
 
-  constructor(private readonly exchange: TokenExchangeService) {}
+  constructor(
+    private readonly exchange: TokenExchangeService,
+    private readonly dpop: DPoPKeyService,
+  ) {}
 
   async get<T>(subjectToken: string, scope: string, url: string, what: string): Promise<T> {
     return this.call<T>(subjectToken, scope, 'GET', url, what);
@@ -116,7 +120,8 @@ export class DomainApiClient {
       // └──────────────────────────────────────────────────────────────────────────────────────
       response = await fetch(url, {
         method,
-        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', ...(contentType ? { 'Content-Type': contentType } : {}), ...extraHeaders },
+        // SEC: "DPoP <token>" + a new proof (the exchanged token is bound to this API's key).
+        headers: { ...(await this.dpop.authorization(token, method, url)), Accept: 'application/json', ...(contentType ? { 'Content-Type': contentType } : {}), ...extraHeaders },
         body,
         signal: controller.signal,
         redirect: 'error',

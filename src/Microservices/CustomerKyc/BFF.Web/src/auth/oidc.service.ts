@@ -5,6 +5,7 @@ import { createPrivateKey, createPublicKey, KeyObject, randomBytes, randomUUID }
 import { readFileSync } from 'node:fs';
 import { calculateJwkThumbprint, exportJWK, SignJWT } from 'jose';
 import { KycBffOptions } from '../configuration/kyc-bff-options';
+import { DPoPKeyService } from './dpop-key.service';
 import { savePendingSignIn, takePendingSignIn } from './pending-sign-in';
 
 // ┌─ :: SECURITY :: OIDC client: code + PKCE, fresh session, single-flight refresh ────────────────
@@ -12,9 +13,9 @@ import { savePendingSignIn, takePendingSignIn } from './pending-sign-in';
 // │       with a rotating refresh token would revoke each other.
 // │ How : Authorization Code + PKCE, pushed to the IDP first (PAR) (prompt=none in the frame,
 // │       prompt=login + acr_values=mfa for step-up); the BFF proves itself with private_key_jwt
-// │       (no client secret); the session ID is regenerated at sign-in; refreshes for the same
-// │       token share one call.
-// │ Ref : Features 2.1.1, 2.3.4, 2.1.5 | RFC 7636 | RFC 9126 (PAR) |
+// │       (no client secret); every token is bound to its DPoP key (dpop-key.service.ts); the
+// │       session ID is regenerated at sign-in; refreshes for the same token share one call.
+// │ Ref : Features 2.1.1, 2.3.4, 2.1.5 | RFC 7636 | RFC 9126 (PAR) | RFC 9449 (DPoP) |
 // │       OWASP Session Fixation | RFC 9700 (rotation)
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 @Injectable()
@@ -33,7 +34,10 @@ export class OidcService {
   private readonly signingKey: KeyObject;
   private readonly signingKeyId: Promise<string>;
 
-  constructor(@Inject('KYC_BFF_OPTIONS') private readonly options: KycBffOptions) {
+  constructor(
+    @Inject('KYC_BFF_OPTIONS') private readonly options: KycBffOptions,
+    private readonly dpop: DPoPKeyService,
+  ) {
     this.signingKey = createPrivateKey({
       key: readFileSync(options.clientKeyPath),
       format: 'pem',
@@ -122,6 +126,8 @@ export class OidcService {
     const pushed = await client.pushedAuthorizationRequest({
       ...(await this.clientAuthentication()),
       scope: 'openid profile email roles organization offline_access customer-kyc.read customer-kyc.write',
+      // SEC: dpop_jkt binds the authorization code to this BFF's DPoP key (RFC 9449 §10).
+      dpop_jkt: await this.dpop.jkt,
       response_mode: 'query',
       state,
       nonce,
@@ -149,7 +155,8 @@ export class OidcService {
         nonce: pending.nonce,
         code_verifier: pending.codeVerifier
       },
-      { exchangeBody: await this.clientAuthentication() },
+      // SEC: the code is redeemed with a DPoP proof (the IDP requires it): the tokens are bound to this BFF's key.
+      { exchangeBody: await this.clientAuthentication(), DPoP: this.dpop.privateKey },
     );
 
     // Session fixation protection: the authenticated session always gets a
@@ -192,7 +199,8 @@ export class OidcService {
     }
 
     const refresh = this.getClient().then(async client =>
-      client.refresh(usedRefreshToken, { exchangeBody: await this.clientAuthentication() }));
+      // SEC: the new tokens stay bound to the same DPoP key.
+      client.refresh(usedRefreshToken, { exchangeBody: await this.clientAuthentication(), DPoP: this.dpop.privateKey }));
     this.refreshes.set(usedRefreshToken, refresh);
     // ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
     // │ A success is kept for a minute: a request that loaded the session just before the new
@@ -257,7 +265,13 @@ export class OidcService {
     // Identity-resource claims (roles, organization) are served by userinfo,
     // not embedded in the ID token.
     const idClaims = tokenSet.claims();
-    const userInfo = await client.userinfo(tokenSet.access_token!);
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ The IDP's userinfo endpoint takes the Bearer scheme only (with "DPoP" + a proof it
+    // │ answers 401 invalid_token), so the token goes as Bearer - as the .NET BFFs' OIDC
+    // │ handler sends it. Once, at sign-in, over the back channel to the IDP itself; every
+    // │ API still requires the DPoP proof.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    const userInfo = await client.userinfo(tokenSet.access_token!, { tokenType: 'Bearer' });
 
     const role = userInfo.role ?? idClaims.role;
     const branch = userInfo.branch;

@@ -31,6 +31,9 @@ set "PARTNER_PRODUCTS_WEB_CLIENT_ID=PartnerProducts.Microservice.Web.ClientID"
 REM private_key_jwt: this BFF's own key (ps\pki\New-EwpLocalPki.ps1 makes it, outside the repository).
 set "PARTNER_PRODUCTS_WEB_CLIENT_KEY_PATH=%USERPROFILE%\.ewp-pki\partner-products-web-client.key.pem"
 set "PARTNER_PRODUCTS_WEB_CLIENT_KEY_PASSWORD_PATH=%USERPROFILE%\.ewp-pki\partner-products-web-client.key.pem.password"
+REM DPoP: the key every token of this BFF is bound to (New-EwpClientKeys.mjs; not the client key).
+set "PARTNER_PRODUCTS_WEB_DPOP_KEY_PATH=%USERPROFILE%\.ewp-pki\partner-products-web-dpop.key.pem"
+set "PARTNER_PRODUCTS_WEB_DPOP_KEY_PASSWORD_PATH=%USERPROFILE%\.ewp-pki\partner-products-web-dpop.key.pem.password"
 REM Encrypts the tokens in the session table (32 random bytes, base64). Changing it signs everybody out.
 set "PARTNER_PRODUCTS_WEB_SESSION_KEY=zaaQFPq0pUTLD4PDmZaL4oQL5nBMNJRvnSTSUGw+osE="
 set "PARTNER_PRODUCTS_WEB_DATABASE_URL=postgres://ewp_partner_products_web:ewp-partner-products-web-dev@localhost:5432/EwpBffStateDb"

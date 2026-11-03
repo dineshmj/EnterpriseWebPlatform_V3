@@ -1,8 +1,13 @@
+import { generateKeyPairSync } from 'node:crypto';
 import { BadRequestException, ConflictException, ForbiddenException, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { DPoPKeyService } from '../src/auth/dpop-key.service';
 import type { JourneyOptions } from '../src/configuration/journey-options';
 import { ParkedMessagesService } from '../src/recovery/parked-messages.service';
 import { TokenExchangeService } from '../src/services/token-exchange.service';
 import { received, resetWireMock, stub, wireMockUrl } from '../../../../../tst/node/wiremock/wiremock';
+
+/** This API's DPoP key, for the test run (the real one is read from a file). */
+const DPOP = new DPoPKeyService(generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey);
 
 // ┌─ :: ARCHITECTURE + SECURITY :: Parked messages of three contexts, their APIs played by WireMock ─
 // │ Why : The operator's one screen over Accounts, Compliance and Partner Products must stay up
@@ -51,7 +56,7 @@ describe('ParkedMessagesService - the IDP and three Domain APIs played by WireMo
       authority: wireMockUrl(), clientId: 'Operations.JourneyApi.ClientID', clientSecret: 'test-only',
       accountsApiBaseUrl: wireMockUrl(), complianceApiBaseUrl: wireMockUrl(), partnerProductsApiBaseUrl: wireMockUrl(),
     } as JourneyOptions;
-    service = new ParkedMessagesService(options, new TokenExchangeService(options));
+    service = new ParkedMessagesService(options, new TokenExchangeService(options, DPOP), DPOP);
   });
 
   it('Given parked messages in each context, when they are listed, then each context is asked with its own read token', async () => {
@@ -72,7 +77,8 @@ describe('ParkedMessagesService - the IDP and three Domain APIs played by WireMo
     ]);
     for (const context of ['accounts', 'compliance', 'partner-products']) {
       const [call] = await received('GET', parked(context));
-      expect(call.headers.Authorization).toBe(`Bearer for-${context}.read`);
+      expect(call.headers.Authorization).toBe(`DPoP for-${context}.read`);
+      expect(call.headers.DPoP).toBeDefined();   // the token is bound to this API's key: a proof goes with it
     }
   });
 
@@ -85,7 +91,7 @@ describe('ParkedMessagesService - the IDP and three Domain APIs played by WireMo
       authority: wireMockUrl(), clientId: 'Operations.JourneyApi.ClientID', clientSecret: 'test-only',
       accountsApiBaseUrl: wireMockUrl(), complianceApiBaseUrl: wireMockUrl(), partnerProductsApiBaseUrl: 'http://127.0.0.1:9',
     } as JourneyOptions;
-    service = new ParkedMessagesService(options, new TokenExchangeService(options));
+    service = new ParkedMessagesService(options, new TokenExchangeService(options, DPOP), DPOP);
 
     // When
     const all = await service.listAll(OPERATOR_TOKEN);
@@ -147,7 +153,7 @@ describe('ParkedMessagesService - the IDP and three Domain APIs played by WireMo
     // Then
     expect(result).toEqual({ messageId: 'M/../1', redriveCount: 1 });
     const [call] = await received('POST', '/v1/compliance/outbox/M%2F..%2F1/resend');
-    expect(call.headers.Authorization).toBe('Bearer for-compliance.write');
+    expect(call.headers.Authorization).toBe('DPoP for-compliance.write');
     expect(JSON.parse(call.body)).toEqual({ reason: 'Kafka was down; it is back.' });
   });
 

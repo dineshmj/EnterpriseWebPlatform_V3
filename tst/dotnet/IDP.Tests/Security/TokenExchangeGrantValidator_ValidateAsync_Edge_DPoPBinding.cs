@@ -15,21 +15,34 @@ using EnterpriseWebPlatform.IdentityServer.Security;
 namespace EnterpriseWebPlatform.IdentityServer.Tests.Security;
 
 // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
-// │ DPoP (RFC 9449) in the token exchange for a staff BFF that exchanges its own sign-in
-// │ token (Customer Onboarding, for Documents Management): the subject token must be bound
-// │ to a key (cnf.jkt) and the BFF must prove THAT key on the exchange. A copied token -
-// │ presented with another key, with no proof, or a token never bound - is refused.
+// │ DPoP (RFC 9449) in the token exchange. A staff BFF exchanges its own sign-in token:
+// │ the token must be bound to a key (cnf.jkt) and the BFF must prove THAT key. A Journey
+// │ API exchanges the token its BFF sent it: that token must be bound (to the BFF) and the
+// │ Journey API must prove a key of its own. A copied token - presented with another key,
+// │ with no proof, or a token never bound - is refused.
 // └──────────────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 [Category("Security")]
 public sealed class TokenExchangeGrantValidator_ValidateAsync_Edge_DPoPBinding
 {
     private const string BffKey = "bff-key-thumbprint";
+    private const string JourneyApiKey = "journey-api-key-thumbprint";
 
     private static readonly string[] ExchangeClients =
     [
         "AuditWeb", "AuditJourneyApi", "OperationsWeb", "OperationsJourneyApi", "PartnerProductsWeb",
         "PartnerProductsJourneyApi", "CustomerOnboardingWeb", "CustomerKycWeb", "SelfServiceWeb", "SelfServiceJourneyApi"
+    ];
+
+    // Every staff BFF that exchanges its own sign-in token (for Documents Management or its Journey API).
+    private static readonly string[] Bffs = ["CustomerOnboardingWeb", "CustomerKycWeb", "AuditWeb", "OperationsWeb", "PartnerProductsWeb"];
+
+    // Each staff Journey API, the BFF that calls it and the audience of the token it receives.
+    private static readonly object[] JourneyApis =
+    [
+        new object[] { "AuditJourneyApi", "AuditWeb", "audit-journey-api" },
+        new object[] { "OperationsJourneyApi", "OperationsWeb", "operations-journey-api" },
+        new object[] { "PartnerProductsJourneyApi", "PartnerProductsWeb", "partner-products-journey-api" }
     ];
 
     [SetUp]
@@ -38,12 +51,12 @@ public sealed class TokenExchangeGrantValidator_ValidateAsync_Edge_DPoPBinding
             .AddInMemoryCollection(ExchangeClients.ToDictionary(c => $"ClientIds:{c}", c => (string?)$"{c}.ClientID"))
             .Build());
 
-    [Test]
-    public async Task Given_ATokenBoundToTheBffsKey_When_TheBffProvesThatKey_Then_TheExchangeIsGranted()
+    [TestCaseSource(nameof(Bffs))]
+    public async Task Given_ATokenBoundToTheBffsKey_When_TheBffProvesThatKey_Then_TheExchangeIsGranted(string bff)
     {
         // Given
-        var context = ExchangeBy("CustomerOnboardingWeb.ClientID", proofKey: BffKey);
-        var validator = ValidatorFor(SignInToken(cnfJkt: BffKey));
+        var context = ExchangeBy($"{bff}.ClientID", proofKey: BffKey);
+        var validator = ValidatorFor(SignInToken(bff, cnfJkt: BffKey));
 
         // When
         await validator.ValidateAsync(context, CancellationToken.None);
@@ -53,13 +66,13 @@ public sealed class TokenExchangeGrantValidator_ValidateAsync_Edge_DPoPBinding
         context.Result.Subject!.FindFirst(JwtClaimTypes.Subject)!.Value.Should().Be("agent-1");
     }
 
-    [TestCase("another-key", TestName = "Given_ATokenBoundToTheBffsKey_When_AnotherKeyIsProved_Then_TheExchangeIsRefused")]
-    [TestCase(null, TestName = "Given_ATokenBoundToTheBffsKey_When_NoKeyIsProved_Then_TheExchangeIsRefused")]
-    public async Task Given_ATokenBoundToTheBffsKey_When_ItsKeyIsNotProved_Then_TheExchangeIsRefused(string? proofKey)
+    [Test]
+    public async Task Given_ATokenBoundToTheBffsKey_When_ItsKeyIsNotProved_Then_TheExchangeIsRefused(
+        [ValueSource(nameof(Bffs))] string bff, [Values("another-key", null)] string? proofKey)
     {
         // Given
-        var context = ExchangeBy("CustomerOnboardingWeb.ClientID", proofKey);
-        var validator = ValidatorFor(SignInToken(cnfJkt: BffKey));
+        var context = ExchangeBy($"{bff}.ClientID", proofKey);
+        var validator = ValidatorFor(SignInToken(bff, cnfJkt: BffKey));
 
         // When
         await validator.ValidateAsync(context, CancellationToken.None);
@@ -69,12 +82,12 @@ public sealed class TokenExchangeGrantValidator_ValidateAsync_Edge_DPoPBinding
         context.Result.Error.Should().Be(OidcConstants.TokenErrors.InvalidGrant);
     }
 
-    [Test]
-    public async Task Given_ABearerToken_When_TheBffExchangesItWithAProof_Then_TheExchangeIsRefused()
+    [TestCaseSource(nameof(Bffs))]
+    public async Task Given_ABearerToken_When_TheBffExchangesItWithAProof_Then_TheExchangeIsRefused(string bff)
     {
         // Given - a token that was never bound (no cnf): it could be a copy from anywhere.
-        var context = ExchangeBy("CustomerOnboardingWeb.ClientID", proofKey: BffKey);
-        var validator = ValidatorFor(SignInToken(cnfJkt: null));
+        var context = ExchangeBy($"{bff}.ClientID", proofKey: BffKey);
+        var validator = ValidatorFor(SignInToken(bff, cnfJkt: null));
 
         // When
         await validator.ValidateAsync(context, CancellationToken.None);
@@ -84,15 +97,73 @@ public sealed class TokenExchangeGrantValidator_ValidateAsync_Edge_DPoPBinding
         context.Result.Error.Should().Be(OidcConstants.TokenErrors.InvalidGrant);
     }
 
-    // The agent's own sign-in token from the Customer Onboarding web app.
-    private static Claim[] SignInToken(string? cnfJkt)
+    [TestCaseSource(nameof(JourneyApis))]
+    public async Task Given_ATokenBoundToTheBffsKey_When_TheJourneyApiProvesItsOwnKey_Then_TheExchangeIsGranted(string journeyApi, string bff, string audience)
     {
-        List<Claim> claims =
+        // Given - the token the BFF sent is bound to the BFF's key; the Journey API proves its own.
+        var context = ExchangeBy($"{journeyApi}.ClientID", proofKey: JourneyApiKey);
+        var validator = ValidatorFor(DelegatedToken(bff, audience, cnfJkt: BffKey));
+
+        // When
+        await validator.ValidateAsync(context, CancellationToken.None);
+
+        // Then
+        context.Result.IsError.Should().BeFalse();
+        context.Result.Subject!.FindFirst(JwtClaimTypes.Subject)!.Value.Should().Be("agent-1");
+    }
+
+    [TestCaseSource(nameof(JourneyApis))]
+    public async Task Given_ATokenBoundToTheBffsKey_When_TheJourneyApiProvesNoKey_Then_TheExchangeIsRefused(string journeyApi, string bff, string audience)
+    {
+        // Given - no proof: the new token could not be bound to the Journey API.
+        var context = ExchangeBy($"{journeyApi}.ClientID", proofKey: null);
+        var validator = ValidatorFor(DelegatedToken(bff, audience, cnfJkt: BffKey));
+
+        // When
+        await validator.ValidateAsync(context, CancellationToken.None);
+
+        // Then
+        context.Result.IsError.Should().BeTrue();
+        context.Result.Error.Should().Be(OidcConstants.TokenErrors.InvalidGrant);
+    }
+
+    [TestCaseSource(nameof(JourneyApis))]
+    public async Task Given_ABearerToken_When_TheJourneyApiExchangesItWithAProof_Then_TheExchangeIsRefused(string journeyApi, string bff, string audience)
+    {
+        // Given - a delegated token that was never bound (no cnf): it could be a copy from anywhere.
+        var context = ExchangeBy($"{journeyApi}.ClientID", proofKey: JourneyApiKey);
+        var validator = ValidatorFor(DelegatedToken(bff, audience, cnfJkt: null));
+
+        // When
+        await validator.ValidateAsync(context, CancellationToken.None);
+
+        // Then
+        context.Result.IsError.Should().BeTrue();
+        context.Result.Error.Should().Be(OidcConstants.TokenErrors.InvalidGrant);
+    }
+
+    // The agent's own sign-in token from a staff web app.
+    private static Claim[] SignInToken(string bff, string? cnfJkt) =>
+        Bound(cnfJkt,
         [
             new(JwtClaimTypes.Subject, "agent-1"),
-            new(JwtClaimTypes.ClientId, "CustomerOnboardingWeb.ClientID"),
+            new(JwtClaimTypes.ClientId, $"{bff}.ClientID"),
             new(JwtClaimTypes.AuthenticationMethod, "pwd")
-        ];
+        ]);
+
+    // The token a staff BFF exchanged for its Journey API: the agent, with the BFF acting.
+    private static Claim[] DelegatedToken(string bff, string audience, string? cnfJkt) =>
+        Bound(cnfJkt,
+        [
+            new(JwtClaimTypes.Subject, "agent-1"),
+            new(JwtClaimTypes.ClientId, $"{bff}.ClientID"),
+            new(JwtClaimTypes.Audience, audience),
+            new(JwtClaimTypes.Actor, $$"""{"client_id":"{{bff}}.ClientID"}""", "json"),
+            new(JwtClaimTypes.AuthenticationMethod, "pwd")
+        ]);
+
+    private static Claim[] Bound(string? cnfJkt, List<Claim> claims)
+    {
         if (cnfJkt is not null)
             claims.Add(new Claim(JwtClaimTypes.Confirmation, $$"""{"jkt":"{{cnfJkt}}"}""", "json"));
         return [.. claims];

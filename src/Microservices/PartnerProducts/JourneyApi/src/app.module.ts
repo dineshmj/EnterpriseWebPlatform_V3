@@ -1,6 +1,8 @@
 import { Controller, Get, Module } from '@nestjs/common';
 import { DelegatedTokenGuard } from './auth/delegated-token.guard';
-import { JOURNEY_OPTIONS, loadOptions } from './configuration/journey-options';
+import { DPoPKeyService } from './auth/dpop-key.service';
+import { DPoPProofVerifier } from './auth/dpop-proof.verifier';
+import { JOURNEY_OPTIONS, JourneyOptions, loadOptions } from './configuration/journey-options';
 import { DigitalGoldController } from './digital-gold/digital-gold.controller';
 import { DigitalGoldService } from './digital-gold/digital-gold.service';
 import { RateLimiter } from './http/rate-limit';
@@ -31,6 +33,9 @@ export class HealthController {
   providers: [
     { provide: JOURNEY_OPTIONS, useFactory: loadOptions },
     DelegatedTokenGuard,
+    DPoPProofVerifier,   // the callers' DPoP proofs (DelegatedTokenGuard)
+    // This API's own DPoP key, read at start-up: missing or unreadable = no start-up.
+    { provide: DPoPKeyService, useFactory: (o: JourneyOptions) => DPoPKeyService.load(o.dpopKeyPath, o.dpopKeyPasswordPath), inject: [JOURNEY_OPTIONS] },
     RateLimiter,   // the per-person limits (DelegatedTokenGuard)
     TokenExchangeService,   // the second exchange: the staff member's token for each Domain API
     DomainApiClient,

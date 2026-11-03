@@ -31,6 +31,9 @@ set "AUDIT_WEB_CLIENT_ID=Audit.Microservice.Web.ClientID"
 REM private_key_jwt: this BFF's own key (ps\pki\New-EwpLocalPki.ps1 makes it, outside the repository).
 set "AUDIT_WEB_CLIENT_KEY_PATH=%USERPROFILE%\.ewp-pki\audit-web-client.key.pem"
 set "AUDIT_WEB_CLIENT_KEY_PASSWORD_PATH=%USERPROFILE%\.ewp-pki\audit-web-client.key.pem.password"
+REM DPoP: the key every token of this BFF is bound to (New-EwpClientKeys.mjs; not the client key).
+set "AUDIT_WEB_DPOP_KEY_PATH=%USERPROFILE%\.ewp-pki\audit-web-dpop.key.pem"
+set "AUDIT_WEB_DPOP_KEY_PASSWORD_PATH=%USERPROFILE%\.ewp-pki\audit-web-dpop.key.pem.password"
 REM Encrypts the tokens in the session table (32 random bytes, base64). Changing it signs everybody out.
 set "AUDIT_WEB_SESSION_KEY=EFcTrhisRyGX2E59EalTqI7nvdoxKIPU735WRg8aWEI="
 set "AUDIT_WEB_DATABASE_URL=postgres://ewp_audit_web:ewp-audit-web-dev@localhost:5432/EwpBffStateDb"

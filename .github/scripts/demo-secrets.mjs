@@ -88,8 +88,13 @@ const webClients = {
 // │ DPoP (RFC 9449): the apps whose tokens are bound to a key of their own - a second EC P-256 key,
 // │ not the client key. Its encrypted PEM + password go into the same Secret as the client key
 // │ (ewp-<component>-client-key, keys dpop-key.pem*); nobody else gets it, the IDP never does.
+// │ The Journey APIs (client secret, no client key) get a Secret of that name holding the DPoP key only.
 // └────────────────────────────────────────────────────────────────────────────────────────────────
-const dpopApps = ['shell', 'customer-onboarding-bff-web', 'compliance-bff-web', 'accounts-bff-web', 'payments-bff-web'];
+const dpopApps = [
+  'shell', 'customer-onboarding-bff-web', 'customer-kyc-bff-web', 'compliance-bff-web', 'accounts-bff-web', 'payments-bff-web',
+  'audit-bff-web', 'operations-bff-web', 'partner-products-bff-web',
+  'audit-journey-api', 'operations-journey-api', 'partner-products-journey-api',
+];
 
 // Each component's database (key, role, database) and Kafka user (key, user).
 const databases = {

@@ -64,13 +64,17 @@ export async function clientAuthenticationOf(http: APIRequestContext, clientId: 
 }
 
 // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
-// │ DPoP (RFC 9449): the clients whose tokens are bound to a key, as their BFFs hold them.
+// │ DPoP (RFC 9449): the clients whose tokens are bound to a key, as their BFFs (and the
+// │ Journey API, for the tokens it exchanges for) hold them.
 // │ The test plays the BFF: one key per client for this run (the IDP registers none - each
 // │ token names its key in cnf.jkt), a proof on each of its token requests, and a proof on
 // │ each API call made with a bound token (authorizationFor). Without them the IDP issues
 // │ nothing and the APIs refuse the token.
 // └──────────────────────────────────────────────────────────────────────────────────────
-const dpopClients: ReadonlySet<string> = new Set([clientIds.paymentsWeb, clientIds.accountsWeb, clientIds.customerOnboardingWeb]);
+const dpopClients: ReadonlySet<string> = new Set([
+  clientIds.paymentsWeb, clientIds.accountsWeb, clientIds.customerOnboardingWeb, clientIds.customerKycWeb,
+  clientIds.auditWeb, clientIds.partnerProductsWeb, clientIds.partnerProductsJourneyApi,
+]);
 const dpopKeys = new Map<string, KeyObject>();
 const boundTo = new Map<string, KeyObject>();
 

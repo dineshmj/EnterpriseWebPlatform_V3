@@ -6,6 +6,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { DPoPKeyService } from '../auth/dpop-key.service';
 import { TokenExchangeService } from './token-exchange.service';
 
 // ┌─ :: SECURITY :: Downstream answers, translated ────────────────────────────────────────────────
@@ -24,7 +25,10 @@ import { TokenExchangeService } from './token-exchange.service';
 export class DomainApiClient {
   private readonly logger = new Logger(DomainApiClient.name);
 
-  constructor(private readonly exchange: TokenExchangeService) {}
+  constructor(
+    private readonly exchange: TokenExchangeService,
+    private readonly dpop: DPoPKeyService,
+  ) {}
 
   async get<T>(subjectToken: string, scope: string, url: string): Promise<T> {
     const token = await this.exchange.exchange(subjectToken, scope);
@@ -38,7 +42,8 @@ export class DomainApiClient {
         // │ never followed - the exchanged token goes to the configured API and nowhere else.
         // └──────────────────────────────────────────────────────────────────────────────────────
         const response = await fetch(url, {
-          headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+          // SEC: "DPoP <token>" + a new proof for each attempt (the exchanged token is bound to this API's key).
+          headers: { ...(await this.dpop.authorization(token, 'GET', url)), Accept: 'application/json' },
           signal: controller.signal,
           redirect: 'error',
         });

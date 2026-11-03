@@ -1,5 +1,6 @@
 import { Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { Request } from 'express';
+import { DPoPKeyService } from '../auth/dpop-key.service';
 import { OidcService } from '../auth/oidc.service';
 import { KycBffOptions } from '../configuration/kyc-bff-options';
 import { tokenExchanges } from '../observability/metrics';
@@ -32,7 +33,9 @@ const MAX_CACHED = 10_000;
 // ┌─ :: SECURITY :: Token exchange for Documents Management (read only) ───────────────────────────
 // │ Why : Documents Management must know which officer reads evidence and from which branch.
 // │ How : The officer's token is exchanged (RFC 8693) for a short-lived documents-management.read
-// │       token, cached per person until shortly before expiry.
+// │       token, cached per person until shortly before expiry; the exchange carries a DPoP proof
+// │       with the key the officer's token is bound to (the IDP checks they match), and the new
+// │       token is bound to it too.
 // │ Ref : Features 2.1.2 | RFC 8693
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 @Injectable()
@@ -41,6 +44,7 @@ export class DocumentsManagementTokenService {
 
   constructor(
     private readonly oidc: OidcService,
+    private readonly dpop: DPoPKeyService,
     @Inject('KYC_BFF_OPTIONS') private readonly options: KycBffOptions,
   ) {}
 
@@ -84,9 +88,10 @@ export class DocumentsManagementTokenService {
     try {
       // A new client assertion for this one call (the IDP takes each one once).
       const clientAuthentication = await this.oidc.clientAuthentication();
+      const tokenEndpoint = `${this.options.authority}/connect/token`;
       response = await resilientFetch(
         breakers.identityProvider,
-        `${this.options.authority}/connect/token`,
+        tokenEndpoint,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -99,7 +104,7 @@ export class DocumentsManagementTokenService {
             scope: 'documents-management.read',
           }).toString(),
         },
-        { timeoutMs: 5000 },
+        { timeoutMs: 5000, perAttemptHeaders: async () => ({ DPoP: await this.dpop.proof('POST', tokenEndpoint) }) },
       );
     } catch (error) {
       if (error instanceof ServiceUnavailableException) throw error;

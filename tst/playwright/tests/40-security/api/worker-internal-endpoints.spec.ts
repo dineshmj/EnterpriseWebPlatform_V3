@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, request, type APIRequestContext } from '@playwright/test';
 import { test } from '../../../support/fixtures';
-import { clientCredentialsToken, clientIds, exchanged, partnerWebSignInToken } from '../../../support/tokens';
+import { authorizationFor, clientCredentialsToken, clientIds, exchanged, partnerWebSignInToken } from '../../../support/tokens';
 
 /**
  * The Partner Products Worker's internal endpoints (the purchase workflow's follow-up: purchase
@@ -44,11 +44,12 @@ test.describe('Worker internal endpoints - the Worker only', () => {
 
     // Act + Assert
     expect((await http.get(purchase)).status(), 'no token').toBe(401);
-    expect((await http.get(purchase, { headers: bearer(staff) })).status(), 'a staff member\'s delegated token').toBe(403);
-    expect((await http.post(`${purchase}/cancel`, { headers: bearer(staff), data: { reason: 'Playwright' } })).status(),
+    // The staff token is DPoP-bound (to the Journey API's key): it goes with a proof, so the 403 is the policy's.
+    expect((await http.get(purchase, { headers: authorizationFor(staff, 'GET', purchase) })).status(), 'a staff member\'s delegated token').toBe(403);
+    expect((await http.post(`${purchase}/cancel`, { headers: authorizationFor(staff, 'POST', `${purchase}/cancel`), data: { reason: 'Playwright' } })).status(),
       'a staff member cancelling through the Worker\'s endpoint').toBe(403);
     expect((await http.post(`${purchase}/payment-advice`, {
-      headers: bearer(staff), data: { paymentRef: randomUUID(), amount: 20 },
+      headers: authorizationFor(staff, 'POST', `${purchase}/payment-advice`), data: { paymentRef: randomUUID(), amount: 20 },
     })).status(), 'a staff member advising a payment through the Worker\'s endpoint').toBe(403);
     expect((await http.get(purchase, { headers: bearer(worker) })).status(), 'the Worker itself: passes, nothing found').toBe(404);
   });
@@ -64,7 +65,7 @@ test.describe('Worker internal endpoints - the Worker only', () => {
 
     // Act + Assert
     expect((await http.get(outcome)).status(), 'no token').toBe(401);
-    expect((await http.get(outcome, { headers: bearer(staff) })).status(), 'a staff member\'s delegated token').toBe(403);
+    expect((await http.get(outcome, { headers: authorizationFor(staff, 'GET', outcome) })).status(), 'a staff member\'s delegated token').toBe(403);
     expect((await http.get(outcome, { headers: bearer(otherMachine) })).status(), 'another machine client of the Payments API').toBe(403);
     expect((await http.get(outcome, { headers: bearer(worker) })).status(), 'the Worker itself: passes, nothing found').toBe(404);
   });

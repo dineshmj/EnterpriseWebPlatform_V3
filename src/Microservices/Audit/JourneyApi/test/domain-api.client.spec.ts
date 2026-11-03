@@ -1,4 +1,7 @@
+import { generateKeyPairSync } from 'node:crypto';
 import { ForbiddenException, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { decodeJwt } from 'jose';
+import { DPoPKeyService } from '../src/auth/dpop-key.service';
 import type { JourneyOptions } from '../src/configuration/journey-options';
 import { DomainApiClient } from '../src/services/domain-api.client';
 import { TokenExchangeService } from '../src/services/token-exchange.service';
@@ -40,7 +43,8 @@ describe('DomainApiClient - the IDP, the Audit Domain API and the Payments API p
   beforeEach(async () => {
     await resetWireMock();
     const options = { authority: wireMockUrl(), clientId: 'Audit.JourneyApi.ClientID', clientSecret: 'test-only' } as JourneyOptions;
-    client = new DomainApiClient(new TokenExchangeService(options));   // a new service: an empty token cache
+    const dpop = new DPoPKeyService(generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey);
+    client = new DomainApiClient(new TokenExchangeService(options, dpop), dpop);   // a new service: an empty token cache
   });
 
   it('Given an auditor\'s token, when Audit and then Payments are read, then each gets its own exchanged token for its own scope', async () => {
@@ -68,8 +72,15 @@ describe('DomainApiClient - the IDP, the Audit Domain API and the Payments API p
     // ... and neither API sees the auditor's own token, nor the other API's.
     const [auditCall] = await received('GET', AUDIT_EVENTS);
     const [paymentsCall] = await received('GET', PAYMENTS);
-    expect(auditCall.headers.Authorization).toBe('Bearer for-audit.read');
-    expect(paymentsCall.headers.Authorization).toBe('Bearer for-payments.read');
+    expect(auditCall.headers.Authorization).toBe('DPoP for-audit.read');
+    expect(paymentsCall.headers.Authorization).toBe('DPoP for-payments.read');
+
+    // ... each with a DPoP proof for exactly that call, and each exchange with one too (RFC 9449).
+    const proof = decodeJwt(auditCall.headers.DPoP);
+    expect(proof).toMatchObject({ htm: 'GET', htu: url(AUDIT_EVENTS) });
+    expect(typeof proof.ath).toBe('string');
+    const exchangeProofs = (await received('POST', '/connect/token')).map(r => decodeJwt(r.headers.DPoP));
+    expect(exchangeProofs.every(p => p.htm === 'POST' && p.htu === `${wireMockUrl()}/connect/token`)).toBe(true);
   });
 
   it('Given the Audit API is briefly unavailable (503, then 200), when it is read, then the one retry brings the answer', async () => {

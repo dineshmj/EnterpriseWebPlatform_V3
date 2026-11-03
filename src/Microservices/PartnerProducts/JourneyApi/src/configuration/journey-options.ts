@@ -23,6 +23,9 @@ export interface JourneyOptions {
   /** This API's own client at the IDP: token exchange only, never client credentials. */
   clientId: string;
   clientSecret: string;
+  /** This API's DPoP key (encrypted PKCS#8 PEM) and the file holding its password (dpop-key.service.ts). */
+  dpopKeyPath: string;
+  dpopKeyPasswordPath: string;
 
   /** The Domain APIs this API composes, always FOR the signed-in staff member. */
   partnerProductsApiBaseUrl: string;
@@ -83,6 +86,8 @@ export function loadOptions(): JourneyOptions {
     callerClientId: required('PARTNER_PRODUCTS_JOURNEY_CALLER_CLIENT_ID'),
     clientId: required('PARTNER_PRODUCTS_JOURNEY_CLIENT_ID'),
     clientSecret: required('PARTNER_PRODUCTS_JOURNEY_CLIENT_SECRET'),
+    dpopKeyPath: required('PARTNER_PRODUCTS_JOURNEY_DPOP_KEY_PATH'),
+    dpopKeyPasswordPath: required('PARTNER_PRODUCTS_JOURNEY_DPOP_KEY_PASSWORD_PATH'),
     partnerProductsApiBaseUrl: httpsUrl('PARTNER_PRODUCTS_API_BASE_URL'),
     customerOnboardingApiBaseUrl: httpsUrl('CUSTOMER_ONBOARDING_API_BASE_URL'),
     accountsApiBaseUrl: httpsUrl('ACCOUNTS_API_BASE_URL'),

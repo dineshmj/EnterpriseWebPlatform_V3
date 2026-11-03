@@ -105,11 +105,17 @@ public sealed class TokenExchangeGrantValidator(
     };
 
     /// <summary>
-    /// Clients whose subject tokens are DPoP-bound (RFC 9449): the customers' channel, and the staff
-    /// BFFs that exchange their own sign-in token (Customer Onboarding, for Documents Management).
+    /// Clients whose subject tokens are DPoP-bound (RFC 9449): the customers' channel, every staff BFF
+    /// that exchanges its own sign-in token and the three staff Journey APIs - i.e. every client
+    /// allowed to exchange at all.
     /// </summary>
     private readonly HashSet<string> SenderConstrained =
-        [ClientSettings.Ids.SelfServiceWeb, ClientSettings.Ids.SelfServiceJourneyApi, ClientSettings.Ids.CustomerOnboardingWeb];
+    [
+        ClientSettings.Ids.SelfServiceWeb, ClientSettings.Ids.SelfServiceJourneyApi,
+        ClientSettings.Ids.CustomerOnboardingWeb, ClientSettings.Ids.CustomerKycWeb,
+        ClientSettings.Ids.AuditWeb, ClientSettings.Ids.OperationsWeb, ClientSettings.Ids.PartnerProductsWeb,
+        ClientSettings.Ids.AuditJourneyApi, ClientSettings.Ids.OperationsJourneyApi, ClientSettings.Ids.PartnerProductsJourneyApi
+    ];
 
     /// <summary>
     /// Of those, the clients that exchange the token issued to THEMSELVES at sign-in: its key must be
@@ -117,7 +123,10 @@ public sealed class TokenExchangeGrantValidator(
     /// that called it, so for it the binding is checked, not the key's owner.)
     /// </summary>
     private readonly HashSet<string> ExchangesOwnSignInToken =
-        [ClientSettings.Ids.SelfServiceWeb, ClientSettings.Ids.CustomerOnboardingWeb];
+    [
+        ClientSettings.Ids.SelfServiceWeb, ClientSettings.Ids.CustomerOnboardingWeb, ClientSettings.Ids.CustomerKycWeb,
+        ClientSettings.Ids.AuditWeb, ClientSettings.Ids.OperationsWeb, ClientSettings.Ids.PartnerProductsWeb
+    ];
 
     public async Task ValidateAsync(ExtensionGrantValidationContext context, CancellationToken cancellationToken)
     {

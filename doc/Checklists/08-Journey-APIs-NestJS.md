@@ -12,11 +12,13 @@ Deployables: `src/Microservices/Audit/JourneyApi`, `src/Microservices/Operations
   - the endpoint's permission.
 
   *Because* a stolen machine token, or another client holding the scope, must not get in.
+- [x] **DPoP only** (RFC 9449): `Authorization: DPoP` with a token bound to a key (`cnf.jkt`) and a valid proof (one header, `dpop+jwt`, ES256 / PS256, this method and address, ~30 s, the token's hash, the key = `cnf.jkt`, `jti` once); a bearer or unbound token is 401. *Because* a copied token must be useless without the web app's key. → `src/auth/dpop-proof.verifier.ts`, `test/dpop-proof.verifier.spec.ts`
 - [x] **Deny by default:** an endpoint without an access rule answers 403. → Operations `delegated-token.guard.ts`
 - [x] **Step-up:** a risky change (the simulator switch) needs a recent MFA sign-in (`amr` + `auth_time`); otherwise it gets 403 `mfa_required`.
 
 ## 2. Calls further down
 
+- [x] **The tokens it obtains are bound to its own DPoP key:** the exchange carries a proof, and every Domain API call `Authorization: DPoP` with a fresh one. → `src/auth/dpop-key.service.ts`, `src/services/token-exchange.service.ts`
 - [x] **The second token exchange:** one token per downstream scope, with this API added to the `act` chain. An IDP refusal becomes 403, an IDP outage 503. → Audit `src/services/token-exchange.service.ts`
 - [x] **Downstream answers are translated** (401 / 403 → 403, 404 → 404, anything else → 503), with timeouts on every call. *Because* raw downstream errors would leak internals. → Audit `src/services/domain-api.client.ts`
 - [x] **Customer facts are read again, never taken from the screen** (Partner Products: name, mobile and KYC status from Customer Onboarding for every Form VII; the paying account from Accounts). → Partner Products `src/digital-gold/digital-gold.service.ts`

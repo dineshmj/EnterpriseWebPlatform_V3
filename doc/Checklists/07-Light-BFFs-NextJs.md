@@ -7,6 +7,7 @@ Deployables: `src/Microservices/Audit/BFF.Web`, `src/Microservices/Operations/BF
 - [x] **A confidential client using Authorization Code + PKCE, with state and nonce.** Silent sign-in uses `prompt=none`. The Operations step-up route uses `prompt=login` with `acr_values=mfa`. → `lib/server/oidc.ts`, `app/api/auth/*/route.ts`
 - [x] **The sign-in state lives in an encrypted `__Host-<App>-Web-Auth` cookie:** HttpOnly, Secure, SameSite=Lax, 10 minutes. A callback without it, or with one that cannot be decrypted, is refused (login CSRF). → `app/api/auth/callback/route.ts`
 - [x] **Back-channel logout verifies the logout token** (issuer, audience, signature, the logout event, no nonce) and deletes the sessions of that `sid` / `sub`. → `app/api/auth/backchannel-logout/route.ts`
+- [x] **Its tokens are DPoP-bound** (RFC 9449): bound to the app's own DPoP key (not the client key); `dpop_jkt` in the pushed request, a proof at the code exchange, each refresh and the Journey API exchange; every Journey API call carries `Authorization: DPoP` and a fresh proof. → `lib/server/dpop.ts`, `lib/server/oidc.ts`
 - [x] **Return URLs come from an allow-list** of this app's own pages. → `lib/server/return-url.ts`
 
 ## 2. Cookies and sessions

@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
@@ -5,6 +6,7 @@ import {
   Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { DPoPKeyService } from '../src/auth/dpop-key.service';
 import type { JourneyOptions } from '../src/configuration/journey-options';
 import { DomainApiClient } from '../src/services/domain-api.client';
 import { TokenExchangeService } from '../src/services/token-exchange.service';
@@ -46,7 +48,8 @@ describe('DomainApiClient - the IDP and the Partner Products Domain API played b
   beforeEach(async () => {
     await resetWireMock();
     const options = { authority: wireMockUrl(), clientId: 'PartnerProducts.JourneyApi.ClientID', clientSecret: 'test-only' } as JourneyOptions;
-    client = new DomainApiClient(new TokenExchangeService(options));   // a new service: an empty token cache
+    const dpop = new DPoPKeyService(generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey);
+    client = new DomainApiClient(new TokenExchangeService(options, dpop), dpop);   // a new service: an empty token cache
   });
 
   it('Given a person\'s token, when the Domain API is read, then the token is exchanged for that one scope and the exchanged token is sent', async () => {
@@ -67,7 +70,8 @@ describe('DomainApiClient - the IDP and the Partner Products Domain API played b
 
     // ... and the Domain API sees the exchanged token, never the person's own.
     const [call] = await received('GET', '/v1/partner-products/gold-account-applications');
-    expect(call.headers.Authorization).toBe('Bearer exchanged-for-partner-products-read');
+    expect(call.headers.Authorization).toBe('DPoP exchanged-for-partner-products-read');
+    expect(call.headers.DPoP).toBeDefined();   // the token is bound to this API's key: a proof goes with it
   });
 
   it('Given a token already exchanged, when the same scope is used again and then another, then the IDP is asked once per scope', async () => {

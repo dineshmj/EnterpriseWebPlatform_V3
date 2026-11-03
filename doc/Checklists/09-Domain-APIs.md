@@ -12,6 +12,7 @@ Deployables: `src/Microservices/<Context>/API` for Customer Onboarding, KYC, Doc
 
   → each `Program.cs`
 - [x] **DPoP-bound tokens need their proof** (RFC 9449, `ConfigureDPoPTokensForScheme`): a token with `cnf.jkt` passes only as `Authorization: DPoP` with a fresh proof for this method and address (~30 s, once); sent as `Bearer` it is refused. Machine tokens stay `Bearer`. *Because* a copied token must be useless without the key. → each `Program.cs`
+- [x] **A person's token must be DPoP-bound:** a token with `sub` but no `cnf` is refused (`OnTokenValidated`); machine tokens stay `Bearer`; `Authentication:BearerPersonTokenClients` (Development: Bruno) is the only exception. *Because* every client holding a person's token is DPoP-bound, so an unbound one came from elsewhere. → each `Program.cs`
 - [x] **Claim names are kept as issued** (`MapInboundClaims = false`), and the role claim is `role`.
 
 ## 2. Authorization
