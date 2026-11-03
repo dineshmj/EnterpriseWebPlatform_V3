@@ -1,7 +1,17 @@
 {
+  // ┌─ :: ARCHITECTURE :: Jest (ts-jest) compiler settings ────────────────────────────────────
+  // │ Why : NestJS 12 ships as ES modules; Jest loads them only through Node's require(esm)
+  // │       (Node 24.9+, the "test" script passes --experimental-vm-modules). ts-jest supports
+  // │       the "nodenext" module kind only file by file (isolatedModules).
+  // │ How : ts-jest transpiles each file (fast, no type check); "type-check" type-checks these
+  // │       files in full instead (--isolatedModules false), so a type error still fails CI.
+  // │       rootDir: the shared WireMock start/stop files live under tst/node at the repo root.
+  // └──────────────────────────────────────────────────────────────────────────────────────────
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "types": ["jest", "node"],
+    "rootDir": "../../../../..",
+    "isolatedModules": true,
     "incremental": false,
     "noEmit": true
   },

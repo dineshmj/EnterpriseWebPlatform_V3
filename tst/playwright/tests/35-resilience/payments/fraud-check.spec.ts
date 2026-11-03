@@ -28,26 +28,30 @@ test.describe('Fraud check at payment capture', () => {
 
   test('The provider declines a payment to a mule account: rejected at once, nothing reserved or sent', async ({ signedInAs }) => {
     const customer = await fundedCustomer(signedInAs, 'FraudCheck');
+    const sophie = await signedInAs('sophie.cs');
 
     // Act
-    const { payments } = await startPayment(await signedInAs('sophie.cs'), customer, muleAccount, '200.00', 'Mule');
+    const { payments } = await startPayment(sophie, customer, muleAccount, '200.00', 'Mule');
 
     // Assert
     await expectPaymentOutcome(payments, 'Payment rejected');
-    const page = (await signedInAs('sophie.cs')).workspace();
+    // The session that took the payment: each signedInAs call opens a fresh one, on Home.
+    const page = sophie.workspace();
     await expect(page.getByText(/^Decline - payment network, score 950 \(PAYEE_ON_MULE_LIST\)$/)).toBeVisible();
     await expect(payments.timeline().filter({ hasText: 'Instruction sent to Accounts' })).toHaveCount(0);
   });
 
   test('The provider asks for a review (AUD 600 to a new payee): a payments officer must approve, below the tier', async ({ signedInAs }) => {
     const customer = await fundedCustomer(signedInAs, 'FraudCheck');
+    const sophie = await signedInAs('sophie.cs');
 
     // Act
-    const { payments } = await startPayment(await signedInAs('sophie.cs'), customer, newPayees.electrician, '600.00', 'New payee');
+    const { payments } = await startPayment(sophie, customer, newPayees.electrician, '600.00', 'New payee');
 
     // Assert
     await expectPaymentOutcome(payments, 'Waiting for a payments officer');
-    const page = (await signedInAs('sophie.cs')).workspace();
+    // The session that took the payment: each signedInAs call opens a fresh one, on Home.
+    const page = sophie.workspace();
     await expect(page.getByText('Needed (fraud check: review)', { exact: true })).toBeVisible();
     await expect(page.getByText(/^Review - payment network, score 680/)).toBeVisible();
   });
