@@ -191,6 +191,11 @@ jobs:
       # │ unit tests: start-up (Program.cs, Nest main.ts), the BFFs and client apps and the Shell
       # │ (Playwright), the simulators, the tests themselves, scripts and deployment. Domain APIs
       # │ and workflows WITHOUT unit tests stay in the count - that gap is real.
+      # ├─ SEC ──────────────────────────────────────────────────────────────────────────────────────
+      # │ One rule is switched off for one file: githubactions:S5332 (clear-text http) in
+      # │ demo-up.yml. Its Gateway check calls http:// ON PURPOSE, to prove the gateway answers it
+      # │ with a 301 to https. The Actions analyser does not read NOSONAR in run scripts, so the
+      # │ exception is named here; S5332 still runs on every other workflow and file.
       # └────────────────────────────────────────────────────────────────────────────────────────────
       - name: Build, test and analyse
         if: env.SONAR_TOKEN != ''
@@ -204,7 +209,10 @@ jobs:
             /d:sonar.cpd.exclusions='**/Program.cs,**/AuthController.cs,**/*DbContext.cs,**/*OutboxPublisher.cs,**/MfeShell.tsx,**/components/ui/**,**/lib/server/oidc.ts,**/lib/server/session-store.ts,**/lib/server/dpop.ts,**/src/auth/dpop-key.service.ts,**/src/auth/client-key.service.ts,**/src/auth/dpop-proof.verifier.ts,**/src/auth/delegated-token.guard.ts,**/src/services/token-exchange.service.ts' \
             /d:sonar.cs.opencover.reportsPaths="$RUNNER_TEMP/coverage/**/coverage.opencover.xml" \
             /d:sonar.javascript.lcov.reportPaths="$LCOV_REPORTS" \
-            /d:sonar.coverage.exclusions='**/Program.cs,src/Microservices/*/JourneyApi/src/main.ts,src/Microservices/*/BFF.Web/**,src/Shell/**,src/Simulators/**,tst/**,ps/**,deploy/**,.github/**'
+            /d:sonar.coverage.exclusions='**/Program.cs,src/Microservices/*/JourneyApi/src/main.ts,src/Microservices/*/BFF.Web/**,src/Shell/**,src/Simulators/**,tst/**,ps/**,deploy/**,.github/**' \
+            /d:sonar.issue.ignore.multicriteria=gatewayhttp \
+            /d:sonar.issue.ignore.multicriteria.gatewayhttp.ruleKey=githubactions:S5332 \
+            /d:sonar.issue.ignore.multicriteria.gatewayhttp.resourceKey=.github/workflows/demo-up.yml
           dotnet build EnterpriseWebPlatform.BSS.slnx --configuration Release
           dotnet test tst/dotnet/EwpTests.slnx --configuration Release \
             --collect:"XPlat Code Coverage" --results-directory "$RUNNER_TEMP/coverage" \

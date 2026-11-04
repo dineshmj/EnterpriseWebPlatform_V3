@@ -2,6 +2,8 @@ using AwesomeAssertions;
 
 using EnterpriseWebPlatform.Payments.Api.Bian;
 
+using static EnterpriseWebPlatform.Payments.Api.Tests.Support.BianExamples;
+
 namespace EnterpriseWebPlatform.Payments.Api.Tests.Bian;
 
 [TestFixture]
@@ -129,16 +131,4 @@ public sealed class PaymentOrderInitiation_ToPaymentOrder_Edge_RequiredFields
     [TestCase("SENDING_TO_NETWORK", "Acceptedsettlementinprocess")]
     public void Given_AnEwpStatus_When_ShownInBian_Then_ItBecomesTheClosestBianStatusType(string ewp, string bian) =>
         PaymentOrderInitiationMapper.ToBianStatusType(ewp).Should().Be(bian);
-
-    internal static PaymentOrderInitiationTransaction FullRequest() => new()
-    {
-        PayerReference = new BianPayer { PayerIdentifier = "CUS-000123", PaymentInstructionInvolvementType = "PayerOrDebtor" },
-        PayerBankReference = new BianPayerBank { PayerBankIdentifier = "062-000" },
-        PayerProductInstanceReference = new BianProductAgreement { ProductAgreementIdentification = new BianIdentifier { IdentifierValue = "72947086" } },
-        PayeeReference = new BianPayee { PayeeIdentifier = "Harbour Plumbing", PaymentInstructionInvolvementType = "PayeeOrCreditor" },
-        PayeeBankReference = new BianPayeeBank { PayeeBankIdentifier = "083-004" },
-        PayeeProductInstanceReference = new BianProductAgreement { ProductAgreementIdentification = new BianIdentifier { IdentifierValue = "12345678" } },
-        Amount = new BianAmount { AmountValue = "1100.00", AmountCurrency = new BianCurrencyCode { Currencycode = "AUD" } },
-        PaymentPurpose = "Invoice 7781"
-    };
 }

@@ -27,6 +27,7 @@ public sealed class FraudScoringClient_ScoreAsync_Edge_UnusableAnswers
     private const string ScoresPath = "/v1/fraud-scores";
     private const string ApiKey = "test-network-key";
     private static readonly TimeSpan Budget = TimeSpan.FromMilliseconds(300);
+    private static readonly string[] ReasonsWithABlank = ["NEW_PAYEE", " ", "HIGH_AMOUNT_FOR_NEW_PAYEE"];
 
     private WireMockNeighbour _network = null!;
     private IFraudScoring _client = null!;
@@ -46,7 +47,7 @@ public sealed class FraudScoringClient_ScoreAsync_Edge_UnusableAnswers
     public async Task Given_TheScoringAnswers_When_APaymentIsScored_Then_ItCarriesTheApiKeyAndThePaymentButNothingAboutTheStaffMember()
     {
         // Given
-        _network.Answers("POST", ScoresPath, 200, new { score = 680, decision = "REVIEW", reasons = new[] { "NEW_PAYEE", " ", "HIGH_AMOUNT_FOR_NEW_PAYEE" } });
+        _network.Answers("POST", ScoresPath, 200, new { score = 680, decision = "REVIEW", reasons = ReasonsWithABlank });
 
         // When
         var result = await _client.ScoreAsync(Request(), CancellationToken.None);

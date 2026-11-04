@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 
 using EnterpriseWebPlatform.Payments.Api.Application.Abstractions;
+using EnterpriseWebPlatform.Payments.Api.Tests.Support;
 using EnterpriseWebPlatform.Tests.Neighbours;
 
 namespace EnterpriseWebPlatform.Payments.Api.Tests.Infrastructure;
@@ -21,7 +22,7 @@ public sealed class PaymentNetworkClient_Enquiries_Edge_StatusAndLookups
     public void SetUp()
     {
         _network = new WireMockNeighbour();
-        _client = PaymentNetworkClient_SendAsync_Edge_LostAndRefusedAnswers.ClientTo(_network.Url);
+        _client = PaymentNetworkTestClient.To(_network.Url);
     }
 
     [TearDown]

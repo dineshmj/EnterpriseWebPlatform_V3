@@ -22,6 +22,8 @@ public sealed class PartnerBankClient_PlacePurchaseAsync_Edge_LostAndRefusedAnsw
     [SetUp]
     public void SetUp() => _partnerBank = new PartnerBankStub(timeout: TimeSpan.FromSeconds(1)).IssuesTokens();
 
+    private static readonly string[] AmountTooLow = ["The amount must be at least AUD 10."];
+
     [TearDown]
     public void TearDown() => _partnerBank.Dispose();
 
@@ -68,7 +70,7 @@ public sealed class PartnerBankClient_PlacePurchaseAsync_Edge_LostAndRefusedAnsw
     public async Task Given_AValidationProblem_When_APurchaseIsPlaced_Then_ItIsRefusedWithTheFirstMessage()
     {
         // Given
-        _partnerBank.AnswersPurchase(400, new { title = "Invalid", errors = new { amount = new[] { "The amount must be at least AUD 10." } } });
+        _partnerBank.AnswersPurchase(400, new { title = "Invalid", errors = new { amount = AmountTooLow } });
 
         // When
         var answer = await PlaceAsync(Guid.NewGuid());
@@ -124,7 +126,7 @@ public sealed class PartnerBankClient_PlacePurchaseAsync_Edge_LostAndRefusedAnsw
         first.Outcome.Should().Be(PartnerOutcome.Unavailable);
         second.Outcome.Should().Be(PartnerOutcome.Accepted);
         _partnerBank.Received(PartnerBankStub.TokenPath).Should().HaveCount(2);
-        _partnerBank.Received(PartnerBankStub.GoldOrdersPath).Last().RequestMessage!.Headers!["Authorization"].Single()
+        _partnerBank.Received(PartnerBankStub.GoldOrdersPath)[^1].RequestMessage!.Headers!["Authorization"].Single()
             .Should().Be("Bearer partner-token-2");
     }
 

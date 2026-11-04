@@ -49,10 +49,14 @@ public static class CustomerAccessScopeQueryExtensions
         var city = scope.BranchCity.Trim().ToUpper();
         var countryCode = scope.BranchCountryCode.Trim().ToUpper();
 
+        // CA1862 (string.Equals with a StringComparison) does not apply here: the lambda runs in
+        // SQL as UPPER(city) = @city, and EF Core cannot translate a StringComparison.
+#pragma warning disable CA1862
         return customers.Where(customer => customer.Addresses.Any(address =>
             address.AddressType == AddressType.Residential &&
             address.IsPrimary &&
-            address.Address.City.ToUpper() == city &&   // NOSONAR - runs in SQL (UPPER); string.Equals with a StringComparison cannot be translated
+            address.Address.City.ToUpper() == city &&
             address.Address.CountryCode == countryCode));
+#pragma warning restore CA1862
     }
 }

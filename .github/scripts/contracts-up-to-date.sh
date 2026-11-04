@@ -12,7 +12,7 @@
 set -euo pipefail
 
 changes=$(git status --porcelain -- tst/contracts/pacts)
-if [ -n "$changes" ]; then
+if [[ -n "$changes" ]]; then
   echo "$changes"
   git --no-pager diff -- tst/contracts/pacts
   echo "::error::The consumer contracts in tst/contracts/pacts differ from what the consumer tests write - run them and commit the files (tst/contracts/README.md)."

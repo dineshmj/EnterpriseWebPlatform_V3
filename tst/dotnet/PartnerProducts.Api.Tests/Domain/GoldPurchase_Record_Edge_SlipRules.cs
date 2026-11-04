@@ -123,7 +123,7 @@ public sealed class GoldPurchase_Record_Edge_SlipRules
         // Then
         second.Should().Be(first);
         purchase.SentAt.Should().Be(DigitalGoldTestData.Now);
-        purchase.Events.Last().Resend.Should().BeTrue();
+        purchase.Events[^1].Resend.Should().BeTrue();
     }
 
     [Test]
