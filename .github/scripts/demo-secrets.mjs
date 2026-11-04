@@ -51,20 +51,12 @@ const kafkaUsers = [
 ];
 
 // The IDP's confidential clients with a shared secret (deploy/helm/ewp values.yaml, idp.secretEnv) and
-// who holds each: the machines (Journey APIs, the worker, the Kafka subscribers).
+// who holds each: the Journey APIs and the Partner Products worker.
 const clients = {
   'Audit.JourneyApi.ClientID': ['audit-journey-api', 'AUDIT_JOURNEY_CLIENT_SECRET'],
   'Operations.JourneyApi.ClientID': ['operations-journey-api', 'OPERATIONS_JOURNEY_CLIENT_SECRET'],
   'PartnerProducts.JourneyApi.ClientID': ['partner-products-journey-api', 'PARTNER_PRODUCTS_JOURNEY_CLIENT_SECRET'],
   'PartnerProducts.Worker.M2M.ClientID': ['partner-products-worker', 'PARTNER_PRODUCTS_WORKER_CLIENT_SECRET'],
-  'CustomerKyc.CaseOpeningSubscriber.To.CustomerKycApi.M2M.ClientID': ['kyc-case-opening-subscriber', 'KycCaseOpeningSubscriber__ClientSecret'],
-  'CustomerOnboarding.OutcomeSubscriber.To.CustomerOnboardingApi.M2M.ClientID': ['onboarding-outcome-subscriber', 'OnboardingOutcomeSubscriber__ClientSecret'],
-  'Compliance.CaseOpeningSubscriber.To.ComplianceApi.M2M.ClientID': ['compliance-case-opening-subscriber', 'ComplianceCaseOpeningSubscriber__ClientSecret'],
-  'DocumentsManagement.InvalidationSubscriber.To.DocumentsManagementApi.M2M.ClientID': ['document-invalidation-subscriber', 'DocumentInvalidationSubscriber__ClientSecret'],
-  'Accounts.ApplicationOpeningSubscriber.To.AccountsApi.M2M.ClientID': ['account-application-opening-subscriber', 'AccountApplicationOpeningSubscriber__ClientSecret'],
-  'Notifications.Subscriber.To.NotificationsApi.M2M.ClientID': ['notifications-subscriber', 'NotificationsSubscriber__ClientSecret'],
-  'Accounts.CommandSubscriber.To.AccountsApi.M2M.ClientID': ['accounts-command-subscriber', 'AccountsCommandSubscriber__ClientSecret'],
-  'Payments.SagaReplySubscriber.To.PaymentsApi.M2M.ClientID': ['payments-saga-reply-subscriber', 'PaymentsSagaReplySubscriber__ClientSecret'],
 };
 
 // ┌─ SEC ──────────────────────────────────────────────────────────────────────────────────────────
@@ -85,8 +77,24 @@ const webClients = {
 };
 
 // ┌─ SEC ──────────────────────────────────────────────────────────────────────────────────────────
-// │ DPoP (RFC 9449): the apps whose tokens are bound to a key of their own - a second EC P-256 key,
-// │ not the client key. Its encrypted PEM + password go into the same Secret as the client key
+// │ The Kafka subscribers' machine identities: private_key_jwt too (no shared secret) - the same
+// │ three parts, the private key only in the worker's own Secret ewp-<component>-client-key.
+// └────────────────────────────────────────────────────────────────────────────────────────────────
+const workerClients = {
+  'CustomerKyc.CaseOpeningSubscriber.To.CustomerKycApi.M2M.ClientID': 'kyc-case-opening-subscriber',
+  'CustomerOnboarding.OutcomeSubscriber.To.CustomerOnboardingApi.M2M.ClientID': 'onboarding-outcome-subscriber',
+  'Compliance.CaseOpeningSubscriber.To.ComplianceApi.M2M.ClientID': 'compliance-case-opening-subscriber',
+  'DocumentsManagement.InvalidationSubscriber.To.DocumentsManagementApi.M2M.ClientID': 'document-invalidation-subscriber',
+  'Accounts.ApplicationOpeningSubscriber.To.AccountsApi.M2M.ClientID': 'account-application-opening-subscriber',
+  'Notifications.Subscriber.To.NotificationsApi.M2M.ClientID': 'notifications-subscriber',
+  'Accounts.CommandSubscriber.To.AccountsApi.M2M.ClientID': 'accounts-command-subscriber',
+  'Payments.SagaReplySubscriber.To.PaymentsApi.M2M.ClientID': 'payments-saga-reply-subscriber',
+};
+const keyClients = { ...webClients, ...workerClients };
+
+// ┌─ SEC ──────────────────────────────────────────────────────────────────────────────────────────
+// │ DPoP (RFC 9449): the apps and workers whose tokens are bound to a key of their own - a second
+// │ EC P-256 key, not the client key. Its encrypted PEM + password go into the same Secret as the client key
 // │ (ewp-<component>-client-key, keys dpop-key.pem*); nobody else gets it, the IDP never does.
 // │ The Journey APIs (client secret, no client key) get a Secret of that name holding the DPoP key only.
 // └────────────────────────────────────────────────────────────────────────────────────────────────
@@ -94,6 +102,7 @@ const dpopApps = [
   'shell', 'customer-onboarding-bff-web', 'customer-kyc-bff-web', 'compliance-bff-web', 'accounts-bff-web', 'payments-bff-web',
   'audit-bff-web', 'operations-bff-web', 'partner-products-bff-web',
   'audit-journey-api', 'operations-journey-api', 'partner-products-journey-api',
+  ...Object.values(workerClients),
 ];
 
 // Each component's database (key, role, database) and Kafka user (key, user).
@@ -231,7 +240,7 @@ function ewpNamespace() {
   add('ewp-idp-signing', 'signing.pfx', o.idpSigningPfx, b64);
   add('ewp-idp-client-keys', 'SelfService.Web.ClientID.jwk', o.clientKey('selfservice-web'));
   add('ewp-idp-client-keys', 'SelfService.JourneyApi.ClientID.jwk', o.clientKey('selfservice-journeyapi'));
-  for (const [id, component] of Object.entries(webClients)) {
+  for (const [id, component] of Object.entries(keyClients)) {
     add('ewp-idp-client-keys', `${id}.jwk`, o.clientKey(component));
     add(`ewp-${component}-client-key`, 'client-key.pem', o.clientPrivateKey(component));
     add(`ewp-${component}-client-key`, 'client-key.pem.password', o.clientPrivateKeyPassword(component));
@@ -521,9 +530,9 @@ for (const [side, vault] of [['ewp', ewpVault], ['partner', partnerVault]]) {
   });
 }
 
-// Each staff web app's key pair: all three parts or none (a re-run after a half-written pair
-// issues a new one; the IDP and the app read it at their next start).
-await inBatches(Object.values(webClients), async (component) => {
+// Each staff web app's and worker's key pair: all three parts or none (a re-run after a half-written
+// pair issues a new one; the IDP and the app read it at their next start).
+await inBatches(Object.values(keyClients), async (component) => {
   const names = [o.clientKey(component), o.clientPrivateKey(component), o.clientPrivateKeyPassword(component)];
   const found = await Promise.all(names.map((name) => vaultCall(ewpVault, 'GET', name)));
   if (found.every((v) => v !== undefined)) {

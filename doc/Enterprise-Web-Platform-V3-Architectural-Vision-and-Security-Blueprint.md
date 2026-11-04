@@ -627,7 +627,7 @@ Details: [Saga plan §2](EWP-V3-Saga-Choreography-and-Orchestration-Plans.md#2-o
 - [x] Outbox and audit events for Partner Products (2026-10-20: `partner-products.digital-gold.events`, read by the audit trail)
 - [ ] Temporal with mTLS and namespace authorization (production: from the platform)
 - [x] The purchase's payment followed by events instead of polling (2026-10-20: signal from `payments.payment.events`, 5-minute fallback)
-- [ ] FAPI 2.0 profile end to end - left: machine tokens (Kafka subscribers, client credentials) are still bearer, and calls between services are not mutual TLS (Threat-Model R-9). Done: PAR, `private_key_jwt` and DPoP-bound person tokens in both channels
+- [ ] FAPI 2.0 profile end to end - left: the Partner Products worker's machine token is still bearer (client secret), and calls between services are not mutual TLS (Threat-Model R-9). Done: PAR, `private_key_jwt` and DPoP-bound person tokens in both channels; `private_key_jwt` and DPoP-bound machine tokens for the eight Kafka subscribers
 
 Details: [PartnerProducts-Requirements.md](Requirements/PartnerProducts-Requirements.md).
 

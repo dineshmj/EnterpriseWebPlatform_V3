@@ -139,8 +139,6 @@ public sealed class OnboardingOutcomeProcessor(
 
     private async Task<HttpResponseMessage> SendAsync(OutcomeMessage message, CancellationToken cancellationToken)
     {
-        var accessToken = await tokenClient.GetAccessTokenAsync(cancellationToken);
-
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
             $"/internal/v1/onboarding/applications/{message.ApplicationRef}/{EndpointByEventType[message.EventType]}")
@@ -155,7 +153,8 @@ public sealed class OnboardingOutcomeProcessor(
             })
         };
 
-        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+        // SEC: the DPoP-bound machine token and a new proof for this attempt are added by
+        // DPoPMachineTokenHandler (Program.cs) - never a bearer token.
 
         // Workflow metadata: the resulting Customer Onboarding events stay in the same
         // workflow, are caused by THIS KYC message, and keep the human initiator.

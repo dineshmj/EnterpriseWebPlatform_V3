@@ -10,9 +10,10 @@ import { urls } from './services';
  * compromised service could obtain - and what the IDP and the APIs must still refuse.
  *
  * The DEVELOPMENT-ONLY client credentials are found through the IDP's appsettings.Development.json
- * at run time - never copied into the tests: a client secret (machines), or the path of a
- * private_key_jwt client's public key, whose private key lies next to it (the staff web apps:
- * ps/pki/New-EwpLocalPki.ps1). Outside Development neither exists in files.
+ * at run time - never copied into the tests: a client secret (the Journey APIs and the Partner
+ * Products worker), or the path of a private_key_jwt client's public key, whose private key lies
+ * next to it (the staff web apps and the Kafka subscribers: ps/pki/New-EwpLocalPki.ps1). Outside
+ * Development neither exists in files.
  */
 export const clientIds = {
   partnerProductsWeb: 'PartnerProducts.Microservice.Web.ClientID',
@@ -33,8 +34,9 @@ let issuer: Promise<string> | undefined;
 
 // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
 // │ The client proves itself the way the IDP registered it: private_key_jwt for the staff
-// │ web apps (an assertion signed with the client's own key, as the BFFs build it: aud =
-// │ the issuer only, typ client-authentication+jwt, 60 s, a new jti), else its secret.
+// │ web apps and the Kafka subscribers (an assertion signed with the client's own key, as
+// │ the BFFs build it: aud = the issuer only, typ client-authentication+jwt, 60 s, a new
+// │ jti), else its secret.
 // └──────────────────────────────────────────────────────────────────────────────────────
 /** The client authentication form parameters for ONE call to the IDP. */
 export async function clientAuthenticationOf(http: APIRequestContext, clientId: string): Promise<Record<string, string>> {
@@ -65,7 +67,8 @@ export async function clientAuthenticationOf(http: APIRequestContext, clientId: 
 
 // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
 // │ DPoP (RFC 9449): the clients whose tokens are bound to a key, as their BFFs (and the
-// │ Journey API, for the tokens it exchanges for) hold them.
+// │ Journey API, for the tokens it exchanges for; the Kafka subscribers, for their own
+// │ machine tokens) hold them.
 // │ The test plays the BFF: one key per client for this run (the IDP registers none - each
 // │ token names its key in cnf.jkt), a proof on each of its token requests, and a proof on
 // │ each API call made with a bound token (authorizationFor). Without them the IDP issues
@@ -74,6 +77,7 @@ export async function clientAuthenticationOf(http: APIRequestContext, clientId: 
 const dpopClients: ReadonlySet<string> = new Set([
   clientIds.paymentsWeb, clientIds.accountsWeb, clientIds.customerOnboardingWeb, clientIds.customerKycWeb,
   clientIds.auditWeb, clientIds.partnerProductsWeb, clientIds.partnerProductsJourneyApi,
+  clientIds.paymentsSagaReplySubscriber, clientIds.kycCaseOpeningSubscriber,
 ]);
 const dpopKeys = new Map<string, KeyObject>();
 const boundTo = new Map<string, KeyObject>();
@@ -124,13 +128,15 @@ export function authorizationFor(token: string, method: string, url: string): Re
     : { Authorization: `Bearer ${token}` };
 }
 
-/** A machine's own token (client credentials, no person). */
+/** A machine's own token (client credentials, no person) - bound to its DPoP key when its client requires it. */
 export async function clientCredentialsToken(http: APIRequestContext, clientId: string, scope: string): Promise<string> {
-  const response = await http.post(`${urls.idp}/connect/token`, {
+  const tokenEndpoint = `${urls.idp}/connect/token`;
+  const response = await http.post(tokenEndpoint, {
+    headers: dpopHeaderOf(clientId, tokenEndpoint),
     form: { grant_type: 'client_credentials', client_id: clientId, ...await clientAuthenticationOf(http, clientId), scope },
   });
-  expect(response.status(), `a client-credentials token for ${clientId} (${scope})`).toBe(200);
-  return (await response.json() as { access_token: string }).access_token;
+  expect(response.status(), `a client-credentials token for ${clientId} (${scope}): ${await response.text()}`).toBe(200);
+  return held(clientId, (await response.json() as { access_token: string }).access_token);
 }
 
 /** RFC 8693 token exchange by `clientId` - the raw answer, so a test can check a refusal. */

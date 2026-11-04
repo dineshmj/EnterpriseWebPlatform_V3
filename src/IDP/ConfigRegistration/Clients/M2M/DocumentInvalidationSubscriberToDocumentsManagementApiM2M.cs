@@ -18,12 +18,19 @@ public sealed class DocumentInvalidationSubscriberToDocumentsManagementApiM2M
         {
             ClientId = ClientSettings.Ids.DocumentInvalidationSubscriber,
             ClientName = "Document Invalidation Subscriber to Documents Management API M2M Client",
-            ClientSecrets = { ClientSecretStore.For(ClientSettings.Ids.DocumentInvalidationSubscriber) },
+            ClientSecrets = { ClientKeyStore.For(ClientSettings.Ids.DocumentInvalidationSubscriber) },
             // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
             // │ Client Credentials with ONE write scope: a machine identity for one caller-callee
             // │ purpose; the receiving API also pins this client_id on its internal endpoint.
             // └──────────────────────────────────────────────────────────────────────────────────────
             AllowedGrantTypes = GrantTypes.ClientCredentials,
+            // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+            // │ private_key_jwt and DPoP (FAPI 2.0): the worker proves itself with a one-time
+            // │ assertion signed by its own key (the IDP holds only the public key - no shared
+            // │ secret), and every token is bound to its DPoP key (cnf.jkt), so a token copied
+            // │ from a log or a proxy cannot be used by anyone else.
+            // └──────────────────────────────────────────────────────────────────────────────────────
+            RequireDPoP = true,
             AllowedScopes = { "documents-management.write" }
         };
 }

@@ -18,13 +18,20 @@ public sealed class OnboardingOutcomeSubscriberToCustomerOnboardingApiM2M
                 {
                     ClientId = ClientSettings.Ids.OnboardingOutcomeSubscriber,
                     ClientName = "Onboarding Outcome Subscriber to Customer Onboarding API M2M Client",
-                    ClientSecrets = { ClientSecretStore.For(ClientSettings.Ids.OnboardingOutcomeSubscriber) },
+                    ClientSecrets = { ClientKeyStore.For(ClientSettings.Ids.OnboardingOutcomeSubscriber) },
 
                     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
                     // │ Client Credentials: a machine identity with no person and no browser - one client per
                     // │ caller-callee purpose.
                     // └──────────────────────────────────────────────────────────────────────────────────────
                     AllowedGrantTypes = GrantTypes.ClientCredentials,
+                    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+                    // │ private_key_jwt and DPoP (FAPI 2.0): the worker proves itself with a one-time
+                    // │ assertion signed by its own key (the IDP holds only the public key - no shared
+                    // │ secret), and every token is bound to its DPoP key (cnf.jkt), so a token copied
+                    // │ from a log or a proxy cannot be used by anyone else.
+                    // └──────────────────────────────────────────────────────────────────────────────────────
+                    RequireDPoP = true,
 
                     AllowedScopes =
                     {

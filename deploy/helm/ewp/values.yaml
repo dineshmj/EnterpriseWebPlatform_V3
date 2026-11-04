@@ -258,6 +258,15 @@ components:
       ClientBaseUrls__SelfServiceWeb: 'https://my.{{ .Values.global.domain }}'
       ClientKeys__SelfService.Web.ClientID: /etc/ewp/idp-client-keys/SelfService.Web.ClientID.jwk
       ClientKeys__SelfService.JourneyApi.ClientID: /etc/ewp/idp-client-keys/SelfService.JourneyApi.ClientID.jwk
+      # The Kafka subscribers' machine identities (private_key_jwt; their private keys are in each worker's own Secret).
+      ClientKeys__CustomerKyc.CaseOpeningSubscriber.To.CustomerKycApi.M2M.ClientID: /etc/ewp/idp-client-keys/CustomerKyc.CaseOpeningSubscriber.To.CustomerKycApi.M2M.ClientID.jwk
+      ClientKeys__CustomerOnboarding.OutcomeSubscriber.To.CustomerOnboardingApi.M2M.ClientID: /etc/ewp/idp-client-keys/CustomerOnboarding.OutcomeSubscriber.To.CustomerOnboardingApi.M2M.ClientID.jwk
+      ClientKeys__Compliance.CaseOpeningSubscriber.To.ComplianceApi.M2M.ClientID: /etc/ewp/idp-client-keys/Compliance.CaseOpeningSubscriber.To.ComplianceApi.M2M.ClientID.jwk
+      ClientKeys__DocumentsManagement.InvalidationSubscriber.To.DocumentsManagementApi.M2M.ClientID: /etc/ewp/idp-client-keys/DocumentsManagement.InvalidationSubscriber.To.DocumentsManagementApi.M2M.ClientID.jwk
+      ClientKeys__Accounts.ApplicationOpeningSubscriber.To.AccountsApi.M2M.ClientID: /etc/ewp/idp-client-keys/Accounts.ApplicationOpeningSubscriber.To.AccountsApi.M2M.ClientID.jwk
+      ClientKeys__Notifications.Subscriber.To.NotificationsApi.M2M.ClientID: /etc/ewp/idp-client-keys/Notifications.Subscriber.To.NotificationsApi.M2M.ClientID.jwk
+      ClientKeys__Accounts.CommandSubscriber.To.AccountsApi.M2M.ClientID: /etc/ewp/idp-client-keys/Accounts.CommandSubscriber.To.AccountsApi.M2M.ClientID.jwk
+      ClientKeys__Payments.SagaReplySubscriber.To.PaymentsApi.M2M.ClientID: /etc/ewp/idp-client-keys/Payments.SagaReplySubscriber.To.PaymentsApi.M2M.ClientID.jwk
       CustomerSignIn__CustomerOnboardingApiBaseUrl: '{{ include "ewp.internal" (list . "customer-onboarding-api") }}'
       SigningCredential__CertificatePath: /etc/ewp/idp-signing/signing.pfx
     secretEnv:
@@ -267,14 +276,6 @@ components:
       - ClientSecrets__Operations.JourneyApi.ClientID
       - ClientSecrets__PartnerProducts.JourneyApi.ClientID
       - ClientSecrets__PartnerProducts.Worker.M2M.ClientID
-      - ClientSecrets__CustomerKyc.CaseOpeningSubscriber.To.CustomerKycApi.M2M.ClientID
-      - ClientSecrets__CustomerOnboarding.OutcomeSubscriber.To.CustomerOnboardingApi.M2M.ClientID
-      - ClientSecrets__Compliance.CaseOpeningSubscriber.To.ComplianceApi.M2M.ClientID
-      - ClientSecrets__DocumentsManagement.InvalidationSubscriber.To.DocumentsManagementApi.M2M.ClientID
-      - ClientSecrets__Accounts.ApplicationOpeningSubscriber.To.AccountsApi.M2M.ClientID
-      - ClientSecrets__Notifications.Subscriber.To.NotificationsApi.M2M.ClientID
-      - ClientSecrets__Accounts.CommandSubscriber.To.AccountsApi.M2M.ClientID
-      - ClientSecrets__Payments.SagaReplySubscriber.To.PaymentsApi.M2M.ClientID
     secretFiles:
       # The token-signing certificate (signing.pfx); its password is in secretEnv.
       - {name: signing, secret: ewp-idp-signing, mountPath: /etc/ewp/idp-signing}
@@ -748,9 +749,15 @@ components:
     env:
       KycCaseOpeningSubscriber__IdentityServerAuthority: '{{ include "ewp.public" (list . "idp") }}'
       KycCaseOpeningSubscriber__KycApiBaseUrl: '{{ include "ewp.internal" (list . "customer-kyc-api") }}'
+      KycCaseOpeningSubscriber__ClientKey__Path: /etc/ewp/client-key/client-key.pem
+      KycCaseOpeningSubscriber__ClientKey__PasswordPath: /etc/ewp/client-key/client-key.pem.password
+      KycCaseOpeningSubscriber__DPoPKey__Path: /etc/ewp/client-key/dpop-key.pem
+      KycCaseOpeningSubscriber__DPoPKey__PasswordPath: /etc/ewp/client-key/dpop-key.pem.password
     secretEnv:
       - Kafka__SaslPassword
-      - KycCaseOpeningSubscriber__ClientSecret
+    secretFiles:
+      # private_key_jwt and DPoP: this worker's own two keys (encrypted PEM) and their passwords - nobody else's.
+      - {name: client-key, secret: ewp-kyc-case-opening-subscriber-client-key, mountPath: /etc/ewp/client-key}
 
   onboarding-outcome-subscriber:
     stack: dotnet
@@ -760,9 +767,15 @@ components:
     env:
       OnboardingOutcomeSubscriber__IdentityServerAuthority: '{{ include "ewp.public" (list . "idp") }}'
       OnboardingOutcomeSubscriber__CustomerOnboardingApiBaseUrl: '{{ include "ewp.internal" (list . "customer-onboarding-api") }}'
+      OnboardingOutcomeSubscriber__ClientKey__Path: /etc/ewp/client-key/client-key.pem
+      OnboardingOutcomeSubscriber__ClientKey__PasswordPath: /etc/ewp/client-key/client-key.pem.password
+      OnboardingOutcomeSubscriber__DPoPKey__Path: /etc/ewp/client-key/dpop-key.pem
+      OnboardingOutcomeSubscriber__DPoPKey__PasswordPath: /etc/ewp/client-key/dpop-key.pem.password
     secretEnv:
       - Kafka__SaslPassword
-      - OnboardingOutcomeSubscriber__ClientSecret
+    secretFiles:
+      # private_key_jwt and DPoP: this worker's own two keys (encrypted PEM) and their passwords - nobody else's.
+      - {name: client-key, secret: ewp-onboarding-outcome-subscriber-client-key, mountPath: /etc/ewp/client-key}
 
   compliance-case-opening-subscriber:
     stack: dotnet
@@ -772,9 +785,15 @@ components:
     env:
       ComplianceCaseOpeningSubscriber__IdentityServerAuthority: '{{ include "ewp.public" (list . "idp") }}'
       ComplianceCaseOpeningSubscriber__ComplianceApiBaseUrl: '{{ include "ewp.internal" (list . "compliance-api") }}'
+      ComplianceCaseOpeningSubscriber__ClientKey__Path: /etc/ewp/client-key/client-key.pem
+      ComplianceCaseOpeningSubscriber__ClientKey__PasswordPath: /etc/ewp/client-key/client-key.pem.password
+      ComplianceCaseOpeningSubscriber__DPoPKey__Path: /etc/ewp/client-key/dpop-key.pem
+      ComplianceCaseOpeningSubscriber__DPoPKey__PasswordPath: /etc/ewp/client-key/dpop-key.pem.password
     secretEnv:
       - Kafka__SaslPassword
-      - ComplianceCaseOpeningSubscriber__ClientSecret
+    secretFiles:
+      # private_key_jwt and DPoP: this worker's own two keys (encrypted PEM) and their passwords - nobody else's.
+      - {name: client-key, secret: ewp-compliance-case-opening-subscriber-client-key, mountPath: /etc/ewp/client-key}
 
   document-invalidation-subscriber:
     stack: dotnet
@@ -784,9 +803,15 @@ components:
     env:
       DocumentInvalidationSubscriber__IdentityServerAuthority: '{{ include "ewp.public" (list . "idp") }}'
       DocumentInvalidationSubscriber__DocumentsManagementApiBaseUrl: '{{ include "ewp.internal" (list . "documents-management-api") }}'
+      DocumentInvalidationSubscriber__ClientKey__Path: /etc/ewp/client-key/client-key.pem
+      DocumentInvalidationSubscriber__ClientKey__PasswordPath: /etc/ewp/client-key/client-key.pem.password
+      DocumentInvalidationSubscriber__DPoPKey__Path: /etc/ewp/client-key/dpop-key.pem
+      DocumentInvalidationSubscriber__DPoPKey__PasswordPath: /etc/ewp/client-key/dpop-key.pem.password
     secretEnv:
       - Kafka__SaslPassword
-      - DocumentInvalidationSubscriber__ClientSecret
+    secretFiles:
+      # private_key_jwt and DPoP: this worker's own two keys (encrypted PEM) and their passwords - nobody else's.
+      - {name: client-key, secret: ewp-document-invalidation-subscriber-client-key, mountPath: /etc/ewp/client-key}
 
   account-application-opening-subscriber:
     stack: dotnet
@@ -796,9 +821,15 @@ components:
     env:
       AccountApplicationOpeningSubscriber__IdentityServerAuthority: '{{ include "ewp.public" (list . "idp") }}'
       AccountApplicationOpeningSubscriber__AccountsApiBaseUrl: '{{ include "ewp.internal" (list . "accounts-api") }}'
+      AccountApplicationOpeningSubscriber__ClientKey__Path: /etc/ewp/client-key/client-key.pem
+      AccountApplicationOpeningSubscriber__ClientKey__PasswordPath: /etc/ewp/client-key/client-key.pem.password
+      AccountApplicationOpeningSubscriber__DPoPKey__Path: /etc/ewp/client-key/dpop-key.pem
+      AccountApplicationOpeningSubscriber__DPoPKey__PasswordPath: /etc/ewp/client-key/dpop-key.pem.password
     secretEnv:
       - Kafka__SaslPassword
-      - AccountApplicationOpeningSubscriber__ClientSecret
+    secretFiles:
+      # private_key_jwt and DPoP: this worker's own two keys (encrypted PEM) and their passwords - nobody else's.
+      - {name: client-key, secret: ewp-account-application-opening-subscriber-client-key, mountPath: /etc/ewp/client-key}
 
   notifications-subscriber:
     stack: dotnet
@@ -808,9 +839,15 @@ components:
     env:
       NotificationsSubscriber__IdentityServerAuthority: '{{ include "ewp.public" (list . "idp") }}'
       NotificationsSubscriber__NotificationsApiBaseUrl: '{{ include "ewp.internal" (list . "notifications-api") }}'
+      NotificationsSubscriber__ClientKey__Path: /etc/ewp/client-key/client-key.pem
+      NotificationsSubscriber__ClientKey__PasswordPath: /etc/ewp/client-key/client-key.pem.password
+      NotificationsSubscriber__DPoPKey__Path: /etc/ewp/client-key/dpop-key.pem
+      NotificationsSubscriber__DPoPKey__PasswordPath: /etc/ewp/client-key/dpop-key.pem.password
     secretEnv:
       - Kafka__SaslPassword
-      - NotificationsSubscriber__ClientSecret
+    secretFiles:
+      # private_key_jwt and DPoP: this worker's own two keys (encrypted PEM) and their passwords - nobody else's.
+      - {name: client-key, secret: ewp-notifications-subscriber-client-key, mountPath: /etc/ewp/client-key}
 
   accounts-command-subscriber:
     stack: dotnet
@@ -820,9 +857,15 @@ components:
     env:
       AccountsCommandSubscriber__IdentityServerAuthority: '{{ include "ewp.public" (list . "idp") }}'
       AccountsCommandSubscriber__AccountsApiBaseUrl: '{{ include "ewp.internal" (list . "accounts-api") }}'
+      AccountsCommandSubscriber__ClientKey__Path: /etc/ewp/client-key/client-key.pem
+      AccountsCommandSubscriber__ClientKey__PasswordPath: /etc/ewp/client-key/client-key.pem.password
+      AccountsCommandSubscriber__DPoPKey__Path: /etc/ewp/client-key/dpop-key.pem
+      AccountsCommandSubscriber__DPoPKey__PasswordPath: /etc/ewp/client-key/dpop-key.pem.password
     secretEnv:
       - Kafka__SaslPassword
-      - AccountsCommandSubscriber__ClientSecret
+    secretFiles:
+      # private_key_jwt and DPoP: this worker's own two keys (encrypted PEM) and their passwords - nobody else's.
+      - {name: client-key, secret: ewp-accounts-command-subscriber-client-key, mountPath: /etc/ewp/client-key}
 
   payments-saga-reply-subscriber:
     stack: dotnet
@@ -832,9 +875,15 @@ components:
     env:
       PaymentsSagaReplySubscriber__IdentityServerAuthority: '{{ include "ewp.public" (list . "idp") }}'
       PaymentsSagaReplySubscriber__PaymentsApiBaseUrl: '{{ include "ewp.internal" (list . "payments-api") }}'
+      PaymentsSagaReplySubscriber__ClientKey__Path: /etc/ewp/client-key/client-key.pem
+      PaymentsSagaReplySubscriber__ClientKey__PasswordPath: /etc/ewp/client-key/client-key.pem.password
+      PaymentsSagaReplySubscriber__DPoPKey__Path: /etc/ewp/client-key/dpop-key.pem
+      PaymentsSagaReplySubscriber__DPoPKey__PasswordPath: /etc/ewp/client-key/dpop-key.pem.password
     secretEnv:
       - Kafka__SaslPassword
-      - PaymentsSagaReplySubscriber__ClientSecret
+    secretFiles:
+      # private_key_jwt and DPoP: this worker's own two keys (encrypted PEM) and their passwords - nobody else's.
+      - {name: client-key, secret: ewp-payments-saga-reply-subscriber-client-key, mountPath: /etc/ewp/client-key}
 
   partner-products-worker:
     stack: node

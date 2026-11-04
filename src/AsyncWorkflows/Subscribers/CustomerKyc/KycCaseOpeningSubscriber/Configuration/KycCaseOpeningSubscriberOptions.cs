@@ -26,10 +26,13 @@ public sealed class KycCaseOpeningSubscriberOptions : ISubscriberSettings, IM2MC
     public string ClientId { get; init; } = string.Empty;
 
     /// <summary>
-    /// M2M client secret. From this worker's configuration / secret store
-    /// (KycCaseOpeningSubscriber__ClientSecret); there is no compiled-in default.
+    /// The private_key_jwt key (encrypted PEM and its password file): from configuration only,
+    /// mounted from a secret store outside Development; no compiled-in default.
     /// </summary>
-    public string ClientSecret { get; init; } = string.Empty;
+    public KeyFileSettings ClientKey { get; init; } = new();
+
+    /// <summary>The key every token of this worker is bound to (DPoP) - not the client key.</summary>
+    public KeyFileSettings DPoPKey { get; init; } = new();
 
     public string Scope { get; init; } = "customer-kyc.write";
 

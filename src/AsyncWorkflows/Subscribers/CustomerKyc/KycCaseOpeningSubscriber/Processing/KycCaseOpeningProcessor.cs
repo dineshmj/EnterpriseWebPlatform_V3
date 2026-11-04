@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 
@@ -132,8 +131,6 @@ public sealed class KycCaseOpeningProcessor(
 
     private async Task<HttpResponseMessage> SendAsync(ApplicationSubmittedMessage message, CancellationToken cancellationToken)
     {
-        var accessToken = await tokenClient.GetAccessTokenAsync(cancellationToken);
-
         using var request = new HttpRequestMessage(HttpMethod.Post, "/internal/v1/kyc/cases/from-application-submitted")
         {
             // CausationId = this message: the KYC API records it in its Inbox and as
@@ -154,7 +151,8 @@ public sealed class KycCaseOpeningProcessor(
             })
         };
 
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        // SEC: the DPoP-bound machine token and a new proof for this attempt are added by
+        // DPoPMachineTokenHandler (Program.cs) - never a bearer token.
 
         // DEBUG POINT #2: the authenticated, resilient call to the Customer KYC API.
         return await httpClientFactory.CreateClient(HttpClientName).SendAsync(request, cancellationToken);
