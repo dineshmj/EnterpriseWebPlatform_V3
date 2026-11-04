@@ -5,7 +5,7 @@ import { MatchersV3, PactV4 } from '@pact-foundation/pact';
 import { createActivities } from '../../src/activities';
 import type { WorkerOptions } from '../../src/config';
 import type { MachineToken } from '../../src/machine-token';
-import { settledPaymentOf } from '../../src/payment-events';
+import { settledPaymentOf } from '../../src/payment-outcome';
 
 const { like, number, regex } = MatchersV3;
 
