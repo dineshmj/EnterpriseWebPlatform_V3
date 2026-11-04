@@ -55,6 +55,7 @@ The document answers *how the platform is built and protected*, not *which busin
   - [1.8 Testing](#18-testing)
     - [1.8.1 Test layers, from one decision to the whole platform](#181-test-layers-from-one-decision-to-the-whole-platform)
     - [1.8.2 Neighbours played by WireMock (C# and TypeScript)](#182-neighbours-played-by-wiremock-c-and-typescript)
+    - [1.8.3 Consumer-driven contracts (Pact), no broker](#183-consumer-driven-contracts-pact-no-broker)
   - [1.9 Delivery and deployment](#19-delivery-and-deployment)
     - [1.9.1 Container images built only in CI](#191-container-images-built-only-in-ci)
     - [1.9.2 One Helm chart for the whole platform](#192-one-helm-chart-for-the-whole-platform)
@@ -606,6 +607,7 @@ Each layer proves what the one below cannot, and none needs more of the platform
 |---|---|---|---|
 | Unit (NUnit) | [tst/dotnet](../tst/dotnet) - one project per .NET API with decisions (Payments, Accounts, Customer Onboarding, KYC, Compliance, Documents Management, Partner Products) and the IDP | nothing | the decisions: aggregates, policies, saga steps, authorization handlers, idempotency |
 | Adapter, with the neighbour played by WireMock | `PartnerProducts.Api.Tests`, and the `Infrastructure/` tests of `Payments.Api.Tests`, `Accounts.Api.Tests` and `Compliance.Api.Tests` (C#); the `test/` of the Partner Products, Audit and Operations Journey APIs (TypeScript) - see [1.8.2](#182-neighbours-played-by-wiremock-c-and-typescript) | nothing (WireMock starts and stops with the test) | our side of a contract: what we send, and how every answer - refusal, failure, late or lost answer - is translated |
+| Contract (Pact) | the consumers' tests (the Payments saga's two Kafka couriers in C#, the Partner Products Worker in TypeScript) and the providers' (`Contracts/` of `Payments.Api.Tests` and `Accounts.Api.Tests`) - see [1.8.3](#183-consumer-driven-contracts-pact-no-broker) | nothing (the provider API runs inside the test) | that two services still agree - fields, types, status codes - each side tested on its own, in the pull request that changes one of them |
 | End to end (Playwright, Edge) | [tst/playwright](../tst/playwright): `30-journeys`, `35-resilience`, `40-security` | the whole platform | several people through real screens; resilience with the simulators and the fault proxy ([1.7.4](#174-operations-platform-health-and-the-simulator-switch)); headers, sessions, MFA |
 
 How to run each: [tst/README.md](../tst/README.md).
@@ -629,6 +631,26 @@ Demo: `dotnet test tst\dotnet\EwpTests.slnx --artifacts-path $env:TEMP\ewp-tests
 - Installing WireMock standalone once: [Install-WireMock.ps1](../ps/wiremock/Install-WireMock.ps1) (pinned 3.13.2, SHA-256 checked)
 
 **Not yet:** tests for the web BFFs' server-side calls (Next.js); component tests of a whole API with a test database (controller → domain → Outbox) and WireMock behind it.
+
+#### 1.8.3 Consumer-driven contracts (Pact), no broker
+
+Services that talk to each other are released on their own; a unit test of either side cannot see that the other side changed. With **consumer-driven contracts** the caller (consumer) writes down exactly what it sends and what it reads - a Pact file, committed in [tst/contracts/pacts](../tst/contracts/pacts) - and the answering or publishing service (provider) replays every contract that names it in its own tests. A provider that renames a field a consumer reads, changes its type, or answers a refusal with another status fails in the pull request that makes the change.
+
+- **The Payments saga loop, six contracts:** the Accounts Command Subscriber reads Payments' funds commands (Kafka) and calls the Accounts API; the Payments Saga Reply Subscriber reads Accounts' replies (Kafka) and calls the Payments API; the Partner Products Worker (TypeScript) reads the payment events (Kafka) and the payment's outcome (HTTP). HTTP and Kafka, C# to C# and TypeScript to C#.
+- **Only what the consumer reads is stated**, with matchers for what may vary (a GUID, a number, a code); exact values only where the consumer decides on them (the worker allocates gold only on `COMPLETED`). The status codes are part of the contract: the couriers dead-letter on 400 / 409 and retry on 5xx, so a refusal that became a 500 would retry a bad message for ever.
+- **The real thing on both sides:** the consumer tests drive the REAL couriers and the worker's REAL reader and activity against Pact's mock server; the provider tests run the REAL API (its `Program`, on Kestrel) with only its persistence ports mocked per provider state, and build each Kafka message with the REAL Outbox mapper from a real aggregate. A test scheme signs in the consumer's pinned machine client, so the authorization policies still run (token validation and DPoP are proven by the security tests).
+- **No broker, no extra process:** the contracts are committed and reviewed as diffs. The consumer tests rewrite their files only after a complete green run (one atomic replace each), and CI fails when the files they write differ from the committed ones ("Contracts up to date") - a consumer's new expectation can never be left uncommitted while the providers are checked against the old one. Pact's usage telemetry is switched off.
+
+Demo: break a provider on purpose - e.g. rename `HoldStatus` in the Accounts API's `FundsReplyPayload` and answer 422 instead of 409 in `InternalFundsCommandsController` - and run `dotnet test tst\dotnet\EwpTests.slnx --artifacts-path $env:TEMP\ewp-tests --filter TestCategory=Contract`: the Accounts verification names the consumer, the interaction and the difference (`expected 409 but was 422`; `$.Payload -> Actual map is missing the following keys: HoldStatus`). Undo it and the run is green again. About 10 s once built; nothing needs to be running.
+
+**Where to look at:**
+
+- How it works, how to change or add a contract: [tst/contracts/README.md](../tst/contracts/README.md)
+- C# consumers: [AsyncWorkflows.Subscribers.ContractTests](../tst/dotnet/AsyncWorkflows.Subscribers.ContractTests); TypeScript consumer: [payments-api.contract.spec.ts](../src/Microservices/PartnerProducts/Worker/test/contracts/payments-api.contract.spec.ts)
+- Providers: [PaymentsApi_Verify_Contract_EveryConsumer.cs](../tst/dotnet/Payments.Api.Tests/Contracts/PaymentsApi_Verify_Contract_EveryConsumer.cs), [AccountsApi_Verify_Contract_EveryConsumer.cs](../tst/dotnet/Accounts.Api.Tests/Contracts/AccountsApi_Verify_Contract_EveryConsumer.cs); the shared host [ContractProviderHost.cs](../tst/dotnet/Shared/ContractProviderHost.cs)
+- CI: [contracts-up-to-date.sh](../.github/scripts/contracts-up-to-date.sh)
+
+**Not yet:** contracts for the other consumers (the onboarding chain, Notifications, Audit, the web BFFs and the Journey APIs); a Pact Broker (`can-i-deploy`), worth it once squads release from repositories of their own.
 
 ### 1.9 Delivery and deployment
 

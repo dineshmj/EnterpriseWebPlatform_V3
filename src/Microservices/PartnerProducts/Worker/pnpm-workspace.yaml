@@ -9,6 +9,9 @@ allowBuilds:
   # Jest (tests only): both ship prebuilt binaries for Windows; their install scripts are not needed.
   '@parcel/watcher': false
   unrs-resolver: false
+  # Pact (contract tests only): its native core ships as a prebuilt optional package per platform; @scarf/scarf's
+  # install script only sends download analytics - never run.
+  '@scarf/scarf': false
 
 # Fixed versions of vulnerable transitive packages (pnpm audit); only the vulnerable versions are rewritten.
 overrides:

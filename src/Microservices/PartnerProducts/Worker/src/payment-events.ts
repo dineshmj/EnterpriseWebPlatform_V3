@@ -2,20 +2,14 @@ import { KafkaJS } from '@confluentinc/kafka-javascript';
 import { Client, Connection, WorkflowNotFoundError } from '@temporalio/client';
 import type { WorkerOptions } from './config';
 import { MachineToken } from './machine-token';
+import { settledPaymentOf } from './payment-outcome';
 import { paymentSettledSignal } from './signals';
 
 const TOPIC = 'payments.payment.events';
 /** The Kafka ACLs grant the worker's user READ on this group only. */
 const GROUP_ID = 'partner-products.worker';
-/** A payment's final outcomes - the moments a waiting purchase workflow should look again. */
-const OUTCOMES = new Set(['PaymentCompleted', 'PaymentRejected', 'PaymentFailed', 'PaymentCompensationFailed']);
 
 export type ListenerState = 'starting' | 'running' | 'stopped';
-
-interface PaymentEvent {
-  EventType?: string;
-  Payload?: { PaymentRef?: string; PaymentNumber?: string; ToBsb?: string; ToAccountNumber?: string };
-}
 
 // ┌─ :: RESILIENCE :: Events wake the workflow, polling is only the safety net ────────────────────
 // │ Why : A purchase should be allocated (or cancelled) as soon as its payment has an outcome, without
@@ -74,30 +68,20 @@ export class PaymentEventListener {
   }
 
   private async handle(client: Client, raw: string | undefined): Promise<void> {
-    if (!raw) return;
-    let event: PaymentEvent;
-    try {
-      event = JSON.parse(raw) as PaymentEvent;
-    } catch {
-      return;   // not JSON: nothing to pass on
-    }
-    const payload = event.Payload;
-    if (!event.EventType || !OUTCOMES.has(event.EventType) || !payload?.PaymentRef) return;
-    // Only payments to the Partner Bank's settlement account can belong to a purchase.
-    if (payload.ToBsb !== this.options.settlementBsb || payload.ToAccountNumber !== this.options.settlementAccountNumber) return;
-    if (!/^[0-9a-f-]{36}$/i.test(payload.PaymentRef)) return;
+    const payment = settledPaymentOf(raw, { bsb: this.options.settlementBsb, accountNumber: this.options.settlementAccountNumber });
+    if (!payment) return;
 
-    const purchaseNumber = await this.purchaseOf(payload.PaymentRef);
+    const purchaseNumber = await this.purchaseOf(payment.paymentRef);
     if (!purchaseNumber) return;   // a payment to the Partner Bank that no purchase started
 
     try {
       await client.workflow.getHandle(`gold-purchase-${purchaseNumber}`).signal(paymentSettledSignal);
-      console.log(`${event.EventType} ${payload.PaymentNumber ?? ''}: purchase ${purchaseNumber}'s workflow told to look again.`);
+      console.log(`${payment.eventType} ${payment.paymentNumber ?? ''}: purchase ${purchaseNumber}'s workflow told to look again.`);
     } catch (error) {
       // Already ended (e.g. the 5-minute check got there first after a restart) or not started
       // yet (it reads the payment on start): nothing to do - said once, so a log reads clearly.
       if (error instanceof WorkflowNotFoundError) {
-        console.log(`${event.EventType} ${payload.PaymentNumber ?? ''}: purchase ${purchaseNumber}'s workflow is not running (already ended, or not started yet) - nothing to tell it.`);
+        console.log(`${payment.eventType} ${payment.paymentNumber ?? ''}: purchase ${purchaseNumber}'s workflow is not running (already ended, or not started yet) - nothing to tell it.`);
         return;
       }
       throw error;

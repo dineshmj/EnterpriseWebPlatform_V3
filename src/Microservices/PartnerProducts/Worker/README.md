@@ -25,7 +25,7 @@ The Partner Products API is EWP's adapter to the Partner Bank: it holds the mutu
 | Temporal | `localhost:7233`, namespace `default`, task queue `partner-products`, workflow `goldPurchaseWorkflow` |
 | Health | https://localhost:46383/health/live, /health/ready (ready = polling Temporal; `paymentEvents` shows the listener: starting / running) |
 | Kafka | Consumer group `partner-products.worker` on `payments.payment.events`, user `ewp-partner-products-worker` (SCRAM-SHA-512 over TLS, CA `KAFKA_SSL_CA_LOCATION`), Confluent's `@confluentinc/kafka-javascript` |
-| Tests | `pnpm test` (Jest): `MachineToken` with real key files and a stand-in IDP - no platform, no WireMock (see [tst/README.md](../../../../tst/README.md)) |
+| Tests | `pnpm test` (Jest): `MachineToken` with real key files and a stand-in IDP - no platform, no WireMock (see [tst/README.md](../../../../tst/README.md)); the consumer contract with the Payments API (Pact: the payment events the listener reads, the outcome read) in [test/contracts](test/contracts), written to `tst/contracts/pacts` ([tst/contracts/README.md](../../../../tst/contracts/README.md)) |
 | Identity | Machine client `PartnerProducts.Worker.M2M.ClientID` (client credentials, `private_key_jwt`, DPoP-bound tokens): `payments.read`, `partner-products.write` |
 
 ## Security controls

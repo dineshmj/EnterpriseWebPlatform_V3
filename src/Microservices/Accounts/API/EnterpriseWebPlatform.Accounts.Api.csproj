@@ -7,6 +7,10 @@
     <AssemblyName>EnterpriseWebPlatform.Accounts.Api</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
+    <!-- ARCH: the provider contract tests build real Outbox messages through the (internal) message mappers. -->
+    <InternalsVisibleTo Include="EnterpriseWebPlatform.Accounts.Api.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Confluent.Kafka" Version="2.16.0" />
     <PackageReference Include="Duende.AspNetCore.Authentication.JwtBearer" Version="1.0.2" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.14" />

@@ -1,0 +1,409 @@
+{
+  "consumer": {
+    "name": "accounts-command-subscriber"
+  },
+  "interactions": [
+    {
+      "contents": {
+        "content": {
+          "CorrelationId": "0199f2a4-6c1e-7b3a-9d42-000000000003",
+          "EventType": "ReleaseFunds",
+          "InitiatedByUserId": "sub-sophie",
+          "MessageId": "0199f2a4-6c1e-7b3a-9d42-000000000001",
+          "Payload": {
+            "AccountNumber": "72947086",
+            "Amount": 140.25,
+            "BranchCode": "SYD001",
+            "Bsb": "062-000",
+            "Currency": "AUD",
+            "CustomerNumber": "CUST-100001",
+            "PaymentNumber": "PAY-261015-TEST01",
+            "PaymentRef": "0199f2a4-6c1e-7b3a-9d42-5e8f1a2b3c4d"
+          },
+          "WorkflowId": "0199f2a4-6c1e-7b3a-9d42-000000000003"
+        },
+        "contentType": "application/json",
+        "encoded": false
+      },
+      "description": "a ReleaseFunds command",
+      "matchingRules": {
+        "body": {
+          "$.CorrelationId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          },
+          "$.InitiatedByUserId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.MessageId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          },
+          "$.Payload.AccountNumber": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.Amount": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "number"
+              }
+            ]
+          },
+          "$.Payload.BranchCode": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.Bsb": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.Currency": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.CustomerNumber": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.PaymentNumber": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.PaymentRef": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          },
+          "$.WorkflowId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          }
+        }
+      },
+      "pending": false,
+      "type": "Asynchronous/Messages"
+    },
+    {
+      "contents": {
+        "content": {
+          "CorrelationId": "0199f2a4-6c1e-7b3a-9d42-000000000003",
+          "EventType": "ReserveFunds",
+          "InitiatedByUserId": "sub-sophie",
+          "MessageId": "0199f2a4-6c1e-7b3a-9d42-000000000001",
+          "Payload": {
+            "AccountNumber": "72947086",
+            "Amount": 140.25,
+            "BranchCode": "SYD001",
+            "Bsb": "062-000",
+            "Currency": "AUD",
+            "CustomerNumber": "CUST-100001",
+            "PaymentNumber": "PAY-261015-TEST01",
+            "PaymentRef": "0199f2a4-6c1e-7b3a-9d42-5e8f1a2b3c4d"
+          },
+          "WorkflowId": "0199f2a4-6c1e-7b3a-9d42-000000000003"
+        },
+        "contentType": "application/json",
+        "encoded": false
+      },
+      "description": "a ReserveFunds command",
+      "matchingRules": {
+        "body": {
+          "$.CorrelationId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          },
+          "$.InitiatedByUserId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.MessageId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          },
+          "$.Payload.AccountNumber": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.Amount": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "number"
+              }
+            ]
+          },
+          "$.Payload.BranchCode": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.Bsb": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.Currency": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.CustomerNumber": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.PaymentNumber": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.PaymentRef": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          },
+          "$.WorkflowId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          }
+        }
+      },
+      "pending": false,
+      "type": "Asynchronous/Messages"
+    },
+    {
+      "contents": {
+        "content": {
+          "CorrelationId": "0199f2a4-6c1e-7b3a-9d42-000000000003",
+          "EventType": "SettleFunds",
+          "InitiatedByUserId": "sub-sophie",
+          "MessageId": "0199f2a4-6c1e-7b3a-9d42-000000000001",
+          "Payload": {
+            "AccountNumber": "72947086",
+            "Amount": 140.25,
+            "BranchCode": "SYD001",
+            "Bsb": "062-000",
+            "Currency": "AUD",
+            "CustomerNumber": "CUST-100001",
+            "PaymentNumber": "PAY-261015-TEST01",
+            "PaymentRef": "0199f2a4-6c1e-7b3a-9d42-5e8f1a2b3c4d"
+          },
+          "WorkflowId": "0199f2a4-6c1e-7b3a-9d42-000000000003"
+        },
+        "contentType": "application/json",
+        "encoded": false
+      },
+      "description": "a SettleFunds command",
+      "matchingRules": {
+        "body": {
+          "$.CorrelationId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          },
+          "$.InitiatedByUserId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.MessageId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          },
+          "$.Payload.AccountNumber": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.Amount": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "number"
+              }
+            ]
+          },
+          "$.Payload.BranchCode": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.Bsb": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.Currency": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.CustomerNumber": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.PaymentNumber": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.PaymentRef": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          },
+          "$.WorkflowId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          }
+        }
+      },
+      "pending": false,
+      "type": "Asynchronous/Messages"
+    }
+  ],
+  "metadata": {
+    "pactRust": {
+      "ffi": "0.4.27",
+      "models": "1.2.8"
+    },
+    "pactSpecification": {
+      "version": "4.0"
+    }
+  },
+  "provider": {
+    "name": "payments-api"
+  }
+}
