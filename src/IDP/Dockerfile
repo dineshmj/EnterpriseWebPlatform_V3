@@ -12,7 +12,7 @@
 # │         SigningCredential__CertificatePath / __CertificatePassword - the token-signing PFX
 # │           (outside Development the IDP refuses to start without it; no developer key),
 # │         ClientKeys__<client id> - path of each private_key_jwt client's PUBLIC JWK,
-# │         ClientSecrets__<client id> - each confidential client's secret,
+# │         ClientSecrets__<client id> - Grafana's only (a third party; every EWP client has a key),
 # │         ConnectionStrings__IdentityDbConnection - users, sessions, keys, PAR requests.
 # │       .dockerignore keeps tempkey*.jwk, keys/ and appsettings.Development.json out.
 # │ Ref : doc/Containers.md | Features 1.6.5, 2.4.5 | OWASP A02, A05, A08 | Threat-Model R-10

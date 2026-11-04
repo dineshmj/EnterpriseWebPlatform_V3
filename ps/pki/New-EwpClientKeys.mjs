@@ -33,12 +33,17 @@ const clients = [
   'notifications-subscriber-client',
   'accounts-command-subscriber-client',
   'payments-saga-reply-subscriber-client',
+  // The Partner Products Worker's machine identity (client credentials, Temporal).
+  'partner-products-worker-client',
+  // The staff Journey APIs (token exchange only): no client secret either.
+  'audit-journey-api-client', 'operations-journey-api-client', 'partner-products-journey-api-client',
 ];
 
 // ┌─ SEC ──────────────────────────────────────────────────────────────────────────────────────────
-// │ DPoP keys: the staff web apps, the Journey APIs that exchange tokens and the Kafka
-// │ subscribers (their machine tokens). A key of its own, not the client key: proving "I hold
-// │ this token" and "I am this client" stay separate, and one can be replaced without the other.
+// │ DPoP keys: the staff web apps, the Journey APIs that exchange tokens, the Kafka subscribers
+// │ and the Partner Products Worker (their machine tokens). A key of its own, not the client
+// │ key: proving "I hold this token" and "I am this client" stay separate, and one can be
+// │ replaced without the other.
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 const dpopKeys = [
   'shell-web-dpop', 'customer-onboarding-web-dpop', 'customer-kyc-web-dpop', 'compliance-web-dpop',
@@ -53,6 +58,7 @@ const dpopKeys = [
   'notifications-subscriber-dpop',
   'accounts-command-subscriber-dpop',
   'payments-saga-reply-subscriber-dpop',
+  'partner-products-worker-dpop',
 ];
 
 const [folder, ...flags] = process.argv.slice(2);

@@ -18,7 +18,7 @@ public sealed class PartnerProductsWorkerM2M
         {
             ClientId = ClientSettings.Ids.PartnerProductsWorker,
             ClientName = "Partner Products Worker (Temporal) M2M Client",
-            ClientSecrets = { ClientSecretStore.For(ClientSettings.Ids.PartnerProductsWorker) },
+            ClientSecrets = { ClientKeyStore.For(ClientSettings.Ids.PartnerProductsWorker) },
             // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
             // │ Client credentials, no person: the worker never acts FOR a staff member (it is
             // │ not on the token-exchange allow-list). Two scopes for its one purpose; the scopes
@@ -26,6 +26,13 @@ public sealed class PartnerProductsWorkerM2M
             // │ (every staff endpoint also needs a person's permission and branch).
             // └──────────────────────────────────────────────────────────────────────────────────────
             AllowedGrantTypes = GrantTypes.ClientCredentials,
+            // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+            // │ private_key_jwt and DPoP (FAPI 2.0): the worker proves itself with a one-time
+            // │ assertion signed by its own key (the IDP holds only the public key - no shared
+            // │ secret), and every token is bound to its DPoP key (cnf.jkt), so a token copied
+            // │ from a log or a proxy cannot be used by anyone else.
+            // └──────────────────────────────────────────────────────────────────────────────────────
+            RequireDPoP = true,
             AllowedScopes = { "payments.read", "partner-products.write" },
             AccessTokenLifetime = 300
         };

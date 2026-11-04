@@ -18,7 +18,9 @@ export interface JourneyOptions {
 
   /** This API's identity at the IDP. Its only grant is token exchange. */
   clientId: string;
-  clientSecret: string;
+  /** This API's client key (private_key_jwt; encrypted PKCS#8 PEM) and the file holding its password (client-key.service.ts). */
+  clientKeyPath: string;
+  clientKeyPasswordPath: string;
   /** This API's DPoP key (encrypted PKCS#8 PEM) and the file holding its password (dpop-key.service.ts). */
   dpopKeyPath: string;
   dpopKeyPasswordPath: string;
@@ -53,7 +55,8 @@ export function loadOptions(): JourneyOptions {
     audience: required('AUDIT_JOURNEY_AUDIENCE'),
     callerClientId: required('AUDIT_JOURNEY_CALLER_CLIENT_ID'),
     clientId: required('AUDIT_JOURNEY_CLIENT_ID'),
-    clientSecret: required('AUDIT_JOURNEY_CLIENT_SECRET'),
+    clientKeyPath: required('AUDIT_JOURNEY_CLIENT_KEY_PATH'),
+    clientKeyPasswordPath: required('AUDIT_JOURNEY_CLIENT_KEY_PASSWORD_PATH'),
     dpopKeyPath: required('AUDIT_JOURNEY_DPOP_KEY_PATH'),
     dpopKeyPasswordPath: required('AUDIT_JOURNEY_DPOP_KEY_PASSWORD_PATH'),
     auditApiBaseUrl: required('AUDIT_API_BASE_URL').replace(/\/$/, ''),

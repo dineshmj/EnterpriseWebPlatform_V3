@@ -11,10 +11,17 @@ export interface WorkerOptions {
   temporalNamespace: string;
   taskQueue: string;
 
-  /** The IDP, and this worker's own machine client (client credentials). */
+  /**
+   * The IDP, and this worker's own machine client (client credentials): its client key
+   * (private_key_jwt) and its DPoP key, each an encrypted PKCS#8 PEM with its password in a file of
+   * its own (machine-token.ts).
+   */
   authority: string;
   clientId: string;
-  clientSecret: string;
+  clientKeyPath: string;
+  clientKeyPasswordPath: string;
+  dpopKeyPath: string;
+  dpopKeyPasswordPath: string;
 
   /** The two APIs whose internal endpoints pin this worker's client ID. */
   partnerProductsApiBaseUrl: string;
@@ -49,7 +56,7 @@ function required(name: string): string {
 }
 
 // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
-// │ Every API and the IDP over https only: the worker sends its bearer tokens there.
+// │ Every API and the IDP over https only: the worker sends its tokens and assertions there.
 // └──────────────────────────────────────────────────────────────────────────────────────
 function httpsUrl(name: string): string {
   const value = required(name).replace(/\/$/, '');
@@ -79,7 +86,10 @@ export function loadOptions(): WorkerOptions {
     taskQueue: required('PARTNER_PRODUCTS_TEMPORAL_TASK_QUEUE'),
     authority: httpsUrl('PARTNER_PRODUCTS_WORKER_IDP_AUTHORITY'),
     clientId: required('PARTNER_PRODUCTS_WORKER_CLIENT_ID'),
-    clientSecret: required('PARTNER_PRODUCTS_WORKER_CLIENT_SECRET'),
+    clientKeyPath: required('PARTNER_PRODUCTS_WORKER_CLIENT_KEY_PATH'),
+    clientKeyPasswordPath: required('PARTNER_PRODUCTS_WORKER_CLIENT_KEY_PASSWORD_PATH'),
+    dpopKeyPath: required('PARTNER_PRODUCTS_WORKER_DPOP_KEY_PATH'),
+    dpopKeyPasswordPath: required('PARTNER_PRODUCTS_WORKER_DPOP_KEY_PASSWORD_PATH'),
     partnerProductsApiBaseUrl: httpsUrl('PARTNER_PRODUCTS_API_BASE_URL'),
     paymentsApiBaseUrl: httpsUrl('PAYMENTS_API_BASE_URL'),
     kafkaBootstrapServers: required('KAFKA_BOOTSTRAP_SERVERS'),

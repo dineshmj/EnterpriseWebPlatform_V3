@@ -37,12 +37,14 @@
                                               PEM), the public key as a JWK that the IDP registers. Made by
                                               New-EwpClientKeys.mjs (needs Node.js) - stay on this laptop
 
-        <subscriber>-client.key.pem + .password  the client keys of the 8 Kafka subscribers (their
-        <subscriber>-client.public.jwk           machine identities, private_key_jwt): same shape and
-                                              script as above - stay on this laptop
+        <subscriber>-client.key.pem + .password  the client keys of the 8 Kafka subscribers, the
+        <subscriber>-client.public.jwk           Partner Products Worker (their machine identities)
+                                              and the 3 staff Journey APIs (private_key_jwt): same
+                                              shape and script as above - stay on this laptop
 
         <app>-dpop.key.pem + .password        the DPoP keys (RFC 9449) of the staff web apps, the
-                                              Journey APIs and the Kafka subscribers: EC P-256, private
+                                              Journey APIs, the Kafka subscribers and the Partner
+                                              Products Worker: EC P-256, private
                                               part only (no one registers the public one - each token
                                               names it); apart from the client keys. Same script - stay
                                               on this laptop
@@ -197,8 +199,8 @@ finally {
 # ---------------------------------------------------------------------- client keys (private_key_jwt)
 
 # ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
-# │ The staff web apps, the customers' channel and the Kafka subscribers authenticate to the
-# │ IDP with private_key_jwt (FAPI 2.0): plain key pairs, no certificate - the IDP trusts the
+# │ The staff web apps and Journey APIs, the customers' channel, the Kafka subscribers and the
+# │ Partner Products Worker authenticate to the IDP with private_key_jwt (FAPI 2.0): plain key pairs, no certificate - the IDP trusts the
 # │ registered PUBLIC key, not a CA. The DPoP keys (RFC 9449) are made here too. Node.js writes
 # │ them (PowerShell 5.1 cannot export PKCS#8 PEM); a new client key needs an IDP restart, a new
 # │ DPoP key the app's (its people sign in again) or the worker's.
@@ -212,7 +214,7 @@ if ($node) {
     if ($LASTEXITCODE -ne 0) { throw 'New-EwpClientKeys.mjs failed.' }
 }
 else {
-    Write-Warning 'Node.js is not on PATH: the client keys and DPoP keys (web apps, My EWP, Kafka subscribers) were NOT created.'
+    Write-Warning 'Node.js is not on PATH: the client keys and DPoP keys (web apps, Journey APIs, My EWP, Kafka subscribers, Partner Products Worker) were NOT created.'
 }
 
 Write-Host ''

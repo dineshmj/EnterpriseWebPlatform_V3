@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit && tsc --noEmit -p test/tsconfig.json",
+    "test": "jest --runInBand"
   },
   "dependencies": {
     "@confluentinc/kafka-javascript": "1.11.0",
@@ -17,7 +18,25 @@
     "@temporalio/workflow": "1.25.0"
   },
   "devDependencies": {
+    "@types/jest": "30.0.0",
     "@types/node": "24.5.2",
+    "jest": "30.5.2",
+    "ts-jest": "29.4.15",
     "typescript": "5.9.2"
+  },
+  "jest": {
+    "rootDir": ".",
+    "roots": ["<rootDir>/test"],
+    "testEnvironment": "node",
+    "testRegex": "\\.spec\\.ts$",
+    "transform": {
+      "^.+\\.ts$": [
+        "ts-jest",
+        {
+          "tsconfig": "<rootDir>/test/tsconfig.json"
+        }
+      ]
+    },
+    "testTimeout": 20000
   }
 }

@@ -123,8 +123,8 @@ vulnerabilities and hotspots are still reported on each pull request.
 **Test coverage for SonarQube Cloud (since 29-OCT-2026).** The SonarQube Cloud job runs the unit
 tests a second time, for coverage only: the .NET tests (`tst/dotnet/EwpTests.slnx`) inside the
 scanner with coverlet writing OpenCover, and the Jest tests of every Node project with a `test`
-script writing lcov (the Journey APIs' Jest `rootDir` is the project, `roots` is `test`, so the
-code under `src` is measured). Left out of the coverage count (`sonar.coverage.exclusions`):
+script writing lcov (the Journey APIs' and the Partner Products Worker's Jest `rootDir` is the
+project, `roots` is `test`, so the code under `src` is measured). Left out of the coverage count (`sonar.coverage.exclusions`):
 start-up (`Program.cs`, the Journey APIs' `main.ts`), the BFFs and their client apps and the
 Shell (tested end to end by Playwright, which SonarQube Cloud cannot count), the simulators, the
 tests, scripts and deployment files. Domain APIs and workflows without unit tests stay in the

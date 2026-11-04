@@ -85,11 +85,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
 
         // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
-        // │ A person's token must be DPoP-bound (cnf): every client that signs a person in, or
-        // │ exchanges a token for one, must use DPoP at the IDP - so a person's token without
-        // │ cnf came from elsewhere (copied, or an unbound client) and is refused. Machine
-        // │ tokens (no sub) stay Bearer. Authentication:BearerPersonTokenClients names the only
-        // │ exceptions: in Development, Bruno (API testing, cannot sign proofs); elsewhere none.
+        // │ EVERY token must be DPoP-bound (cnf), a person's or a machine's: every EWP client -
+        // │ the web apps, the Journey APIs, the Kafka subscribers, the Partner Products Worker
+        // │ and the IDP's own customer directory - must use DPoP, so a token without cnf came
+        // │ from elsewhere (copied, or an unbound client) and is refused.
+        // │ Authentication:BearerPersonTokenClients names the only exceptions: in Development,
+        // │ Bruno (API testing, cannot sign proofs); elsewhere none.
         // └──────────────────────────────────────────────────────────────────────────────────────
         var bearerPersonTokenClients = builder.Configuration.GetSection("Authentication:BearerPersonTokenClients").Get<string[]>() ?? [];
         options.Events = new JwtBearerEvents
@@ -98,11 +99,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             OnTokenValidated = context =>
             {
                 var principal = context.Principal!;
-                if (principal.HasClaim(c => c.Type == "sub") &&
-                    !principal.HasClaim(c => c.Type == "cnf") &&
+                if (!principal.HasClaim(c => c.Type == "cnf") &&
                     !bearerPersonTokenClients.Contains(principal.FindFirst("client_id")?.Value))
                 {
-                    context.Fail("A person's token must be DPoP-bound (cnf).");
+                    context.Fail("The token must be DPoP-bound (cnf).");
                 }
                 return Task.CompletedTask;
             }
@@ -110,16 +110,17 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
-// │ DPoP (RFC 9449, FAPI 2.0): a token bound to a key (cnf.jkt - the staff web apps')
+// │ DPoP (RFC 9449, FAPI 2.0): a token bound to a key (cnf.jkt - every EWP client's)
 // │ passes only as "Authorization: DPoP" with a fresh proof signed by that key, for this
 // │ very method and address, carrying the token's hash (ath), at most ~30 s old (5 s +
 // │ 25 s clock skew) and used once. The same bound token sent as Bearer is refused, so a
-// │ copied token is useless without the key. Machine tokens (client credentials) stay
-// │ Bearer.
+// │ copied token is useless without the key. The "Bearer" scheme itself is accepted only
+// │ while Authentication:BearerPersonTokenClients names an exception (Bruno, Development);
+// │ elsewhere every call must say "DPoP".
 // └──────────────────────────────────────────────────────────────────────────────────────
 builder.Services.ConfigureDPoPTokensForScheme(JwtBearerDefaults.AuthenticationScheme, options =>
 {
-    options.AllowBearerTokens = true;
+    options.AllowBearerTokens = builder.Configuration.GetSection("Authentication:BearerPersonTokenClients").Get<string[]>() is { Length: > 0 };
     options.ProofTokenLifetime = TimeSpan.FromSeconds(5);
     options.ProofTokenIssuedAtClockSkew = TimeSpan.FromSeconds(25);
 });

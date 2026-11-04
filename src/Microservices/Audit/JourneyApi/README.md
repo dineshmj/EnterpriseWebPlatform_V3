@@ -56,50 +56,21 @@ Downstream answers are mapped, never passed through: 401/403 → 403, 404 → 40
    dotnet dev-certs https -ep "$env:USERPROFILE\.aspnet\https\ewp-v3-dev.pem" --format Pem --no-password
    ```
 2. Hosts file: `127.0.0.1    audit-journey.dev.localhost`.
-3. `runnow.bat` (installs, builds and starts; the development client secret is set there - elsewhere supply `AUDIT_JOURNEY_CLIENT_SECRET` from a secret store). Every setting is an environment variable: `src/configuration/journey-options.ts`. A missing one stops the start-up. `.\ps\run\Start-NodeServices.ps1` in the repository root starts it with the other Node services.
+3. `runnow.bat` (installs, builds and starts; it names the development key files made by `ps\pki\New-EwpLocalPki.ps1` - this API's client key and its DPoP key - elsewhere they are mounted from a secret store). Every setting is an environment variable: `src/configuration/journey-options.ts`. A missing one stops the start-up. `.\ps\run\Start-NodeServices.ps1` in the repository root starts it with the other Node services.
 4. Debugging: `runnow.bat dev` in VS Code's **JavaScript Debug Terminal** runs it in watch mode with source maps - breakpoints in the TypeScript sources are hit, and a saved change restarts it.
 
 ## Try the refusals
 
-The happy path is the Audit Trail screen (sign in as `sarah.audit`). The refusals can be checked directly (PowerShell, IDP running):
+The happy path is the Audit Trail screen (sign in as `sarah.audit`). The refusals are no longer a hand-run PowerShell script: every EWP client now proves itself with a signed `private_key_jwt` assertion and DPoP proofs (no secret to paste into a request), so the Playwright suite plays the clients instead (IDP and APIs running):
 
 ```powershell
-# From the repository root. Show-Refusal prints the status and the body of a refused request
-# (Windows PowerShell 5.1 hides it otherwise).
-function Show-Refusal($label, [scriptblock] $call) {
-  try { & $call | Out-Null; "$label -> SUCCEEDED (unexpected!)" }
-  catch {
-    $r = $_.Exception.Response
-    if ($r) { "$label -> HTTP {0}: {1}" -f [int]$r.StatusCode, (New-Object IO.StreamReader($r.GetResponseStream())).ReadToEnd() }
-    else { "$label -> " + $_.Exception.Message }
-  }
-}
-
-$idp = 'https://idp.dev.localhost:46392/connect/token'
-$secrets = (Get-Content .\src\IDP\appsettings.Development.json -Raw | ConvertFrom-Json).ClientSecrets
-$journey = @{ client_id='Audit.JourneyApi.ClientID'; client_secret=$secrets.'Audit.JourneyApi.ClientID' }
-
-Show-Refusal '1 client credentials' { Invoke-RestMethod $idp -Method Post -Body ($journey + @{ grant_type='client_credentials' }) }
-
-$machine = (Invoke-RestMethod $idp -Method Post -Body @{ grant_type='client_credentials'; client_id='Notifications.Subscriber.To.NotificationsApi.M2M.ClientID'; client_secret=$secrets.'Notifications.Subscriber.To.NotificationsApi.M2M.ClientID'; scope='notifications.write' }).access_token
-"machine token obtained: " + [bool]$machine
-
-Show-Refusal '2 exchange machine token' { Invoke-RestMethod $idp -Method Post -Body ($journey + @{ grant_type='urn:ietf:params:oauth:grant-type:token-exchange'; subject_token=$machine; subject_token_type='urn:ietf:params:oauth:token-type:access_token'; scope='audit.read' }) }
-Show-Refusal '3 Audit API' { Invoke-WebRequest https://audit-api.dev.localhost:46378/v1/audit/integrity -UseBasicParsing -Headers @{ Authorization = "Bearer $machine" } }
-Show-Refusal '4 Journey API' { Invoke-WebRequest https://audit-journey.dev.localhost:46379/v1/journeys/audit/integrity -UseBasicParsing -Headers @{ Authorization = "Bearer $machine" } }
+cd tst\playwright
+pnpm exec playwright test 40-security/api/token-exchange-allow-list.spec.ts 40-security/api/dpop-bound-tokens.spec.ts
 ```
 
-Expected - every line a refusal:
-
-```text
-1 client credentials -> HTTP 400: {"error":"unauthorized_client"}
-machine token obtained: True
-2 exchange machine token -> HTTP 400: {"error":"invalid_grant","error_description":"The subject token has no person (sub)."}
-3 Audit API -> HTTP 401:
-4 Journey API -> HTTP 401:
-```
-
-`invalid_client` on 1 or 2 means the IDP running is older than this step; "Unable to connect" means that service is not running; any `SUCCEEDED` is a real problem.
+- `token-exchange-allow-list.spec.ts`: a machine token (no person) cannot be exchanged - by a Journey API or a web app; a Journey API cannot exchange a sign-in token directly; a client without the token-exchange grant is refused.
+- `dpop-bound-tokens.spec.ts`: a bound token sent as `Bearer`, a replayed proof and a proof for another address are refused - at a Domain API, at a Journey API, and for the machines (a Kafka subscriber, the Partner Products Worker).
+- This API's own guard (a bearer or unbound token, a missing or wrong proof = 401): `pnpm test` (`test/dpop-proof.verifier.spec.ts`).
 
 ## Security controls
 
@@ -117,8 +88,9 @@ What this project does to stay secure: each control, what would go wrong without
 | 8 | No default for any security setting: audience, permitted caller and own client must be configured | A copied default could accept tokens meant for another service | Misconfiguration (OWASP A05) | [journey-options.ts](src/configuration/journey-options.ts) |
 | 9 | Container image: CI builds the API from the committed lockfile (`--frozen-lockfile`) - never a local build; production dependencies only; distroless Node runtime (no shell, no package manager - no apt, npm, npx, corepack or yarn), as the non-root user 65532 with its files read-only to it; base images pinned by tag and digest, scanned before it is published (HIGH / CRITICAL with a fix, or any secret, fails); no secret inside - every setting comes from the environment, and `runnow.bat` and key material never enter the build | A developer-built image could carry anything; a package manager in a container helps an attacker who gets in; a secret in a layer stays in the registry for good | Supply-chain tampering (OWASP A08); vulnerable components (A06); hard-coded credentials (CWE-798) | [Dockerfile](Dockerfile), [.dockerignore](../../../../.dockerignore), [container-images.yml](../../../../.github/workflows/container-images.yml), [doc/Containers.md](../../../../doc/Containers.md) |
 | 10 | TLS here or at the platform, never neither by accident: `AUDIT_JOURNEY_PLAIN_HTTP=true` (the image sets it) listens on plain HTTP 8080 - TLS between pods comes from the platform (service mesh mTLS); otherwise the development certificate (`AUDIT_JOURNEY_TLS_PFX_PATH`) is required, and both set refuse to start | A missing setting could quietly open plain HTTP | Misconfiguration (OWASP A05); cleartext transmission (CWE-319) | [listener-tls.ts](src/configuration/listener-tls.ts) |
-| 11 | No redirect followed: the calls to the IDP's token endpoint and to the Audit and Payments APIs refuse a redirect (`redirect: 'error'` - an error, so "unavailable") | A domain API's 302 would carry the exchanged token to its `Location`; an IDP's 307 would re-send the token-exchange form (client secret, the auditor's token) there | Credential leak to another host; SSRF-style redirection (CWE-601) | [domain-api.client.ts](src/services/domain-api.client.ts), [token-exchange.service.ts](src/services/token-exchange.service.ts); `pnpm test` (WireMock) |
+| 11 | No redirect followed: the calls to the IDP's token endpoint and to the Audit and Payments APIs refuse a redirect (`redirect: 'error'` - an error, so "unavailable") | A domain API's 302 would carry the exchanged token to its `Location`; an IDP's 307 would re-send the token-exchange form (client assertion, the auditor's token) there | Credential leak to another host; SSRF-style redirection (CWE-601) | [domain-api.client.ts](src/services/domain-api.client.ts), [token-exchange.service.ts](src/services/token-exchange.service.ts); `pnpm test` (WireMock) |
 | 12 | DPoP only, both ways (RFC 9449 - FAPI 2.0). In: only `Authorization: DPoP` with a token bound to a key (`cnf.jkt`) and a valid proof - exactly one `DPoP` header, `typ` `dpop+jwt`, ES256 / PS256, signed by the public key it carries, `htm` / `htu` = this request (no query; the caller's address or the configured public origin), `iat` within 5 s (+25 s skew either way), `ath` = the token's hash, the key's thumbprint = `cnf.jkt`, its `jti` used once (replay cache in this instance's memory); a bearer token, an unbound token or any miss = 401. Out: this API's own DPoP key (read at start-up - missing = no start-up) signs a proof on each exchange, so the token it gets for the Audit and Payments APIs is bound to THIS API, and a new proof goes with every call | A token copied from the web app's or this API's memory or logs could be replayed here or downstream until it expires | Token theft and replay (OWASP A07 / API2) | [dpop-proof.verifier.ts](src/auth/dpop-proof.verifier.ts), [delegated-token.guard.ts](src/auth/delegated-token.guard.ts), [dpop-key.service.ts](src/auth/dpop-key.service.ts), [token-exchange.service.ts](src/services/token-exchange.service.ts), [domain-api.client.ts](src/services/domain-api.client.ts); UT `test/dpop-proof.verifier.spec.ts` (each rule mutation-checked); Playwright `40-security/api/dpop-bound-tokens.spec.ts` |
+| 13 | No client secret (`private_key_jwt`, FAPI 2.0): every token exchange carries a new assertion signed with this API's own EC P-256 client key (read at start-up - missing, another curve, or the DPoP key used twice = no start-up): `iss` = `sub` = its client ID, `aud` = the IDP's issuer only (read from its discovery document; a failed discovery = 503, no token request), `typ` `client-authentication+jwt`, 60 s, a new `jti`. The IDP holds only the public key | A secret in this API's settings, sent with every exchange and known to the IDP too, would let anyone who reads it exchange tokens as this API | Client impersonation (OWASP A07 / API2; Threat-Model R-10) | [client-key.service.ts](src/auth/client-key.service.ts), [app.module.ts](src/app.module.ts), [token-exchange.service.ts](src/services/token-exchange.service.ts); `pnpm test` (`test/domain-api.client.spec.ts`) |
 
 ## Not yet
 

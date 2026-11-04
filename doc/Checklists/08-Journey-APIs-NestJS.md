@@ -19,6 +19,7 @@ Deployables: `src/Microservices/Audit/JourneyApi`, `src/Microservices/Operations
 ## 2. Calls further down
 
 - [x] **The tokens it obtains are bound to its own DPoP key:** the exchange carries a proof, and every Domain API call `Authorization: DPoP` with a fresh one. → `src/auth/dpop-key.service.ts`, `src/services/token-exchange.service.ts`
+- [x] **No client secret** (`private_key_jwt`, FAPI 2.0): every exchange carries a one-time assertion signed by its own client key (`aud` = the IDP's issuer from discovery, 60 s, new `jti`); the client key is not the DPoP key; no start-up without it. *Because* a secret in the settings, sent with every exchange, would let anyone who reads it exchange tokens as this API. → `src/auth/client-key.service.ts`
 - [x] **The second token exchange:** one token per downstream scope, with this API added to the `act` chain. An IDP refusal becomes 403, an IDP outage 503. → Audit `src/services/token-exchange.service.ts`
 - [x] **Downstream answers are translated** (401 / 403 → 403, 404 → 404, anything else → 503), with timeouts on every call. *Because* raw downstream errors would leak internals. → Audit `src/services/domain-api.client.ts`
 - [x] **Customer facts are read again, never taken from the screen** (Partner Products: name, mobile and KYC status from Customer Onboarding for every Form VII; the paying account from Accounts). → Partner Products `src/digital-gold/digital-gold.service.ts`
@@ -47,5 +48,5 @@ Deployables: `src/Microservices/Audit/JourneyApi`, `src/Microservices/Operations
 ## 5. Production (open)
 
 - [ ] **Shared token fixtures.** The guard and the .NET handlers pass the same fixtures (R-11; the parity checklist is in Threat-Model §4, TB3).
-- [ ] **Secret store.** Client secrets and TLS passwords come from a secret store (R-10).
+- [ ] **Secret store.** The client key, the DPoP key and TLS passwords come from a secret store (R-10; the cloud demo mounts them from Key Vault).
 - [ ] **Deployment-wide rate limits.** A gateway or shared store enforces them across instances (R-14).

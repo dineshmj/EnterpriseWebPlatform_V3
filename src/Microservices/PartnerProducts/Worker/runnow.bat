@@ -28,13 +28,18 @@ set "PARTNER_PRODUCTS_TEMPORAL_TASK_QUEUE=partner-products"
 
 REM +- SEC --------------------------------------------------------------------------------
 REM | This worker's own MACHINE client (client credentials): only the internal endpoints that
-REM | pin its client ID accept it. The secret below is a DEVELOPMENT value; elsewhere it
-REM | comes from the environment or a secret store (Threat-Model R-10).
+REM | pin its client ID accept it. No secret: it proves itself with its client key
+REM | (private_key_jwt - the IDP holds only the public key) and every token is bound to its
+REM | DPoP key. DEVELOPMENT key files (New-EwpClientKeys.mjs); elsewhere mounted from a
+REM | secret store (Threat-Model R-10).
 REM +--------------------------------------------------------------------------------------
 set "PARTNER_PRODUCTS_WORKER_IDP_AUTHORITY=https://idp.dev.localhost:46392"
 REM Must equal ClientIds:PartnerProductsWorker in src\IDP\appsettings.json (where the IDP registers that client).
 set "PARTNER_PRODUCTS_WORKER_CLIENT_ID=PartnerProducts.Worker.M2M.ClientID"
-set "PARTNER_PRODUCTS_WORKER_CLIENT_SECRET=e6b2c9d4-3f71-4a85-9c0e-81d5a7f3b246"
+set "PARTNER_PRODUCTS_WORKER_CLIENT_KEY_PATH=%USERPROFILE%\.ewp-pki\partner-products-worker-client.key.pem"
+set "PARTNER_PRODUCTS_WORKER_CLIENT_KEY_PASSWORD_PATH=%USERPROFILE%\.ewp-pki\partner-products-worker-client.key.pem.password"
+set "PARTNER_PRODUCTS_WORKER_DPOP_KEY_PATH=%USERPROFILE%\.ewp-pki\partner-products-worker-dpop.key.pem"
+set "PARTNER_PRODUCTS_WORKER_DPOP_KEY_PASSWORD_PATH=%USERPROFILE%\.ewp-pki\partner-products-worker-dpop.key.pem.password"
 
 REM Development: the API addresses below go through the fault proxy (ps\toxiproxy\toxiproxy.json,
 REM ports 47101-47111) so operations can cut them; elsewhere use each API's own address.

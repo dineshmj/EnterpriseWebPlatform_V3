@@ -14,7 +14,7 @@ public sealed class PartnerProductsJourneyApiTokenExchange
         {
             ClientId = ClientSettings.Ids.PartnerProductsJourneyApi,
             ClientName = "Partner Products Journey API Client",
-            ClientSecrets = { ClientSecretStore.For(ClientSettings.Ids.PartnerProductsJourneyApi) },
+            ClientSecrets = { ClientKeyStore.For(ClientSettings.Ids.PartnerProductsJourneyApi) },
             // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
             // │ Token exchange ONLY - no client credentials: the Partner Products Journey API can
             // │ never call another API as itself, only for the signed-in staff member, whose own
@@ -25,7 +25,9 @@ public sealed class PartnerProductsJourneyApiTokenExchange
             // └──────────────────────────────────────────────────────────────────────────────────────
             AllowedGrantTypes = { OidcConstants.GrantTypes.TokenExchange },
             // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
-            // │ DPoP (RFC 9449): every token it gets is bound to ITS own DPoP key, so a token taken
+            // │ private_key_jwt and DPoP (FAPI 2.0): the Journey API proves itself with a one-time
+            // │ assertion signed by its own key (the IDP holds only the public key - no shared
+            // │ secret), and every token it gets is bound to ITS own DPoP key, so a token taken
             // │ from the Journey API's memory or logs cannot be replayed by anyone else.
             // └──────────────────────────────────────────────────────────────────────────────────────
             RequireDPoP = true,

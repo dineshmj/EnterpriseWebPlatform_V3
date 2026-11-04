@@ -32,7 +32,7 @@ export class PaymentEventListener {
   private temporal: Connection | null = null;
   state: ListenerState = 'starting';
 
-  constructor(private readonly options: WorkerOptions, private readonly tokens = new MachineToken(options)) {}
+  constructor(private readonly options: WorkerOptions, private readonly tokens: MachineToken) {}
 
   async start(): Promise<void> {
     this.temporal = await Connection.connect({ address: this.options.temporalAddress });
@@ -107,9 +107,9 @@ export class PaymentEventListener {
   /** The purchase that started this payment (its Idempotency-Key), from the Partner Products API. */
   private async purchaseOf(paymentRef: string): Promise<string | null> {
     const scope = 'partner-products.write';
-    const response = await fetch(
-      `${this.options.partnerProductsApiBaseUrl}/internal/v1/gold-purchases/by-payment-ref/${encodeURIComponent(paymentRef)}`,
-      { headers: { Authorization: `Bearer ${await this.tokens.for(scope)}`, Accept: 'application/json' }, signal: AbortSignal.timeout(10_000) });
+    const url = `${this.options.partnerProductsApiBaseUrl}/internal/v1/gold-purchases/by-payment-ref/${encodeURIComponent(paymentRef)}`;
+    const response = await fetch(url,
+      { headers: { ...await this.tokens.authorization(scope, 'GET', url), Accept: 'application/json' }, signal: AbortSignal.timeout(10_000) });
     if (response.status === 404) return null;
     if (response.status === 401) this.tokens.forget(scope);
     if (!response.ok) throw new Error(`HTTP ${response.status} looking up the purchase of a payment`);
