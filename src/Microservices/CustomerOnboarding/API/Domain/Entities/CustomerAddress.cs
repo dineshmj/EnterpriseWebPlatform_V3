@@ -55,6 +55,9 @@ public sealed class CustomerAddress : Entity
             now);
     }
 
+    /// <summary>Persistence only: the address of an entity just loaded (its lines are stored encrypted).</summary>
+    internal void RestoreAddress(PostalAddress address) => Address = address;
+
     internal void AssignToCustomer(long customerId, DateTimeOffset now)
     {
         if (customerId <= 0)

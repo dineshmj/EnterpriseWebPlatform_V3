@@ -37,6 +37,11 @@ kafka:
   # The Secret with one key per Kafka user (the key is the user name): its SCRAM password.
   usersSecret: ewp-kafka-users
 
+  # SEC: 7 days on every topic, dead-letter topics included - some events carry personal data,
+  # and every clear copy must end long before erasure can happen (crypto-shredding). Mirrors
+  # $RetentionMs in ps/kafka/Setup-KafkaSecurity.ps1.
+  retentionMs: 604800000
+
   # CONTRACT: ps/kafka/Setup-KafkaSecurity.ps1 ($Topics). Created explicitly; auto-creation is off.
   topics:
     - customer.created

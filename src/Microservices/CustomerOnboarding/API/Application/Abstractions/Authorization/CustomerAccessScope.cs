@@ -1,5 +1,8 @@
+using Microsoft.EntityFrameworkCore;
+
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Aggregates;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Enums;
+using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Privacy;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Authorization;
 
@@ -49,14 +52,16 @@ public static class CustomerAccessScopeQueryExtensions
         var city = scope.BranchCity.Trim().ToUpper();
         var countryCode = scope.BranchCountryCode.Trim().ToUpper();
 
+        // The address is stored with encrypted lines, so EF Core maps its readable parts as
+        // columns of their own (CustomerAddressConfiguration); the city and country are two of them.
         // CA1862 (string.Equals with a StringComparison) does not apply here: the lambda runs in
         // SQL as UPPER(city) = @city, and EF Core cannot translate a StringComparison.
 #pragma warning disable CA1862
         return customers.Where(customer => customer.Addresses.Any(address =>
             address.AddressType == AddressType.Residential &&
             address.IsPrimary &&
-            address.Address.City.ToUpper() == city &&
-            address.Address.CountryCode == countryCode));
+            EF.Property<string>(address, PersonalDataColumns.City).ToUpper() == city &&
+            EF.Property<string>(address, PersonalDataColumns.CountryCode) == countryCode));
 #pragma warning restore CA1862
     }
 }

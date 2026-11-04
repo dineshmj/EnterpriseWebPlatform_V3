@@ -16,6 +16,11 @@ public sealed class CustomerOutboxPublisherHostedService(
     private readonly TimeSpan _pollInterval =
         TimeSpan.FromSeconds(options.Value.PollIntervalSeconds);
 
+    // Blanking expired payloads is housekeeping: once an hour (and at start-up) is plenty.
+    private static readonly TimeSpan RedactionInterval = TimeSpan.FromHours(1);
+
+    private DateTimeOffset _nextRedaction = DateTimeOffset.MinValue;
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         logger.LogInformation("Customer Outbox Publisher started.");
@@ -31,6 +36,14 @@ public sealed class CustomerOutboxPublisherHostedService(
                     .GetRequiredService<ICustomerOutboxPublisher>();
 
                 await publisher.PublishPendingAsync(stoppingToken);
+
+                if (DateTimeOffset.UtcNow >= _nextRedaction)
+                {
+                    _nextRedaction = DateTimeOffset.UtcNow + RedactionInterval;
+                    var redacted = await publisher.RedactExpiredPayloadsAsync(stoppingToken);
+                    if (redacted > 0)
+                        logger.LogInformation("Blanked the payload of {Count} Outbox messages published more than {Days} days ago.", redacted, options.Value.PayloadRetentionDays);
+                }
             }
             catch (OperationCanceledException)
                 when (stoppingToken.IsCancellationRequested)

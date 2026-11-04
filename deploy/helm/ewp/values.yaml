@@ -504,6 +504,9 @@ components:
       Authentication__Authority: '{{ include "ewp.public" (list . "idp") }}'
     secretEnv:
       - ConnectionStrings__CustomerDbConnection
+      # SEC: crypto-shredding keys (Key Vault; the API refuses to start without them).
+      - PersonalData__MasterKey
+      - PersonalData__BlindIndexKey
 
   customer-kyc-api:
     stack: dotnet

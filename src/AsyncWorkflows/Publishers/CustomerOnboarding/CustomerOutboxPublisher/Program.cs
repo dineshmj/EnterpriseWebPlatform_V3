@@ -24,8 +24,12 @@ builder.Services.AddKafkaOptions(builder.Configuration);
 
 builder.Services.AddSingleton<IKafkaProducer, KafkaProducer>();
 
-builder.Services.Configure<CustomerOutboxPublisherOptions>(
-    builder.Configuration.GetSection(CustomerOutboxPublisherOptions.SectionName));
+// SEC: a payload retention below one day (or a typo reading as 0) would blank payloads the
+// subscribers may still need; refuse to start instead.
+builder.Services.AddOptions<CustomerOutboxPublisherOptions>()
+    .Bind(builder.Configuration.GetSection(CustomerOutboxPublisherOptions.SectionName))
+    .Validate(o => o.PayloadRetentionDays >= 1, "CustomerOutboxPublisher:PayloadRetentionDays must be at least 1.")
+    .ValidateOnStart();
 
 // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
 // │ Fail closed at start-up: the connection string (with its password) comes from the

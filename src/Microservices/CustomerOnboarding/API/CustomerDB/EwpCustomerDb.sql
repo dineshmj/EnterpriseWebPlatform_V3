@@ -43,6 +43,7 @@ DROP TABLE IF EXISTS outbox_messages CASCADE;
 DROP TABLE IF EXISTS onboarding_application_documents CASCADE;
 DROP TABLE IF EXISTS onboarding_applications CASCADE;
 DROP TABLE IF EXISTS customer_addresses CASCADE;
+DROP TABLE IF EXISTS personal_data_keys CASCADE;
 DROP TABLE IF EXISTS customers CASCADE;
 
 DROP SEQUENCE IF EXISTS public.customer_number_seq CASCADE;
@@ -98,11 +99,22 @@ CREATE TABLE customers
 
     subject_id         UUID         NULL,
 
-    first_name         VARCHAR(100) NOT NULL,
-    last_name          VARCHAR(100) NOT NULL,
+    -- ┌─ :: SECURITY :: Personal fields are stored encrypted (crypto-shredding) ─────────────────────
+    -- │ Why : Erasure must reach every copy, backups included; destroying one key per customer does.
+    -- │ How : first_name, last_name, email and phone_number hold "v1.<base64>" - AES-256-GCM under
+    -- │       the customer's own data key (personal_data_keys), bound to the customer number. Exact-
+    -- │       match lookups use the blind indexes (HMAC-SHA256 of the normalised value, 64 hex).
+    -- │       The API encrypts and decrypts; this database never sees a personal field in clear.
+    -- │ Ref : doc/Crypto-Shredding.md | GDPR Art. 17, Art. 32 | OWASP A02
+    -- └────────────────────────────────────────────────────────────────────────────────────────────────
+    first_name         TEXT         NOT NULL,
+    last_name          TEXT         NOT NULL,
 
-    email              VARCHAR(254) NOT NULL,
-    phone_number       VARCHAR(30)  NOT NULL,
+    email              TEXT         NOT NULL,
+    phone_number       TEXT         NOT NULL,
+
+    email_index        CHAR(64)     NOT NULL,
+    last_name_index    CHAR(64)     NOT NULL,
 
     customer_type      VARCHAR(30)  NOT NULL,
     status             VARCHAR(30)  NOT NULL,
@@ -152,7 +164,44 @@ CREATE TABLE customers
         ),
 
     CONSTRAINT ck_customers_version
-        CHECK (version > 0)
+        CHECK (version > 0),
+
+    CONSTRAINT ck_customers_personal_fields_encrypted
+        CHECK
+        (
+            first_name LIKE 'v1.%' AND
+            last_name LIKE 'v1.%' AND
+            email LIKE 'v1.%' AND
+            phone_number LIKE 'v1.%'
+        )
+);
+
+
+-- ============================================================================
+-- PERSONAL DATA KEYS
+-- ============================================================================
+--
+-- One data key per customer, stored only WRAPPED (AES-256-GCM under the API's
+-- master key, which lives in configuration / Key Vault - never in this database).
+-- Deleting a customer's row is the erasure: every encrypted copy of their
+-- personal fields - rows, backups - can no longer be read.
+--
+-- ============================================================================
+
+CREATE TABLE personal_data_keys
+(
+    customer_number    VARCHAR(30)  NOT NULL,
+
+    wrapped_key        BYTEA        NOT NULL,
+
+    created_at         TIMESTAMPTZ  NOT NULL,
+
+    CONSTRAINT pk_personal_data_keys
+        PRIMARY KEY (customer_number),
+
+    -- 12-byte nonce + 32-byte key + 16-byte tag.
+    CONSTRAINT ck_personal_data_keys_wrapped_length
+        CHECK (octet_length(wrapped_key) = 60)
 );
 
 
@@ -175,8 +224,10 @@ CREATE TABLE customer_addresses
 
     address_type        VARCHAR(30)  NOT NULL,
 
-    address_line1      VARCHAR(200) NOT NULL,
-    address_line2      VARCHAR(200) NULL,
+    -- Encrypted under the customer's key ("v1.<base64>"); city, state, postal code and
+    -- country stay readable (they identify nobody on their own; the branch scope uses city).
+    address_line1      TEXT         NOT NULL,
+    address_line2      TEXT         NULL,
 
     city                VARCHAR(100) NOT NULL,
     state               VARCHAR(100) NOT NULL,
@@ -208,7 +259,14 @@ CREATE TABLE customer_addresses
         ),
 
     CONSTRAINT ck_customer_addresses_country_code
-        CHECK (length(country_code) = 2)
+        CHECK (length(country_code) = 2),
+
+    CONSTRAINT ck_customer_addresses_lines_encrypted
+        CHECK
+        (
+            address_line1 LIKE 'v1.%' AND
+            (address_line2 IS NULL OR address_line2 LIKE 'v1.%')
+        )
 );
 
 
@@ -373,6 +431,10 @@ CREATE TABLE outbox_messages
 
     published_at        TIMESTAMPTZ  NULL,
 
+    -- When the relay blanked the payload (to {}), PayloadRetentionDays after publishing:
+    -- some payloads carry personal data. The row itself is kept as evidence.
+    payload_redacted_at TIMESTAMPTZ  NULL,
+
     attempt_count       INTEGER      NOT NULL DEFAULT 0,
 
     last_attempt_at     TIMESTAMPTZ  NULL,
@@ -447,8 +509,11 @@ CREATE INDEX ix_customers_branch_id
 CREATE INDEX ix_customers_managing_agent_user_id
     ON customers (managing_agent_user_id);
 
-CREATE INDEX ix_customers_email
-    ON customers (email);
+CREATE INDEX ix_customers_email_index
+    ON customers (email_index);
+
+CREATE INDEX ix_customers_last_name_index
+    ON customers (last_name_index);
 
 
 -- ----------------------------------------------------------------------------

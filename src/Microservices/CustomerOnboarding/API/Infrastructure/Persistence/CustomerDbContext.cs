@@ -7,6 +7,7 @@ using EnterpriseWebPlatform.CustomerOnboarding.Domain.Entities;
 using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Messaging;
 using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence.Inbox;
 using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence.Outbox;
+using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Privacy;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence;
 
@@ -24,13 +25,16 @@ public sealed class CustomerDbContext :
     IInboxStore
 {
     private readonly WorkflowContextAccessor _workflowContext;
+    private readonly PersonalDataCipher _personalDataCipher;
 
     public CustomerDbContext(
         DbContextOptions<CustomerDbContext> options,
-        WorkflowContextAccessor workflowContext)
+        WorkflowContextAccessor workflowContext,
+        PersonalDataCipher personalDataCipher)
         : base(options)
     {
         _workflowContext = workflowContext;
+        _personalDataCipher = personalDataCipher;
     }
 
     public DbSet<Customer> Customers => Set<Customer>();
@@ -64,6 +68,9 @@ public sealed class CustomerDbContext :
     public override async Task<int> SaveChangesAsync(
         CancellationToken cancellationToken = default)
     {
+        // SEC: personal fields are encrypted under the customer's own key before anything is written.
+        await CustomerPersonalData.ProtectAsync(this, _personalDataCipher, cancellationToken);
+
         var domainEvents = CollectDomainEvents();
 
         if (domainEvents.Count == 0)
@@ -84,7 +91,7 @@ public sealed class CustomerDbContext :
 
             // The generated IDs are now available to the integration events.
             var outboxMessages =
-                await new CustomerIntegrationEventMapper(this).ToOutboxMessagesAsync(
+                await new CustomerIntegrationEventMapper(this, _personalDataCipher).ToOutboxMessagesAsync(
                     domainEvents,
                     _workflowContext.GetRequestContext(),
                     _workflowContext.GetInitiatedByUserId(),

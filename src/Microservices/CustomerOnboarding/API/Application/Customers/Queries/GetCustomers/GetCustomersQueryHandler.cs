@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Authorization;
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Persistence;
+using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Privacy;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Application.Customers.Queries.GetCustomers;
 
@@ -11,10 +12,16 @@ public sealed class GetCustomersQueryHandler
 
     private readonly IOnboardingApplicationReadContext _applications;
 
-    public GetCustomersQueryHandler(ICustomerReadContext readContext, IOnboardingApplicationReadContext applications)
+    private readonly ICustomerPersonalData _personalData;
+
+    public GetCustomersQueryHandler(
+        ICustomerReadContext readContext,
+        IOnboardingApplicationReadContext applications,
+        ICustomerPersonalData personalData)
     {
         _readContext = readContext;
         _applications = applications;
+        _personalData = personalData;
     }
 
     public async Task<PagedResult<CustomerListItemDto>> HandleAsync(
@@ -33,16 +40,14 @@ public sealed class GetCustomersQueryHandler
         {
             var search = query.Search.Trim();
 
-            // ┌─ NOTE ───────────────────────────────────────────────────────────────────────────────
-            // │ CustomerNumber and Email are value objects stored through value converters:
-            // │ "(string)(object)x.Email" is how EF Core addresses the stored column value.
-            // │ (x.Email.Value cannot be translated to SQL.)
+            // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+            // │ Names and e-mail addresses are encrypted, so SQL cannot search INSIDE them: the
+            // │ customer number matches in part, an e-mail address or a surname only exactly
+            // │ (ignoring case), through the blind index. "(string)(object)x.CustomerNumber" is
+            // │ how EF Core addresses the value object's stored column.
             // └──────────────────────────────────────────────────────────────────────────────────────
-            customers = customers.Where(x =>
-                ((string)(object)x.CustomerNumber).Contains(search) ||
-                x.Name.FirstName.Contains(search) ||
-                x.Name.LastName.Contains(search) ||
-                ((string)(object)x.Email).Contains(search));
+            var byNumber = customers.Where(x => ((string)(object)x.CustomerNumber).Contains(search));
+            customers = byNumber.Union(_personalData.WhereEmailOrSurnameIs(customers, search));
         }
 
         var totalCount = await customers.CountAsync(cancellationToken);
@@ -55,9 +60,6 @@ public sealed class GetCustomersQueryHandler
             {
                 x.Id,
                 CustomerNumber = x.CustomerNumber.Value,
-                x.Name.FirstName,
-                x.Name.LastName,
-                Email = x.Email.Value,
                 x.CustomerType,
                 x.Status
             })
@@ -76,13 +78,16 @@ public sealed class GetCustomersQueryHandler
             .GroupBy(a => a.CustomerId)
             .ToDictionary(g => g.Key, g => g.OrderByDescending(a => a.CreatedAt).First());
 
+        // SEC: only the customers on this page have their name and e-mail decrypted.
+        var people = await _personalData.ReadAsync(customerIds, cancellationToken);
+
         var items = rows
             .Select(x => new CustomerListItemDto(
                 x.Id,
                 x.CustomerNumber,
-                x.FirstName,
-                x.LastName,
-                x.Email,
+                people[x.Id].FirstName,
+                people[x.Id].LastName,
+                people[x.Id].Email,
                 x.CustomerType,
                 x.Status.ToString().ToUpperInvariant(),
                 latestApplications.TryGetValue(x.Id, out var latest)

@@ -138,6 +138,19 @@ public sealed class Customer : AggregateRoot
         return customer;
     }
 
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ The name and contact details are stored encrypted under the customer's own key, so
+    // │ EF Core cannot materialise them; persistence decrypts them and hands them back here.
+    // │ Not a business operation: no rule runs, no event is raised, Version is unchanged.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    /// <summary>Persistence only: the decrypted personal details of a customer just loaded.</summary>
+    internal void RestorePersonalData(PersonName name, EmailAddress email, PhoneNumber phoneNumber)
+    {
+        Name = name;
+        Email = email;
+        PhoneNumber = phoneNumber;
+    }
+
     /// <summary>ReBAC: is <paramref name="userId"/> the agent who manages this customer?</summary>
     public bool IsManagedBy(string? userId) =>
         !string.IsNullOrWhiteSpace(userId) &&

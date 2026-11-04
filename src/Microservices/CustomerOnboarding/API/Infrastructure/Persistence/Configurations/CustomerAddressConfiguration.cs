@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Entities;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Enums;
+using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Privacy;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence.Configurations;
 
@@ -44,39 +45,41 @@ public sealed class CustomerAddressConfiguration : IEntityTypeConfiguration<Cust
             .HasColumnName("updated_at")
             .IsRequired();
 
-        builder.ComplexProperty(
-            x => x.Address,
-            address =>
-            {
-                address.Property(x => x.AddressLine1)
-                    .HasColumnName("address_line1")
-                    .HasMaxLength(200)
-                    .IsRequired();
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ The address lines are stored ENCRYPTED under the customer's own key; city, state,
+        // │ postcode and country stay readable - on their own they identify nobody, and the
+        // │ branch scope (CustomerAccessScope) filters on the city in SQL. The domain's
+        // │ PostalAddress is therefore not mapped: shadow columns are, and the repository
+        // │ rebuilds the PostalAddress on load.
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        builder.Ignore(x => x.Address);
 
-                address.Property(x => x.AddressLine2)
-                    .HasColumnName("address_line2")
-                    .HasMaxLength(200);
+        builder.Property<string>(PersonalDataColumns.AddressLine1)
+            .HasColumnName("address_line1")
+            .IsRequired();
 
-                address.Property(x => x.City)
-                    .HasColumnName("city")
-                    .HasMaxLength(100)
-                    .IsRequired();
+        builder.Property<string?>(PersonalDataColumns.AddressLine2)
+            .HasColumnName("address_line2");
 
-                address.Property(x => x.State)
-                    .HasColumnName("state")
-                    .HasMaxLength(100)
-                    .IsRequired();
+        builder.Property<string>(PersonalDataColumns.City)
+            .HasColumnName("city")
+            .HasMaxLength(100)
+            .IsRequired();
 
-                address.Property(x => x.PostalCode)
-                    .HasColumnName("postal_code")
-                    .HasMaxLength(20)
-                    .IsRequired();
+        builder.Property<string>(PersonalDataColumns.State)
+            .HasColumnName("state")
+            .HasMaxLength(100)
+            .IsRequired();
 
-                address.Property(x => x.CountryCode)
-                    .HasColumnName("country_code")
-                    .HasColumnType("character(2)")
-                    .IsRequired();
-            });
+        builder.Property<string>(PersonalDataColumns.PostalCode)
+            .HasColumnName("postal_code")
+            .HasMaxLength(20)
+            .IsRequired();
+
+        builder.Property<string>(PersonalDataColumns.CountryCode)
+            .HasColumnName("country_code")
+            .HasColumnType("character(2)")
+            .IsRequired();
 
         builder.HasOne<Domain.Aggregates.Customer>()
             .WithMany(x => x.Addresses)

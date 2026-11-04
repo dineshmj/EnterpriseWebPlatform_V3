@@ -1,17 +1,19 @@
 using Microsoft.EntityFrameworkCore;
 
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Persistence;
-using EnterpriseWebPlatform.CustomerOnboarding.Domain.Enums;
+using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Privacy;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Application.Customers.Queries.GetCustomer;
 
 public sealed class GetCustomerQueryHandler
 {
     private readonly ICustomerReadContext _readContext;
+    private readonly ICustomerPersonalData _personalData;
 
-    public GetCustomerQueryHandler(ICustomerReadContext readContext)
+    public GetCustomerQueryHandler(ICustomerReadContext readContext, ICustomerPersonalData personalData)
     {
         _readContext = readContext;
+        _personalData = personalData;
     }
 
     public async Task<CustomerDetailsDto?> HandleAsync(
@@ -25,44 +27,42 @@ public sealed class GetCustomerQueryHandler
             {
                 x.Id,
                 CustomerNumber = x.CustomerNumber.Value,
-                x.Name.FirstName,
-                x.Name.LastName,
-                Email = x.Email.Value,
-                PhoneNumber = x.PhoneNumber.Value,
                 x.CustomerType,
                 x.Status,
                 x.BranchId,
                 x.Version,
-                x.CreatedAt,
-                ResidentialAddress = x.Addresses
-                    .Where(a => a.AddressType == AddressType.Residential)
-                    .OrderByDescending(a => a.IsPrimary)
-                    .Select(a => new CustomerAddressDto(
-                        a.Address.AddressLine1,
-                        a.Address.AddressLine2,
-                        a.Address.City,
-                        a.Address.State,
-                        a.Address.PostalCode,
-                        a.Address.CountryCode))
-                    .FirstOrDefault()
+                x.CreatedAt
             })
             .SingleOrDefaultAsync(cancellationToken);
 
-        return row is null
-            ? null
-            : new CustomerDetailsDto(
-                row.Id,
-                row.CustomerNumber,
-                row.FirstName,
-                row.LastName,
-                row.Email,
-                row.PhoneNumber,
-                row.CustomerType,
-                row.Status.ToString().ToUpperInvariant(),
-                row.BranchId,
-                row.Version,
-                row.ResidentialAddress,
-                row.CreatedAt);
+        if (row is null)
+            return null;
+
+        // SEC: the name, contact details and address lines are encrypted; only this customer's are opened.
+        var person = (await _personalData.ReadAsync([row.Id], cancellationToken))[row.Id];
+        var address = person.ResidentialAddress;
+
+        return new CustomerDetailsDto(
+            row.Id,
+            row.CustomerNumber,
+            person.FirstName,
+            person.LastName,
+            person.Email,
+            person.PhoneNumber,
+            row.CustomerType,
+            row.Status.ToString().ToUpperInvariant(),
+            row.BranchId,
+            row.Version,
+            address is null
+                ? null
+                : new CustomerAddressDto(
+                    address.AddressLine1,
+                    address.AddressLine2,
+                    address.City,
+                    address.State,
+                    address.PostalCode,
+                    address.CountryCode),
+            row.CreatedAt);
     }
 }
 

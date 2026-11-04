@@ -18,4 +18,10 @@ public sealed class CustomerOutboxPublisherOptions
 
     /// <summary>Base of the exponential retry backoff: base * 2^(attempts - 1).</summary>
     public int RetryBaseDelaySeconds { get; init; } = 5;
+
+    /// <summary>
+    /// Days a PUBLISHED message keeps its payload; after that the payload is blanked (the row
+    /// stays). Matches the Kafka topics' retention (7 days) - see RedactExpiredPayloadsAsync.
+    /// </summary>
+    public int PayloadRetentionDays { get; init; } = 7;
 }
