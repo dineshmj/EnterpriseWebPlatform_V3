@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Aggregates;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Enums;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.ValueObjects;
+using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Privacy;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence.Configurations;
 
@@ -40,35 +41,40 @@ public sealed class CustomerConfiguration : IEntityTypeConfiguration<Customer>
             .IsUnique()
             .HasDatabaseName("uq_customers_subject_id");
 
-        builder.ComplexProperty(
-            x => x.Name,
-            name =>
-            {
-                name.Property(x => x.FirstName)
-                    .HasColumnName("first_name")
-                    .HasMaxLength(PersonName.MaxPartLength)
-                    .IsRequired();
+        // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+        // │ Name, e-mail and phone are stored ENCRYPTED under the customer's own key (crypto-
+        // │ shredding), so EF Core does not map the domain properties: it maps shadow columns
+        // │ that CustomerDbContext fills on save and the repository decrypts on load. Exact-
+        // │ match lookups use the blind indexes (HMAC), never the ciphertext.
+        // └──────────────────────────────────────────────────────────────────────────────────────
+        builder.Ignore(x => x.Name);
+        builder.Ignore(x => x.Email);
+        builder.Ignore(x => x.PhoneNumber);
 
-                name.Property(x => x.LastName)
-                    .HasColumnName("last_name")
-                    .HasMaxLength(PersonName.MaxPartLength)
-                    .IsRequired();
-            });
-
-        builder.Property(x => x.Email)
-            .HasColumnName("email")
-            .HasConversion(
-                value => value.Value,
-                value => EmailAddress.Create(value))
-            .HasMaxLength(254)
+        builder.Property<string>(PersonalDataColumns.FirstName)
+            .HasColumnName("first_name")
             .IsRequired();
 
-        builder.Property(x => x.PhoneNumber)
+        builder.Property<string>(PersonalDataColumns.LastName)
+            .HasColumnName("last_name")
+            .IsRequired();
+
+        builder.Property<string>(PersonalDataColumns.Email)
+            .HasColumnName("email")
+            .IsRequired();
+
+        builder.Property<string>(PersonalDataColumns.PhoneNumber)
             .HasColumnName("phone_number")
-            .HasConversion(
-                value => value.Value,
-                value => PhoneNumber.Create(value))
-            .HasMaxLength(30)
+            .IsRequired();
+
+        builder.Property<string>(PersonalDataColumns.EmailIndex)
+            .HasColumnName("email_index")
+            .HasColumnType("character(64)")
+            .IsRequired();
+
+        builder.Property<string>(PersonalDataColumns.LastNameIndex)
+            .HasColumnName("last_name_index")
+            .HasColumnType("character(64)")
             .IsRequired();
 
         builder.Property(x => x.CustomerType)
@@ -116,7 +122,10 @@ public sealed class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.HasIndex(x => x.BranchId)
             .HasDatabaseName("ix_customers_branch_id");
 
-        builder.HasIndex(x => x.Email)
-            .HasDatabaseName("ix_customers_email");
+        builder.HasIndex(PersonalDataColumns.EmailIndex)
+            .HasDatabaseName("ix_customers_email_index");
+
+        builder.HasIndex(PersonalDataColumns.LastNameIndex)
+            .HasDatabaseName("ix_customers_last_name_index");
     }
 }

@@ -165,6 +165,8 @@ const o = {
   sessionKey: (name) => `session-key-${name}`,
   kycSessionSecret: 'session-secret-kyc-bff',
   documentKey: 'documents-encryption-key-1',
+  personalDataMasterKey: 'customer-personal-data-master-key',
+  personalDataIndexKey: 'customer-personal-data-blind-index-key',
   anchorKey: 'audit-anchor-signing-key',
   keystorePassword: 'tls-keystore-password',
   dataProtectionPfx: 'pki-data-protection-pfx',
@@ -212,6 +214,9 @@ function ewpNamespace() {
   add('ewp-operations-bff-web', 'OPERATIONS_WEB_SESSION_KEY', o.sessionKey('operations-web'));
   add('ewp-partner-products-bff-web', 'PARTNER_PRODUCTS_WEB_SESSION_KEY', o.sessionKey('partner-products-web'));
   add('ewp-documents-management-api', 'DocumentStorage__Encryption__Keys__key-1', o.documentKey);
+  // SEC: crypto-shredding - the master key wraps each customer's data key; the other keys the blind index.
+  add('ewp-customer-onboarding-api', 'PersonalData__MasterKey', o.personalDataMasterKey);
+  add('ewp-customer-onboarding-api', 'PersonalData__BlindIndexKey', o.personalDataIndexKey);
   add('ewp-audit-api', 'Audit__Anchors__SigningKey', o.anchorKey);
   // A simulator's key equals its caller's.
   for (const [caller, key, simulator, name] of [
@@ -502,6 +507,8 @@ base.ewp[o.simulatorAdminKey] = () => password(40);
 for (const name of ['kyc-bff', 'audit-web', 'operations-web', 'partner-products-web']) base.ewp[o.sessionKey(name)] = key32;
 base.ewp[o.kycSessionSecret] = () => password(48);
 base.ewp[o.documentKey] = key32;
+base.ewp[o.personalDataMasterKey] = key32;
+base.ewp[o.personalDataIndexKey] = key32;
 base.ewp[o.anchorKey] = ecPkcs8;
 base.ewp[o.keystorePassword] = () => password();
 base.ewp[o.clientKey('selfservice-web')] = publicJwk;

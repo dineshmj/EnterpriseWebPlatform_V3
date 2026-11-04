@@ -68,6 +68,29 @@ public sealed class CustomerOutboxPublisher(
         }
     }
 
+    // ┌─ :: SECURITY :: A published payload is kept 7 days, then blanked ──────────────────────────────
+    // │ Why : Some payloads carry personal data (the applicant's name and address in
+    // │       OnboardingApplicationSubmitted). Erasure (crypto-shredding) makes the ENCRYPTED copies
+    // │       unreadable; a clear copy kept here for years would survive it.
+    // │ How : Once a message has been published for PayloadRetentionDays (the Kafka topics keep it
+    // │       as long), its payload becomes {} and payload_redacted_at is set. The ROW stays - the
+    // │       Outbox is never deleted: it remains evidence of what was published and when, and the
+    // │       audit trail keeps the payload's SHA-256. Unpublished and parked rows are never touched.
+    // │ Ref : GDPR Art. 5(1)(e) storage limitation | APP 11.2 | doc/Crypto-Shredding.md
+    // └────────────────────────────────────────────────────────────────────────────────────────────────
+    public Task<int> RedactExpiredPayloadsAsync(CancellationToken cancellationToken)
+    {
+        var retentionDays = _options.PayloadRetentionDays;
+        return dbContext.Database.ExecuteSqlAsync($$"""
+                UPDATE outbox_messages
+                SET payload = '{}'::jsonb,
+                    payload_redacted_at = now()
+                WHERE published_at IS NOT NULL
+                  AND published_at < now() - make_interval(days => {{retentionDays}})
+                  AND payload_redacted_at IS NULL
+                """, cancellationToken);
+    }
+
     /// <summary>Unpublished rows, for the readiness check (parked = given up after MaxAttempts).</summary>
     public static async Task<OutboxBacklog> GetBacklogAsync(CustomerOutboxDbContext db, int maxAttempts, CancellationToken ct)
     {

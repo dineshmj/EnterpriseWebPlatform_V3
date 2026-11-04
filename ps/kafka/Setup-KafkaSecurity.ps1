@@ -211,9 +211,22 @@ switch ($Phase) {
         Write-Host "     $user"
     }
 
-    Write-Host '2/3  Topics (explicit; auto-creation will be disabled)' -ForegroundColor Cyan
+    # ┌─ :: SECURITY :: Every topic keeps a message 7 days - stated, not left to a default ───────────
+    # │ Why : Some events carry personal data (the applicant's name and address); erasure
+    # │       (crypto-shredding) can only make the ENCRYPTED copies unreadable, so every clear
+    # │       copy must have an end. 7 days is far shorter than any retention period after which
+    # │       erasure may happen, and far longer than any planned outage of a subscriber.
+    # │ How : retention.ms on every topic, dead-letter topics included, set on create AND on
+    # │       topics that already exist (re-running this script applies it). The Customer
+    # │       Onboarding Outbox deletes its published rows after the same period. Mirrors
+    # │       kafka.retentionMs in deploy/helm/ewp-infra/values.yaml.
+    # │ Ref : GDPR Art. 5(1)(e) storage limitation | APP 11.2 | doc/Crypto-Shredding.md
+    # └────────────────────────────────────────────────────────────────────────────────────────────────
+    $RetentionMs = 7 * 24 * 60 * 60 * 1000
+    Write-Host "2/3  Topics (explicit; auto-creation will be disabled; retention $($RetentionMs / 86400000) days)" -ForegroundColor Cyan
     foreach ($topic in $Topics) {
-        Invoke-KafkaTool 'kafka-topics.bat' "--bootstrap-server $Bootstrap $auth --create --if-not-exists --topic $topic --partitions 1 --replication-factor 1" | Out-Null
+        Invoke-KafkaTool 'kafka-topics.bat' "--bootstrap-server $Bootstrap $auth --create --if-not-exists --topic $topic --partitions 1 --replication-factor 1 --config retention.ms=$RetentionMs" | Out-Null
+        Invoke-KafkaTool 'kafka-configs.bat' "--bootstrap-server $Bootstrap $auth --alter --entity-type topics --entity-name $topic --add-config retention.ms=$RetentionMs" | Out-Null
         Write-Host "     $topic"
     }
 

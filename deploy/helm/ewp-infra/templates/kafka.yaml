@@ -122,6 +122,10 @@ metadata:
 spec:
   partitions: 1
   replicas: 1
+  # SEC: every topic keeps a message for a stated period (personal data in some events; see
+  # kafka.retentionMs in values.yaml and ps/kafka/Setup-KafkaSecurity.ps1).
+  config:
+    retention.ms: {{ $k.retentionMs | int64 }}
 {{- end }}
 {{- range $user, $u := $k.users }}
 ---

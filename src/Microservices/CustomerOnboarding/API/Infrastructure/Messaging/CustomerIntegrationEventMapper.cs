@@ -9,6 +9,7 @@ using EnterpriseWebPlatform.CustomerOnboarding.Domain.Enums;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Events;
 using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence;
 using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence.Outbox;
+using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Privacy;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Messaging;
 
@@ -17,7 +18,7 @@ namespace EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Messaging;
 /// (standard envelope, Outbox rows). The single place where internal domain language
 /// meets the external contract: event names, status codes and workflow metadata.
 /// </summary>
-internal sealed class CustomerIntegrationEventMapper(CustomerDbContext db)
+internal sealed class CustomerIntegrationEventMapper(CustomerDbContext db, PersonalDataCipher personalDataCipher)
 {
     private const string Source = "customer-onboarding";
 
@@ -77,26 +78,31 @@ internal sealed class CustomerIntegrationEventMapper(CustomerDbContext db)
                     var causationId = ResolveCausationId(
                         submitted.ApplicationId, context.CausationId, lastMessageIdByAggregate);
 
-                    var customer = await db.Customers
+                    var customerNumber = await db.Customers
                         .AsNoTracking()
                         .Where(x => x.Id == submitted.CustomerId)
-                        .Select(x => new { CustomerNumber = x.CustomerNumber.Value, x.Name.FirstName, x.Name.LastName })
+                        .Select(x => x.CustomerNumber.Value)
                         .SingleAsync(cancellationToken);
-                    var customerNumber = customer.CustomerNumber;
+
+                    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+                    // │ The applicant travels in clear (KYC verifies the evidence against it), so this
+                    // │ copy is bounded instead: the topic keeps it 7 days, and the relay blanks this
+                    // │ Outbox payload after the same period. The stored fields stay encrypted.
+                    // └──────────────────────────────────────────────────────────────────────────────────────
+                    var person = (await new CustomerPersonalData(db, personalDataCipher)
+                        .ReadAsync([submitted.CustomerId], cancellationToken))[submitted.CustomerId];
 
                     // The primary residential address: the one KYC verifies and Compliance screens.
-                    var address = await db.CustomerAddresses
-                        .AsNoTracking()
-                        .Where(x => x.CustomerId == submitted.CustomerId && x.AddressType == AddressType.Residential)
-                        .OrderByDescending(x => x.IsPrimary)
-                        .Select(x => new AddressReference(
-                            x.Address.AddressLine1,
-                            x.Address.AddressLine2,
-                            x.Address.City,
-                            x.Address.State,
-                            x.Address.PostalCode,
-                            x.Address.CountryCode))
-                        .FirstOrDefaultAsync(cancellationToken);
+                    var residential = person.ResidentialAddress;
+                    var address = residential is null
+                        ? null
+                        : new AddressReference(
+                            residential.AddressLine1,
+                            residential.AddressLine2,
+                            residential.City,
+                            residential.State,
+                            residential.PostalCode,
+                            residential.CountryCode);
 
                     var integrationEvent = new OnboardingApplicationSubmittedIntegrationEvent(
                         submitted.ApplicationId,
@@ -106,7 +112,7 @@ internal sealed class CustomerIntegrationEventMapper(CustomerDbContext db)
                         customerNumber,
                         submitted.BranchCode,
                         [.. submitted.EvidenceDocuments.Select(x => new EvidenceDocumentReference(x.DocumentId, x.DocumentType))],
-                        new ApplicantReference(customer.FirstName, customer.LastName, address));
+                        new ApplicantReference(person.FirstName, person.LastName, address));
 
                     messages.Add(Envelope(
                         messageId, "OnboardingApplication", submitted.ApplicationId,

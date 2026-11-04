@@ -2,14 +2,15 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { MfeShell, publishWorkspaceContext, replacePersistentContext, type WorkspaceContext } from '../../../components/MfeShell';
 import { getJson } from '../../../lib/api';
-import { ArrowRight, CheckCircle2, Hourglass, UserPlus, Users } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Hourglass, Search, UserPlus, Users, X } from 'lucide-react';
 import { Button, buttonVariants } from '../../../components/ui/button';
 import { Card, CardHeader } from '../../../components/ui/card';
 import { Table, Td, Th } from '../../../components/ui/data';
 import { Alert, EmptyState, StatusBadge } from '../../../components/ui/feedback';
+import { Input } from '../../../components/ui/form';
 
 interface Customer {
   customerId: number;
@@ -54,6 +55,8 @@ export default function CustomersPage() {
   const router = useRouter();
   const [data, setData] = useState<Page | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState('');
+  const [searched, setSearched] = useState('');
   const workspaceContextRef = useRef<WorkspaceContext | null>(null);
 
   useEffect(() => {
@@ -67,11 +70,33 @@ export default function CustomersPage() {
       window.removeEventListener('bss-context-handoff', handleContextHandoff);
   }, []);
 
-  useEffect(() => {
-    getJson<Page>('/bff/api/customers?pageNumber=1&pageSize=25')
+  // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+  // │ Names and e-mail addresses are encrypted at rest, so the API cannot search INSIDE
+  // │ them: a customer number matches in part, an e-mail address or a surname only in full
+  // │ (case and outer spaces ignored). The hint and the empty result say so.
+  // └──────────────────────────────────────────────────────────────────────────────────────
+  const load = useCallback((search: string) => {
+    const query = new URLSearchParams({ pageNumber: '1', pageSize: '25' });
+    if (search) query.set('search', search);
+    setData(null);
+    setError(null);
+    setSearched(search);
+    getJson<Page>(`/bff/api/customers?${query.toString()}`)
       .then(setData)
       .catch(e => setError(e.message));
   }, []);
+
+  useEffect(() => load(''), [load]);
+
+  function submitSearch(event: FormEvent) {
+    event.preventDefault();
+    load(searchInput.trim());
+  }
+
+  function clearSearch() {
+    setSearchInput('');
+    load('');
+  }
 
   function startOnboarding(customer: Customer) {
     if (onboardingState(customer.status) !== 'can-start') return;
@@ -121,10 +146,35 @@ export default function CustomersPage() {
           }
         />
 
+        <form role="search" onSubmit={submitSearch} className="flex flex-wrap items-center gap-2 border-b border-line px-6 py-4">
+          <label htmlFor="customer-search" className="sr-only">Search customers</label>
+          <Input
+            id="customer-search"
+            type="search"
+            maxLength={254}
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
+            placeholder="Customer number, full e-mail address or surname"
+            className="max-w-md flex-1"
+          />
+          <Button type="submit" variant="secondary" size="sm"><Search aria-hidden="true" />Search</Button>
+          {searched && (
+            <Button type="button" variant="ghost" size="sm" onClick={clearSearch}><X aria-hidden="true" />Clear</Button>
+          )}
+          <p className="basis-full text-xs text-ink-muted">
+            A customer number matches in part; an e-mail address or surname only in full (any case).
+          </p>
+        </form>
+
         {error && <div className="p-6"><Alert tone="danger">{error}</Alert></div>}
         {!data && !error && <p className="px-6 py-8 text-sm text-ink-muted">Loading customers…</p>}
-        {data?.items.length === 0 && (
+        {data?.items.length === 0 && !searched && (
           <EmptyState icon={<Users />} title="No customers yet">Customers you onboard will appear here.</EmptyState>
+        )}
+        {data?.items.length === 0 && searched && (
+          <EmptyState icon={<Search />} title={`No customer matches “${searched}”`}>
+            E-mail addresses and surnames are matched in full only: try the whole address or surname, or the customer number.
+          </EmptyState>
         )}
 
         {data && data.items.length > 0 && (
