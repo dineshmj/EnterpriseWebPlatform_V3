@@ -1,6 +1,6 @@
 import { createPrivateKey, createPublicKey, KeyObject, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { calculateJwkThumbprint, exportJWK, SignJWT } from 'jose';
+import { calculateJwkThumbprint, JWK, SignJWT } from 'jose';
 
 // ┌─ :: SECURITY :: private_key_jwt: this API proves itself with its own key ──────────────────────
 // │ Why : A shared client secret is known to the IDP too and travels with every token exchange;
@@ -15,7 +15,7 @@ import { calculateJwkThumbprint, exportJWK, SignJWT } from 'jose';
 // │ Ref : Features 2.1.2 | FAPI 2.0 Security Profile §5.3.1 | RFC 7523, 7638 | Threat-Model R-10
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 export class ClientKeyService {
-  private readonly keyId: Promise<string>;
+  private readonly publicJwk: JWK;
   private issuer?: Promise<string>;
 
   constructor(
@@ -26,7 +26,9 @@ export class ClientKeyService {
     if (privateKey.asymmetricKeyType !== 'ec' || privateKey.asymmetricKeyDetails?.namedCurve !== 'prime256v1') {
       throw new Error('The client key must be an EC P-256 key (ES256).');
     }
-    this.keyId = exportJWK(createPublicKey(privateKey)).then((jwk) => calculateJwkThumbprint(jwk));
+    // The public members only - never "d"; the thumbprint is computed when asked (no async work here).
+    const { kty, crv, x, y } = createPublicKey(privateKey).export({ format: 'jwk' });
+    this.publicJwk = { kty, crv, x, y };
   }
 
   /** Reads the key file (encrypted PKCS#8 PEM) with the password from its own file. */
@@ -40,14 +42,14 @@ export class ClientKeyService {
 
   /** RFC 7638 thumbprint of the public key: its kid at the IDP. */
   thumbprint(): Promise<string> {
-    return this.keyId;
+    return calculateJwkThumbprint(this.publicJwk);
   }
 
   /** The client authentication for ONE call to the IDP (form parameters). */
   async clientAuthentication(): Promise<{ client_assertion_type: string; client_assertion: string }> {
     const now = Math.floor(Date.now() / 1000);
     const assertion = await new SignJWT({})
-      .setProtectedHeader({ alg: 'ES256', typ: 'client-authentication+jwt', kid: await this.keyId })
+      .setProtectedHeader({ alg: 'ES256', typ: 'client-authentication+jwt', kid: await this.thumbprint() })
       .setIssuer(this.clientId)
       .setSubject(this.clientId)
       .setAudience(await this.issuerOf())

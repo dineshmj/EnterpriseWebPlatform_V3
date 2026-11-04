@@ -1,0 +1,16 @@
+{
+  // ┌─ :: ARCHITECTURE :: Jest (ts-jest) compiler settings ────────────────────────────────────
+  // │ Why : The worker compiles to CommonJS, so ts-jest runs the tests without Node's ES-module
+  // │       flags; the tests type-check against the same strict settings as the worker.
+  // │ How : The worker's own tsconfig plus Jest's types; rootDir widened to the project, so the
+  // │       tests and src/ compile together; "type-check" checks these files too, so a type error
+  // │       in a test still fails CI.
+  // └──────────────────────────────────────────────────────────────────────────────────────────
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["jest", "node"],
+    "rootDir": "..",
+    "noEmit": true
+  },
+  "include": ["**/*.ts", "../src/**/*.ts"]
+}
