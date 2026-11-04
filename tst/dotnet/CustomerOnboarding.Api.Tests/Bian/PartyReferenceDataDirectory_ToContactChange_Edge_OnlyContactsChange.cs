@@ -5,7 +5,7 @@ using AwesomeAssertions;
 using EnterpriseWebPlatform.CustomerOnboarding.API.Bian;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Enums;
 
-using static EnterpriseWebPlatform.CustomerOnboarding.Api.Tests.Bian.PartyReferenceDataDirectory_Contract_Happy_ValidAgainstBian;
+using static EnterpriseWebPlatform.CustomerOnboarding.Api.Tests.Support.BianExamples;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Api.Tests.Bian;
 

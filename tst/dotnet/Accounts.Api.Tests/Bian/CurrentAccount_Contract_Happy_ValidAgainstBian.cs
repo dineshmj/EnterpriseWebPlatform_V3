@@ -57,7 +57,7 @@ public sealed class CurrentAccount_Contract_Happy_ValidAgainstBian
     public void Given_ADepositAsThePartnerWouldSendIt_When_CheckedAgainstBian_Then_ItIsValidAndMapsToACashDeposit()
     {
         // Given
-        var request = CurrentAccount_ToCashDeposit_Edge_RequiredFields.CashDeposit();
+        var request = BianExamples.CashDeposit();
 
         // When
         var errors = BianSchema.Validate(BianFile, "Deposit", request, BianJson.Options);

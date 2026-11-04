@@ -98,9 +98,14 @@ types and the IDP's `Config`; fixed log templates; backtracking-free regular exp
 in the bash scripts; `autofocus` removed from the IDP's pages. Marked `NOSONAR` with the reason on
 the line (deliberate, and reviewed): the upload size limits for identity documents, the Shell's
 menu query (placeholders only), tools found on `PATH` in CI and test scripts, Key Vault purge
-protection off in the demo (Demo down deletes everything), `http://` in the gateway's redirect
-check and in the OIDC back-channel-logout event name, `ToUpper()` inside an EF query (it becomes
-SQL `UPPER`), the launcher's own `Clear-Host`. Turned off: CA1873 (logging arguments are plain
+protection off in the demo (Demo down deletes everything), `http://` in the OIDC
+back-channel-logout event name, the launcher's own `Clear-Host`. Where a marker cannot reach the
+analyser, the exception is named instead: `#pragma warning disable CA1862` around `ToUpper()`
+inside an EF query (it becomes SQL `UPPER`; Roslyn findings ignore `NOSONAR`), and rule
+`githubactions:S5332` (clear-text http) off for `demo-up.yml` only
+(`sonar.issue.ignore.multicriteria` in [code-scanning.yml](../.github/workflows/code-scanning.yml)) -
+its Gateway check calls `http://` on purpose to prove the 301 to https, and the Actions analyser
+does not read `NOSONAR` in run scripts. Turned off: CA1873 (logging arguments are plain
 values - see [.editorconfig](../.editorconfig)). Excluded: `**/*.sql` (SonarQube Cloud reads T-SQL and
 PostgreSQL as Oracle PL/SQL). **Duplication stays by design**: each micro front end and its BFF is
 its squad's own deployable, so their start-up code is not shared through a central project.

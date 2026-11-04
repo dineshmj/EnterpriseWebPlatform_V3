@@ -1,9 +1,10 @@
 using AwesomeAssertions;
 
 using EnterpriseWebPlatform.CustomerOnboarding.API.Bian;
-using EnterpriseWebPlatform.CustomerOnboarding.Application.Customers.Queries.GetCustomer;
 using EnterpriseWebPlatform.CustomerOnboarding.Domain.Enums;
 using EnterpriseWebPlatform.Tests.Bian;
+
+using static EnterpriseWebPlatform.CustomerOnboarding.Api.Tests.Support.BianExamples;
 
 namespace EnterpriseWebPlatform.CustomerOnboarding.Api.Tests.Bian;
 
@@ -109,24 +110,4 @@ public sealed class PartyReferenceDataDirectory_Contract_Happy_ValidAgainstBian
         // Then
         errors.Should().NotBeEmpty();
     }
-
-    internal static BianContactPoint Contact(string type, string address) => new()
-    {
-        ContactPointType = type,
-        LocationReference = new BianLocation { LocationAddress = address }
-    };
-
-    internal static CustomerDetailsDto Customer() => new(
-        CustomerId: 42,
-        CustomerNumber: "CUS-000123",
-        FirstName: "Camilla",
-        LastName: "Parker",
-        Email: "camilla.parker@example.com",
-        PhoneNumber: "+61 412 345 678",
-        CustomerType: CustomerType.Individual,
-        Status: "ACTIVE",
-        BranchId: 1,
-        Version: 3,
-        ResidentialAddress: new CustomerAddressDto("1 George Street", "Level 4", "Sydney", "NSW", "2000", "AU"),
-        CreatedAt: new DateTimeOffset(2026, 10, 15, 9, 30, 0, TimeSpan.Zero));
 }

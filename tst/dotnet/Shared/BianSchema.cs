@@ -54,7 +54,7 @@ public static class BianSchema
     };
 
     // A plain (unquoted) scalar keeps its YAML type; a quoted one is always text.
-    private static JsonNode? Scalar(YamlScalarNode scalar)
+    private static JsonValue? Scalar(YamlScalarNode scalar)
     {
         var text = scalar.Value ?? string.Empty;
         if (scalar.Style is ScalarStyle.SingleQuoted or ScalarStyle.DoubleQuoted or ScalarStyle.Literal or ScalarStyle.Folded)

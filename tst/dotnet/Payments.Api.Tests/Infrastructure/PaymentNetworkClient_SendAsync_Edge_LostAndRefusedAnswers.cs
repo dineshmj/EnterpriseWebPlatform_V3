@@ -1,12 +1,10 @@
 using System.Text.Json.Nodes;
 
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
-
 using AwesomeAssertions;
 
 using EnterpriseWebPlatform.Payments.Api.Application.Abstractions;
 using EnterpriseWebPlatform.Payments.Api.Infrastructure.PaymentNetwork;
+using EnterpriseWebPlatform.Payments.Api.Tests.Support;
 using EnterpriseWebPlatform.Tests.Neighbours;
 
 namespace EnterpriseWebPlatform.Payments.Api.Tests.Infrastructure;
@@ -22,7 +20,6 @@ namespace EnterpriseWebPlatform.Payments.Api.Tests.Infrastructure;
 public sealed class PaymentNetworkClient_SendAsync_Edge_LostAndRefusedAnswers
 {
     private const string PaymentsPath = "/v1/payments";
-    private const string ApiKey = "test-network-key";
 
     private WireMockNeighbour _network = null!;
     private IPaymentNetwork _client = null!;
@@ -31,7 +28,7 @@ public sealed class PaymentNetworkClient_SendAsync_Edge_LostAndRefusedAnswers
     public void SetUp()
     {
         _network = new WireMockNeighbour();
-        _client = ClientTo(_network.Url);
+        _client = PaymentNetworkTestClient.To(_network.Url);
     }
 
     [TearDown]
@@ -51,7 +48,7 @@ public sealed class PaymentNetworkClient_SendAsync_Edge_LostAndRefusedAnswers
         // Then
         reference.Should().Be("NPP-000123");
         var sent = _network.Received(PaymentsPath).Single();
-        WireMockNeighbour.Header(sent, "X-Api-Key").Should().Be(ApiKey);
+        WireMockNeighbour.Header(sent, "X-Api-Key").Should().Be(PaymentNetworkTestClient.ApiKey);
         WireMockNeighbour.Header(sent, "Idempotency-Key").Should().Be(payment.IdempotencyKey.ToString());
         var body = JsonNode.Parse(sent.RequestMessage!.Body!)!;
         body["endToEndId"]!.GetValue<string>().Should().Be(payment.PaymentNumber);
@@ -153,16 +150,6 @@ public sealed class PaymentNetworkClient_SendAsync_Edge_LostAndRefusedAnswers
 
         // Then
         await send.Should().ThrowAsync<PaymentNetworkUnavailableException>();
-    }
-
-    internal static IPaymentNetwork ClientTo(string baseUrl)
-    {
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddSingleton(Options.Create(new PaymentNetworkOptions { BaseUrl = baseUrl, ApiKey = ApiKey }));
-        services.AddPaymentNetworkClient();
-        WireMockNeighbour.ShortenWaits(services, PaymentNetworkClient.HttpClientName);
-        return services.BuildServiceProvider().GetRequiredService<IPaymentNetwork>();
     }
 
     private static NetworkPaymentRequest Payment() => new(

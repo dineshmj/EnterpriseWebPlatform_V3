@@ -2,6 +2,8 @@ using AwesomeAssertions;
 
 using EnterpriseWebPlatform.Accounts.Api.Bian;
 
+using static EnterpriseWebPlatform.Accounts.Api.Tests.Support.BianExamples;
+
 namespace EnterpriseWebPlatform.Accounts.Api.Tests.Bian;
 
 [TestFixture]
@@ -89,11 +91,4 @@ public sealed class CurrentAccount_ToCashDeposit_Edge_RequiredFields
     [TestCase("CLOSED", "Disabled")]
     public void Given_AnEwpAccountStatus_When_ShownInBian_Then_ItBecomesTheClosestBianStatusType(string ewp, string bian) =>
         CurrentAccountMapper.ToBianStatusType(ewp).Should().Be(bian);
-
-    internal static Deposit CashDeposit() => new()
-    {
-        DepositType = "CashDeposit",
-        DepositTransactionSourceReference = "CUS-000123",
-        DepositTransactionAmount = new BianAmount { AmountValue = "250.00", AmountCurrency = new BianCurrencyCode { Currencycode = "AUD" } }
-    };
 }

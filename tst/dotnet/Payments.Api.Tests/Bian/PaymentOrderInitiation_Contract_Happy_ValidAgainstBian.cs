@@ -21,7 +21,7 @@ public sealed class PaymentOrderInitiation_Contract_Happy_ValidAgainstBian
 {
     private const string BianFile = "PaymentOrderInitiation.yaml";
 
-    public static IEnumerable<string> EveryPaymentStatus() =>
+    private static IEnumerable<string> EveryPaymentStatus() =>
         Enum.GetValues<PaymentStatus>().Select(s => s.ToCode());
 
     [TestCaseSource(nameof(EveryPaymentStatus))]
@@ -44,7 +44,7 @@ public sealed class PaymentOrderInitiation_Contract_Happy_ValidAgainstBian
     public void Given_ARequestAsAPartnerWouldSendIt_When_CheckedAgainstBian_Then_ItIsValidAndMapsToAPayment()
     {
         // Given
-        var request = PaymentOrderInitiation_ToPaymentOrder_Edge_RequiredFields.FullRequest();
+        var request = BianExamples.FullRequest();
 
         // When
         var errors = BianSchema.Validate(BianFile, "PaymentOrderInitiationTransaction", request, BianJson.Options);
@@ -91,7 +91,7 @@ public sealed class PaymentOrderInitiation_Contract_Happy_ValidAgainstBian
         errors.Should().NotBeEmpty();
     }
 
-    internal static PaymentDetail Payment(string status) => new(
+    private static PaymentDetail Payment(string status) => new(
         PaymentId: 42,
         PaymentRef: Guid.Parse("5b0e8a1c-7d2f-4a44-9a51-2a8d3b6c1e90"),
         PaymentNumber: "PAY-20261015-000042",

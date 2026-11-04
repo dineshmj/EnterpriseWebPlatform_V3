@@ -40,7 +40,8 @@ describe('Contract with the Payments API (partner-products-worker -> payments-ap
   const contract = (name: string, test: () => Promise<void>) => {
     registered++;
     it(name, async () => {
-      await test();
+      // The interactions' own expectations live in `test`; this asserts it ran to the end.
+      await expect(test()).resolves.toBeUndefined();
       passed++;
     });
   };
