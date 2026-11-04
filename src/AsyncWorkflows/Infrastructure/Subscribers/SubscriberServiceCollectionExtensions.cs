@@ -74,6 +74,9 @@ public static class SubscriberServiceCollectionExtensions
             .Validate(s => IsSet(s.DPoPKey), $"{sectionName}:DPoPKey:Path and :PasswordPath are not configured.")
             .Validate(s =>
             {
+                // Unnamed files are reported by the two checks above, with a clear message.
+                if (!IsSet(s.ClientKey) || !IsSet(s.DPoPKey))
+                    return true;
                 using var keys = MachineKeys.Load(s, TimeProvider.System);   // throws with the reason
                 return true;
             }, $"{sectionName}: the client key or DPoP key cannot be read.")

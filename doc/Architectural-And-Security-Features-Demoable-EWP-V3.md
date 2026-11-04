@@ -746,7 +746,7 @@ Humans and services authenticate differently. Workers and BFFs use OAuth 2.0 Cli
 
 - M2M clients: [IDP ConfigRegistration/Clients/M2M](../src/IDP/ConfigRegistration/Clients/M2M)
 - The subscribers' keys, assertion and proofs: [MachineKeys.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/MachineKeys.cs), [CachedM2MTokenClient.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/CachedM2MTokenClient.cs), [DPoPMachineTokenHandler.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/DPoPMachineTokenHandler.cs)
-- Demo: the Playwright test `Machine ShouldBindASubscribersToken_AndRefuseItAsBearer_AReplayedProof_AndAProofForAnotherAddress` ([dpop-bound-tokens.spec.ts](../tst/playwright/tests/40-security/api/dpop-bound-tokens.spec.ts)); UT `KafkaSubscriberClients_Edge_KeyAndDPoPBound`
+- Demo: the Playwright test `Machine ShouldBindASubscribersToken_AndRefuseItAsBearer_AReplayedProof_AndAProofForAnotherAddress` ([dpop-bound-tokens.spec.ts](../tst/playwright/tests/40-security/api/dpop-bound-tokens.spec.ts)); UT `KafkaSubscriberClients_Edge_KeyAndDPoPBound` and [AsyncWorkflows.Infrastructure.Tests](../tst/dotnet/AsyncWorkflows.Infrastructure.Tests/Subscribers) (assertion and proofs, the token client against a WireMock IDP, a new proof per retry, no start without keys)
 - Pinned-client policies `KycCaseOpeningSubscriberWrite` and `OnboardingOutcomeSubscriberWrite`: [CustomerKyc API Program.cs](../src/Microservices/CustomerKyc/API/Program.cs), [CustomerOnboarding API Program.cs](../src/Microservices/CustomerOnboarding/API/Program.cs)
 - Client and scope inventory: [IDP-Requirements.md](Requirements/IDP-Requirements.md)
 
