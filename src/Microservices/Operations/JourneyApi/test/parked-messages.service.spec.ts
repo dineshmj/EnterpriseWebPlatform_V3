@@ -1,5 +1,6 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { BadRequestException, ConflictException, ForbiddenException, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { ClientKeyService } from '../src/auth/client-key.service';
 import { DPoPKeyService } from '../src/auth/dpop-key.service';
 import type { JourneyOptions } from '../src/configuration/journey-options';
 import { ParkedMessagesService } from '../src/recovery/parked-messages.service';
@@ -8,6 +9,9 @@ import { received, resetWireMock, stub, wireMockUrl } from '../../../../../tst/n
 
 /** This API's DPoP key, for the test run (the real one is read from a file). */
 const DPOP = new DPoPKeyService(generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey);
+/** This API's client key (private_key_jwt), for the test run; the IDP's discovery names its issuer. */
+const clientKeyOf = (options: JourneyOptions) =>
+  new ClientKeyService(generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey, options.clientId, options.authority);
 
 // ┌─ :: ARCHITECTURE + SECURITY :: Parked messages of three contexts, their APIs played by WireMock ─
 // │ Why : The operator's one screen over Accounts, Compliance and Partner Products must stay up
@@ -52,11 +56,12 @@ describe('ParkedMessagesService - the IDP and three Domain APIs played by WireMo
 
   beforeEach(async () => {
     await resetWireMock();
+    await stub({ request: { method: 'GET', urlPath: '/.well-known/openid-configuration' }, response: { status: 200, jsonBody: { issuer: 'https://idp.ewp.example' } } });
     const options = {
-      authority: wireMockUrl(), clientId: 'Operations.JourneyApi.ClientID', clientSecret: 'test-only',
+      authority: wireMockUrl(), clientId: 'Operations.JourneyApi.ClientID',
       accountsApiBaseUrl: wireMockUrl(), complianceApiBaseUrl: wireMockUrl(), partnerProductsApiBaseUrl: wireMockUrl(),
     } as JourneyOptions;
-    service = new ParkedMessagesService(options, new TokenExchangeService(options, DPOP), DPOP);
+    service = new ParkedMessagesService(options, new TokenExchangeService(options, DPOP, clientKeyOf(options)), DPOP);
   });
 
   it('Given parked messages in each context, when they are listed, then each context is asked with its own read token', async () => {
@@ -88,10 +93,10 @@ describe('ParkedMessagesService - the IDP and three Domain APIs played by WireMo
     await answers('GET', parked('accounts'), 200, [MESSAGE]);
     await answers('GET', parked('compliance'), 500, { detail: 'Npgsql.PostgresException: relation "outbox" does not exist' });
     const options = {
-      authority: wireMockUrl(), clientId: 'Operations.JourneyApi.ClientID', clientSecret: 'test-only',
+      authority: wireMockUrl(), clientId: 'Operations.JourneyApi.ClientID',
       accountsApiBaseUrl: wireMockUrl(), complianceApiBaseUrl: wireMockUrl(), partnerProductsApiBaseUrl: 'http://127.0.0.1:9',
     } as JourneyOptions;
-    service = new ParkedMessagesService(options, new TokenExchangeService(options, DPOP), DPOP);
+    service = new ParkedMessagesService(options, new TokenExchangeService(options, DPOP, clientKeyOf(options)), DPOP);
 
     // When
     const all = await service.listAll(OPERATOR_TOKEN);

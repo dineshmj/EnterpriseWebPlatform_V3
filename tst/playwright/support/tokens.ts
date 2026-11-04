@@ -10,10 +10,10 @@ import { urls } from './services';
  * compromised service could obtain - and what the IDP and the APIs must still refuse.
  *
  * The DEVELOPMENT-ONLY client credentials are found through the IDP's appsettings.Development.json
- * at run time - never copied into the tests: a client secret (the Journey APIs and the Partner
- * Products worker), or the path of a private_key_jwt client's public key, whose private key lies
- * next to it (the staff web apps and the Kafka subscribers: ps/pki/New-EwpLocalPki.ps1). Outside
- * Development neither exists in files.
+ * at run time - never copied into the tests: the path of each client's public key, whose private
+ * key lies next to it (every EWP client uses private_key_jwt - the staff web apps and Journey APIs,
+ * the Kafka subscribers and the Partner Products worker: ps/pki/New-EwpLocalPki.ps1). Outside
+ * Development no key exists in files.
  */
 export const clientIds = {
   partnerProductsWeb: 'PartnerProducts.Microservice.Web.ClientID',
@@ -33,20 +33,15 @@ const idpSettings = resolve(__dirname, '../../../src/IDP/appsettings.Development
 let issuer: Promise<string> | undefined;
 
 // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
-// │ The client proves itself the way the IDP registered it: private_key_jwt for the staff
-// │ web apps and the Kafka subscribers (an assertion signed with the client's own key, as
-// │ the BFFs build it: aud = the issuer only, typ client-authentication+jwt, 60 s, a new
-// │ jti), else its secret.
+// │ The client proves itself the way the IDP registered every EWP client: private_key_jwt
+// │ (an assertion signed with the client's own key, as the BFFs build it: aud = the issuer
+// │ only, typ client-authentication+jwt, 60 s, a new jti). No client has a secret.
 // └──────────────────────────────────────────────────────────────────────────────────────
 /** The client authentication form parameters for ONE call to the IDP. */
 export async function clientAuthenticationOf(http: APIRequestContext, clientId: string): Promise<Record<string, string>> {
-  const settings = JSON.parse(readFileSync(idpSettings, 'utf-8')) as { ClientSecrets?: Record<string, string>; ClientKeys?: Record<string, string> };
-  const publicKeyPath = settings.ClientKeys?.[clientId];
-  if (!publicKeyPath) {
-    const secret = settings.ClientSecrets?.[clientId];
-    expect(secret, `the development secret or key of ${clientId} (src/IDP/appsettings.Development.json)`).toBeTruthy();
-    return { client_secret: secret! };
-  }
+  const settings = JSON.parse(readFileSync(idpSettings, 'utf-8')) as { ClientKeys?: Record<string, string> };
+  const publicKeyPath = settings.ClientKeys?.[clientId] ?? '';
+  expect(publicKeyPath, `the development key of ${clientId} (src/IDP/appsettings.Development.json)`).toBeTruthy();
 
   issuer ??= http.get(`${urls.idp}/.well-known/openid-configuration`)
     .then(async (response) => (await response.json() as { issuer: string }).issuer);
@@ -67,8 +62,8 @@ export async function clientAuthenticationOf(http: APIRequestContext, clientId: 
 
 // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
 // │ DPoP (RFC 9449): the clients whose tokens are bound to a key, as their BFFs (and the
-// │ Journey API, for the tokens it exchanges for; the Kafka subscribers, for their own
-// │ machine tokens) hold them.
+// │ Journey API, for the tokens it exchanges for; the Kafka subscribers and the Partner
+// │ Products worker, for their own machine tokens) hold them.
 // │ The test plays the BFF: one key per client for this run (the IDP registers none - each
 // │ token names its key in cnf.jkt), a proof on each of its token requests, and a proof on
 // │ each API call made with a bound token (authorizationFor). Without them the IDP issues
@@ -77,7 +72,7 @@ export async function clientAuthenticationOf(http: APIRequestContext, clientId: 
 const dpopClients: ReadonlySet<string> = new Set([
   clientIds.paymentsWeb, clientIds.accountsWeb, clientIds.customerOnboardingWeb, clientIds.customerKycWeb,
   clientIds.auditWeb, clientIds.partnerProductsWeb, clientIds.partnerProductsJourneyApi,
-  clientIds.paymentsSagaReplySubscriber, clientIds.kycCaseOpeningSubscriber,
+  clientIds.paymentsSagaReplySubscriber, clientIds.kycCaseOpeningSubscriber, clientIds.partnerProductsWorker,
 ]);
 const dpopKeys = new Map<string, KeyObject>();
 const boundTo = new Map<string, KeyObject>();

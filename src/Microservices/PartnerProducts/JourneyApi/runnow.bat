@@ -36,7 +36,9 @@ set "PARTNER_PRODUCTS_JOURNEY_CLIENT_ID=PartnerProducts.JourneyApi.ClientID"
 REM DPoP: the key every token this API obtains is bound to (New-EwpClientKeys.mjs).
 set "PARTNER_PRODUCTS_JOURNEY_DPOP_KEY_PATH=%USERPROFILE%\.ewp-pki\partner-products-journey-api-dpop.key.pem"
 set "PARTNER_PRODUCTS_JOURNEY_DPOP_KEY_PASSWORD_PATH=%USERPROFILE%\.ewp-pki\partner-products-journey-api-dpop.key.pem.password"
-set "PARTNER_PRODUCTS_JOURNEY_CLIENT_SECRET=c13649b2-6a6e-41a3-b7f7-6cd20e5e0dec"
+REM private_key_jwt: this API's client key - the IDP holds only the public one (New-EwpClientKeys.mjs).
+set "PARTNER_PRODUCTS_JOURNEY_CLIENT_KEY_PATH=%USERPROFILE%\.ewp-pki\partner-products-journey-api-client.key.pem"
+set "PARTNER_PRODUCTS_JOURNEY_CLIENT_KEY_PASSWORD_PATH=%USERPROFILE%\.ewp-pki\partner-products-journey-api-client.key.pem.password"
 
 REM Development: the API addresses below go through the fault proxy (ps\toxiproxy\toxiproxy.json,
 REM ports 47101-47111) so operations can cut them; elsewhere use each API's own address.

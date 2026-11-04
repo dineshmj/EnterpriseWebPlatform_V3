@@ -50,19 +50,11 @@ const kafkaUsers = [
   'ewp-payments-saga-reply-subscriber', 'ewp-notifications-subscriber', 'ewp-audit-api',
 ];
 
-// The IDP's confidential clients with a shared secret (deploy/helm/ewp values.yaml, idp.secretEnv) and
-// who holds each: the Journey APIs and the Partner Products worker.
-const clients = {
-  'Audit.JourneyApi.ClientID': ['audit-journey-api', 'AUDIT_JOURNEY_CLIENT_SECRET'],
-  'Operations.JourneyApi.ClientID': ['operations-journey-api', 'OPERATIONS_JOURNEY_CLIENT_SECRET'],
-  'PartnerProducts.JourneyApi.ClientID': ['partner-products-journey-api', 'PARTNER_PRODUCTS_JOURNEY_CLIENT_SECRET'],
-  'PartnerProducts.Worker.M2M.ClientID': ['partner-products-worker', 'PARTNER_PRODUCTS_WORKER_CLIENT_SECRET'],
-};
-
 // ┌─ SEC ──────────────────────────────────────────────────────────────────────────────────────────
-// │ The staff web apps prove themselves with private_key_jwt (FAPI 2.0), not a secret: each has
-// │ its own EC P-256 key. Its private key (encrypted PEM + password) goes only to that app's
-// │ Secret ewp-<component>-client-key; the IDP gets only the PUBLIC key (ewp-idp-client-keys).
+// │ Every EWP client proves itself with private_key_jwt (FAPI 2.0), not a secret: each has its
+// │ own EC P-256 key. Its private key (encrypted PEM + password) goes only to that app's Secret
+// │ ewp-<component>-client-key; the IDP gets only the PUBLIC key (ewp-idp-client-keys). The only
+// │ client secret left is a third party's: Grafana's.
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 const webClients = {
   'BSS.Shell.BFF.ClientID': 'shell',
@@ -74,11 +66,16 @@ const webClients = {
   'Audit.Microservice.Web.ClientID': 'audit-bff-web',
   'Operations.Microservice.Web.ClientID': 'operations-bff-web',
   'PartnerProducts.Microservice.Web.ClientID': 'partner-products-bff-web',
+  // The staff Journey APIs (token exchange only).
+  'Audit.JourneyApi.ClientID': 'audit-journey-api',
+  'Operations.JourneyApi.ClientID': 'operations-journey-api',
+  'PartnerProducts.JourneyApi.ClientID': 'partner-products-journey-api',
 };
 
 // ┌─ SEC ──────────────────────────────────────────────────────────────────────────────────────────
-// │ The Kafka subscribers' machine identities: private_key_jwt too (no shared secret) - the same
-// │ three parts, the private key only in the worker's own Secret ewp-<component>-client-key.
+// │ The Kafka subscribers' and the Partner Products worker's machine identities: private_key_jwt
+// │ too (no shared secret) - the same three parts, the private key only in the worker's own Secret
+// │ ewp-<component>-client-key.
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 const workerClients = {
   'CustomerKyc.CaseOpeningSubscriber.To.CustomerKycApi.M2M.ClientID': 'kyc-case-opening-subscriber',
@@ -89,6 +86,7 @@ const workerClients = {
   'Notifications.Subscriber.To.NotificationsApi.M2M.ClientID': 'notifications-subscriber',
   'Accounts.CommandSubscriber.To.AccountsApi.M2M.ClientID': 'accounts-command-subscriber',
   'Payments.SagaReplySubscriber.To.PaymentsApi.M2M.ClientID': 'payments-saga-reply-subscriber',
+  'PartnerProducts.Worker.M2M.ClientID': 'partner-products-worker',
 };
 const keyClients = { ...webClients, ...workerClients };
 
@@ -96,7 +94,6 @@ const keyClients = { ...webClients, ...workerClients };
 // │ DPoP (RFC 9449): the apps and workers whose tokens are bound to a key of their own - a second
 // │ EC P-256 key, not the client key. Its encrypted PEM + password go into the same Secret as the client key
 // │ (ewp-<component>-client-key, keys dpop-key.pem*); nobody else gets it, the IDP never does.
-// │ The Journey APIs (client secret, no client key) get a Secret of that name holding the DPoP key only.
 // └────────────────────────────────────────────────────────────────────────────────────────────────
 const dpopApps = [
   'shell', 'customer-onboarding-bff-web', 'customer-kyc-bff-web', 'compliance-bff-web', 'accounts-bff-web', 'payments-bff-web',
@@ -207,10 +204,6 @@ function ewpNamespace() {
   for (const [component, [key, role]] of Object.entries(databaseUrls)) add(`ewp-${component}`, key, o.dbUrl(role));
   for (const [component, user] of Object.entries(kafkaClients)) add(`ewp-${component}`, 'Kafka__SaslPassword', o.kafka(user));
   add('ewp-partner-products-worker', 'PARTNER_PRODUCTS_WORKER_KAFKA_PASSWORD', o.kafka('ewp-partner-products-worker'));
-  for (const [id, [component, key]] of Object.entries(clients)) {
-    add('ewp-idp', `ClientSecrets__${id}`, o.client(id));
-    add(`ewp-${component}`, key, o.client(id));
-  }
   add('ewp-idp', `ClientSecrets__${grafanaClientId}`, o.client(grafanaClientId));
   add('ewp-idp', 'SigningCredential__CertificatePassword', o.idpSigningPassword);
   add('ewp-customer-kyc-bff-web', 'KYC_BFF_SESSION_SECRET', o.kycSessionSecret);
@@ -503,7 +496,7 @@ const outDir = env('OUT_DIR');
 const base = { ewp: {}, partner: {} };
 for (const role of dbRoles) base.ewp[o.dbRole(role)] = () => password();
 for (const user of kafkaUsers) base.ewp[o.kafka(user)] = () => password();
-for (const id of [...Object.keys(clients), grafanaClientId]) base.ewp[o.client(id)] = () => password(40);
+base.ewp[o.client(grafanaClientId)] = () => password(40);
 for (const name of ['screening-provider', 'core-banking', 'payment-network']) base.ewp[o.apiKey(name)] = () => password(40);
 base.ewp[o.simulatorAdminKey] = () => password(40);
 for (const name of ['kyc-bff', 'audit-web', 'operations-web', 'partner-products-web']) base.ewp[o.sessionKey(name)] = key32;

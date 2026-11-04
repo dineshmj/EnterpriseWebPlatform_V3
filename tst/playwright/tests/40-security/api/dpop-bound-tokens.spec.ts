@@ -14,8 +14,9 @@ import {
  * │ How : Jack's Accounts web app token (bound). With a fresh proof the Accounts API answers; the
  * │       same token as Bearer is refused (401); the same proof sent again is refused (replay).
  * │       The same three checks at a NestJS Journey API, with Sophie's delegated token - and for a
- * │       machine: a Kafka subscriber's own token (client credentials, private_key_jwt) is bound
- * │       too; the IDP issues none without a proof, and a proof made for another address fails.
+ * │       machine: a Kafka subscriber's and the Partner Products worker's own tokens (client
+ * │       credentials, private_key_jwt) are bound too; the IDP issues none without a proof, and a
+ * │       proof made for another address fails.
  * │ Ref : Features 2.1.1, 2.1.2 | API READMEs (DPoP row) | RFC 9449 §4.3, §11.1 | Threat-Model R-9
  * └────────────────────────────────────────────────────────────────────────────────────────────────
  */
@@ -89,5 +90,25 @@ test.describe('DPoP - a bound token needs its key, and a proof works once', () =
     // Act + Assert 5: a fresh proof made for another address is refused (htu).
     const forElsewhere = authorizationFor(token, 'GET', `${urls.paymentsApi}/v1/payments`);
     expect((await request.get(outcome, { headers: forElsewhere })).status(), 'a proof for another address').toBe(401);
+  });
+
+  test('Worker ShouldGetOnlyABoundToken_AndHaveItRefusedAsBearer', async ({ request }) => {
+    // Arrange: the Partner Products Worker's own token (Temporal), obtained as the worker does - a
+    // client assertion signed with its key (no secret) and a DPoP proof.
+    const clientId = clientIds.partnerProductsWorker;
+    const token = await clientCredentialsToken(request, clientId, 'payments.read');
+    expect(claimsOf(token).cnf, 'the worker\'s token is DPoP-bound').toBeTruthy();
+    // The internal endpoint pinned to the worker: 404 (nothing found) proves it passed.
+    const outcome = `${urls.paymentsApi}/internal/v1/payments/by-idempotency-key/${randomUUID()}`;
+
+    // Act + Assert 1: the IDP issues no token to the worker without a proof.
+    const unbound = await request.post(`${urls.idp}/connect/token`, {
+      form: { grant_type: 'client_credentials', client_id: clientId, ...await clientAuthenticationOf(request, clientId), scope: 'payments.read' },
+    });
+    expect(unbound.status(), 'a token request without a DPoP proof').toBe(400);
+
+    // Act + Assert 2: with its proof, the worker passes; as Bearer, the same token is refused.
+    expect((await request.get(outcome, { headers: authorizationFor(token, 'GET', outcome) })).status(), 'token + fresh proof').toBe(404);
+    expect((await request.get(outcome, { headers: { Authorization: `Bearer ${token}` } })).status(), 'a bound token sent as Bearer').toBe(401);
   });
 });

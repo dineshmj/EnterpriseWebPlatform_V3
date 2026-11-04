@@ -69,7 +69,7 @@ Component Secrets (`ewp-<component>`; each key = the setting's name):
 
 | Secret | Keys |
 |---|---|
-| `ewp-idp` | `ConnectionStrings__IdentityDbConnection`, `SigningCredential__CertificatePassword`, and `ClientSecrets__<client id>` for each of the 21 confidential clients ([values.yaml](../deploy/helm/ewp/values.yaml), `idp.secretEnv`), plus Grafana's (`ClientSecrets__Grafana.ClientID`) while `global.observability.enabled` |
+| `ewp-idp` | `ConnectionStrings__IdentityDbConnection`, `SigningCredential__CertificatePassword`, ([values.yaml](../deploy/helm/ewp/values.yaml), `idp.secretEnv`); no EWP client has a secret (every one is `private_key_jwt`: `ewp-idp-client-keys` below) - only Grafana's (`ClientSecrets__Grafana.ClientID`) while `global.observability.enabled` |
 | `ewp-grafana-oidc` (namespace `observability`) | `client-secret`: Grafana's client secret at the IDP - the same value as `ewp-idp`'s `ClientSecrets__Grafana.ClientID` ([ewp-observability](../deploy/helm/ewp-observability), only with `global.observability.enabled`) |
 | `ewp-shell` | `ConnectionStrings__MenuDbConnection`, `ConnectionStrings__BffStateDbConnection` |
 | `ewp-customer-onboarding-bff-web`, `ewp-compliance-bff-web`, `ewp-accounts-bff-web`, `ewp-payments-bff-web` | `ConnectionStrings__BffStateDbConnection` |
@@ -84,10 +84,10 @@ Component Secrets (`ewp-<component>`; each key = the setting's name):
 | `ewp-notifications-api` | `ConnectionStrings__NotificationsDbConnection` |
 | `ewp-audit-api` | `ConnectionStrings__AuditDbConnection`, `Kafka__SaslPassword`, `Audit__Anchors__SigningKey` |
 | `ewp-partner-products-api` | `ConnectionStrings__PartnerProductsDbConnection`, `Kafka__SaslPassword` |
-| `ewp-audit-journey-api`, `ewp-operations-journey-api`, `ewp-partner-products-journey-api` | `<PREFIX>_CLIENT_SECRET` (`AUDIT_JOURNEY_`, `OPERATIONS_JOURNEY_`, `PARTNER_PRODUCTS_JOURNEY_`) |
+| `ewp-operations-journey-api` | `OPERATIONS_JOURNEY_SIMULATOR_ADMIN_KEY`; no client secret for any Journey API - their two keys are files in `ewp-<journey api>-client-key` (below) |
 | `ewp-customer-outbox-publisher` | `ConnectionStrings__CustomerDbConnection`, `Kafka__SaslPassword` |
 | `ewp-<subscriber>` (the 8 Kafka subscribers) | `Kafka__SaslPassword`; no client secret - the worker's two keys are files in `ewp-<subscriber>-client-key` (below) |
-| `ewp-partner-products-worker` | `PARTNER_PRODUCTS_WORKER_CLIENT_SECRET`, `PARTNER_PRODUCTS_WORKER_KAFKA_PASSWORD` |
+| `ewp-partner-products-worker` | `PARTNER_PRODUCTS_WORKER_KAFKA_PASSWORD`; no client secret - the worker's two keys are files in `ewp-partner-products-worker-client-key` (below) |
 | `ewp-<simulator>` (the 3 simulators) | `Simulator__ApiKey` - equal to its caller's `ApiKey`; `Simulator__AdminKey` - equal to the Operations Journey API's `OPERATIONS_JOURNEY_SIMULATOR_ADMIN_KEY` (the behaviour switch from another pod) |
 
 Shared Secrets and files:
@@ -97,10 +97,10 @@ Shared Secrets and files:
 | `ewp-data-protection` | `certificate.pfx`, `password` | IDP, Shell, the 4 .NET BFFs: encrypts their Data Protection key rings at rest (`DataProtection__CertificatePath` / `__CertificatePassword`, required outside Development) |
 | `ewp-tls-keystore-password` | `password` | cert-manager (writes the Node services' PKCS#12 keystores) and the Node services (read them) |
 | `ewp-idp-signing` | `signing.pfx` | IDP: the token-signing certificate |
-| `ewp-idp-client-keys` | `<client id>.jwk` for the Shell, the 8 web apps, the customers' channel (`SelfService.Web.ClientID.jwk`, `SelfService.JourneyApi.ClientID.jwk`) and the 8 Kafka subscribers | IDP: the private_key_jwt clients' PUBLIC keys |
+| `ewp-idp-client-keys` | `<client id>.jwk` for the Shell, the 8 web apps, the customers' channel (`SelfService.Web.ClientID.jwk`, `SelfService.JourneyApi.ClientID.jwk`), the 3 staff Journey APIs, the 8 Kafka subscribers and the Partner Products worker | IDP: the private_key_jwt clients' PUBLIC keys |
 | `ewp-<web app>-client-key` (the Shell and the 8 web apps, one each) | `client-key.pem` (encrypted PKCS#8), `client-key.pem.password`, `dpop-key.pem`, `dpop-key.pem.password` | That web app only, mounted at `/etc/ewp/client-key`: its private_key_jwt key (`Oidc__ClientKey__*`, `<PREFIX>_CLIENT_KEY_*`) and its DPoP key (`Oidc__DPoPKey__*`, `<PREFIX>_DPOP_KEY_*`) - two separate keys |
-| `ewp-<journey api>-client-key` (the 3 Journey APIs, one each) | `dpop-key.pem` (encrypted PKCS#8), `dpop-key.pem.password` | That Journey API only, mounted at `/etc/ewp/client-key`: its DPoP key (`<PREFIX>_DPOP_KEY_*`) - the tokens it obtains are bound to it |
-| `ewp-<subscriber>-client-key` (the 8 Kafka subscribers, one each) | `client-key.pem` (encrypted PKCS#8), `client-key.pem.password`, `dpop-key.pem`, `dpop-key.pem.password` | That worker only, mounted at `/etc/ewp/client-key`: its private_key_jwt key (`<Subscriber>__ClientKey__*`) and its DPoP key (`<Subscriber>__DPoPKey__*`) - two separate keys; its machine tokens are bound to the second |
+| `ewp-<journey api>-client-key` (the 3 Journey APIs, one each) | `client-key.pem` (encrypted PKCS#8), `client-key.pem.password`, `dpop-key.pem`, `dpop-key.pem.password` | That Journey API only, mounted at `/etc/ewp/client-key`: its private_key_jwt key (`<PREFIX>_CLIENT_KEY_*`) and its DPoP key (`<PREFIX>_DPOP_KEY_*`) - two separate keys; the tokens it obtains are bound to the second |
+| `ewp-<subscriber>-client-key` (the 8 Kafka subscribers, one each), `ewp-partner-products-worker-client-key` | `client-key.pem` (encrypted PKCS#8), `client-key.pem.password`, `dpop-key.pem`, `dpop-key.pem.password` | That worker only, mounted at `/etc/ewp/client-key`: its private_key_jwt key (`<Subscriber>__ClientKey__*`, `PARTNER_PRODUCTS_WORKER_CLIENT_KEY_*`) and its DPoP key (`<Subscriber>__DPoPKey__*`, `PARTNER_PRODUCTS_WORKER_DPOP_KEY_*`) - two separate keys; its machine tokens are bound to the second |
 | `ewp-partner-pki` | `ewp-partner-client.pfx` (+ `.password`), `ewp-request-signing.pfx` (+ `.password`), `ewp-trust-root.cer` | Partner Products API: mutual TLS and signed instructions to the Partner Bank |
 | ConfigMap `ewp-kafka-trust` | `ca.crt` | Every Kafka client: the Kafka trust root |
 | `ewp-launchdarkly` (only with `global.featureFlags.launchDarkly.enabled`) | `sdk-key` | The 5 APIs that read feature flags: the LaunchDarkly environment's SDK key (`EWP_LAUNCHDARKLY_SDK_KEY`, K13); the chart's own ConfigMap `ewp-feature-flags` holds the flag file |

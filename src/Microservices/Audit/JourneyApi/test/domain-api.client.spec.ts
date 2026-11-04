@@ -1,6 +1,7 @@
-import { generateKeyPairSync } from 'node:crypto';
+import { generateKeyPairSync, type KeyObject } from 'node:crypto';
 import { ForbiddenException, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
-import { decodeJwt } from 'jose';
+import { decodeJwt, jwtVerify } from 'jose';
+import { ClientKeyService } from '../src/auth/client-key.service';
 import { DPoPKeyService } from '../src/auth/dpop-key.service';
 import type { JourneyOptions } from '../src/configuration/journey-options';
 import { DomainApiClient } from '../src/services/domain-api.client';
@@ -22,7 +23,10 @@ describe('DomainApiClient - the IDP, the Audit Domain API and the Payments API p
   const AUDIT_EVENTS = '/v1/audit/events';
   const PAYMENTS = '/v1/payments';
   const UNAVAILABLE = 'A service behind this one is unavailable. Try again shortly.';
+  const CLIENT_ID = 'Audit.JourneyApi.ClientID';
+  const ISSUER = 'https://idp.ewp.example';
   let client: DomainApiClient;
+  let clientKey: { privateKey: KeyObject; publicKey: KeyObject };
 
   const url = (path: string) => `${wireMockUrl()}${path}`;
 
@@ -42,9 +46,13 @@ describe('DomainApiClient - the IDP, the Audit Domain API and the Payments API p
 
   beforeEach(async () => {
     await resetWireMock();
-    const options = { authority: wireMockUrl(), clientId: 'Audit.JourneyApi.ClientID', clientSecret: 'test-only' } as JourneyOptions;
+    // The IDP's discovery document: the client assertion's audience is the issuer it names.
+    await stub({ request: { method: 'GET', urlPath: '/.well-known/openid-configuration' }, response: { status: 200, jsonBody: { issuer: ISSUER } } });
+    const options = { authority: wireMockUrl(), clientId: CLIENT_ID } as JourneyOptions;
     const dpop = new DPoPKeyService(generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey);
-    client = new DomainApiClient(new TokenExchangeService(options, dpop), dpop);   // a new service: an empty token cache
+    clientKey = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+    const clientKeys = new ClientKeyService(clientKey.privateKey, CLIENT_ID, options.authority);
+    client = new DomainApiClient(new TokenExchangeService(options, dpop, clientKeys), dpop);   // a new service: an empty token cache
   });
 
   it('Given an auditor\'s token, when Audit and then Payments are read, then each gets its own exchanged token for its own scope', async () => {
@@ -81,6 +89,29 @@ describe('DomainApiClient - the IDP, the Audit Domain API and the Payments API p
     expect(typeof proof.ath).toBe('string');
     const exchangeProofs = (await received('POST', '/connect/token')).map(r => decodeJwt(r.headers.DPoP));
     expect(exchangeProofs.every(p => p.htm === 'POST' && p.htu === `${wireMockUrl()}/connect/token`)).toBe(true);
+
+    // ... and this API proves itself with a one-time assertion signed by its own key, for the
+    // IDP's issuer only - never a secret (private_key_jwt, FAPI 2.0).
+    expect(exchanges.every(f => f.get('client_secret') === null)).toBe(true);
+    const assertions = await Promise.all(exchanges.map(f => jwtVerify(f.get('client_assertion')!, clientKey.publicKey,
+      { issuer: CLIENT_ID, subject: CLIENT_ID, audience: ISSUER, typ: 'client-authentication+jwt' })));
+    expect(new Set(assertions.map(a => a.payload.jti)).size).toBe(2);
+    expect(assertions.every(a => a.payload.exp! - a.payload.iat! === 60)).toBe(true);
+  });
+
+  it('Given the IDP\'s discovery is unavailable, when the Audit API is read, then the auditor is told the IDP is unavailable and no token request is sent', async () => {
+    // Given
+    await resetWireMock();
+    await stub({ request: { method: 'GET', urlPath: '/.well-known/openid-configuration' }, response: { status: 503 } });
+    await idpExchanges();
+
+    // When
+    const error = await failureOf(client.get(AUDITOR_TOKEN, 'audit.read', url(AUDIT_EVENTS)));
+
+    // Then
+    expect(error).toBeInstanceOf(ServiceUnavailableException);
+    expect(error.message).toBe('The identity provider is unavailable. Try again shortly.');
+    expect(await received('POST', '/connect/token')).toHaveLength(0);
   });
 
   it('Given the Audit API is briefly unavailable (503, then 200), when it is read, then the one retry brings the answer', async () => {
@@ -203,8 +234,8 @@ describe('DomainApiClient - the IDP, the Audit Domain API and the Payments API p
     expect(await received('GET', AUDIT_EVENTS)).toHaveLength(0);
   });
 
-  it('Given the IDP\'s token endpoint redirects (307), when a token is exchanged, then the client secret and the auditor\'s token are not sent on', async () => {
-    // Given: a 307 keeps the method and the body - the form with the client secret.
+  it('Given the IDP\'s token endpoint redirects (307), when a token is exchanged, then the client assertion and the auditor\'s token are not sent on', async () => {
+    // Given: a 307 keeps the method and the body - the form with the client assertion.
     await stub({ request: { method: 'POST', urlPath: '/connect/token' }, response: { status: 307, headers: { Location: url('/elsewhere/token') } } });
     await stub({ request: { method: 'POST', urlPath: '/elsewhere/token' }, response: { status: 200, jsonBody: { access_token: 'stolen', expires_in: 300 } } });
 

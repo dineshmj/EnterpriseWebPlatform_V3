@@ -1,4 +1,4 @@
-import { generateKeyPairSync } from 'node:crypto';
+import { generateKeyPairSync, type KeyObject } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
@@ -6,6 +6,8 @@ import {
   Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { jwtVerify } from 'jose';
+import { ClientKeyService } from '../src/auth/client-key.service';
 import { DPoPKeyService } from '../src/auth/dpop-key.service';
 import type { JourneyOptions } from '../src/configuration/journey-options';
 import { DomainApiClient } from '../src/services/domain-api.client';
@@ -25,7 +27,10 @@ import { received, resetWireMock, stub, wireMockUrl } from '../../../../../tst/n
 describe('DomainApiClient - the IDP and the Partner Products Domain API played by WireMock', () => {
   const PERSON_TOKEN = 'person-delegated-token';
   const WHAT = 'Partner Products';
+  const CLIENT_ID = 'PartnerProducts.JourneyApi.ClientID';
+  const ISSUER = 'https://idp.ewp.example';
   let client: DomainApiClient;
+  let clientKey: { privateKey: KeyObject; publicKey: KeyObject };
 
   const domainUrl = (path: string) => `${wireMockUrl()}/v1/partner-products${path}`;
 
@@ -47,9 +52,13 @@ describe('DomainApiClient - the IDP and the Partner Products Domain API played b
 
   beforeEach(async () => {
     await resetWireMock();
-    const options = { authority: wireMockUrl(), clientId: 'PartnerProducts.JourneyApi.ClientID', clientSecret: 'test-only' } as JourneyOptions;
+    // The IDP's discovery document: the client assertion's audience is the issuer it names.
+    await stub({ request: { method: 'GET', urlPath: '/.well-known/openid-configuration' }, response: { status: 200, jsonBody: { issuer: ISSUER } } });
+    const options = { authority: wireMockUrl(), clientId: CLIENT_ID } as JourneyOptions;
     const dpop = new DPoPKeyService(generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey);
-    client = new DomainApiClient(new TokenExchangeService(options, dpop), dpop);   // a new service: an empty token cache
+    clientKey = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+    const clientKeys = new ClientKeyService(clientKey.privateKey, CLIENT_ID, options.authority);
+    client = new DomainApiClient(new TokenExchangeService(options, dpop, clientKeys), dpop);   // a new service: an empty token cache
   });
 
   it('Given a person\'s token, when the Domain API is read, then the token is exchanged for that one scope and the exchanged token is sent', async () => {
@@ -68,10 +77,33 @@ describe('DomainApiClient - the IDP and the Partner Products Domain API played b
     expect(form.get('subject_token')).toBe(PERSON_TOKEN);
     expect(form.get('scope')).toBe('partner-products.read');
 
+    // ... proved by a one-time assertion signed with this API's own key, for the IDP's issuer
+    // only - never a secret (private_key_jwt, FAPI 2.0) ...
+    expect(form.get('client_secret')).toBeNull();
+    expect(form.get('client_assertion_type')).toBe('urn:ietf:params:oauth:client-assertion-type:jwt-bearer');
+    const { payload } = await jwtVerify(form.get('client_assertion')!, clientKey.publicKey,
+      { issuer: CLIENT_ID, subject: CLIENT_ID, audience: ISSUER, typ: 'client-authentication+jwt' });
+    expect(payload.exp! - payload.iat!).toBe(60);
+
     // ... and the Domain API sees the exchanged token, never the person's own.
     const [call] = await received('GET', '/v1/partner-products/gold-account-applications');
     expect(call.headers.Authorization).toBe('DPoP exchanged-for-partner-products-read');
     expect(call.headers.DPoP).toBeDefined();   // the token is bound to this API's key: a proof goes with it
+  });
+
+  it('Given the IDP\'s discovery is unavailable, when the Domain API is read, then the person is told the IDP is unavailable and no token request is sent', async () => {
+    // Given
+    await resetWireMock();
+    await stub({ request: { method: 'GET', urlPath: '/.well-known/openid-configuration' }, response: { status: 503 } });
+    await idpExchangesFor('never-used');
+
+    // When
+    const error = await failureOf(client.get(PERSON_TOKEN, 'partner-products.read', domainUrl('/gold-account-applications'), WHAT));
+
+    // Then
+    expect(error).toBeInstanceOf(ServiceUnavailableException);
+    expect(error.message).toBe('The identity provider is unavailable. Try again shortly.');
+    expect(await received('POST', '/connect/token')).toHaveLength(0);
   });
 
   it('Given a token already exchanged, when the same scope is used again and then another, then the IDP is asked once per scope', async () => {
@@ -195,8 +227,8 @@ describe('DomainApiClient - the IDP and the Partner Products Domain API played b
     expect(await received('GET', '/elsewhere')).toHaveLength(0);
   });
 
-  it('Given the IDP\'s token endpoint redirects (307), when a token is exchanged, then the client secret and the person\'s token are not sent on', async () => {
-    // Given: a 307 keeps the method and the body - the form with the client secret.
+  it('Given the IDP\'s token endpoint redirects (307), when a token is exchanged, then the client assertion and the person\'s token are not sent on', async () => {
+    // Given: a 307 keeps the method and the body - the form with the client assertion.
     await stub({ request: { method: 'POST', urlPath: '/connect/token' }, response: { status: 307, headers: { Location: `${wireMockUrl()}/elsewhere/token` } } });
     await stub({ request: { method: 'POST', urlPath: '/elsewhere/token' }, response: { status: 200, jsonBody: { access_token: 'stolen', expires_in: 300 } } });
 

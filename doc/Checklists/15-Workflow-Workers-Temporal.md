@@ -6,6 +6,7 @@ Deployables: `src/Microservices/PartnerProducts/Worker` (the Digital Gold purcha
 
 - [x] **Its own machine identity** (client credentials, `PartnerProducts.Worker.M2M.ClientID`), never a stored person's token. *Because* the workflow runs long after the staff member's token has expired, and a machine must not act as a person. → `src/machine-token.ts`
 - [x] **One token per API** (`payments.read` for Payments, `partner-products.write` for Partner Products), kept until a minute before it expires; a 401 drops it. *Because* a token for one API must never reach another.
+- [x] **No client secret, no bearer token** (FAPI 2.0): `private_key_jwt` with the worker's own client key, and every token bound to its DPoP key (`cnf.jkt`); each API call carries a new proof (a retry too); an unbound token is refused; no start-up without both keys. *Because* a copied secret or token must not let anyone call the internal endpoints as the worker. → `src/machine-token.ts`
 - [x] **Accepted only where it is pinned:** Payments `GET /internal/v1/payments/by-idempotency-key/{key}` and Partner Products `/internal/v1/gold-purchases/...`; the Partner Products policy also refuses any token with a person (`sub` or `act`) in it. Staff endpoints need a person's permission and branch, which this token never has. → `PaymentOutcomeForPartnerProducts` (Payments `Program.cs`), `Worker` in `DigitalGoldPolicies.cs`
 
 ## 2. The workflow
@@ -32,5 +33,5 @@ Deployables: `src/Microservices/PartnerProducts/Worker` (the Digital Gold purcha
 
 - [ ] **Temporal secured:** mTLS to the frontend and namespace authorization (today the local development server, localhost only; production: mTLS from the service mesh or Temporal Cloud, not built in the app; R-16).
 - [x] **Events instead of polling:** the worker listens to `payments.payment.events` (its own Kafka user, read-only) and signals the purchase's workflow; the signal carries nothing - the workflow reads the payment itself; fallback look every 5 minutes. → `src/payment-events.ts`, `src/workflows.ts`
-- [ ] **Secret store** for the client secret (R-10).
+- [ ] **Secret store** for the client key and the DPoP key (R-10; the cloud demo mounts them from Key Vault).
 - [ ] **Workflow metrics and alerts** (failed or long-running workflows) in the deployment's monitoring.

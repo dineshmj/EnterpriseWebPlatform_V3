@@ -3,6 +3,7 @@ import { createServer as createHttpsServer } from 'node:https';
 import { NativeConnection, Worker } from '@temporalio/worker';
 import { createActivities } from './activities';
 import { loadOptions } from './config';
+import { MachineToken } from './machine-token';
 import { PaymentEventListener } from './payment-events';
 
 /**
@@ -14,6 +15,8 @@ async function main() {
   // The console window's title, like the other services.
   process.title = 'Partner Products Worker';
   const options = loadOptions();
+  // SEC: the worker's client key and DPoP key, read now - missing or unreadable = no start-up.
+  const tokens = new MachineToken(options);
 
   const connection = await NativeConnection.connect({ address: options.temporalAddress });
   const worker = await Worker.create({
@@ -22,14 +25,14 @@ async function main() {
     taskQueue: options.taskQueue,
     // Workflows are bundled and run in Temporal's deterministic sandbox; activities run here, in Node.
     workflowsPath: require.resolve('./workflows'),
-    activities: createActivities(options),
+    activities: createActivities(options, tokens),
   });
 
   // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
   // │ The payment-event listener runs beside the worker; until Kafka answers it tries again
   // │ every 30 s (the workflows still look at their payments every 5 minutes meanwhile).
   // └──────────────────────────────────────────────────────────────────────────────────────
-  const listener = new PaymentEventListener(options);
+  const listener = new PaymentEventListener(options, tokens);
   void (async () => {
     while (listener.state !== 'running') {
       try {

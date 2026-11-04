@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { ForbiddenException, Inject, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { ClientKeyService } from '../auth/client-key.service';
 import { DPoPKeyService } from '../auth/dpop-key.service';
 import { JOURNEY_OPTIONS, JourneyOptions } from '../configuration/journey-options';
 
@@ -32,6 +33,7 @@ export class TokenExchangeService {
   constructor(
     @Inject(JOURNEY_OPTIONS) private readonly options: JourneyOptions,
     private readonly dpop: DPoPKeyService,
+    private readonly clientKey: ClientKeyService,
   ) {}
 
   async exchange(subjectToken: string, scope: string): Promise<string> {
@@ -46,7 +48,7 @@ export class TokenExchangeService {
     let response: Response;
     try {
       // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
-      // │ The form carries this API's client secret and the person's token: a redirect is
+      // │ The form carries this API's client assertion and the person's token: a redirect is
       // │ refused (an error, so "IDP unavailable"), never followed - a 307 would send the form on.
       // └──────────────────────────────────────────────────────────────────────────────────────
       const tokenEndpoint = `${this.options.authority}/connect/token`;
@@ -57,7 +59,8 @@ export class TokenExchangeService {
         body: new URLSearchParams({
           grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
           client_id: this.options.clientId,
-          client_secret: this.options.clientSecret,
+          // SEC: private_key_jwt - a one-time assertion signed with this API's own key, no secret.
+          ...(await this.clientKey.clientAuthentication()),
           subject_token: subjectToken,
           subject_token_type: 'urn:ietf:params:oauth:token-type:access_token',
           scope,

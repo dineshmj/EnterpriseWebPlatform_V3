@@ -36,15 +36,15 @@ const PARTNER_PRODUCTS_WRITE = 'partner-products.write';
 // │       retry after a lost answer allocates or cancels once.
 // │ Ref : Temporal activities and retry policies | Partner Products step 8
 // └────────────────────────────────────────────────────────────────────────────────────────────────
-export function createActivities(options: WorkerOptions) {
-  const tokens = new MachineToken(options);
+export function createActivities(options: WorkerOptions, tokens: MachineToken) {
   const purchases = `${options.partnerProductsApiBaseUrl}/internal/v1/gold-purchases`;
 
   async function call<T>(scope: string, method: 'GET' | 'POST', url: string, body?: unknown): Promise<T | null> {
     const response = await fetch(url, {
       method,
       headers: {
-        Authorization: `Bearer ${await tokens.for(scope)}`,
+        // SEC: "DPoP <token>" and a new proof for exactly this call - a retry signs a new one.
+        ...await tokens.authorization(scope, method, url),
         Accept: 'application/json',
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
       },

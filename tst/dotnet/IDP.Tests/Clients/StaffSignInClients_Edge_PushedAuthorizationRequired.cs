@@ -18,9 +18,10 @@ namespace EnterpriseWebPlatform.IdentityServer.Tests.Clients;
 // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
 // │ FAPI 2.0 for the staff channel: the Shell and every web app sign people in with PAR
 // │ only (RFC 9126) - an authorization request sent through the browser is refused - plus
-// │ PKCE and a short-lived request_uri, and prove themselves with private_key_jwt (a public
-// │ key at the IDP, no shared secret). A new web app copied without either fails here, and
-// │ so does any web app or Journey API whose tokens are not DPoP-bound (RFC 9449).
+// │ PKCE and a short-lived request_uri. They and the three Journey APIs prove themselves with
+// │ private_key_jwt (a public key at the IDP, no shared secret). A new web app copied without
+// │ either fails here, and so does any web app or Journey API with a secret, or whose tokens
+// │ are not DPoP-bound (RFC 9449).
 // └──────────────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 [Category("Security")]
@@ -73,12 +74,11 @@ public sealed class StaffSignInClients_Edge_PushedAuthorizationRequired
         foreach (var api in JourneyApis)
         {
             settings[$"ClientIds:{api}"] = $"{api}.ClientID";
-            settings[$"ClientSecrets:{api}.ClientID"] = $"{api}-test-secret";
+            settings[$"ClientKeys:{api}.ClientID"] = WritePublicJwk(api);
         }
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
         ClientSettings.Initialize(configuration);
         ClientKeyStore.Initialize(configuration);
-        ClientSecretStore.Initialize(configuration);
     }
 
     [TearDown]
@@ -118,8 +118,8 @@ public sealed class StaffSignInClients_Edge_PushedAuthorizationRequired
     
     }
 
-    [TestCaseSource(nameof(StaffClients))]
-    public void Given_AStaffWebApp_When_ItsClientIsBuilt_Then_ItProvesItselfWithItsOwnKeyOnly(Func<Client> build)
+    [TestCaseSource(nameof(DPoPBoundClients))]
+    public void Given_AClientHoldingAPersonsTokens_When_ItsClientIsBuilt_Then_ItProvesItselfWithItsOwnKeyOnly(Func<Client> build)
     {
         // Given / When
         var client = build();

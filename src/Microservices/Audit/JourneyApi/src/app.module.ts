@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ClientKeyService } from './auth/client-key.service';
 import { DelegatedTokenGuard } from './auth/delegated-token.guard';
 import { DPoPKeyService } from './auth/dpop-key.service';
 import { DPoPProofVerifier } from './auth/dpop-proof.verifier';
@@ -16,6 +17,16 @@ import { TokenExchangeService } from './services/token-exchange.service';
     DPoPProofVerifier,   // the callers' DPoP proofs (DelegatedTokenGuard)
     // This API's own DPoP key, read at start-up: missing or unreadable = no start-up.
     { provide: DPoPKeyService, useFactory: (o: JourneyOptions) => DPoPKeyService.load(o.dpopKeyPath, o.dpopKeyPasswordPath), inject: [JOURNEY_OPTIONS] },
+    // This API's client key (private_key_jwt), read at start-up - and never the DPoP key as well.
+    {
+      provide: ClientKeyService,
+      useFactory: async (o: JourneyOptions, dpop: DPoPKeyService) => {
+        const key = ClientKeyService.load(o.clientKeyPath, o.clientKeyPasswordPath, o.clientId, o.authority);
+        if ((await key.thumbprint()) === (await dpop.thumbprint())) throw new Error('The DPoP key must not be the client key.');
+        return key;
+      },
+      inject: [JOURNEY_OPTIONS, DPoPKeyService],
+    },
     RateLimiter,   // the per-person limit (DelegatedTokenGuard)
     TokenExchangeService,
     DomainApiClient,

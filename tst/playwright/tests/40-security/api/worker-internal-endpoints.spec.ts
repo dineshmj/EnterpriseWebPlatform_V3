@@ -32,8 +32,6 @@ test.describe('Worker internal endpoints - the Worker only', () => {
   });
   test.afterAll(async () => { await http.dispose(); });
 
-  const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
-
   test('PartnerProductsApi ShouldRefuse_AStaffMembersDelegatedToken_AndNoToken', async ({ signedInAs }) => {
     // Arrange: Sophie's token for the Partner Products API, through the real chain
     // (web BFF -> Journey API -> Partner Products API, scope partner-products.write).
@@ -51,7 +49,8 @@ test.describe('Worker internal endpoints - the Worker only', () => {
     expect((await http.post(`${purchase}/payment-advice`, {
       headers: authorizationFor(staff, 'POST', `${purchase}/payment-advice`), data: { paymentRef: randomUUID(), amount: 20 },
     })).status(), 'a staff member advising a payment through the Worker\'s endpoint').toBe(403);
-    expect((await http.get(purchase, { headers: bearer(worker) })).status(), 'the Worker itself: passes, nothing found').toBe(404);
+    // The Worker's token is DPoP-bound too (FAPI 2.0): it goes with a proof of its own.
+    expect((await http.get(purchase, { headers: authorizationFor(worker, 'GET', purchase) })).status(), 'the Worker itself: passes, nothing found').toBe(404);
   });
 
   test('PaymentsApi ShouldRefuse_AStaffMembersDelegatedToken_AnotherMachine_AndNoToken', async ({ signedInAs }) => {
@@ -67,6 +66,6 @@ test.describe('Worker internal endpoints - the Worker only', () => {
     expect((await http.get(outcome)).status(), 'no token').toBe(401);
     expect((await http.get(outcome, { headers: authorizationFor(staff, 'GET', outcome) })).status(), 'a staff member\'s delegated token').toBe(403);
     expect((await http.get(outcome, { headers: authorizationFor(otherMachine, 'GET', outcome) })).status(), 'another machine client of the Payments API').toBe(403);
-    expect((await http.get(outcome, { headers: bearer(worker) })).status(), 'the Worker itself: passes, nothing found').toBe(404);
+    expect((await http.get(outcome, { headers: authorizationFor(worker, 'GET', outcome) })).status(), 'the Worker itself: passes, nothing found').toBe(404);
   });
 });

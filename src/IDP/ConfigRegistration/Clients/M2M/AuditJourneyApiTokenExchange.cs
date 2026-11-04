@@ -20,14 +20,16 @@ public sealed class AuditJourneyApiTokenExchange
         {
             ClientId = ClientSettings.Ids.AuditJourneyApi,
             ClientName = "Audit Journey API Client",
-            ClientSecrets = { ClientSecretStore.For(ClientSettings.Ids.AuditJourneyApi) },
+            ClientSecrets = { ClientKeyStore.For(ClientSettings.Ids.AuditJourneyApi) },
             // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
             // │ Token exchange ONLY - no client credentials: the Audit Journey API can never call a
             // │ Domain API as itself, only for a person (read scopes only).
             // └──────────────────────────────────────────────────────────────────────────────────────
             AllowedGrantTypes = { OidcConstants.GrantTypes.TokenExchange },
             // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
-            // │ DPoP (RFC 9449): every token it gets is bound to ITS own DPoP key, so a token taken
+            // │ private_key_jwt and DPoP (FAPI 2.0): the Journey API proves itself with a one-time
+            // │ assertion signed by its own key (the IDP holds only the public key - no shared
+            // │ secret), and every token it gets is bound to ITS own DPoP key, so a token taken
             // │ from the Journey API's memory or logs cannot be replayed by anyone else.
             // └──────────────────────────────────────────────────────────────────────────────────────
             RequireDPoP = true,
