@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.ContractTests</RootNamespace>
+    <AssemblyName>EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.ContractTests</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\AsyncWorkflows\Subscribers\Accounts\AccountsCommandSubscriber\AccountsCommandSubscriber.csproj" />
+    <ProjectReference Include="..\..\..\src\AsyncWorkflows\Subscribers\Payments\PaymentsSagaReplySubscriber\PaymentsSagaReplySubscriber.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="NUnit.Framework" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Where the Pact files are written (tst/contracts/pacts) and the participant names. -->
+    <Compile Include="..\Shared\ContractFiles.cs" Link="Shared\ContractFiles.cs" />
+    <AssemblyMetadata Include="ContractsDirectory" Value="$(MSBuildThisFileDirectory)..\..\contracts\pacts" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="AwesomeAssertions" Version="9.6.0" />
+    <PackageReference Include="coverlet.collector" Version="10.1.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+    <PackageReference Include="Moq" Version="4.21.0" />
+    <PackageReference Include="NUnit" Version="5.0.0" />
+    <PackageReference Include="NUnit.Analyzers" Version="4.15.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="NUnit3TestAdapter" Version="6.3.1" />
+    <PackageReference Include="PactNet" Version="5.0.1" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,237 @@
+{
+  "consumer": {
+    "name": "partner-products-worker"
+  },
+  "interactions": [
+    {
+      "contents": {
+        "content": {
+          "EventType": "PaymentCompleted",
+          "Payload": {
+            "PaymentNumber": "PAY-261015-TEST01",
+            "PaymentRef": "0199f2a4-6c1e-7b3a-9d42-5e8f1a2b3c4d",
+            "ToAccountNumber": "10203040",
+            "ToBsb": "033-000"
+          }
+        },
+        "contentType": "application/json",
+        "encoded": false
+      },
+      "description": "a PaymentCompleted event",
+      "matchingRules": {
+        "body": {
+          "$.Payload.PaymentNumber": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.PaymentRef": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          },
+          "$.Payload.ToAccountNumber": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.ToBsb": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          }
+        }
+      },
+      "pending": false,
+      "type": "Asynchronous/Messages"
+    },
+    {
+      "contents": {
+        "content": {
+          "EventType": "PaymentFailed",
+          "Payload": {
+            "PaymentNumber": "PAY-261015-TEST01",
+            "PaymentRef": "0199f2a4-6c1e-7b3a-9d42-5e8f1a2b3c4d",
+            "ToAccountNumber": "10203040",
+            "ToBsb": "033-000"
+          }
+        },
+        "contentType": "application/json",
+        "encoded": false
+      },
+      "description": "a PaymentFailed event",
+      "matchingRules": {
+        "body": {
+          "$.Payload.PaymentNumber": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.PaymentRef": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          },
+          "$.Payload.ToAccountNumber": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.ToBsb": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          }
+        }
+      },
+      "pending": false,
+      "type": "Asynchronous/Messages"
+    },
+    {
+      "description": "a request for the outcome of a payment",
+      "pending": false,
+      "providerStates": [
+        {
+          "name": "a completed payment exists for the key"
+        }
+      ],
+      "request": {
+        "headers": {
+          "Accept": [
+            "application/json"
+          ]
+        },
+        "method": "GET",
+        "path": "/internal/v1/payments/by-idempotency-key/0199f2a4-6c1e-7b3a-9d42-5e8f1a2b3c4d"
+      },
+      "response": {
+        "body": {
+          "content": {
+            "amount": 140.25,
+            "networkReference": "NPP-261015-000042",
+            "payeeAccountNumber": "10203040",
+            "payeeBsb": "033-000",
+            "paymentNumber": "PAY-261015-TEST01",
+            "status": "COMPLETED"
+          },
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "matchingRules": {
+          "body": {
+            "$.amount": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "number"
+                }
+              ]
+            },
+            "$.networkReference": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.payeeAccountNumber": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.payeeBsb": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.paymentNumber": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      },
+      "type": "Synchronous/HTTP"
+    },
+    {
+      "description": "a request for the outcome of a payment never started",
+      "pending": false,
+      "providerStates": [
+        {
+          "name": "no payment was started with the key"
+        }
+      ],
+      "request": {
+        "headers": {
+          "Accept": [
+            "application/json"
+          ]
+        },
+        "method": "GET",
+        "path": "/internal/v1/payments/by-idempotency-key/0199f2a4-6c1e-7b3a-9d42-5e8f1a2b3c4d"
+      },
+      "response": {
+        "status": 404
+      },
+      "type": "Synchronous/HTTP"
+    }
+  ],
+  "metadata": {
+    "pact-js": {
+      "version": "17.1.4"
+    },
+    "pactRust": {
+      "ffi": "0.5.8",
+      "models": "1.3.16"
+    },
+    "pactSpecification": {
+      "version": "4.0"
+    }
+  },
+  "provider": {
+    "name": "payments-api"
+  }
+}

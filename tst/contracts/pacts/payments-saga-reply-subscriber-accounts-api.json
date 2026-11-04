@@ -1,0 +1,310 @@
+{
+  "consumer": {
+    "name": "payments-saga-reply-subscriber"
+  },
+  "interactions": [
+    {
+      "contents": {
+        "content": {
+          "CausationId": "0199f2a4-6c1e-7b3a-9d42-000000000001",
+          "EventType": "FundsReleased",
+          "MessageId": "0199f2a4-6c1e-7b3a-9d42-000000000002",
+          "Payload": {
+            "HoldStatus": "RELEASED",
+            "NothingWasHeld": true,
+            "PaymentNumber": "PAY-261015-TEST01",
+            "PaymentRef": "0199f2a4-6c1e-7b3a-9d42-5e8f1a2b3c4d"
+          }
+        },
+        "contentType": "application/json",
+        "encoded": false
+      },
+      "description": "a FundsReleased reply",
+      "matchingRules": {
+        "body": {
+          "$.CausationId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          },
+          "$.MessageId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          },
+          "$.Payload.HoldStatus": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.NothingWasHeld": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.PaymentNumber": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.PaymentRef": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          }
+        }
+      },
+      "pending": false,
+      "type": "Asynchronous/Messages"
+    },
+    {
+      "contents": {
+        "content": {
+          "CausationId": "0199f2a4-6c1e-7b3a-9d42-000000000001",
+          "EventType": "FundsReservationFailed",
+          "MessageId": "0199f2a4-6c1e-7b3a-9d42-000000000002",
+          "Payload": {
+            "HoldStatus": "REFUSED",
+            "PaymentNumber": "PAY-261015-TEST01",
+            "PaymentRef": "0199f2a4-6c1e-7b3a-9d42-5e8f1a2b3c4d",
+            "Reason": "INSUFFICIENT_FUNDS",
+            "ReasonText": "The account does not have enough available funds."
+          }
+        },
+        "contentType": "application/json",
+        "encoded": false
+      },
+      "description": "a FundsReservationFailed reply",
+      "matchingRules": {
+        "body": {
+          "$.CausationId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          },
+          "$.MessageId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          },
+          "$.Payload.HoldStatus": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.PaymentNumber": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.PaymentRef": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          },
+          "$.Payload.Reason": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.ReasonText": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          }
+        }
+      },
+      "pending": false,
+      "type": "Asynchronous/Messages"
+    },
+    {
+      "contents": {
+        "content": {
+          "CausationId": "0199f2a4-6c1e-7b3a-9d42-000000000001",
+          "EventType": "FundsReserved",
+          "MessageId": "0199f2a4-6c1e-7b3a-9d42-000000000002",
+          "Payload": {
+            "HoldStatus": "HELD",
+            "PaymentNumber": "PAY-261015-TEST01",
+            "PaymentRef": "0199f2a4-6c1e-7b3a-9d42-5e8f1a2b3c4d"
+          }
+        },
+        "contentType": "application/json",
+        "encoded": false
+      },
+      "description": "a FundsReserved reply",
+      "matchingRules": {
+        "body": {
+          "$.CausationId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          },
+          "$.MessageId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          },
+          "$.Payload.HoldStatus": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.PaymentNumber": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.PaymentRef": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          }
+        }
+      },
+      "pending": false,
+      "type": "Asynchronous/Messages"
+    },
+    {
+      "contents": {
+        "content": {
+          "CausationId": "0199f2a4-6c1e-7b3a-9d42-000000000001",
+          "EventType": "FundsSettled",
+          "MessageId": "0199f2a4-6c1e-7b3a-9d42-000000000002",
+          "Payload": {
+            "HoldStatus": "SETTLED",
+            "PaymentNumber": "PAY-261015-TEST01",
+            "PaymentRef": "0199f2a4-6c1e-7b3a-9d42-5e8f1a2b3c4d"
+          }
+        },
+        "contentType": "application/json",
+        "encoded": false
+      },
+      "description": "a FundsSettled reply",
+      "matchingRules": {
+        "body": {
+          "$.CausationId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          },
+          "$.MessageId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          },
+          "$.Payload.HoldStatus": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.PaymentNumber": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.Payload.PaymentRef": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          }
+        }
+      },
+      "pending": false,
+      "type": "Asynchronous/Messages"
+    }
+  ],
+  "metadata": {
+    "pactRust": {
+      "ffi": "0.4.27",
+      "models": "1.2.8"
+    },
+    "pactSpecification": {
+      "version": "4.0"
+    }
+  },
+  "provider": {
+    "name": "accounts-api"
+  }
+}

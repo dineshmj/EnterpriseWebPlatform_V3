@@ -24,12 +24,19 @@
     <Compile Include="..\Shared\WireMockNeighbour.cs" Link="Shared\WireMockNeighbour.cs" />
   </ItemGroup>
   <ItemGroup>
+    <!-- The committed consumer contracts (tst/contracts/pacts) this API is checked against, and its host for the verifier (Contracts/). -->
+    <Compile Include="..\Shared\ContractFiles.cs" Link="Shared\ContractFiles.cs" />
+    <AssemblyMetadata Include="ContractsDirectory" Value="$(MSBuildThisFileDirectory)..\..\contracts\pacts" />
+    <Compile Include="..\Shared\ContractProviderHost.cs" Link="Shared\ContractProviderHost.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="AwesomeAssertions" Version="9.6.0" />
     <PackageReference Include="coverlet.collector" Version="10.1.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="JsonSchema.Net" Version="9.5.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.14" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
     <PackageReference Include="Moq" Version="4.21.0" />
     <PackageReference Include="NUnit" Version="5.0.0" />
@@ -38,6 +45,7 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="NUnit3TestAdapter" Version="6.3.1" />
+    <PackageReference Include="PactNet" Version="5.0.1" />
     <PackageReference Include="WireMock.Net" Version="2.21.0" />
     <!-- ARCH: Humanizer.Core 3 referenced directly - Flagd needs >= 3 (via JsonPointer.Net), WireMock.Net pins exactly 2.14.1;
          without this, NuGet cannot settle it (NU1107). Remove when WireMock.Net moves to Humanizer 3. -->

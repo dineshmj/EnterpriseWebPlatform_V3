@@ -1,0 +1,307 @@
+{
+  "consumer": {
+    "name": "payments-saga-reply-subscriber"
+  },
+  "interactions": [
+    {
+      "description": "a FundsReleased reply",
+      "pending": false,
+      "providerStates": [
+        {
+          "name": "a payment saga waits for Accounts' reply"
+        }
+      ],
+      "request": {
+        "body": {
+          "content": {
+            "causationId": "0199f2a4-6c1e-7b3a-9d42-000000000001",
+            "messageId": "0199f2a4-6c1e-7b3a-9d42-000000000002",
+            "nothingWasHeld": true,
+            "paymentRef": "0199f2a4-6c1e-7b3a-9d42-5e8f1a2b3c4d",
+            "reason": null,
+            "reasonCode": null,
+            "replyType": "FundsReleased"
+          },
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "matchingRules": {
+          "body": {
+            "$.causationId": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                }
+              ]
+            },
+            "$.messageId": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                }
+              ]
+            },
+            "$.nothingWasHeld": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.paymentRef": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                }
+              ]
+            }
+          }
+        },
+        "method": "POST",
+        "path": "/internal/v1/payment-sagas/replies"
+      },
+      "response": {
+        "status": 200
+      },
+      "type": "Synchronous/HTTP"
+    },
+    {
+      "description": "a FundsReservationFailed reply",
+      "pending": false,
+      "providerStates": [
+        {
+          "name": "a payment saga waits for Accounts' reply"
+        }
+      ],
+      "request": {
+        "body": {
+          "content": {
+            "causationId": "0199f2a4-6c1e-7b3a-9d42-000000000001",
+            "messageId": "0199f2a4-6c1e-7b3a-9d42-000000000002",
+            "nothingWasHeld": null,
+            "paymentRef": "0199f2a4-6c1e-7b3a-9d42-5e8f1a2b3c4d",
+            "reason": "The account does not have enough available funds.",
+            "reasonCode": "INSUFFICIENT_FUNDS",
+            "replyType": "FundsReservationFailed"
+          },
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "matchingRules": {
+          "body": {
+            "$.causationId": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                }
+              ]
+            },
+            "$.messageId": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                }
+              ]
+            },
+            "$.paymentRef": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                }
+              ]
+            },
+            "$.reason": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.reasonCode": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          }
+        },
+        "method": "POST",
+        "path": "/internal/v1/payment-sagas/replies"
+      },
+      "response": {
+        "status": 200
+      },
+      "type": "Synchronous/HTTP"
+    },
+    {
+      "description": "a FundsReserved reply",
+      "pending": false,
+      "providerStates": [
+        {
+          "name": "a payment saga waits for Accounts' reply"
+        }
+      ],
+      "request": {
+        "body": {
+          "content": {
+            "causationId": "0199f2a4-6c1e-7b3a-9d42-000000000001",
+            "messageId": "0199f2a4-6c1e-7b3a-9d42-000000000002",
+            "nothingWasHeld": null,
+            "paymentRef": "0199f2a4-6c1e-7b3a-9d42-5e8f1a2b3c4d",
+            "reason": null,
+            "reasonCode": null,
+            "replyType": "FundsReserved"
+          },
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "matchingRules": {
+          "body": {
+            "$.causationId": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                }
+              ]
+            },
+            "$.messageId": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                }
+              ]
+            },
+            "$.paymentRef": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                }
+              ]
+            }
+          }
+        },
+        "method": "POST",
+        "path": "/internal/v1/payment-sagas/replies"
+      },
+      "response": {
+        "status": 200
+      },
+      "type": "Synchronous/HTTP"
+    },
+    {
+      "description": "a reply for a payment Payments does not know",
+      "pending": false,
+      "providerStates": [
+        {
+          "name": "no payment saga exists for the payment"
+        }
+      ],
+      "request": {
+        "body": {
+          "content": {
+            "causationId": "0199f2a4-6c1e-7b3a-9d42-000000000001",
+            "messageId": "0199f2a4-6c1e-7b3a-9d42-000000000002",
+            "nothingWasHeld": null,
+            "paymentRef": "0199f2a4-6c1e-7b3a-9d42-5e8f1a2b3c4d",
+            "reason": null,
+            "reasonCode": null,
+            "replyType": "FundsReserved"
+          },
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "matchingRules": {
+          "body": {
+            "$.causationId": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                }
+              ]
+            },
+            "$.messageId": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                }
+              ]
+            },
+            "$.paymentRef": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                }
+              ]
+            }
+          }
+        },
+        "method": "POST",
+        "path": "/internal/v1/payment-sagas/replies"
+      },
+      "response": {
+        "status": 400
+      },
+      "type": "Synchronous/HTTP"
+    }
+  ],
+  "metadata": {
+    "pactRust": {
+      "ffi": "0.4.27",
+      "models": "1.2.8"
+    },
+    "pactSpecification": {
+      "version": "4.0"
+    }
+  },
+  "provider": {
+    "name": "payments-api"
+  }
+}

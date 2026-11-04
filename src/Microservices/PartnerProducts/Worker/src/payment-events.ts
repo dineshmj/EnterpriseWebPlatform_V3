@@ -17,6 +17,36 @@ interface PaymentEvent {
   Payload?: { PaymentRef?: string; PaymentNumber?: string; ToBsb?: string; ToAccountNumber?: string };
 }
 
+/** A payment's final outcome that a waiting purchase workflow should hear about. */
+export interface SettledPayment {
+  eventType: string;
+  paymentRef: string;
+  paymentNumber: string | undefined;
+}
+
+// ┌─ CONTRACT ───────────────────────────────────────────────────────────────────────────
+// │ Tolerant reader of the Payments API's envelope: only EventType and four payload fields
+// │ are read; anything else may change freely. These are exactly the fields of the
+// │ contract partner-products-worker-payments-api.json (test/contracts), which the
+// │ Payments API's tests check against its real Outbox messages.
+// └──────────────────────────────────────────────────────────────────────────────────────
+/** The outcome to pass on, or null: not JSON, not a final outcome, or not a payment to the Partner Bank's settlement account. */
+export function settledPaymentOf(raw: string | undefined, settlement: { bsb: string; accountNumber: string }): SettledPayment | null {
+  if (!raw) return null;
+  let event: PaymentEvent;
+  try {
+    event = JSON.parse(raw) as PaymentEvent;
+  } catch {
+    return null;   // not JSON: nothing to pass on
+  }
+  const payload = event.Payload;
+  if (!event.EventType || !OUTCOMES.has(event.EventType) || !payload?.PaymentRef) return null;
+  // Only payments to the Partner Bank's settlement account can belong to a purchase.
+  if (payload.ToBsb !== settlement.bsb || payload.ToAccountNumber !== settlement.accountNumber) return null;
+  if (!/^[0-9a-f-]{36}$/i.test(payload.PaymentRef)) return null;
+  return { eventType: event.EventType, paymentRef: payload.PaymentRef, paymentNumber: payload.PaymentNumber };
+}
+
 // ┌─ :: RESILIENCE :: Events wake the workflow, polling is only the safety net ────────────────────
 // │ Why : A purchase should be allocated (or cancelled) as soon as its payment has an outcome, without
 // │       a stream of status calls to EWP Payments for every open purchase.
@@ -74,30 +104,20 @@ export class PaymentEventListener {
   }
 
   private async handle(client: Client, raw: string | undefined): Promise<void> {
-    if (!raw) return;
-    let event: PaymentEvent;
-    try {
-      event = JSON.parse(raw) as PaymentEvent;
-    } catch {
-      return;   // not JSON: nothing to pass on
-    }
-    const payload = event.Payload;
-    if (!event.EventType || !OUTCOMES.has(event.EventType) || !payload?.PaymentRef) return;
-    // Only payments to the Partner Bank's settlement account can belong to a purchase.
-    if (payload.ToBsb !== this.options.settlementBsb || payload.ToAccountNumber !== this.options.settlementAccountNumber) return;
-    if (!/^[0-9a-f-]{36}$/i.test(payload.PaymentRef)) return;
+    const payment = settledPaymentOf(raw, { bsb: this.options.settlementBsb, accountNumber: this.options.settlementAccountNumber });
+    if (!payment) return;
 
-    const purchaseNumber = await this.purchaseOf(payload.PaymentRef);
+    const purchaseNumber = await this.purchaseOf(payment.paymentRef);
     if (!purchaseNumber) return;   // a payment to the Partner Bank that no purchase started
 
     try {
       await client.workflow.getHandle(`gold-purchase-${purchaseNumber}`).signal(paymentSettledSignal);
-      console.log(`${event.EventType} ${payload.PaymentNumber ?? ''}: purchase ${purchaseNumber}'s workflow told to look again.`);
+      console.log(`${payment.eventType} ${payment.paymentNumber ?? ''}: purchase ${purchaseNumber}'s workflow told to look again.`);
     } catch (error) {
       // Already ended (e.g. the 5-minute check got there first after a restart) or not started
       // yet (it reads the payment on start): nothing to do - said once, so a log reads clearly.
       if (error instanceof WorkflowNotFoundError) {
-        console.log(`${event.EventType} ${payload.PaymentNumber ?? ''}: purchase ${purchaseNumber}'s workflow is not running (already ended, or not started yet) - nothing to tell it.`);
+        console.log(`${payment.eventType} ${payment.paymentNumber ?? ''}: purchase ${purchaseNumber}'s workflow is not running (already ended, or not started yet) - nothing to tell it.`);
         return;
       }
       throw error;

@@ -93,6 +93,15 @@ jobs:
       - name: Unit tests
         run: dotnet test tst/dotnet/EwpTests.slnx --configuration Release --logger "console;verbosity=normal"
 
+      # ┌─ ARCH ─────────────────────────────────────────────────────────────────────────────────────
+      # │ The consumer-driven contracts (tst/contracts/pacts): the consumer tests above wrote them
+      # │ afresh, the provider tests checked the COMMITTED ones. A difference means a consumer's
+      # │ expectations changed without their contract being committed - the providers would be
+      # │ checked against an old promise.
+      # └──────────────────────────────────────────────────────────────────────────────────────────
+      - name: Contracts up to date
+        run: bash .github/scripts/contracts-up-to-date.sh
+
   # ┌─ ARCH ─────────────────────────────────────────────────────────────────────────────────────────
   # │ The Node projects are found, not listed: a new project under src is checked from its first
   # │ commit. A project is a Next.js app when it has a next.config.*; it has tests when its
@@ -191,6 +200,12 @@ jobs:
       - name: Tests
         if: matrix.tests
         run: pnpm test
+
+      # ARCH: a project with Pact consumer tests rewrote its contract above - it must equal the committed one.
+      - name: Contracts up to date
+        if: matrix.tests
+        working-directory: .
+        run: bash .github/scripts/contracts-up-to-date.sh
 
   # ┌─ :: ARCHITECTURE + SECURITY :: The Helm charts render to valid Kubernetes objects ───────────
   # │ Why : A chart error would show only at install time in a short-lived demo cluster; here it

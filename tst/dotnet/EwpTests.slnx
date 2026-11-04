@@ -1,6 +1,8 @@
 <Solution>
   <Folder Name="/TargetProjects/">
     <Project Path="../../src/AsyncWorkflows/Infrastructure/Subscribers/EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Subscribers.csproj" />
+    <Project Path="../../src/AsyncWorkflows/Subscribers/Accounts/AccountsCommandSubscriber/AccountsCommandSubscriber.csproj" />
+    <Project Path="../../src/AsyncWorkflows/Subscribers/Payments/PaymentsSagaReplySubscriber/PaymentsSagaReplySubscriber.csproj" />
     <Project Path="../../src/IDP/EnterpriseWebPlatform.IdentityServer.csproj" />
     <Project Path="../../src/Microservices/Accounts/API/EnterpriseWebPlatform.Accounts.Api.csproj" />
     <Project Path="../../src/Microservices/Compliance/API/EnterpriseWebPlatform.Compliance.Api.csproj" />
@@ -13,6 +15,7 @@
   <Folder Name="/Unit/">
     <Project Path="Accounts.Api.Tests/Accounts.Api.Tests.csproj" />
     <Project Path="AsyncWorkflows.Infrastructure.Tests/AsyncWorkflows.Infrastructure.Tests.csproj" />
+    <Project Path="AsyncWorkflows.Subscribers.ContractTests/AsyncWorkflows.Subscribers.ContractTests.csproj" />
     <Project Path="Compliance.Api.Tests/Compliance.Api.Tests.csproj" />
     <Project Path="CustomerKyc.Api.Tests/CustomerKyc.Api.Tests.csproj" />
     <Project Path="CustomerOnboarding.Api.Tests/CustomerOnboarding.Api.Tests.csproj" />
