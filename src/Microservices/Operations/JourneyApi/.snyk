@@ -1,0 +1,18 @@
+# ┌─ :: SECURITY :: One Snyk finding ignored - until a fixed version exists, at most 3 months ──────
+# │ Why : deepmerge 4.3.1 (CVE-2026-93753, GHSA-gcqx-w48m-w2h4, LOW: prototype poisoning in
+# │       mergeObject) has no fixed version. Here it is reached ONLY through development tools
+# │       (Jest's jest-config, the Nest CLI) - never through a production dependency, so it is
+# │       not in the container image (pnpm install --prod) and never sees request data.
+# │ How : Ignored for this project only, with an expiry: on 2027-02-04 Snyk reports it again, so
+# │       the decision is taken anew (update if a fixed version exists, else renew with a reason).
+# │       pnpm audit --prod in CI still guards the production dependencies.
+# │ Ref : doc/CI.md (Snyk) | OWASP A06 Vulnerable and Outdated Components
+# └────────────────────────────────────────────────────────────────────────────────────────────────
+version: v1.25.0
+ignore:
+  SNYK-JS-DEEPMERGE-19964053:
+    - '*':
+        reason: Development tools only (Jest / Nest CLI), not in the production image; no fixed version yet.
+        expires: 2027-02-04T00:00:00.000Z
+        created: 2026-11-04T00:00:00.000Z
+patch: {}
