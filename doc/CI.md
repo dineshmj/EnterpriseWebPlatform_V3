@@ -63,6 +63,14 @@ Snyk and `pnpm audit` can rate the same advisory differently: `qs` 6.16.0 (GHSA-
 28-OCT-2026) was Medium for GitHub, so the CI gate passed, and High for Snyk. It was fixed with
 an override like the others.
 
+**A Snyk finding ignored, with an expiry.** `deepmerge` 4.3.1 (CVE-2026-93753 /
+GHSA-gcqx-w48m-w2h4, LOW, 4-NOV-2026) has no fixed version. In the Audit, Operations and Partner
+Products Journey APIs and the Partner Products worker it is reached only through development tools
+(Jest, the Nest CLI), so it is not in any image. Each of those four projects has a `.snyk` policy
+that ignores this one finding until **2027-02-04**, with the reason. On that date Snyk reports it
+again: update `deepmerge` if a fixed version exists, otherwise renew the ignore with a reason.
+`pnpm audit --prod` in the CI gate still checks every production dependency.
+
 **The tokens.** `SONAR_TOKEN` is a *personal* SonarQube Cloud token with **no expiry**: scoped
 organisation tokens need the paid Team plan, and an expiring token would turn the job red on its
 own one day. Accepted for this PoC because the token can only act in one free organisation with
