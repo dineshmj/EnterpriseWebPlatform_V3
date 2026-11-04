@@ -68,8 +68,22 @@ public interface IM2MClientSettings
 
     string ClientId { get; }
 
-    /// <summary>From configuration / secret store only; never compiled in.</summary>
-    string ClientSecret { get; }
+    /// <summary>The private_key_jwt key: proves WHICH worker asks (the IDP holds its public key).</summary>
+    KeyFileSettings ClientKey { get; }
+
+    /// <summary>The DPoP key every token of this worker is bound to - not the client key.</summary>
+    KeyFileSettings DPoPKey { get; }
 
     string Scope { get; }
+}
+
+/// <summary>
+/// A private key in a file (encrypted PKCS#8 PEM, made by ps/pki/New-EwpLocalPki.ps1 or mounted
+/// from a secret store) and the file holding its password. Environment variables are expanded.
+/// </summary>
+public sealed class KeyFileSettings
+{
+    public string Path { get; init; } = string.Empty;
+
+    public string PasswordPath { get; init; } = string.Empty;
 }

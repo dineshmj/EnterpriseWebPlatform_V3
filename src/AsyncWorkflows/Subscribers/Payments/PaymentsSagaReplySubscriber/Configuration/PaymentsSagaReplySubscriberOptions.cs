@@ -25,8 +25,14 @@ public sealed class PaymentsSagaReplySubscriberOptions : ISubscriberSettings, IM
     /// <summary>From configuration only: the client ID the IDP registered for this worker.</summary>
     public string ClientId { get; init; } = string.Empty;
 
-    /// <summary>From configuration / secret store only; no compiled-in default.</summary>
-    public string ClientSecret { get; init; } = string.Empty;
+    /// <summary>
+    /// The private_key_jwt key (encrypted PEM and its password file): from configuration only,
+    /// mounted from a secret store outside Development; no compiled-in default.
+    /// </summary>
+    public KeyFileSettings ClientKey { get; init; } = new();
+
+    /// <summary>The key every token of this worker is bound to (DPoP) - not the client key.</summary>
+    public KeyFileSettings DPoPKey { get; init; } = new();
 
     public string Scope { get; init; } = "payments.write";
 

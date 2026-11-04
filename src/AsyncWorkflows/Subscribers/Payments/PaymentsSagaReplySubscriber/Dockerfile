@@ -9,9 +9,9 @@
 # │       runtime runs it. The ASP.NET runtime (not the plain .NET one) because the worker serves
 # │       /health/live, /health/ready and /metrics from a small Kestrel listener on Health:Urls,
 # │       set to all interfaces on 8080 here so the orchestrator can probe it. The Kafka password
-# │       and client secret come from the environment (Kafka__SaslPassword,
-# │       PaymentsSagaReplySubscriber__ClientSecret); the Kafka trust root is a mounted file
-# │       (Kafka__SslCaLocation).
+# │       comes from the environment (Kafka__SaslPassword); the worker's client and DPoP keys
+# │       (PaymentsSagaReplySubscriber__ClientKey__Path, __DPoPKey__Path) and the Kafka trust root
+# │       (Kafka__SslCaLocation) are mounted files.
 # │ Ref : doc/Containers.md | Features 2.4.6 | OWASP A05, A08 | Threat-Model R-10
 # └────────────────────────────────────────────────────────────────────────────────────────────────
 

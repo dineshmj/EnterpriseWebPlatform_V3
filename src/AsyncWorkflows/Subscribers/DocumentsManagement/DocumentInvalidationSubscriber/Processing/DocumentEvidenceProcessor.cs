@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 
@@ -142,12 +141,12 @@ public sealed class DocumentEvidenceProcessor(
 
     private async Task<HttpResponseMessage> SendAsync(string path, object body, CancellationToken cancellationToken)
     {
-        var token = await tokenClient.GetAccessTokenAsync(cancellationToken);
         using var request = new HttpRequestMessage(HttpMethod.Post, path)
         {
             Content = JsonContent.Create(body)
         };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        // SEC: the DPoP-bound machine token and a new proof for this attempt are added by
+        // DPoPMachineTokenHandler (Program.cs) - never a bearer token.
         return await httpClientFactory.CreateClient(HttpClientName).SendAsync(request, cancellationToken);
     }
 

@@ -66,7 +66,7 @@ test.describe('Worker internal endpoints - the Worker only', () => {
     // Act + Assert
     expect((await http.get(outcome)).status(), 'no token').toBe(401);
     expect((await http.get(outcome, { headers: authorizationFor(staff, 'GET', outcome) })).status(), 'a staff member\'s delegated token').toBe(403);
-    expect((await http.get(outcome, { headers: bearer(otherMachine) })).status(), 'another machine client of the Payments API').toBe(403);
+    expect((await http.get(outcome, { headers: authorizationFor(otherMachine, 'GET', outcome) })).status(), 'another machine client of the Payments API').toBe(403);
     expect((await http.get(outcome, { headers: bearer(worker) })).status(), 'the Worker itself: passes, nothing found').toBe(404);
   });
 });

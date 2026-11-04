@@ -7,8 +7,9 @@
 # │       neither, and be as small and locked down as the APIs'.
 # │ How : Same pattern as the APIs: SDK stage publishes, chiseled non-root ASP.NET runtime runs it
 # │       (the worker serves /health/* and /metrics from Kestrel on Health:Urls - all interfaces on
-# │       8080 here). Kafka password and client secret from the environment; the Kafka trust root is
-# │       a mounted file (Kafka__SslCaLocation).
+# │       8080 here). Kafka password from the environment; the worker's client and DPoP keys and
+# │       the Kafka trust root are mounted files (<Section>__ClientKey__Path, __DPoPKey__Path,
+# │       Kafka__SslCaLocation).
 # │ Ref : doc/Containers.md | OWASP A05, A08 | CIS Docker Benchmark 4.1
 # └─────────────────────────────────────────────────────────────────────────────────────────────────
 

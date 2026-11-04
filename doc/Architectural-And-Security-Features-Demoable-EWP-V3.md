@@ -740,9 +740,13 @@ Users sign in with OpenID Connect Authorization Code flow plus PKCE, the flow re
 
 Humans and services authenticate differently. Workers and BFFs use OAuth 2.0 Client Credentials with **one client per caller–callee purpose** (for example "KYC Case Opening Subscriber → Customer KYC API"), each with only the scope it needs. The receiving API pins the exact `client_id` on its internal endpoints, so a valid token from any *other* service is rejected even if it carries the right scope. A machine identity never acts as a human: the human initiator travels as data, for accountability only.
 
+**No secret, and no bearer token, for the Kafka subscribers (FAPI 2.0, 4-NOV-2026).** Each of the eight subscribers proves itself to the IDP with **its own EC P-256 key** (`private_key_jwt`): a one-time, 60-second assertion signed with the private key, while the IDP holds only the public key. No client secret exists for them any more, in settings or in a secret store. Each also has a second key, its **DPoP key**. The IDP issues its token only against a DPoP proof and binds the token to that key (`cnf.jkt`). Every call to the API then carries a new proof for exactly that request, including a retry. So a machine token copied from a log, a memory dump or a proxy is useless without the worker's private key. A worker that gets an unbound token back refuses to use it. A worker without readable keys does not start. The Partner Products worker (Temporal) still uses a client secret and bearer tokens; it is next.
+
 **Where to look at:**
 
 - M2M clients: [IDP ConfigRegistration/Clients/M2M](../src/IDP/ConfigRegistration/Clients/M2M)
+- The subscribers' keys, assertion and proofs: [MachineKeys.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/MachineKeys.cs), [CachedM2MTokenClient.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/CachedM2MTokenClient.cs), [DPoPMachineTokenHandler.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/DPoPMachineTokenHandler.cs)
+- Demo: the Playwright test `Machine ShouldBindASubscribersToken_AndRefuseItAsBearer_AReplayedProof_AndAProofForAnotherAddress` ([dpop-bound-tokens.spec.ts](../tst/playwright/tests/40-security/api/dpop-bound-tokens.spec.ts)); UT `KafkaSubscriberClients_Edge_KeyAndDPoPBound` and [AsyncWorkflows.Infrastructure.Tests](../tst/dotnet/AsyncWorkflows.Infrastructure.Tests/Subscribers) (assertion and proofs, the token client against a WireMock IDP, a new proof per retry, no start without keys)
 - Pinned-client policies `KycCaseOpeningSubscriberWrite` and `OnboardingOutcomeSubscriberWrite`: [CustomerKyc API Program.cs](../src/Microservices/CustomerKyc/API/Program.cs), [CustomerOnboarding API Program.cs](../src/Microservices/CustomerOnboarding/API/Program.cs)
 - Client and scope inventory: [IDP-Requirements.md](Requirements/IDP-Requirements.md)
 
@@ -1102,7 +1106,7 @@ Demo: Sophie records Camilla's Form VII and sends it (the PC's Partner Bank wind
 - Security controls: [Partner Products API README](../src/Microservices/PartnerProducts/API/README.md) #11-#22
 - Automated proof of the adapter (signed instruction, refusals, lost answer and resend with the same `jti`), with the Partner Bank played by WireMock: [1.8.2](#182-neighbours-played-by-wiremock-c-and-typescript)
 
-**Not yet:** mutual TLS on EWP's internal calls (Threat-Model R-9). A person's token on those calls is already DPoP-bound, Journey APIs included ([2.1.1](#211-oidc-authorization-code--pkce-through-a-bff)); machine tokens stay bearer.
+**Not yet:** mutual TLS on EWP's internal calls (Threat-Model R-9). A person's token on those calls is already DPoP-bound, Journey APIs included ([2.1.1](#211-oidc-authorization-code--pkce-through-a-bff)), and so are the Kafka subscribers' machine tokens ([2.1.2](#212-separate-human-and-machine-identities)); only the Partner Products worker's token stays bearer.
 
 ### 2.5 Supply chain
 

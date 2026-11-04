@@ -35,11 +35,12 @@ builder.Services.AddKafkaSubscriber<AccountApplicationOpeningProcessor, AccountA
 // The worker's own machine identity; the token is cached until shortly before expiry.
 builder.Services
     // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
-    // │ Its own client_id and secret, accepted only on its one internal endpoint (pinned);
-    // │ the token is cached until shortly before expiry, never shared with another worker.
+    // │ Its own client_id and keys - no secret: a one-time assertion signed with its client
+    // │ key, and a token bound to its DPoP key; accepted only on its one internal endpoint
+    // │ (pinned); the token is cached until shortly before expiry, never shared with another
+    // │ worker. The token client has its own resilience (time-outs, no automatic retry).
     // └──────────────────────────────────────────────────────────────────────────────────────
-    .AddCachedM2MTokenClient<AccountApplicationOpeningSubscriberOptions>(AccountApplicationOpeningSubscriberOptions.SectionName)
-    .AddStandardResilienceHandler();
+    .AddCachedM2MTokenClient<AccountApplicationOpeningSubscriberOptions>(AccountApplicationOpeningSubscriberOptions.SectionName);
 
 builder.Services
     .AddHttpClient(AccountApplicationOpeningProcessor.HttpClientName, (sp, client) =>
@@ -59,6 +60,13 @@ builder.Services
         options.CircuitBreaker.BreakDuration = TimeSpan.FromSeconds(30);
         options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(60);
     });
+
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ Added AFTER the resilience handler (same named client), so every attempt - a retry
+// │ too - carries the DPoP-bound token with a new proof of its own (RFC 9449): a reused
+// │ proof would be refused.
+// └──────────────────────────────────────────────────────────────────────────────────────
+builder.Services.AddHttpClient(AccountApplicationOpeningProcessor.HttpClientName).AddDPoPMachineToken();
 
 // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
 // │ Health endpoints for the orchestrator's probes (Health:Urls): live = the consume loop

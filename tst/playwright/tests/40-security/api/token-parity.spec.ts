@@ -1,7 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { expect, request, test, type APIRequestContext } from '@playwright/test';
-import { urls } from '../../../support/services';
+import { authorizationFor, clientCredentialsToken, clientIds } from '../../../support/tokens';
 
 /**
  * Token parity: the .NET domain APIs and the NestJS journey APIs refuse the same bad bearer tokens
@@ -9,26 +7,17 @@ import { urls } from '../../../support/services';
  * Plain HTTP; the IDP's keys, issuer and audience are checked on both stacks.
  *
  * The wrong-audience token is a client-credentials token of the KYC case-opening subscriber
- * (audience: the Customer KYC API). Its DEVELOPMENT-ONLY secret is read from that subscriber's
- * appsettings.Development.json at run time - never copied into the tests.
+ * (audience: the Customer KYC API), obtained with that subscriber's DEVELOPMENT-ONLY key
+ * (support/tokens.ts) and sent the way the subscriber sends it - DPoP-bound, with a proof - so
+ * only its audience is wrong.
  */
 const apis = [
   { name: 'Payments API (.NET)', url: 'https://payments-api.dev.localhost:44488/v1/payments' },
   { name: 'Operations Journey API (NestJS)', url: 'https://operations-journey.dev.localhost:46382/v1/journeys/operations/parked-messages' },
 ];
 
-const subscriberSettings = resolve(__dirname, '../../../../../src/AsyncWorkflows/Subscribers/CustomerKyc/KycCaseOpeningSubscriber/appsettings.Development.json');
-const subscriberClientId = 'CustomerKyc.CaseOpeningSubscriber.To.CustomerKycApi.M2M.ClientID';
-
 async function wrongAudienceToken(http: APIRequestContext): Promise<string> {
-  const secret = (JSON.parse(readFileSync(subscriberSettings, 'utf-8')) as { KycCaseOpeningSubscriber?: { ClientSecret?: string } })
-    .KycCaseOpeningSubscriber?.ClientSecret;
-  expect(secret, 'the subscriber\'s development secret').toBeTruthy();
-  const response = await http.post(`${urls.idp}/connect/token`, {
-    form: { grant_type: 'client_credentials', client_id: subscriberClientId, client_secret: secret!, scope: 'customer-kyc.write' },
-  });
-  expect(response.status(), 'a token for the Customer KYC API').toBe(200);
-  return (await response.json() as { access_token: string }).access_token;
+  return clientCredentialsToken(http, clientIds.kycCaseOpeningSubscriber, 'customer-kyc.write');
 }
 
 test.describe('Token parity - .NET and NestJS refuse the same tokens', () => {
@@ -47,7 +36,7 @@ test.describe('Token parity - .NET and NestJS refuse the same tokens', () => {
       const attempts: Record<string, Record<string, string>> = {
         'no token': {},
         'a malformed token': { Authorization: 'Bearer not.a.jwt' },
-        'a token for another API': { Authorization: `Bearer ${otherApisToken}` },
+        'a token for another API': authorizationFor(otherApisToken, 'GET', api.url),
       };
 
       for (const [label, headers] of Object.entries(attempts)) {
