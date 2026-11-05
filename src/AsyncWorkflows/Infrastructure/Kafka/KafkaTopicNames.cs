@@ -38,6 +38,14 @@ public static class KafkaTopicNames
     public const string CustomerPersonalDataErasure =
         "customer.personal-data.erasure";
 
+    /// <summary>
+    /// Each context's confirmation that it erased its own copy of a customer's personal data
+    /// (PersonalDataCopyErased: KYC, Compliance, Accounts, Documents Management). Written by each
+    /// context's subscriber after its API answered; read by Audit. Identifiers and counts only.
+    /// </summary>
+    public const string CustomerPersonalDataErasureConfirmations =
+        "customer.personal-data.erasure.confirmed";
+
     public const string KycCaseCreated = "kyc.case.created";
 
     public const string KycCaseApproved = "kyc.case.approved";

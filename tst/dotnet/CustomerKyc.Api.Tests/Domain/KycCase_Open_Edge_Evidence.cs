@@ -31,7 +31,7 @@ public sealed class KycCase_Open_Edge_Evidence
         kycCase.IdentityVerification.IsPending.Should().BeTrue();
         kycCase.DocumentVerification.IsPending.Should().BeTrue();
         kycCase.AssignedOfficerUserId.Should().BeNull();
-        kycCase.Applicant.CountryCode.Should().Be("AU");
+        kycCase.Applicant!.CountryCode.Should().Be("AU");
     }
 
     [Test]

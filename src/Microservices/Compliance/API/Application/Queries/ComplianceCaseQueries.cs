@@ -40,7 +40,8 @@ public sealed record ComplianceCaseDetail(
     DateTimeOffset UpdatedAt,
     string CustomerName,
     ApplicantAddress ResidentialAddress,
-    StaffLanIds Staff);
+    StaffLanIds Staff,
+    bool PersonalDataErased);
 
 /// <summary>The LAN IDs of the people on the case (null when not known to this context).</summary>
 public sealed record StaffLanIds(

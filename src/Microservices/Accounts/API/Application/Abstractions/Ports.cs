@@ -18,6 +18,9 @@ public interface IAccountApplicationRepository
     Task<AccountApplication?> GetNextDueForOpeningAsync(DateTimeOffset now, CancellationToken cancellationToken);
 
     void Add(AccountApplication application);
+
+    /// <summary>Every application of the customer, tracked, for the erasure of their personal data.</summary>
+    Task<IReadOnlyList<AccountApplication>> ListForErasureAsync(string customerNumber, CancellationToken cancellationToken);
 }
 
 /// <summary>Adds and locks Account aggregates.</summary>

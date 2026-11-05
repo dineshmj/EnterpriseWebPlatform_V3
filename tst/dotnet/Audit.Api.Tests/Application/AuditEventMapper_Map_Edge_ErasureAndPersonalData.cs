@@ -58,6 +58,28 @@ public sealed class AuditEventMapper_Map_Edge_ErasureAndPersonalData
     }
 
     [Test]
+    public void Given_AContextConfirmingItsCopyIsGone_When_Recorded_Then_TheEntryNamesTheContextAndTheRequester()
+    {
+        // Given - KYC's subscriber confirms after its API erased the copy
+        var message = Envelope("PersonalDataCopyErased", new
+        {
+            ErasureRequestId = 7, CustomerNumber = "CUS-000123", Context = "customer-kyc", Status = "ERASED",
+            RecordsErased = 1, RecordsHeld = 1
+        }).Replace("\"Source\":\"customer-onboarding\"", "\"Source\":\"customer-kyc\"");
+
+        // When
+        var entry = AuditEventMapper.Map("customer.personal-data.erasure.confirmed", 0, 3, message, RecordedAt)!;
+
+        // Then
+        entry.EventType.Should().Be("PersonalDataCopyErased");
+        entry.Source.Should().Be("customer-kyc");
+        entry.RecordType.Should().Be("CUSTOMER");
+        entry.RecordRef.Should().Be("CUS-000123");
+        entry.Status.Should().Be("ERASED");
+        entry.InitiatedByLanId.Should().Be("dacoo");
+    }
+
+    [Test]
     public void Given_ARequestWaitingForASecondPerson_When_Recorded_Then_ItHasNoDeciderYet()
     {
         // Given

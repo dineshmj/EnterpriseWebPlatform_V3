@@ -8,7 +8,7 @@ public sealed class ComplianceCaseOpeningSubscriberOptions : ISubscriberSettings
     public const string SectionName = "ComplianceCaseOpeningSubscriber";
 
     /// <summary>Fixed in code: the topic is part of this worker's contract, not configuration.</summary>
-    public IReadOnlyList<string> Topics { get; } = [KafkaTopicNames.KycCaseApproved];
+    public IReadOnlyList<string> Topics { get; } = [KafkaTopicNames.KycCaseApproved, KafkaTopicNames.CustomerPersonalDataErasure];
 
     /// <summary>The Kafka ACLs grant this worker's user READ on this group only.</summary>
     public string GroupId { get; init; } = "compliance.case-opening-subscriber";

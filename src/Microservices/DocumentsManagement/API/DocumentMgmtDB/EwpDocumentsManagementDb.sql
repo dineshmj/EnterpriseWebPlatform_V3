@@ -74,6 +74,13 @@ CREATE TABLE documents
     -- authorization. NULL (legacy rows) is accessible to nobody.
     resource_branch     VARCHAR(20)   NULL,
 
+    -- ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    -- │ Set when Customer Onboarding's erasure reached the document: file_name is blanked and
+    -- │ the content deleted from storage; the row (type, size, SHA-256, status) stays as the
+    -- │ record of what was submitted. doc/Crypto-Shredding.md
+    -- └──────────────────────────────────────────────────────────────────────────────────────
+    personal_data_erased_at TIMESTAMPTZ NULL,
+
     created_at          TIMESTAMPTZ   NOT NULL,
     updated_at          TIMESTAMPTZ   NOT NULL,
 

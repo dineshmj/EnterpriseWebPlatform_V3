@@ -24,6 +24,9 @@ public interface IDocumentRepository
     /// <summary>Loads the documents for change (tracked), skipping IDs that do not exist.</summary>
     Task<IReadOnlyList<Document>> GetForUpdateAsync(IReadOnlyCollection<Guid> documentIds, CancellationToken cancellationToken);
 
+    /// <summary>Every document filed under the customer number (tracked), for the erasure of their personal data.</summary>
+    Task<IReadOnlyList<Document>> ListForErasureAsync(string customerNumber, CancellationToken cancellationToken);
+
     void Remove(Document document);
 
     Task SaveChangesAsync(CancellationToken cancellationToken);

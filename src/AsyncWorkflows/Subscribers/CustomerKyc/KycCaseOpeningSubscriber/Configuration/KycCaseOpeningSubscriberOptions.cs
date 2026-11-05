@@ -8,7 +8,7 @@ public sealed class KycCaseOpeningSubscriberOptions : ISubscriberSettings, IM2MC
     public const string SectionName = "KycCaseOpeningSubscriber";
 
     /// <summary>Fixed in code: the topic is part of this worker's contract, not configuration.</summary>
-    public IReadOnlyList<string> Topics { get; } = [KafkaTopicNames.OnboardingApplicationSubmitted];
+    public IReadOnlyList<string> Topics { get; } = [KafkaTopicNames.OnboardingApplicationSubmitted, KafkaTopicNames.CustomerPersonalDataErasure];
 
     /// <summary>The Kafka ACLs grant this worker's user READ on this group only.</summary>
     public string GroupId { get; init; } = "customer-kyc.case-opening-subscriber";

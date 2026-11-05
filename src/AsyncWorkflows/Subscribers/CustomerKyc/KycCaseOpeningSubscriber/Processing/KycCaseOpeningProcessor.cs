@@ -26,10 +26,15 @@ namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.CustomerKyc.KycCa
 public sealed class KycCaseOpeningProcessor(
     IHttpClientFactory httpClientFactory,
     CachedM2MTokenClient tokenClient,
-    ILogger<KycCaseOpeningProcessor> logger)
+    ILogger<KycCaseOpeningProcessor> logger,
+    PersonalDataErasureForwarder erasure)
     : IMessageProcessor
 {
     public const string HttpClientName = "CustomerKycApi";
+
+    // The erasure of a customer's personal data (crypto-shredding): this context's own copy.
+    private static readonly PersonalDataErasureTarget ErasureTarget =
+        new(HttpClientName, "/internal/v1/kyc/personal-data-erasures", "customer-kyc");
 
     private const string ExpectedEventType = "OnboardingApplicationSubmitted";
 
@@ -37,6 +42,10 @@ public sealed class KycCaseOpeningProcessor(
 
     public async Task<ProcessingOutcome> ProcessAsync(ConsumedMessage consumed, CancellationToken cancellationToken)
     {
+        // ARCH: an erasure decided in Customer Onboarding - erase this context's copy, then confirm.
+        if (PersonalDataErasureForwarder.Handles(consumed))
+            return await erasure.ForwardAsync(consumed, ErasureTarget, cancellationToken);
+
         ApplicationSubmittedMessage message;
         try
         {

@@ -54,7 +54,8 @@ public sealed record AccountApplicationDetail(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     string CustomerName,
-    StaffLanIds Staff);
+    StaffLanIds Staff,
+    bool PersonalDataErased);
 
 /// <summary>The LAN IDs of the people on the application (null when not known to this context).</summary>
 public sealed record StaffLanIds(

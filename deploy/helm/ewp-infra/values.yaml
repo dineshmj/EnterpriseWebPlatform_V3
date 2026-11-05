@@ -49,6 +49,7 @@ kafka:
     - onboarding.application.status.changed
     - onboarding.application.rejected
     - customer.personal-data.erasure
+    - customer.personal-data.erasure.confirmed
     - kyc.case.created
     - kyc.case.approved
     - kyc.case.rejected
@@ -92,9 +93,10 @@ kafka:
     ewp-kyc-api:
       writePrefix: [kyc.]
     ewp-kyc-case-opening-subscriber:
-      read: [onboarding.application.submitted]
+      # SEC: also the erasure decision in, and the confirmation that KYC's copy is gone out.
+      read: [onboarding.application.submitted, customer.personal-data.erasure]
       group: customer-kyc.case-opening-subscriber
-      write: [customer-kyc.case-opening-subscriber.dlq]
+      write: [customer-kyc.case-opening-subscriber.dlq, customer.personal-data.erasure.confirmed]
     ewp-onboarding-outcome-subscriber:
       read: [kyc.case.created, kyc.case.approved, kyc.case.rejected, compliance.case.created, compliance.case.approved, compliance.case.rejected,
              accounts.application.created, accounts.account.opened, accounts.application.rejected, accounts.account.opening.failed]
@@ -103,20 +105,20 @@ kafka:
     ewp-compliance-api:
       writePrefix: [compliance.case.]
     ewp-compliance-case-opening-subscriber:
-      read: [kyc.case.approved]
+      read: [kyc.case.approved, customer.personal-data.erasure]
       group: compliance.case-opening-subscriber
-      write: [compliance.case-opening-subscriber.dlq]
+      write: [compliance.case-opening-subscriber.dlq, customer.personal-data.erasure.confirmed]
     ewp-dm-invalidation-subscriber:
-      read: [onboarding.application.submitted, onboarding.application.rejected]
+      read: [onboarding.application.submitted, onboarding.application.rejected, customer.personal-data.erasure]
       group: documents-management.invalidation-subscriber
-      write: [documents-management.invalidation-subscriber.dlq]
+      write: [documents-management.invalidation-subscriber.dlq, customer.personal-data.erasure.confirmed]
     ewp-accounts-api:
       writePrefix: [accounts.application., accounts.account.]
       write: [accounts.funds.replies]
     ewp-accounts-application-opening-subscriber:
-      read: [compliance.case.approved]
+      read: [compliance.case.approved, customer.personal-data.erasure]
       group: accounts.application-opening-subscriber
-      write: [accounts.application-opening-subscriber.dlq]
+      write: [accounts.application-opening-subscriber.dlq, customer.personal-data.erasure.confirmed]
     ewp-accounts-command-subscriber:
       read: [accounts.commands]
       group: accounts.command-subscriber
@@ -140,7 +142,7 @@ kafka:
       write: [notifications.subscriber.dlq]
     ewp-audit-api:
       read: [customer.created, onboarding.application.submitted, onboarding.application.status.changed, onboarding.application.rejected,
-             customer.personal-data.erasure,
+             customer.personal-data.erasure, customer.personal-data.erasure.confirmed,
              kyc.case.created, kyc.identity.verification.approved, kyc.identity.verification.rejected,
              kyc.document.verification.approved, kyc.document.verification.rejected, kyc.case.approved, kyc.case.rejected,
              compliance.case.created, compliance.case.screened, compliance.case.approved, compliance.case.rejected,

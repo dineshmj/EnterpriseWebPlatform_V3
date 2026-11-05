@@ -37,6 +37,8 @@ namespace EnterpriseWebPlatform.Accounts.Api.Domain.Aggregates;
 ///  4. An account is opened only by the core-banking system after approval. A technical
 ///     failure keeps the application OPENING and is retried; it never counts as opened.
 ///     Too many failures, or a refusal, end it FAILED - the trigger for compensation.
+///  5. Once the holder's personal data is erased, nobody can act on the application and no
+///     account is opened from it; its outcome and people stay as the record.
 /// </summary>
 public sealed class AccountApplication : AggregateRoot
 {
@@ -45,7 +47,6 @@ public sealed class AccountApplication : AggregateRoot
         ApplicationNumber = null!;
         CustomerNumber = null!;
         BranchCode = null!;
-        HolderName = null!;
     }
 
     private AccountApplication(
@@ -81,8 +82,16 @@ public sealed class AccountApplication : AggregateRoot
 
     public string CustomerNumber { get; private set; }
 
-    /// <summary>The name the account is opened in (as Compliance cleared it).</summary>
-    public HolderName HolderName { get; private set; }
+    /// <summary>
+    /// The name the account is opened in (as Compliance cleared it). Null once the holder's
+    /// personal data is erased.
+    /// </summary>
+    public HolderName? HolderName { get; private set; }
+
+    /// <summary>When Customer Onboarding's erasure reached this application; null while the data is kept.</summary>
+    public DateTimeOffset? PersonalDataErasedAt { get; private set; }
+
+    public bool IsPersonalDataErased => PersonalDataErasedAt is not null;
 
     /// <summary>The Compliance case that approved the application (by value).</summary>
     public long ComplianceCaseId { get; private set; }
@@ -179,6 +188,28 @@ public sealed class AccountApplication : AggregateRoot
     public bool IsAssignedTo(string? officerUserId) =>
         AssignedOfficerUserId is not null &&
         string.Equals(AssignedOfficerUserId, officerUserId, StringComparison.OrdinalIgnoreCase);
+
+    // ------------------------------------------------------------------ Erasure
+
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ The erasure was decided in Customer Onboarding (four eyes, eligibility); this
+    // │ application only obeys it: it forgets the holder's name and keeps everything else as
+    // │ the record. Repeating it changes nothing (a redelivered erasure event).
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    /// <summary>Forgets the holder's name. False when it was already erased.</summary>
+    public bool ErasePersonalData(DateTimeOffset now)
+    {
+        if (IsPersonalDataErased)
+            return false;
+
+        HolderName = null;
+        PersonalDataErasedAt = now;
+        Touch(now);
+        return true;
+    }
+
+    /// <summary>Infrastructure only: the holder's name decrypted when the application is loaded.</summary>
+    internal void RestoreHolderName(HolderName holderName) => HolderName = holderName;
 
     // ------------------------------------------------------------------ Assignment (ReBAC)
 
@@ -371,6 +402,9 @@ public sealed class AccountApplication : AggregateRoot
     private void EnsureOfficerMayAct(string officerUserId)
     {
         RequireOfficer(officerUserId);
+
+        if (IsPersonalDataErased)
+            throw new DomainConflictException("The holder's personal data was erased: this account application can no longer be worked on.");
 
         // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
         // │ If the initiator is unknown, deny - separation of duties cannot be proven, so it

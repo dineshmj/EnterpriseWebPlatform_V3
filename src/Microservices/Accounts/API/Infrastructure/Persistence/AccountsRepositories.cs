@@ -4,13 +4,16 @@ using EnterpriseWebPlatform.Accounts.Api.Application.Abstractions;
 using EnterpriseWebPlatform.Accounts.Api.Application.Queries;
 using EnterpriseWebPlatform.Accounts.Api.Domain.Aggregates;
 using EnterpriseWebPlatform.Accounts.Api.Domain.ValueObjects;
+using EnterpriseWebPlatform.Accounts.Api.Infrastructure.Privacy;
 
 namespace EnterpriseWebPlatform.Accounts.Api.Infrastructure.Persistence;
 
-public sealed class AccountApplicationRepository(AccountsDbContext db) : IAccountApplicationRepository
+public sealed class AccountApplicationRepository(AccountsDbContext db, AccountApplicationPersonalData personalData) : IAccountApplicationRepository
 {
-    public Task<AccountApplication?> GetByApplicationRefAsync(Guid applicationRef, CancellationToken cancellationToken) =>
-        db.AccountApplications.SingleOrDefaultAsync(x => x.ApplicationRef == applicationRef, cancellationToken);
+    public async Task<AccountApplication?> GetByApplicationRefAsync(Guid applicationRef, CancellationToken cancellationToken) =>
+        await RevealAsync(
+            await db.AccountApplications.SingleOrDefaultAsync(x => x.ApplicationRef == applicationRef, cancellationToken),
+            cancellationToken);
 
     public async Task<AccountApplication?> GetForUpdateAsync(long applicationId, CancellationToken cancellationToken)
     {
@@ -20,7 +23,9 @@ public sealed class AccountApplicationRepository(AccountsDbContext db) : IAccoun
             .SqlQuery<long>($"SELECT id AS \"Value\" FROM account_applications WHERE id = {applicationId} FOR UPDATE")
             .ToListAsync(cancellationToken);
 
-        return locked.Count == 0 ? null : await db.AccountApplications.SingleAsync(x => x.Id == applicationId, cancellationToken);
+        return locked.Count == 0
+            ? null
+            : await RevealAsync(await db.AccountApplications.SingleAsync(x => x.Id == applicationId, cancellationToken), cancellationToken);
     }
 
     public async Task<AccountApplication?> GetNextDueForOpeningAsync(DateTimeOffset now, CancellationToken cancellationToken)
@@ -30,17 +35,30 @@ public sealed class AccountApplicationRepository(AccountsDbContext db) : IAccoun
             .SqlQuery<long>($"""
                 SELECT id AS "Value"
                 FROM account_applications
-                WHERE status = 'OPENING' AND next_opening_at <= {now}
+                WHERE status = 'OPENING' AND next_opening_at <= {now} AND personal_data_erased_at IS NULL
                 ORDER BY next_opening_at
                 LIMIT 1
                 FOR UPDATE SKIP LOCKED
                 """)
             .ToListAsync(cancellationToken);
 
-        return ids.Count == 0 ? null : await db.AccountApplications.SingleAsync(x => x.Id == ids[0], cancellationToken);
+        return ids.Count == 0
+            ? null
+            : await RevealAsync(await db.AccountApplications.SingleAsync(x => x.Id == ids[0], cancellationToken), cancellationToken);
     }
 
+    // Not decrypted: the only caller erases them.
+    public async Task<IReadOnlyList<AccountApplication>> ListForErasureAsync(string customerNumber, CancellationToken cancellationToken) =>
+        await db.AccountApplications.Where(x => x.CustomerNumber == customerNumber).OrderBy(x => x.Id).ToListAsync(cancellationToken);
+
     public void Add(AccountApplication application) => db.AccountApplications.Add(application);
+
+    private async Task<AccountApplication?> RevealAsync(AccountApplication? application, CancellationToken cancellationToken)
+    {
+        if (application is not null)
+            await personalData.RevealAsync(application, cancellationToken);
+        return application;
+    }
 }
 
 public sealed class AccountRepository(AccountsDbContext db) : IAccountRepository
@@ -88,7 +106,11 @@ public sealed class CashDepositRepository(AccountsDbContext db) : ICashDepositRe
     public void Add(CashDeposit deposit) => db.CashDeposits.Add(deposit);
 }
 
-public sealed class AccountsQueries(AccountsDbContext db) : IAccountsQueries
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ An application's holder is stored encrypted: the application queries read their page with
+// │ the ciphertext, then decrypt only those rows. An erased one reads "Personal data erased".
+// └──────────────────────────────────────────────────────────────────────────────────────
+public sealed class AccountsQueries(AccountsDbContext db, AccountApplicationPersonalData personalData) : IAccountsQueries
 {
     public async Task<PagedResponse<AccountApplicationDetail>> GetApplicationsAsync(
         BranchCode branch, int pageNumber, int pageSize, AccountApplicationStatus? status, CancellationToken cancellationToken)
@@ -104,15 +126,18 @@ public sealed class AccountsQueries(AccountsDbContext db) : IAccountsQueries
             : query.OrderBy(x => x.CreatedAt).ThenBy(x => x.Id);
 
         var total = await query.CountAsync(cancellationToken);
-        var items = await ProjectApplications(ordered.Skip((pageNumber - 1) * pageSize).Take(pageSize))
+        var page = await ProjectApplications(ordered.Skip((pageNumber - 1) * pageSize).Take(pageSize))
             .ToListAsync(cancellationToken);
 
-        return new PagedResponse<AccountApplicationDetail>(items, pageNumber, pageSize, total);
+        return new PagedResponse<AccountApplicationDetail>(await ShowAsync(page, cancellationToken), pageNumber, pageSize, total);
     }
 
-    public Task<AccountApplicationDetail?> GetApplicationAsync(long applicationId, BranchCode branch, CancellationToken cancellationToken) =>
-        ProjectApplications(db.AccountApplications.AsNoTracking().Where(x => x.BranchCode == branch && x.Id == applicationId))
+    public async Task<AccountApplicationDetail?> GetApplicationAsync(long applicationId, BranchCode branch, CancellationToken cancellationToken)
+    {
+        var row = await ProjectApplications(db.AccountApplications.AsNoTracking().Where(x => x.BranchCode == branch && x.Id == applicationId))
             .SingleOrDefaultAsync(cancellationToken);
+        return row is null ? null : (await ShowAsync([row], cancellationToken))[0];
+    }
 
     public async Task<PagedResponse<AccountDetail>> GetAccountsAsync(BranchCode branch, int pageNumber, int pageSize, CancellationToken cancellationToken)
     {
@@ -152,8 +177,16 @@ public sealed class AccountsQueries(AccountsDbContext db) : IAccountsQueries
             .ToListAsync(cancellationToken);
     }
 
-    private IQueryable<AccountApplicationDetail> ProjectApplications(IQueryable<AccountApplication> query) =>
-        query.Select(x => new AccountApplicationDetail(
+    private async Task<IReadOnlyList<AccountApplicationDetail>> ShowAsync(IReadOnlyList<ApplicationRow> rows, CancellationToken cancellationToken)
+    {
+        var names = await personalData.ShowAsync(
+            rows.Select(x => (x.Detail.CustomerNumber, x.HolderName, x.Detail.PersonalDataErased)).ToList(),
+            cancellationToken);
+        return rows.Select((x, i) => x.Detail with { CustomerName = names[i] }).ToList();
+    }
+
+    private IQueryable<ApplicationRow> ProjectApplications(IQueryable<AccountApplication> query) =>
+        query.Select(x => new ApplicationRow(EF.Property<string>(x, AccountApplicationPersonalData.HolderNameColumn), new AccountApplicationDetail(
             x.Id,
             x.ApplicationNumber,
             x.CustomerNumber,
@@ -176,12 +209,15 @@ public sealed class AccountsQueries(AccountsDbContext db) : IAccountsQueries
             x.FailureReason,
             x.CreatedAt,
             x.UpdatedAt,
-            x.HolderName.FirstName + " " + x.HolderName.LastName,
+            string.Empty,   // decrypted after the query
             new StaffLanIds(
                 db.StaffMembers.Where(s => s.UserId == x.InitiatedByUserId).Select(s => s.LanId).FirstOrDefault(),
                 db.StaffMembers.Where(s => s.UserId == x.ComplianceApprovedByUserId).Select(s => s.LanId).FirstOrDefault(),
                 db.StaffMembers.Where(s => s.UserId == x.AssignedOfficerUserId).Select(s => s.LanId).FirstOrDefault(),
-                db.StaffMembers.Where(s => s.UserId == x.DecisionByUserId).Select(s => s.LanId).FirstOrDefault())));
+                db.StaffMembers.Where(s => s.UserId == x.DecisionByUserId).Select(s => s.LanId).FirstOrDefault()),
+            x.PersonalDataErasedAt != null)));
+
+    private sealed record ApplicationRow(string HolderName, AccountApplicationDetail Detail);
 
     private static IQueryable<AccountDetail> ProjectAccounts(IQueryable<Account> query) =>
         query.Select(x => new AccountDetail(

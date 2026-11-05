@@ -16,8 +16,12 @@ A bank has two duties that pull against each other:
 | `personal_data_keys` | each customer's data key, **wrapped** by the master key | the row is deleted: that is the erasure |
 | Kafka topics | events; `OnboardingApplicationSubmitted` carries the applicant's name and address in clear | every topic keeps a message **7 days** (stated, not a default) |
 | Customer Onboarding Outbox | the published payloads | the relay **blanks** a payload 7 days after publishing; the row stays |
-| Audit trail | IDs, people's IDs, outcome, SHA-256 of the message | holds no personal data: nothing to erase, and its chain still verifies; it records each erasure (who asked, who decided, the reason code) |
-| KYC, Compliance, Accounts, Partner Products, Documents | their own copies | **next PR:** each context's own key, shredded on the erasure event |
+| Audit trail | IDs, people's IDs, outcome, SHA-256 of the message | holds no personal data: nothing to erase, and its chain still verifies; it records each erasure (who asked, who decided, the reason code) and each context's confirmation |
+| KYC `kyc_cases.applicant` | the applicant as submitted (name, residential address): **ciphertext** under KYC's own key | KYC's key for the customer is deleted |
+| Compliance `compliance_cases.applicant` | the applicant as KYC verified them: **ciphertext** under Compliance's own key | Compliance's key is deleted; the case is never screened again |
+| Accounts `account_applications.holder_name` | the name the account is to be opened in: **ciphertext** under Accounts' own key | Accounts' key is deleted; no account is opened from the application |
+| Documents Management | the scans (encrypted files) and their file names | the files are **deleted** and the names blanked; the rows (type, size, SHA-256) stay |
+| Accounts `accounts`, Partner Products | an ACTIVE customer's name (and, for Digital Gold, date of birth and mobile) | out of scope: only a prospect can be erased, and a prospect has neither |
 
 ## How the encryption works
 
@@ -78,6 +82,23 @@ Code: [PersonalDataErasureRequest.cs](../src/Microservices/CustomerOnboarding/AP
 
 After that, the branch sees **"Personal data erased"** in place of the name and e-mail, the customer is found by number only, and cannot be changed or onboarded. The customer number, applications and audit entries all stay.
 
-## Next: the other contexts
+## The other contexts: each erases its own copy, then says so
 
-KYC, Compliance, Accounts, Partner Products and Documents Management each keep their own copy (decision 2a), encrypted under their own key. Each will subscribe to `CustomerPersonalDataErased`, destroy its key for that customer and acknowledge; the audit trail then records every acknowledgement (IDs only).
+Code: [PersonalDataErasureForwarder.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/PersonalDataErasureForwarder.cs); each context's `InternalPersonalDataErasuresController`.
+
+KYC, Compliance and Accounts keep their own copy of the applicant (decision 2a), encrypted the same way as Customer Onboarding's but under **their own** master key and per-customer keys (squad autonomy: no shared key, no shared code). Documents Management keeps the scans themselves.
+
+1. **The event.** `CustomerPersonalDataErased` reaches each context's **existing** subscriber (the KYC, Compliance, Account Application Opening and Document Invalidation subscribers also read `customer.personal-data.erasure`). Requested and rejected erasures are skipped: nothing to erase yet.
+2. **The erasure.** The subscriber calls its own API's internal endpoint (`POST internal/v1/<context>/personal-data-erasures`, its pinned machine client only):
+   - **KYC, Compliance, Accounts** mark every case or application of the customer erased and delete the customer's key **in the same transaction**. The ciphertext stays, unreadable; the screens show *"Personal data erased"*; nobody can act on the case any more, and an erased compliance case is never screened, an erased application never opens an account.
+   - **Documents Management** blanks the file names and saves, **then** deletes the content of every document filed under the customer - also those blanked by an earlier try, so a retry after a failure half-way removes what is left. Reading an erased document's content answers *410 Gone*.
+   - The API does not check eligibility again: the bank decided the erasure in Customer Onboarding (four eyes); a context only obeys. Called again, it erases nothing new and answers the same.
+3. **The confirmation.** Only after the API answered 2xx, the subscriber publishes `PersonalDataCopyErased` (topic `customer.personal-data.erasure.confirmed`: the context, the customer number, the erasure request, how many records it erased and held - nothing personal), and only then commits the message.
+
+**Why no Outbox.** An Outbox makes a database change and an event happen together. Here the context's change is idempotent and the confirmation is sent by the subscriber, which commits the Kafka message last: if it crashes after the erasure but before the confirmation, the message is delivered again, the API answers "done" again, and the confirmation goes out. A confirmation can never be sent for a copy that is still there. The confirmation's ID is derived from the erasure message and the context, so a repeated confirmation is one audit entry.
+
+**Proof.** Every erasure therefore leaves five or more entries in the audit trail: the request, the decision, and one `PersonalDataCopyErased` per context - also from a context that held nothing (*0 erased, 0 held*), so Sarah can see that each one was asked.
+
+**Known limits.**
+- As for Customer Onboarding, each context's keys live in its own database: a backup taken before the erasure still holds them (see *Known limit* above), and a disk backup still holds the scans.
+- Opened accounts and Partner Products keep an ACTIVE customer's name in clear: they join when a CLOSED customer can be erased.

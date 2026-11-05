@@ -1,4 +1,5 @@
 using EnterpriseWebPlatform.DocumentsManagement.Application.Documents.Commands.AttachDocuments;
+using EnterpriseWebPlatform.DocumentsManagement.Application.Documents.Commands.ErasePersonalData;
 using EnterpriseWebPlatform.DocumentsManagement.Application.Documents.Commands.InvalidateDocuments;
 using EnterpriseWebPlatform.DocumentsManagement.Application.Documents.Commands.UploadDocument;
 using EnterpriseWebPlatform.DocumentsManagement.Application.Documents.Queries.GetDocument;
@@ -17,6 +18,7 @@ public static class DependencyInjection
         services.AddScoped<UploadDocumentCommandHandler>();
         services.AddScoped<AttachDocumentsCommandHandler>();
         services.AddScoped<InvalidateDocumentsCommandHandler>();
+        services.AddScoped<ErasePersonalDataCommandHandler>();
         services.AddScoped<GetDocumentQueryHandler>();
         services.AddScoped<GetDocumentsQueryHandler>();
 

@@ -15,6 +15,7 @@ DROP TABLE IF EXISTS compliance_cases CASCADE;
 DROP TABLE IF EXISTS outbox_messages CASCADE;
 DROP TABLE IF EXISTS inbox_messages CASCADE;
 DROP TABLE IF EXISTS staff_members CASCADE;
+DROP TABLE IF EXISTS personal_data_keys CASCADE;
 
 CREATE TABLE compliance_cases (
     id BIGSERIAL PRIMARY KEY,
@@ -28,14 +29,17 @@ CREATE TABLE compliance_cases (
 
     -- The applicant AS KYC VERIFIED THEM (snapshot from kyc.case.approved): what is
     -- screened and what the officer sees. Never refreshed; no contact details.
-    applicant_first_name VARCHAR(100) NOT NULL,
-    applicant_last_name VARCHAR(100) NOT NULL,
-    applicant_address_line1 VARCHAR(200) NULL,
-    applicant_address_line2 VARCHAR(200) NULL,
-    applicant_city VARCHAR(100) NULL,
-    applicant_state VARCHAR(100) NULL,
-    applicant_postal_code VARCHAR(20) NULL,
-    applicant_country_code CHAR(2) NULL,
+    -- ┌─ :: SECURITY :: The applicant is stored only encrypted (crypto-shredding) ─────────────────────
+    -- │ Why : When Customer Onboarding erases a customer, this copy and every backup of it must
+    -- │       become unreadable, while the case (outcome, risk, people) stays as the record.
+    -- │ How : "v1.<base64>": name and address as ONE value, AES-256-GCM under the customer's own
+    -- │       key in personal_data_keys (Compliance's key, not another context's), bound to the
+    -- │       customer number. The erasure deletes the key and stamps personal_data_erased_at;
+    -- │       the ciphertext stays, unreadable. An erased case is never screened again.
+    -- │ Ref : doc/Crypto-Shredding.md | GDPR Art. 17, Art. 32 | OWASP A02
+    -- └────────────────────────────────────────────────────────────────────────────────────────────────
+    applicant TEXT NOT NULL,
+    personal_data_erased_at TIMESTAMPTZ NULL,
 
     -- The KYC case that approved the application (Customer KYC, by value).
     kyc_case_id BIGINT NOT NULL,
@@ -80,6 +84,10 @@ CREATE TABLE compliance_cases (
 
     CONSTRAINT uq_compliance_cases_application_ref UNIQUE (application_ref),
 
+    -- Never an applicant in clear.
+    CONSTRAINT ck_compliance_cases_applicant_protected
+        CHECK (applicant LIKE 'v1.%'),
+
     CONSTRAINT ck_compliance_cases_status
         CHECK (status IN ('SCREENING', 'UNDER_REVIEW', 'ON_HOLD', 'APPROVED', 'REJECTED')),
 
@@ -118,6 +126,17 @@ CREATE INDEX ix_compliance_cases_screening_due ON compliance_cases (next_screeni
 CREATE INDEX ix_compliance_cases_customer_number ON compliance_cases (customer_number);
 
 -- Transactional Outbox (same shape as the other contexts).
+-- One data key per customer, wrapped by the Compliance API's master key (12-byte nonce +
+-- 32-byte key + 16-byte tag). Deleting the row IS the erasure of that customer's applicant data.
+CREATE TABLE personal_data_keys (
+    customer_number VARCHAR(100) NOT NULL,
+    wrapped_key BYTEA NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT pk_personal_data_keys PRIMARY KEY (customer_number),
+    CONSTRAINT ck_personal_data_keys_wrapped_length CHECK (octet_length(wrapped_key) = 60)
+);
+
 CREATE TABLE outbox_messages (
     id UUID PRIMARY KEY,
     sequence BIGINT GENERATED ALWAYS AS IDENTITY,
@@ -174,6 +193,8 @@ BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ewp_compliance_api') THEN
         GRANT SELECT, INSERT, UPDATE ON compliance_cases, outbox_messages, inbox_messages, staff_members TO ewp_compliance_api;   -- no DELETE: nothing is ever deleted
         GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_compliance_api;
+        -- SEC: the one DELETE - a customer's key, which is the erasure (crypto-shredding).
+        GRANT SELECT, INSERT, DELETE ON personal_data_keys TO ewp_compliance_api;
     ELSE
         RAISE WARNING 'Role ewp_compliance_api does not exist yet: run db/EwpServiceDbUsers.sql, then this script again.';
     END IF;

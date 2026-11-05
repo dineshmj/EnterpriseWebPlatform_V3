@@ -16,6 +16,7 @@ using EnterpriseWebPlatform.Accounts.Api.Authorization;
 using EnterpriseWebPlatform.Accounts.Api.Infrastructure.CoreBanking;
 using EnterpriseWebPlatform.Accounts.Api.Infrastructure.Messaging;
 using EnterpriseWebPlatform.Accounts.Api.Infrastructure.Persistence;
+using EnterpriseWebPlatform.Accounts.Api.Infrastructure.Privacy;
 using EnterpriseWebPlatform.BSS.AsyncWorkflows.Infrastructure.Kafka;
 using EnterpriseWebPlatform.Common.Observability;
 using EnterpriseWebPlatform.Common.WebUtilities.Configuration;
@@ -52,6 +53,18 @@ builder.Services.AddControllers();
 var connectionString = builder.Configuration.GetConnectionString("AccountsDbConnection")
     ?? throw new InvalidOperationException("Connection string 'AccountsDbConnection' was not configured.");
 builder.Services.AddDbContext<AccountsDbContext>(o => o.UseNpgsql(DependencyOutage.FailFast(connectionString)));
+
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ Crypto-shredding of Accounts' own copy: the master key comes from configuration
+// │ "PersonalData" (Key Vault outside Development); a missing or short key stops the API at
+// │ start-up instead of writing a holder's name unprotected.
+// └──────────────────────────────────────────────────────────────────────────────────────
+builder.Services.AddOptions<PersonalDataProtectionOptions>()
+    .BindConfiguration(PersonalDataProtectionOptions.SectionName)
+    .Validate(options => options.IsValid(), "PersonalData:MasterKey must be base64 of 32 random bytes.")
+    .ValidateOnStart();
+builder.Services.AddSingleton(sp => new PersonalDataCipher(sp.GetRequiredService<IOptions<PersonalDataProtectionOptions>>().Value));
+builder.Services.AddScoped<AccountApplicationPersonalData>();
 
 // ---------------------------------------------------------------- Authentication
 var authority = builder.Configuration["Authentication:Authority"]
@@ -239,6 +252,7 @@ builder.Services.AddScoped<IFundsHoldRepository, FundsHoldRepository>();
 builder.Services.AddScoped<ICashDepositRepository, CashDepositRepository>();
 builder.Services.AddScoped<IAccountsQueries, AccountsQueries>();
 builder.Services.AddScoped<OpenAccountApplicationCommandHandler>();
+builder.Services.AddScoped<ErasePersonalDataCommandHandler>();
 builder.Services.AddScoped<OfficerActionCommandHandler>();
 builder.Services.AddScoped<OpenDueAccountCommandHandler>();
 builder.Services.AddScoped<RecordOpeningErrorCommandHandler>();

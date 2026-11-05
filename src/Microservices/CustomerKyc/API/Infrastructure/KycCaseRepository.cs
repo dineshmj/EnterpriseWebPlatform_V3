@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 
 using EnterpriseWebPlatform.CustomerKyc.Api.Application.Abstractions;
 using EnterpriseWebPlatform.CustomerKyc.Api.Domain.Aggregates;
+using EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure.Privacy;
 
 namespace EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure;
 
@@ -12,10 +13,16 @@ namespace EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure;
 // │       Version is the second guard at save time.
 // │ Ref : Features 1.6.4 | Pessimistic + optimistic concurrency
 // └────────────────────────────────────────────────────────────────────────────────────────────────
-public sealed class KycCaseRepository(KycDbContext db) : IKycCaseRepository
+public sealed class KycCaseRepository(KycDbContext db, KycCasePersonalData personalData) : IKycCaseRepository
 {
-    public Task<KycCase?> GetByApplicationRefAsync(Guid applicationRef, CancellationToken cancellationToken) =>
-        db.KycCases.SingleOrDefaultAsync(x => x.ApplicationRef == applicationRef, cancellationToken);
+    public async Task<KycCase?> GetByApplicationRefAsync(Guid applicationRef, CancellationToken cancellationToken) =>
+        await RevealAsync(
+            await db.KycCases.SingleOrDefaultAsync(x => x.ApplicationRef == applicationRef, cancellationToken),
+            cancellationToken);
+
+    // Not decrypted: the only caller erases them.
+    public async Task<IReadOnlyList<KycCase>> ListForErasureAsync(string customerNumber, CancellationToken cancellationToken) =>
+        await db.KycCases.Where(x => x.CustomerNumber == customerNumber).OrderBy(x => x.Id).ToListAsync(cancellationToken);
 
     public async Task<KycCase?> GetForDecisionAsync(long caseId, CancellationToken cancellationToken)
     {
@@ -34,8 +41,17 @@ public sealed class KycCaseRepository(KycDbContext db) : IKycCaseRepository
         if (locked.Count == 0)
             return null;
 
-        return await db.KycCases.SingleOrDefaultAsync(x => x.Id == caseId, cancellationToken);
+        return await RevealAsync(
+            await db.KycCases.SingleOrDefaultAsync(x => x.Id == caseId, cancellationToken),
+            cancellationToken);
     }
 
     public void Add(KycCase kycCase) => db.KycCases.Add(kycCase);
+
+    private async Task<KycCase?> RevealAsync(KycCase? kycCase, CancellationToken cancellationToken)
+    {
+        if (kycCase is not null)
+            await personalData.RevealAsync(kycCase, cancellationToken);
+        return kycCase;
+    }
 }

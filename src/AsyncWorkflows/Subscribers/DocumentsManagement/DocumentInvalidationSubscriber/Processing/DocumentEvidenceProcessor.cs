@@ -23,10 +23,15 @@ namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.DocumentsManageme
 public sealed class DocumentEvidenceProcessor(
     IHttpClientFactory httpClientFactory,
     CachedM2MTokenClient tokenClient,
-    ILogger<DocumentEvidenceProcessor> logger)
+    ILogger<DocumentEvidenceProcessor> logger,
+    PersonalDataErasureForwarder erasure)
     : IMessageProcessor
 {
     public const string HttpClientName = "DocumentsManagementApi";
+
+    // The erasure of a customer's personal data (crypto-shredding): this context's own copy.
+    private static readonly PersonalDataErasureTarget ErasureTarget =
+        new(HttpClientName, "/internal/v1/documents/personal-data-erasures", "documents-management");
 
     private const string SubmittedEventType = "OnboardingApplicationSubmitted";
     private const string RejectedEventType = "OnboardingApplicationRejected";
@@ -35,6 +40,10 @@ public sealed class DocumentEvidenceProcessor(
 
     public async Task<ProcessingOutcome> ProcessAsync(ConsumedMessage consumed, CancellationToken cancellationToken)
     {
+        // ARCH: an erasure decided in Customer Onboarding - erase this context's copy, then confirm.
+        if (PersonalDataErasureForwarder.Handles(consumed))
+            return await erasure.ForwardAsync(consumed, ErasureTarget, cancellationToken);
+
         Envelope? envelope;
         try
         {

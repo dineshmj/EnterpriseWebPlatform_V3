@@ -18,6 +18,7 @@ DROP TABLE IF EXISTS account_applications CASCADE;
 DROP TABLE IF EXISTS outbox_messages CASCADE;
 DROP TABLE IF EXISTS inbox_messages CASCADE;
 DROP TABLE IF EXISTS staff_members CASCADE;
+DROP TABLE IF EXISTS personal_data_keys CASCADE;
 
 CREATE TABLE account_applications (
     id BIGSERIAL PRIMARY KEY,
@@ -31,8 +32,19 @@ CREATE TABLE account_applications (
 
     -- The account holder's name as Compliance cleared it (snapshot from
     -- compliance.case.approved): the name core banking opens the account in.
-    holder_first_name VARCHAR(100) NOT NULL,
-    holder_last_name VARCHAR(100) NOT NULL,
+    -- ┌─ :: SECURITY :: The holder's name is stored only encrypted (crypto-shredding) ─────────────────
+    -- │ Why : When Customer Onboarding erases a customer, this copy and every backup of it must
+    -- │       become unreadable, while the application (outcome, people) stays as the record.
+    -- │ How : "v1.<base64>": first and last name as ONE value, AES-256-GCM under the customer's own
+    -- │       key in personal_data_keys (Accounts' key, not another context's), bound to the
+    -- │       customer number. The erasure deletes the key and stamps personal_data_erased_at; the
+    -- │       ciphertext stays, unreadable. An erased application never opens an account.
+    -- │       Opened accounts (table accounts) keep the holder in clear: only an ACTIVE customer
+    -- │       has one, and an active customer's data is never erased.
+    -- │ Ref : doc/Crypto-Shredding.md | GDPR Art. 17, Art. 32 | OWASP A02
+    -- └────────────────────────────────────────────────────────────────────────────────────────────────
+    holder_name TEXT NOT NULL,
+    personal_data_erased_at TIMESTAMPTZ NULL,
 
     -- W3C traceparent of the officer's approval: the background opening continues
     -- this trace, so approval, core-banking call and AccountOpened are one trace.
@@ -77,6 +89,10 @@ CREATE TABLE account_applications (
 
     CONSTRAINT uq_account_applications_application_ref UNIQUE (application_ref),
 
+    -- Never a holder's name in clear.
+    CONSTRAINT ck_account_applications_holder_protected
+        CHECK (holder_name LIKE 'v1.%'),
+
     CONSTRAINT ck_account_applications_status
         CHECK (status IN ('PENDING_REVIEW', 'ON_HOLD', 'REJECTED', 'OPENING', 'OPENED', 'FAILED')),
 
@@ -113,6 +129,17 @@ CREATE INDEX ix_account_applications_opening_due ON account_applications (next_o
 CREATE INDEX ix_account_applications_customer_number ON account_applications (customer_number);
 
 -- Accounts opened by the core-banking system (it issues the BSB and account number).
+-- One data key per customer, wrapped by the Accounts API's master key (12-byte nonce + 32-byte
+-- key + 16-byte tag). Deleting the row IS the erasure of that customer's name on their applications.
+CREATE TABLE personal_data_keys (
+    customer_number VARCHAR(100) NOT NULL,
+    wrapped_key BYTEA NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT pk_personal_data_keys PRIMARY KEY (customer_number),
+    CONSTRAINT ck_personal_data_keys_wrapped_length CHECK (octet_length(wrapped_key) = 60)
+);
+
 CREATE TABLE accounts (
     id BIGSERIAL PRIMARY KEY,
     account_number VARCHAR(30) NOT NULL,
@@ -293,6 +320,8 @@ BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ewp_accounts_api') THEN
         GRANT SELECT, INSERT, UPDATE ON account_applications, accounts, funds_holds, cash_deposits, outbox_messages, inbox_messages, staff_members TO ewp_accounts_api;   -- no DELETE: nothing is ever deleted
         GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_accounts_api;
+        -- SEC: the one DELETE - a customer's key, which is the erasure (crypto-shredding).
+        GRANT SELECT, INSERT, DELETE ON personal_data_keys TO ewp_accounts_api;
     ELSE
         RAISE WARNING 'Role ewp_accounts_api does not exist yet: run ps\database\Apply-EwpServiceDbUsers.ps1, then this script again.';
     END IF;

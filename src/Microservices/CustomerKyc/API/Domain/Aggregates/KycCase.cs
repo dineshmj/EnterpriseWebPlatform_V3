@@ -30,6 +30,8 @@ namespace EnterpriseWebPlatform.CustomerKyc.Api.Domain.Aggregates;
 ///  7. The final decision metadata exists exactly when the case is terminal.
 ///  8. The case is opened with what it verifies: the applicant as submitted (a snapshot,
 ///     never refreshed) and exactly the two evidence documents of the application.
+///  9. Once the applicant's personal data is erased, the case can no longer be taken or
+///     decided; its outcome, people and evidence IDs stay as the record.
 /// </summary>
 public sealed class KycCase : AggregateRoot
 {
@@ -39,7 +41,6 @@ public sealed class KycCase : AggregateRoot
         ApplicationNumber = null!;
         CustomerNumber = null!;
         BranchCode = null!;
-        Applicant = null!;
         IdentityVerification = null!;
         DocumentVerification = null!;
     }
@@ -83,8 +84,16 @@ public sealed class KycCase : AggregateRoot
     /// <summary>ABAC: the branch the application was opened in.</summary>
     public BranchCode BranchCode { get; private set; }
 
-    /// <summary>The applicant as submitted: what the officer verifies the evidence against.</summary>
-    public Applicant Applicant { get; private set; }
+    /// <summary>
+    /// The applicant as submitted: what the officer verifies the evidence against. Null once the
+    /// applicant's personal data is erased (and on a case loaded without its key).
+    /// </summary>
+    public Applicant? Applicant { get; private set; }
+
+    /// <summary>When Customer Onboarding's erasure reached this case; null while the data is kept.</summary>
+    public DateTimeOffset? PersonalDataErasedAt { get; private set; }
+
+    public bool IsPersonalDataErased => PersonalDataErasedAt is not null;
 
     /// <summary>The identity proof submitted with THIS application (Documents Management ID).</summary>
     public Guid IdentityProofDocumentId { get; private set; }
@@ -176,10 +185,31 @@ public sealed class KycCase : AggregateRoot
     public VerificationStage StageOf(VerificationStageType stage) =>
         stage == VerificationStageType.IdentityVerification ? IdentityVerification : DocumentVerification;
 
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ The erasure was decided in Customer Onboarding (four eyes, eligibility); this case only
+    // │ obeys it: it forgets the applicant and keeps everything else as the record. Repeating
+    // │ it changes nothing (a redelivered erasure event).
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    /// <summary>Forgets the applicant. False when it was already erased.</summary>
+    public bool ErasePersonalData(DateTimeOffset now)
+    {
+        if (IsPersonalDataErased)
+            return false;
+
+        Applicant = null;
+        PersonalDataErasedAt = now;
+        Touch(now);
+        return true;
+    }
+
+    /// <summary>Infrastructure only: the applicant decrypted when the case is loaded.</summary>
+    internal void RestoreApplicant(Applicant applicant) => Applicant = applicant;
+
     /// <summary>An officer takes the case from the shared work queue.</summary>
     public void Claim(string officerUserId, DateTimeOffset now)
     {
         RequireOfficer(officerUserId);
+        EnsureNotErased();
         EnsureSeparationOfDuties(officerUserId);
 
         if (IsTerminal)
@@ -223,6 +253,7 @@ public sealed class KycCase : AggregateRoot
         DateTimeOffset now)
     {
         RequireOfficer(decidedByUserId);
+        EnsureNotErased();
         EnsureSeparationOfDuties(decidedByUserId);
 
         if (IsTerminal)
@@ -290,6 +321,12 @@ public sealed class KycCase : AggregateRoot
     {
         if (string.IsNullOrWhiteSpace(officerUserId))
             throw new DomainRuleViolationException("The officer must be identified.");
+    }
+
+    private void EnsureNotErased()
+    {
+        if (IsPersonalDataErased)
+            throw new DomainConflictException("The applicant's personal data was erased: this KYC case can no longer be worked on.");
     }
 
     private void EnsureSeparationOfDuties(string officerUserId)

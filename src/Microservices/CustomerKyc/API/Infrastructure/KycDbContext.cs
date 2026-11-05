@@ -8,10 +8,11 @@ using EnterpriseWebPlatform.CustomerKyc.Api.Application.Abstractions;
 using EnterpriseWebPlatform.CustomerKyc.Api.Domain.Aggregates;
 using EnterpriseWebPlatform.CustomerKyc.Api.Domain.ValueObjects;
 using EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure.Messaging;
+using EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure.Privacy;
 
 namespace EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure;
 
-public sealed class KycDbContext(DbContextOptions<KycDbContext> options, TimeProvider clock)
+public sealed class KycDbContext(DbContextOptions<KycDbContext> options, TimeProvider clock, PersonalDataCipher cipher)
     : DbContext(options), IKycUnitOfWork, IInboxStore
 {
     public DbSet<KycCase> KycCases => Set<KycCase>();
@@ -34,6 +35,10 @@ public sealed class KycDbContext(DbContextOptions<KycDbContext> options, TimePro
             .Select(entry => entry.Entity)
             .Where(aggregate => aggregate.DomainEvents.Count > 0)
             .ToList();
+
+        // SEC: the applicant of a new case is encrypted before anything is written; an erased
+        //      case loses its customer's key in this same transaction (crypto-shredding).
+        await KycCasePersonalData.ProtectAsync(this, cipher, cancellationToken);
 
         // 1. The aggregates themselves (a new case gets its database ID here).
         await SaveTranslatingErrorsAsync(cancellationToken);
@@ -145,18 +150,11 @@ public sealed class KycDbContext(DbContextOptions<KycDbContext> options, TimePro
 
             e.Property(x => x.InitiatedByUserId).HasColumnName("initiated_by_user_id").HasMaxLength(200);
 
-            e.ComplexProperty(x => x.Applicant, a =>
-            {
-                a.Property(x => x.FirstName).HasColumnName("applicant_first_name").HasMaxLength(Applicant.MaxNameLength).IsRequired();
-                a.Property(x => x.LastName).HasColumnName("applicant_last_name").HasMaxLength(Applicant.MaxNameLength).IsRequired();
-                a.Property(x => x.AddressLine1).HasColumnName("applicant_address_line1").HasMaxLength(200);
-                a.Property(x => x.AddressLine2).HasColumnName("applicant_address_line2").HasMaxLength(200);
-                a.Property(x => x.City).HasColumnName("applicant_city").HasMaxLength(100);
-                a.Property(x => x.State).HasColumnName("applicant_state").HasMaxLength(100);
-                a.Property(x => x.PostalCode).HasColumnName("applicant_postal_code").HasMaxLength(20);
-                a.Property(x => x.CountryCode).HasColumnName("applicant_country_code").HasMaxLength(2);
-                a.Ignore(x => x.FullName);
-            });
+            // SEC: the applicant is stored only encrypted, as one value (KycCasePersonalData).
+            e.Ignore(x => x.Applicant);
+            e.Ignore(x => x.IsPersonalDataErased);
+            e.Property<string>(KycCasePersonalData.ApplicantColumn).HasColumnName("applicant").IsRequired();
+            e.Property(x => x.PersonalDataErasedAt).HasColumnName("personal_data_erased_at").HasColumnType("timestamp with time zone");
 
             e.Property(x => x.IdentityProofDocumentId).HasColumnName("identity_proof_document_id").HasColumnType("uuid").IsRequired();
             e.Property(x => x.TaxProofDocumentId).HasColumnName("tax_proof_document_id").HasColumnType("uuid").IsRequired();
@@ -196,6 +194,15 @@ public sealed class KycDbContext(DbContextOptions<KycDbContext> options, TimePro
             e.HasIndex(x => x.WorkflowId).HasDatabaseName("ix_kyc_outbox_workflow_id");
             e.HasIndex(x => x.CorrelationId).HasDatabaseName("ix_kyc_outbox_correlation_id");
             e.HasIndex(x => x.CausationId).HasDatabaseName("ix_kyc_outbox_causation_id");
+        });
+
+        modelBuilder.Entity<PersonalDataKey>(e =>
+        {
+            e.ToTable("personal_data_keys");
+            e.HasKey(x => x.CustomerNumber).HasName("pk_personal_data_keys");
+            e.Property(x => x.CustomerNumber).HasColumnName("customer_number").HasMaxLength(100);
+            e.Property(x => x.WrappedKey).HasColumnName("wrapped_key").IsRequired();
+            e.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone").IsRequired();
         });
 
         modelBuilder.Entity<StaffMember>(e =>

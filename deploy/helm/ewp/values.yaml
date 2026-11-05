@@ -521,6 +521,8 @@ components:
       Authentication__Authority: '{{ include "ewp.public" (list . "idp") }}'
     secretEnv:
       - ConnectionStrings__KycDbConnection
+      # SEC: crypto-shredding of this context's own copy (Key Vault; the API refuses to start without it).
+      - PersonalData__MasterKey
       - Kafka__SaslPassword
 
   documents-management-api:
@@ -554,6 +556,8 @@ components:
       ScreeningProvider__PermittedHosts__0: screening-provider-simulator
     secretEnv:
       - ConnectionStrings__ComplianceDbConnection
+      # SEC: crypto-shredding of this context's own copy (Key Vault; the API refuses to start without it).
+      - PersonalData__MasterKey
       - Kafka__SaslPassword
       - ScreeningProvider__ApiKey
 
@@ -571,6 +575,8 @@ components:
       CoreBanking__PermittedHosts__0: core-banking-simulator
     secretEnv:
       - ConnectionStrings__AccountsDbConnection
+      # SEC: crypto-shredding of this context's own copy (Key Vault; the API refuses to start without it).
+      - PersonalData__MasterKey
       - Kafka__SaslPassword
       - CoreBanking__ApiKey
 

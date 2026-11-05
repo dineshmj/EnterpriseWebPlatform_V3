@@ -24,6 +24,8 @@ public sealed class AuditTrailSubscriberOptions : ISubscriberSettings
         KafkaTopicNames.OnboardingApplicationRejected,
         // The erasure workflow: who asked, who decided, the reason code - the proof an erasure happened lawfully.
         KafkaTopicNames.CustomerPersonalDataErasure,
+        // Each context's confirmation that its own copy is gone (KYC, Compliance, Accounts, Documents).
+        KafkaTopicNames.CustomerPersonalDataErasureConfirmations,
         KafkaTopicNames.KycCaseCreated,
         KafkaTopicNames.KycIdentityVerificationApproved,
         KafkaTopicNames.KycIdentityVerificationRejected,

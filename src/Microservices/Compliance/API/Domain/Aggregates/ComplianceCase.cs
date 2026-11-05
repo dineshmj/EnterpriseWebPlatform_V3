@@ -37,6 +37,8 @@ namespace EnterpriseWebPlatform.Compliance.Api.Domain.Aggregates;
 ///  5. A rejection and a hold always carry a written reason.
 ///  6. Decision metadata exists exactly when the case is final.
 ///  7. The case screens the applicant as KYC verified them (a snapshot, never refreshed).
+///  8. Once the applicant's personal data is erased, nobody can act on the case and it is
+///     never screened; its outcome, risk and people stay as the record.
 /// </summary>
 public sealed class ComplianceCase : AggregateRoot
 {
@@ -45,7 +47,6 @@ public sealed class ComplianceCase : AggregateRoot
         ApplicationNumber = null!;
         CustomerNumber = null!;
         BranchCode = null!;
-        Applicant = null!;
     }
 
     private ComplianceCase(
@@ -88,8 +89,16 @@ public sealed class ComplianceCase : AggregateRoot
 
     public BranchCode BranchCode { get; private set; }
 
-    /// <summary>The applicant as KYC verified them: what is screened and what the officer sees.</summary>
-    public Applicant Applicant { get; private set; }
+    /// <summary>
+    /// The applicant as KYC verified them: what is screened and what the officer sees. Null once
+    /// the applicant's personal data is erased.
+    /// </summary>
+    public Applicant? Applicant { get; private set; }
+
+    /// <summary>When Customer Onboarding's erasure reached this case; null while the data is kept.</summary>
+    public DateTimeOffset? PersonalDataErasedAt { get; private set; }
+
+    public bool IsPersonalDataErased => PersonalDataErasedAt is not null;
 
     public string? InitiatedByUserId { get; private set; }
 
@@ -228,6 +237,26 @@ public sealed class ComplianceCase : AggregateRoot
 
     // ------------------------------------------------------------------ Assignment (ReBAC)
 
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ The erasure was decided in Customer Onboarding (four eyes, eligibility); this case only
+    // │ obeys it: it forgets the applicant and keeps everything else as the record. Repeating
+    // │ it changes nothing (a redelivered erasure event).
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    /// <summary>Forgets the applicant. False when it was already erased.</summary>
+    public bool ErasePersonalData(DateTimeOffset now)
+    {
+        if (IsPersonalDataErased)
+            return false;
+
+        Applicant = null;
+        PersonalDataErasedAt = now;
+        Touch(now);
+        return true;
+    }
+
+    /// <summary>Infrastructure only: the applicant decrypted when the case is loaded.</summary>
+    internal void RestoreApplicant(Applicant applicant) => Applicant = applicant;
+
     public void Claim(string officerUserId, DateTimeOffset now)
     {
         EnsureOfficerMayAct(officerUserId);
@@ -356,6 +385,9 @@ public sealed class ComplianceCase : AggregateRoot
     private void EnsureOfficerMayAct(string officerUserId)
     {
         RequireOfficer(officerUserId);
+
+        if (IsPersonalDataErased)
+            throw new DomainConflictException("The applicant's personal data was erased: this compliance case can no longer be worked on.");
 
         // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
         // │ If the initiator is unknown, deny: nobody can prove the officer is not acting on their

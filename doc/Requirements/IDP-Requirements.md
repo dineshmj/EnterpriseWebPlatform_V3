@@ -129,7 +129,7 @@ Demo identities are fictitious and for local development only. **Password conven
 | `emily.payments` | Emily Carter | `payments_officer` | PAYMENTS | SYD001 | 4 |
 | `daniel.ops` | Daniel Cooper | `operations_administrator` | OPERATIONS | BNE001 | 4 |
 | `sarah.audit` | Sarah Collins | `auditor` | AUDIT | ADL001 | 5 |
-| `platform.admin` | Michael Turner | `platform_administrator` + `operations_administrator` | IT | PER001 | 5 |
+| `michael.pfadmin` | Michael Turner | `platform_administrator` + `operations_administrator` | IT | PER001 | 5 |
 | `mia.cs` | Mia Robinson | `customer_service_agent` | CUSTOMER_SERVICE | MEL001 | 2 |
 
 All staff are `FULL_TIME`. `ethan.kyc` and `noah.kyc` are deliberately unassigned, so the KYC work queue can demonstrate "first officer to decide wins".
@@ -138,7 +138,7 @@ All staff are `FULL_TIME`. `ethan.kyc` and `noah.kyc` are deliberately unassigne
 
 **Branch-scope demonstration:** `sophie.cs` (Sydney) and `mia.cs` (Melbourne) are both Customer Service Agents. Each can onboard and see only customers with a primary residential address in their own branch city. Applications record the branch they were opened in, and KYC officers see only their own branch's cases: the KYC officers are in Sydney, so they review Sophie's onboardings, while Mia's would wait for a Melbourne officer. Documents uploaded by Mia stay invisible to them as well.
 
-**Four-eyes demonstration (Payments reconciliation):** `daniel.ops` and `platform.admin` both hold `operations_administrator` (with `payment.reconcile`), so one can propose the resolution of a payment the network never confirmed and the other approve it.
+**Four-eyes demonstration (Payments reconciliation):** `daniel.ops` and `michael.pfadmin` both hold `operations_administrator` (with `payment.reconcile`), so one can propose the resolution of a payment the network never confirmed and the other approve it.
 
 **Clearance-by-risk demonstration (CMP):** approving a compliance case needs clearance 3 (LOW risk), 4 (MEDIUM) or 5 (HIGH, a sanctions MATCH). `olivia.compliance` (4) can therefore only reject or hold a HIGH-risk case; `grace.compliance` (5) can approve it.
 

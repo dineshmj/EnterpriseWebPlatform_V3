@@ -15,6 +15,9 @@ public interface IKycCaseRepository
     Task<KycCase?> GetForDecisionAsync(long caseId, CancellationToken cancellationToken);
 
     void Add(KycCase kycCase);
+
+    /// <summary>Every case of the customer, tracked, for the erasure of their personal data.</summary>
+    Task<IReadOnlyList<KycCase>> ListForErasureAsync(string customerNumber, CancellationToken cancellationToken);
 }
 
 /// <summary>

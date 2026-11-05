@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 using Duende.AspNetCore.Authentication.JwtBearer.DPoP;
@@ -16,10 +17,12 @@ using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.CustomerKyc.Api.Application.Abstractions;
 using EnterpriseWebPlatform.CustomerKyc.Api.Application.Commands.AssignKycCase;
 using EnterpriseWebPlatform.CustomerKyc.Api.Application.Commands.DecideVerificationStage;
+using EnterpriseWebPlatform.CustomerKyc.Api.Application.Commands.ErasePersonalData;
 using EnterpriseWebPlatform.CustomerKyc.Api.Application.Commands.OpenKycCase;
 using EnterpriseWebPlatform.CustomerKyc.Api.Application.Queries;
 using EnterpriseWebPlatform.CustomerKyc.Api.Authorization;
 using EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure;
+using EnterpriseWebPlatform.CustomerKyc.Api.Infrastructure.Privacy;
 
 // ┌─ :: ARCHITECTURE + SECURITY :: Customer KYC API: a resource server ────────────────────────────
 // │ Why : The domain API owns its context's data and rules; it trusts nothing the caller says about
@@ -51,6 +54,18 @@ builder.Services.AddControllers();
 var connectionString = builder.Configuration.GetConnectionString("KycDbConnection")
     ?? throw new InvalidOperationException("Connection string 'KycDbConnection' was not configured.");
 builder.Services.AddDbContext<KycDbContext>(o => o.UseNpgsql(DependencyOutage.FailFast(connectionString)));
+
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ Crypto-shredding of KYC's own copy: the master key comes from configuration
+// │ "PersonalData" (Key Vault outside Development); a missing or short key stops the API at
+// │ start-up instead of writing an applicant unprotected.
+// └──────────────────────────────────────────────────────────────────────────────────────
+builder.Services.AddOptions<PersonalDataProtectionOptions>()
+    .BindConfiguration(PersonalDataProtectionOptions.SectionName)
+    .Validate(options => options.IsValid(), "PersonalData:MasterKey must be base64 of 32 random bytes.")
+    .ValidateOnStart();
+builder.Services.AddSingleton(sp => new PersonalDataCipher(sp.GetRequiredService<IOptions<PersonalDataProtectionOptions>>().Value));
+builder.Services.AddScoped<KycCasePersonalData>();
 
 var authority = builder.Configuration["Authentication:Authority"]
     ?? throw new InvalidOperationException("Authentication:Authority was not configured.");
@@ -187,6 +202,7 @@ builder.Services.AddScoped<IStaffDirectory, StaffDirectory>();
 builder.Services.AddScoped<OpenKycCaseCommandHandler>();
 builder.Services.AddScoped<DecideVerificationStageCommandHandler>();
 builder.Services.AddScoped<AssignKycCaseCommandHandler>();
+builder.Services.AddScoped<ErasePersonalDataCommandHandler>();
 // The in-process Outbox relay's Kafka settings, validated at start-up (no credentials, no start).
 // :: SECURITY :: Kafka authentication, fail closed - see AsyncWorkflows/Infrastructure/Kafka/KafkaClientSecurity.cs
 builder.Services.AddKafkaOptions(builder.Configuration);

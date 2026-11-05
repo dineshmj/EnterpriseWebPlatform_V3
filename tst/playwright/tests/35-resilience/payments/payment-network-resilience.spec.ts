@@ -79,7 +79,7 @@ test.describe('Payment network resilience', () => {
       await expect(daniel.workspace().getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
 
       // Act 2: the second operator approves.
-      const michael = await signedInAs('platform.admin');
+      const michael = await signedInAs('michael.pfadmin');
       await openAsOperator(michael, paymentNumber);
       await decideResolution(michael, 'Approve');
 
@@ -100,7 +100,7 @@ test.describe('Payment network resilience', () => {
       const daniel = await signedInAs('daniel.ops');
       await openAsOperator(daniel, paymentNumber);
       await proposeResolution(daniel, 'SENT', 'NPP statement line 42 shows the payment sent; ticket OPS-TEST-2.', 'NPP-TEST-000145');
-      const michael = await signedInAs('platform.admin');
+      const michael = await signedInAs('michael.pfadmin');
       await openAsOperator(michael, paymentNumber);
       await decideResolution(michael, 'Approve');
 
@@ -122,7 +122,7 @@ test.describe('Payment network resilience', () => {
       // Act 1: the proposal is rejected by the second operator - the payment keeps waiting, funds still reserved.
       await openAsOperator(daniel, started.paymentNumber);
       await proposeResolution(daniel, 'NOT_SENT', 'First look: no statement entry yet; ticket OPS-TEST-3.');
-      const michael = await signedInAs('platform.admin');
+      const michael = await signedInAs('michael.pfadmin');
       await openAsOperator(michael, started.paymentNumber);
       await decideResolution(michael, 'Reject', 'The statement for today is not final yet - check again later.');
       await expect(started.payments.timeline().filter({ hasText: /rejected the proposed resolution/ })).toHaveCount(1, { timeout: 60_000 });

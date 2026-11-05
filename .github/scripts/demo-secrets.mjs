@@ -167,6 +167,8 @@ const o = {
   documentKey: 'documents-encryption-key-1',
   personalDataMasterKey: 'customer-personal-data-master-key',
   personalDataIndexKey: 'customer-personal-data-blind-index-key',
+  // One master key per context that keeps its own copy (squad autonomy: never shared).
+  contextPersonalDataKey: (context) => `${context}-personal-data-master-key`,
   anchorKey: 'audit-anchor-signing-key',
   keystorePassword: 'tls-keystore-password',
   dataProtectionPfx: 'pki-data-protection-pfx',
@@ -217,6 +219,10 @@ function ewpNamespace() {
   // SEC: crypto-shredding - the master key wraps each customer's data key; the other keys the blind index.
   add('ewp-customer-onboarding-api', 'PersonalData__MasterKey', o.personalDataMasterKey);
   add('ewp-customer-onboarding-api', 'PersonalData__BlindIndexKey', o.personalDataIndexKey);
+  // SEC: crypto-shredding of each downstream copy - KYC, Compliance and Accounts each wrap their own data keys.
+  add('ewp-customer-kyc-api', 'PersonalData__MasterKey', o.contextPersonalDataKey('kyc'));
+  add('ewp-compliance-api', 'PersonalData__MasterKey', o.contextPersonalDataKey('compliance'));
+  add('ewp-accounts-api', 'PersonalData__MasterKey', o.contextPersonalDataKey('accounts'));
   add('ewp-audit-api', 'Audit__Anchors__SigningKey', o.anchorKey);
   // A simulator's key equals its caller's.
   for (const [caller, key, simulator, name] of [
@@ -509,6 +515,7 @@ base.ewp[o.kycSessionSecret] = () => password(48);
 base.ewp[o.documentKey] = key32;
 base.ewp[o.personalDataMasterKey] = key32;
 base.ewp[o.personalDataIndexKey] = key32;
+for (const context of ['kyc', 'compliance', 'accounts']) base.ewp[o.contextPersonalDataKey(context)] = key32;
 base.ewp[o.anchorKey] = ecPkcs8;
 base.ewp[o.keystorePassword] = () => password();
 base.ewp[o.clientKey('selfservice-web')] = publicJwk;
