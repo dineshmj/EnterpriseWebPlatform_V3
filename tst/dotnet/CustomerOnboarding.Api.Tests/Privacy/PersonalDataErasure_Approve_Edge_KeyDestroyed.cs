@@ -189,7 +189,9 @@ public sealed class PersonalDataErasure_Approve_Edge_KeyDestroyed
         payload.GetProperty("DecisionByUserId").GetString().Should().Be(Platform);
         payload.GetProperty("DecisionByLanId").GetString().Should().Be("michael.pfadmin");
 
-        string.Concat(requested.GetRawText(), erased.GetRawText()).Should().NotContainAny("Ava", "Nguyen", "ava.nguyen", "412");
+        // The whole phone number (spaced and stored forms): a fragment such as "412" also occurs in random message IDs.
+        string.Concat(requested.GetRawText(), erased.GetRawText())
+            .Should().NotContainAny("Ava", "Nguyen", "ava.nguyen", "412 345 678", "412345678");
     }
 
     [Test]
