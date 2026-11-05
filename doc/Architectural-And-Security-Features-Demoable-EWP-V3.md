@@ -93,6 +93,7 @@ The document answers *how the platform is built and protected*, not *which busin
     - [2.4.8 Tamper-evident audit trail](#248-tamper-evident-audit-trail)
     - [2.4.9 Calls to external systems](#249-calls-to-external-systems)
     - [2.4.10 Integration with another organisation: the Partner Bank](#2410-integration-with-another-organisation-the-partner-bank)
+    - [2.4.11 Crypto-shredding: erasing a person, keeping the record](#2411-crypto-shredding-erasing-a-person-keeping-the-record)
   - [2.5 Supply chain](#25-supply-chain)
     - [2.5.1 Dependency vulnerability scanning](#251-dependency-vulnerability-scanning)
     - [2.5.2 Code scanning: CodeQL, SonarQube Cloud and Snyk](#252-code-scanning-codeql-sonarqube-cloud-and-snyk)
@@ -845,7 +846,7 @@ Some actions need more than being signed in: a payments officer's approval or re
 
 #### 2.1.6 Customers sign in to their own channel (My EWP, FAPI 2.0)
 
-EWP's customers can register for online access and sign in at the IDP (A7 + B1, first part). Their own channel, "My EWP", is planned; its clients are already registered. They sign in to the same IDP as the staff, but as a **separate population**: their own table (`customer_logins`), their own sign-in pages (`/Customer/Login`, `/Register`, `/Code`) and their own clients. The client decides which population is looked up. A customer token carries the `customer_number` and nothing organisational (no role, permission or branch), so every staff policy refuses it. A staff member's IDP session does not count for a customer client, and the staff sign-in page never completes a customer client's request (nor the reverse).
+EWP's customers can register for online access and sign in at the IDP (A7 + B1, first part). Their own channel, "My EWP", is **not part of V3** (decided 27-OCT-2026): EWP is an assisted channel for the branch counter, and a bank's net banking is usually a separate application. Its clients are registered, so the IDP side shows the customer population and FAPI 2.0 on its own. They sign in to the same IDP as the staff, but as a **separate population**: their own table (`customer_logins`), their own sign-in pages (`/Customer/Login`, `/Register`, `/Code`) and their own clients. The client decides which population is looked up. A customer token carries the `customer_number` and nothing organisational (no role, permission or branch), so every staff policy refuses it. A staff member's IDP session does not count for a customer client, and the staff sign-in page never completes a customer client's request (nor the reverse).
 
 **Online registration.** The customer types their customer number and the e-mail address EWP holds for them. The IDP asks Customer Onboarding as itself: a 60-second token it signs in-process for a pseudo-client that has no secret anywhere, aimed at two internal endpoints that pin it. Only an onboarded customer without online access matches. Whatever the answer, the person sees the same page and the same words; on a miss, no code is sent. A one-time code goes to the mobile on record (simulated: the console, and in Development the page). The customer enters the code and chooses a password (12+ characters). The sign-in is created first, then Customer Onboarding links it to the customer; if that fails, the sign-in is removed again. One online identity per customer.
 
@@ -868,7 +869,7 @@ DPoP versus mutual TLS: the bank-to-bank calls to the Partner Bank keep mutual T
 - FAPI 2.0 client: [SelfServiceWeb.cs](../src/IDP/ConfigRegistration/Clients/Customers/SelfServiceWeb.cs), [ClientKeyStore.cs](../src/IDP/Security/ClientKeyStore.cs), [New-EwpClientKeys.mjs](../ps/pki/New-EwpClientKeys.mjs); DPoP in the exchange: `SenderConstrained` in [TokenExchangeGrantValidator.cs](../src/IDP/Security/TokenExchangeGrantValidator.cs)
 - Automated proof: `tst/dotnet/IDP.Tests` (one-time codes, lockout, password rule)
 
-**Not yet:** the My EWP web (Next.js + light BFF) and its Self-Service Journey API, with the "my accounts" and "my Digital Gold" endpoints - postponed (laptop memory), the IDP side is ready for them; an app authenticator or passkeys instead of SMS codes (R-17).
+**Not in V3:** the My EWP web (Next.js + light BFF) and its Self-Service Journey API, with the "my accounts" and "my Digital Gold" endpoints; the IDP side is ready for them. Also not yet: an app authenticator or passkeys instead of SMS codes (R-17).
 
 ### 2.2 Authorization beyond RBAC
 
@@ -1131,6 +1132,25 @@ Demo: Sophie records Camilla's Form VII and sends it (the PC's Partner Bank wind
 - Automated proof of the adapter (signed instruction, refusals, lost answer and resend with the same `jti`), with the Partner Bank played by WireMock: [1.8.2](#182-neighbours-played-by-wiremock-c-and-typescript)
 
 **Not yet:** mutual TLS on EWP's internal calls (Threat-Model R-9). A person's token on those calls is already DPoP-bound, Journey APIs included ([2.1.1](#211-oidc-authorization-code--pkce-through-a-bff)), and so is every machine token ([2.1.2](#212-separate-human-and-machine-identities)): the APIs refuse any token without `cnf`.
+
+#### 2.4.11 Crypto-shredding: erasing a person, keeping the record
+
+A bank must keep its records for years, and must then erase the person: every copy. The audit trail is append-only, so nothing may be deleted from it. Crypto-shredding settles the two duties. Each customer's personal data is encrypted under **that customer's own key**, so destroying the key makes every copy unreadable at once, while nothing append-only changes.
+
+- **Encrypted at rest.** Name, e-mail, phone and address lines are AES-256-GCM under a per-customer data key, which is stored only wrapped by a master key. The customer number is the associated data, so a value copied onto another customer fails to decrypt. The database refuses a personal field without the `v1.` prefix. An e-mail address or surname is found only by an exact match, through an HMAC blind index under a second key.
+- **Every clear copy has an end.** The submitted application still travels in clear, because KYC needs it as submitted. Kafka keeps each message 7 days on every topic, and the Outbox relay blanks a published payload after 7 days (the row stays as evidence).
+- **Four eyes.** One operations administrator requests the erasure with a reason **code** (no free text). A different one approves or rejects it. Each step needs its permission, comes only through the Operations Journey API and needs a recent authenticator code. Only a prospect qualifies, and only after the retention period. Approval deletes the key and clears the blind indexes in one transaction.
+- **Each context erases its own copy.** KYC, Compliance and Accounts keep their own copy under their own keys (squad autonomy: no shared key). Documents Management keeps the scans. Each context's existing subscriber passes the erasure to its own API, then publishes `PersonalDataCopyErased`, so the audit trail shows that every context was asked and what it erased: who asked, who decided, why, and nothing personal.
+
+**Where to look at:**
+
+- The design: [Crypto-Shredding.md](Crypto-Shredding.md)
+- Encryption: [PersonalDataCipher.cs](../src/Microservices/CustomerOnboarding/API/Infrastructure/Privacy/PersonalDataCipher.cs), [CustomerPersonalData.cs](../src/Microservices/CustomerOnboarding/API/Infrastructure/Privacy/CustomerPersonalData.cs)
+- The four eyes: [PersonalDataErasureRequest.cs](../src/Microservices/CustomerOnboarding/API/Domain/Aggregates/PersonalDataErasureRequest.cs); screen: Operations → Privacy → Personal Data Erasure
+- The fan-out: [PersonalDataErasureForwarder.cs](../src/AsyncWorkflows/Infrastructure/Subscribers/PersonalDataErasureForwarder.cs); the events: [Integration-Event-Catalogue.md](Integration-Event-Catalogue.md)
+- Automated proof: the `Privacy/` tests of Customer Onboarding, KYC, Compliance and Accounts on SQLite (never stored in clear, erased with its key in one transaction, a redelivery erases nothing new); `Audit.Api.Tests` (an erasure recorded with requester, decider and reason, nothing personal); `Notifications.Api.Tests` (who is told); `AsyncWorkflows.Infrastructure.Tests` (the forwarder)
+
+**Not yet:** the keys live in the same database as the data, so a backup taken before an erasure still holds the key. Production keeps them in a separate key store with a short backup retention (production item 18 in [Response-to-AI-Architect-Reviews.md](AI-Architect-Reviews/Response-to-AI-Architect-Reviews.md#what-remains-for-a-production-go-ahead), R-22). Opened accounts and Partner Products keep an ACTIVE customer's name, and join the erasure once closed customers can be erased.
 
 ### 2.5 Supply chain
 

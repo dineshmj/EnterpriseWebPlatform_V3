@@ -74,10 +74,11 @@ Each bounded context's requirements document lists the permissions that belong t
 | `service.health.view` | Service health (the Operations Platform Health screen) | `operations_administrator`, `platform_administrator` |
 | `simulator.behaviour.manage` | Switch a simulated external system to Slow / Failing / Down / Refusing (Development and Test only; recent MFA) | `operations_administrator` |
 | `payment.reconcile` | Propose or decide, with a second person, what happened to a payment the network never confirmed (recent MFA; four eyes, §8.2) | `operations_administrator` |
+| `personal-data.erasure.request`, `personal-data.erasure.approve` | Ask for, or decide with a second person, the erasure of a prospect's personal data (crypto-shredding: [Crypto-Shredding.md](Crypto-Shredding.md); recent MFA; four eyes, §8.2) | `operations_administrator` |
 | `audit.view`, `audit.search`, `workflow.history.view`, `approval.history.view` | Audit and investigation | `auditor` |
 | `platform.configuration.view` / `.update`, `platform.user.view` / `.manage`, `platform.role.view` / `.manage`, `platform.permission.view`, `platform.health.view` | Platform administration | `platform_administrator` |
 
-None of these permissions authorizes a business approval. `payment.reconcile` records a **fact** taken from the payment network's own records (sent / not sent), with evidence and two people; it never approves a payment.
+None of these permissions authorizes a business approval. `payment.reconcile` records a **fact** taken from the payment network's own records (sent / not sent), with evidence and two people; it never approves a payment. The erasure permissions act on a prospect only (no accounts, no application in progress, unchanged for the retention period), and the erasure can never be decided by the person who asked for it.
 
 ### 3.3 Scopes vs Permissions
 
@@ -224,6 +225,7 @@ Compliance approver    != Account-opening approver
 Payment initiator      != Payment approver
 Reconciliation proposer != Reconciliation approver   (four eyes)
 Payment initiator      != Reconciliation proposer or approver
+Erasure requester      != Erasure approver           (four eyes; also a database CHECK)
 ```
 
 The exact SoD rules of a workflow step are defined in the owning context's requirements document, close to the operation, not as generic UI rules.
