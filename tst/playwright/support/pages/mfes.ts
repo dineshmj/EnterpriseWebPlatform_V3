@@ -577,3 +577,48 @@ export class DigitalGoldMfe {
     }).toPass({ ...WORKFLOW_WAIT, timeout });
   }
 }
+// ---------------------------------------------------------------- Operations
+
+/** Operations: "Personal Data Erasure" - one operator requests, ANOTHER approves or rejects. */
+export class PersonalDataErasureMfe {
+  static readonly title = 'Personal data erasure';
+
+  constructor(private readonly shell: ShellPage) {}
+
+  async open(): Promise<void> {
+    await this.shell.openMenuItem('Operations', 'Personal Data Erasure');
+    await this.shell.waitForScreen(PersonalDataErasureMfe.title);
+  }
+
+  /** Requests the erasure of `customerNumber` for the customer's own request; returns the screen's answer. */
+  async request(customerNumber: string): Promise<Locator> {
+    const mfe = this.shell.workspace();
+    const submit = mfe.getByRole('button', { name: 'Request erasure', exact: true });
+    await typeUntilScreenReacts(mfe.locator('#erasure-customer-number'), customerNumber, () => expect(submit).toBeEnabled({ timeout: 3_000 }));
+    await submit.click();
+    return mfe.getByRole('alert').or(mfe.getByRole('status')).first();
+  }
+
+  /** The waiting request's row for this customer (empty when there is none). */
+  pending(customerNumber: string): Locator {
+    return this.shell.workspace().getByRole('table', { name: 'Erasure requests waiting for a decision' })
+      .locator('tbody tr').filter({ hasText: customerNumber });
+  }
+
+  /** Waits until the request shows (it may have been made by someone else a moment ago). */
+  async expectPending(customerNumber: string): Promise<void> {
+    await waitFor(this.shell, PersonalDataErasureMfe.title, () => this.pending(customerNumber));
+  }
+
+  /** Approves the waiting request and confirms the warning ("Erase for good"). */
+  async approve(customerNumber: string): Promise<void> {
+    await this.pending(customerNumber).getByRole('button', { name: 'Approve', exact: true }).click();
+    await this.shell.workspace().getByRole('alertdialog').getByRole('button', { name: 'Erase for good', exact: true }).click();
+  }
+
+  /** The decided request's row for this customer. */
+  decided(customerNumber: string): Locator {
+    return this.shell.workspace().getByRole('table', { name: 'Decided and expired erasure requests' })
+      .locator('tbody tr').filter({ hasText: customerNumber });
+  }
+}

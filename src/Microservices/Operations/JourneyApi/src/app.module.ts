@@ -13,10 +13,12 @@ import { HealthController, PlatformController } from './platform/platform.contro
 import { HealthProbeService, SimulatorService } from './platform/platform.services';
 import { ParkedMessagesController } from './recovery/parked-messages.controller';
 import { ParkedMessagesService } from './recovery/parked-messages.service';
+import { PersonalDataErasureController } from './privacy/personal-data-erasure.controller';
+import { PersonalDataErasureService } from './privacy/personal-data-erasure.service';
 import { TokenExchangeService } from './services/token-exchange.service';
 
 @Module({
-  controllers: [PlatformController, FaultRoutesController, ParkedMessagesController, HealthController],
+  controllers: [PlatformController, FaultRoutesController, ParkedMessagesController, PersonalDataErasureController, HealthController],
   providers: [
     { provide: JOURNEY_OPTIONS, useFactory: loadOptions },
     DelegatedTokenGuard,
@@ -42,8 +44,9 @@ import { TokenExchangeService } from './services/token-exchange.service';
     // └──────────────────────────────────────────────────────────────────────────────────────
     { provide: FAULT_CONTROLLER, useClass: ToxiproxyFaultController },
     FaultControlService,
-    TokenExchangeService,   // the second exchange: the operator's token for Accounts / Compliance / Partner Products
+    TokenExchangeService,   // the second exchange: the operator's token for Accounts / Compliance / Partner Products / Customer Onboarding
     ParkedMessagesService,
+    PersonalDataErasureService,
   ],
 })
 export class AppModule {}

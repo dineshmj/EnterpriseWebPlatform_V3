@@ -71,6 +71,26 @@ export interface ContextParkedMessages {
   messages: ParkedMessage[];
 }
 
+/** Why a customer is erased: a code, never free text (no personal data travels with it). */
+export const ERASURE_REASONS = ['CUSTOMER_REQUEST', 'RETENTION_ENDED'] as const;
+export type ErasureReason = (typeof ERASURE_REASONS)[number];
+
+/** A personal-data erasure request: identifiers, LAN IDs and outcome only. */
+export interface ErasureRequest {
+  erasureRequestId: number;
+  customerNumber: string;
+  reasonCode: ErasureReason;
+  status: 'PENDING' | 'ERASED' | 'REJECTED' | 'EXPIRED';
+  requestedBy: string;
+  requestedAt: string;
+  expiresAt: string;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  decisionRemarks: string | null;
+  /** False for the requester: four eyes (the Customer Onboarding API refuses their decision anyway). */
+  mayDecide: boolean;
+}
+
 export type ActionResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string; signedOut?: boolean; stepUp?: boolean; notAvailable?: boolean };

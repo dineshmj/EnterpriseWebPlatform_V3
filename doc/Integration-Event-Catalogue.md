@@ -103,6 +103,14 @@ The body remains the source of truth for consumers; headers are a copy for infra
 | `OnboardingApplicationStatusChanged` | `onboarding.application.status.changed` | Application ID | `ApplicationRef`, `PreviousStatus`, `NewStatus`, plus `ApplicationId` / `CustomerId` | Notifications (planned) | Published; no consumer yet |
 | `OnboardingApplicationRejected` | `onboarding.application.rejected` | Application ID | `ApplicationRef`, `ApplicationNumber`, `CustomerNumber`, `BranchCode`, `RejectedBy` (`KYC` / `COMPLIANCE` / `ACCOUNTS` for an officer's decision; `ACCOUNT_OPENING` when the account could not be opened, with `PreviousStatus` `COMPENSATING`), `PreviousStatus`, `EvidenceDocuments` (`DocumentId`, `DocumentType`: the evidence recorded at submission) | `DocumentInvalidationSubscriber` → Documents Management invalidates exactly those documents (saga compensation; retained, not deleted) | Present |
 
+**Personal-data erasure** (crypto-shredding, [Crypto-Shredding.md](Crypto-Shredding.md)): one topic, `customer.personal-data.erasure`, keyed by the erasure request's ID; one erasure request is one workflow (the decision's causation is the request). Every payload is `ErasureRequestId`, `CustomerId`, `CustomerNumber`, `ReasonCode` (`CUSTOMER_REQUEST` / `RETENTION_ENDED`), `Status`, `DecisionByUserId`, `DecisionByLanId` - no personal data, no remarks. The envelope's initiator is always the requester.
+
+| Event type | Topic | Key | Status | Consumers | Status |
+|---|---|---|---|---|---|
+| `PersonalDataErasureRequested` | `customer.personal-data.erasure` | Erasure request ID | `PENDING` (no decider yet) | Audit trail; Notifications (operations: "Erasure to approve") | Present |
+| `PersonalDataErasureRejected` | `customer.personal-data.erasure` | Erasure request ID | `REJECTED` (decider = the second person) | Audit trail; Notifications (the requester) | Present |
+| `CustomerPersonalDataErased` | `customer.personal-data.erasure` | Erasure request ID | `ERASED` (decider = the second person; the customer's key is already destroyed) | Audit trail; Notifications (the requester); next: KYC, Compliance, Accounts, Partner Products and Documents Management each shred their own copy and acknowledge | Present (audit); downstream planned |
+
 ### 4.2 Customer KYC (producer: Customer KYC API, in-process Outbox relay)
 
 | Event type | Topic | Key | Consumers | Status |

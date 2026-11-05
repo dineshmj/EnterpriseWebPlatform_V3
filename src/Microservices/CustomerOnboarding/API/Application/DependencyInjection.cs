@@ -24,6 +24,11 @@ public static class DependencyInjection
             Customers.Queries.GetCustomers.GetCustomersQueryHandler>();
 
         services.AddScoped<
+            Customers.PersonalDataErasure.PersonalDataErasureCommandHandler>();
+        services.AddScoped<
+            Customers.PersonalDataErasure.GetPersonalDataErasureRequestsQueryHandler>();
+
+        services.AddScoped<
             Onboarding.Commands.CreateApplication.CreateOnboardingApplicationCommandHandler>();
 
         services.AddScoped<

@@ -7,7 +7,8 @@ import { exchangeForJourneyApi, freshAccessToken } from '@/lib/server/oidc';
 import { readSession, updateSession } from '@/lib/server/session-store';
 import { isDependencyUnavailable, OUTAGE_MESSAGE } from '@/lib/server/outage';
 import {
-  BEHAVIOURS, ROUTE_STATES, type ActionResult, type Behaviour, type ContextParkedMessages, type FaultRoute, type PlatformHealth, type RouteState, type SimulatorState,
+  BEHAVIOURS, ERASURE_REASONS, ROUTE_STATES, type ActionResult, type Behaviour, type ContextParkedMessages, type ErasureReason, type ErasureRequest,
+  type FaultRoute, type PlatformHealth, type RouteState, type SimulatorState,
 } from '@/lib/operations-types';
 
 /*
@@ -66,6 +67,30 @@ export async function resendParkedMessage(context: string, messageId: string, re
   return callJourney<unknown>('operations-journey.write', 'POST', `/v1/journeys/operations/parked-messages/${context}/${messageId}/resend`, { reason: trimmed });
 }
 
+export async function loadErasureRequests(): Promise<ActionResult<ErasureRequest[]>> {
+  return callJourney<ErasureRequest[]>('operations-journey.read', 'GET', '/v1/journeys/operations/personal-data-erasures');
+}
+
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ Personal-data erasure: only a customer-number-shaped value, a known reason code and a
+// │ numeric request ID go out; the remarks (to reject) are length-checked here, again by
+// │ the Customer Onboarding API. Four eyes and eligibility are decided there, not here.
+// └──────────────────────────────────────────────────────────────────────────────────────
+export async function requestErasure(customerNumber: string, reasonCode: ErasureReason): Promise<ActionResult<unknown>> {
+  const number = customerNumber.trim();
+  if (!/^[A-Za-z0-9-]{1,30}$/.test(number)) return { ok: false, error: 'Give the customer number (e.g. CUS-000123).' };
+  if (!ERASURE_REASONS.includes(reasonCode)) return { ok: false, error: 'Choose the reason.' };
+  return callJourney<unknown>('operations-journey.write', 'POST', '/v1/journeys/operations/personal-data-erasures', { customerNumber: number, reasonCode });
+}
+
+export async function decideErasure(erasureRequestId: number, approve: boolean, remarks = ''): Promise<ActionResult<unknown>> {
+  if (!Number.isSafeInteger(erasureRequestId) || erasureRequestId < 1) return { ok: false, error: 'Unknown request.' };
+  if (approve) return callJourney<unknown>('operations-journey.write', 'POST', `/v1/journeys/operations/personal-data-erasures/${erasureRequestId}/approve`, {});
+  const trimmed = remarks.trim();
+  if (trimmed.length < 10 || trimmed.length > 500) return { ok: false, error: 'Say why the erasure is refused (10 to 500 characters).' };
+  return callJourney<unknown>('operations-journey.write', 'POST', `/v1/journeys/operations/personal-data-erasures/${erasureRequestId}/reject`, { remarks: trimmed });
+}
+
 async function callJourney<T>(
   scope: 'operations-journey.read' | 'operations-journey.write', method: 'GET' | 'PUT' | 'POST', path: string, body?: unknown,
 ): Promise<ActionResult<T>> {
@@ -106,9 +131,12 @@ async function callJourney<T>(
     if (response.status === 403) {
       // Problem Details (RFC 9457): "code" says why, "detail" says what to do.
       const problem = (await response.json().catch(() => null)) as { code?: string; detail?: string } | null;
-      return problem?.code === 'mfa_required'
-        ? { ok: false, stepUp: true, error: problem.detail ?? 'This change needs a recent confirmation with your authenticator code.' }
-        : { ok: false, error: 'You are not allowed to do this.' };
+      if (problem?.code === 'mfa_required')
+        return { ok: false, stepUp: true, error: problem.detail ?? 'This change needs a recent confirmation with your authenticator code.' };
+      // Four eyes: the domain's own sentence ("the requester cannot decide it") is meant for the screen.
+      if (problem?.code === 'separation_of_duties')
+        return { ok: false, error: problem.detail ?? 'Another person must decide this.' };
+      return { ok: false, error: 'You are not allowed to do this.' };
     }
     if (response.status === 400 || response.status === 409) {
       // Our own refusal texts (a reason too short, a message no longer parked) - shown as they are.

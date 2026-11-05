@@ -24,7 +24,9 @@ public sealed class NotificationsSubscriberOptions : ISubscriberSettings, IM2MCl
         KafkaTopicNames.AccountApplicationRejected,
         KafkaTopicNames.AccountOpened,
         KafkaTopicNames.AccountOpeningFailed,
-        KafkaTopicNames.PaymentEvents
+        KafkaTopicNames.PaymentEvents,
+        // An erasure waiting for a second operator (new work), and its outcome for the requester.
+        KafkaTopicNames.CustomerPersonalDataErasure
     ];
 
     /// <summary>The Kafka ACLs grant this worker's user READ on this group only.</summary>

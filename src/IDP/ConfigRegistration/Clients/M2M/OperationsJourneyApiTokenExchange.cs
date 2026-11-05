@@ -18,9 +18,10 @@ public sealed class OperationsJourneyApiTokenExchange
             // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
             // │ Token exchange ONLY - no client credentials: the Operations Journey API can never call
             // │ Accounts, Compliance or Partner Products as itself, only for the signed-in operator -
-            // │ whose own permissions (outbox.view, workflow.reprocess) and MFA freshness travel with
-            // │ the token. Partner Products accepts it on the Outbox endpoints only (its policies pin
-            // │ the acting client per endpoint), never on the counter's Digital Gold endpoints.
+            // │ whose own permissions (outbox.view, workflow.reprocess, personal-data.erasure.*) and
+            // │ MFA freshness travel with the token. Partner Products accepts it on the Outbox
+            // │ endpoints only (its policies pin the acting client per endpoint), never on the
+            // │ counter's Digital Gold endpoints; Customer Onboarding on the erasure endpoints only.
             // └──────────────────────────────────────────────────────────────────────────────────────
             AllowedGrantTypes = { OidcConstants.GrantTypes.TokenExchange },
             // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
@@ -34,7 +35,8 @@ public sealed class OperationsJourneyApiTokenExchange
             {
                 "accounts.read", "accounts.write",
                 "compliance.read", "compliance.write",
-                "partner-products.read", "partner-products.write"
+                "partner-products.read", "partner-products.write",
+                "customer-onboarding.read", "customer-onboarding.write"
             },
 
             // Delegated tokens are short-lived: one request, one call.

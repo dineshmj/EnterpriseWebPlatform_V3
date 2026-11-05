@@ -371,6 +371,8 @@ INSERT INTO permissions (name, code, description) VALUES
 ('Resume Workflow','workflow.resume','Resume a paused workflow'),
 ('Manage Simulator Behaviour','simulator.behaviour.manage','Switch an external-system simulator to healthy, slow, failing, down or refusing (development and test environments only)'),
 ('Reprocess Workflow','workflow.reprocess','Reprocess an eligible workflow'),
+('Request Personal Data Erasure','personal-data.erasure.request','Ask for a customer''s personal data to be erased (crypto-shredding); another person must decide'),
+('Approve Personal Data Erasure','personal-data.erasure.approve','Approve or reject an erasure another person requested (four eyes; their key is destroyed on approval)'),
 ('View Integration Status','integration.status.view','View integration status'),
 ('View Service Health','service.health.view','View service health information'),
 ('View Outbox','outbox.view','View Outbox operational information'),
@@ -685,7 +687,11 @@ JOIN permissions p ON p.code IN (
     'inbox.view',
     'consumer.status.view',
     'workflow.status.view',
-    'simulator.behaviour.manage'
+    'simulator.behaviour.manage',
+    -- Both erasure permissions: the four eyes come from the rule "the requester never decides",
+    -- so any two operations administrators can complete an erasure, never one alone.
+    'personal-data.erasure.request',
+    'personal-data.erasure.approve'
 )
 WHERE r.code = 'operations_administrator';
 

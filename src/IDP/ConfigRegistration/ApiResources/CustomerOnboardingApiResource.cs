@@ -27,6 +27,10 @@ public sealed class CustomerOnboardingApiResource : IDuendeApiResource
                     // The acting staff member's LAN ID, recorded next to the subject ID
                     "lan_id",
 
+                    // SEC: the personal-data erasure endpoints authorize on the operator's
+                    // permissions (personal-data.erasure.request / .approve).
+                    "permission",
+
                     // ABAC: branch scope of a Customer Service Agent
                     "branch",
                     "branch_city",

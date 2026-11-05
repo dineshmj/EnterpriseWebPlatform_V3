@@ -25,5 +25,6 @@ internal static class BianExamples
         BranchId: 1,
         Version: 3,
         ResidentialAddress: new CustomerAddressDto("1 George Street", "Level 4", "Sydney", "NSW", "2000", "AU"),
-        CreatedAt: new DateTimeOffset(2026, 10, 15, 9, 30, 0, TimeSpan.Zero));
+        CreatedAt: new DateTimeOffset(2026, 10, 15, 9, 30, 0, TimeSpan.Zero),
+        PersonalDataErased: false);
 }

@@ -27,7 +27,8 @@ export type DelegatedRequest = Request & { delegation?: Delegation };
 
 interface Requirement {
   scope: string;
-  permission: string;
+  /** The permission the person must hold - or, as a list, any one of them (e.g. seeing what either of two roles works on). */
+  permission: string | readonly string[];
   /** A recent MFA sign-in, while MFA is on (changing a simulator's behaviour). */
   stepUp?: boolean;
 }
@@ -120,7 +121,8 @@ export class DelegatedTokenGuard implements CanActivate {
     this.limiter.take(`${isChange ? 'change' : 'read'}|${payload.sub}|${actingClient}`, isChange ? CHANGE_LIMIT : READ_LIMIT);
 
     const permissions = toList(payload.permission);
-    if (!permissions.includes(requirement.permission)) {
+    const accepted: readonly string[] = typeof requirement.permission === 'string' ? [requirement.permission] : requirement.permission;
+    if (!accepted.some((permission) => permissions.includes(permission))) {
       throw new ForbiddenException('You are not allowed to do this.');
     }
 

@@ -47,7 +47,7 @@ export const personas: Record<PersonaName, Persona> = {
     menu: {
       'Customer Onboarding': ['View Customers', 'View Onboarding Applications', 'Onboarding Workflow Monitor'],
       Payments: ['View Payments', 'Payment Processing Monitor'],
-      Operations: ['Platform Health', 'Simulator & Fault Controls'],
+      Operations: ['Platform Health', 'Simulator & Fault Controls', 'Personal Data Erasure'],
     },
   },
   // Michael Turner: platform administrator AND operations administrator - the second person of
@@ -57,7 +57,7 @@ export const personas: Record<PersonaName, Persona> = {
     menu: {
       'Customer Onboarding': ['View Customers', 'View Onboarding Applications', 'Onboarding Workflow Monitor'],
       Payments: ['View Payments', 'Payment Processing Monitor'],
-      Operations: ['Platform Health', 'Simulator & Fault Controls'],
+      Operations: ['Platform Health', 'Simulator & Fault Controls', 'Personal Data Erasure'],
     },
   },
   'sarah.audit': { username: 'sarah.audit', role: 'auditor', menu: { Audit: ['Audit Trail'] } },
@@ -88,6 +88,7 @@ export const menuAreas: Record<string, string> = {
   'Audit Trail': 'Audit',
   'Platform Health': 'Platform',
   'Simulator & Fault Controls': 'Platform',
+  'Personal Data Erasure': 'Privacy',
   'Digital Gold': 'Partner Products',
 };
 

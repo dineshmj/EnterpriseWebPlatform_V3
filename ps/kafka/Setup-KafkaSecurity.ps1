@@ -77,6 +77,7 @@ $Topics = @(
     'onboarding.application.submitted',
     'onboarding.application.status.changed',
     'onboarding.application.rejected',
+    'customer.personal-data.erasure',
     'kyc.case.created',
     'kyc.case.approved',
     'kyc.case.rejected',
@@ -358,8 +359,9 @@ switch ($Phase) {
         Invoke-KafkaTool 'kafka-acls.bat' "$base --allow-principal User:$Principal $What" | Out-Null
     }
 
-    Write-Host 'Customer Onboarding Outbox relay: write its four topics' -ForegroundColor Cyan
-    foreach ($t in 'customer.created', 'onboarding.application.submitted', 'onboarding.application.status.changed', 'onboarding.application.rejected') {
+    Write-Host 'Customer Onboarding Outbox relay: write its five topics' -ForegroundColor Cyan
+    foreach ($t in 'customer.created', 'onboarding.application.submitted', 'onboarding.application.status.changed', 'onboarding.application.rejected',
+                   'customer.personal-data.erasure') {
         Grant 'ewp-co-outbox-relay' "--operation Write --operation Describe --topic $t"
     }
 
@@ -432,7 +434,7 @@ switch ($Phase) {
                                                   'compliance.case.screened', 'compliance.case.approved', 'compliance.case.rejected',
                                                   'accounts.application.created', 'accounts.application.rejected',
                                                   'accounts.account.opened', 'accounts.account.opening.failed',
-                                                  'payments.payment.events') {
+                                                  'payments.payment.events', 'customer.personal-data.erasure') {
         Grant 'ewp-notifications-subscriber' "--operation Read --operation Describe --topic $t"
     }
     Grant 'ewp-notifications-subscriber' '--operation Read --group notifications.subscriber'
@@ -440,6 +442,7 @@ switch ($Phase) {
 
     Write-Host 'Audit API (in-process trail subscriber): READ every business event topic and its group; write its dead-letter topic; nothing else' -ForegroundColor Cyan
     foreach ($t in 'customer.created', 'onboarding.application.submitted', 'onboarding.application.status.changed', 'onboarding.application.rejected',
+                   'customer.personal-data.erasure',
                    'kyc.case.created', 'kyc.identity.verification.approved', 'kyc.identity.verification.rejected',
                    'kyc.document.verification.approved', 'kyc.document.verification.rejected', 'kyc.case.approved', 'kyc.case.rejected',
                    'compliance.case.created', 'compliance.case.screened', 'compliance.case.approved', 'compliance.case.rejected',

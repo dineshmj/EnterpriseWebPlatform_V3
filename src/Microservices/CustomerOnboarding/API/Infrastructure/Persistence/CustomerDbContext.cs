@@ -22,6 +22,7 @@ public sealed class CustomerDbContext :
     IApplicationUnitOfWork,
     ICustomerReadContext,
     IOnboardingApplicationReadContext,
+    IPersonalDataErasureReadContext,
     IInboxStore
 {
     private readonly WorkflowContextAccessor _workflowContext;
@@ -54,8 +55,14 @@ public sealed class CustomerDbContext :
     public DbSet<StaffMember> StaffMembers =>
         Set<StaffMember>();
 
+    public DbSet<PersonalDataErasureRequest> PersonalDataErasureRequests =>
+        Set<PersonalDataErasureRequest>();
+
     IQueryable<Customer> ICustomerReadContext.Customers =>
         Customers;
+
+    IQueryable<PersonalDataErasureRequest> IPersonalDataErasureReadContext.PersonalDataErasureRequests =>
+        PersonalDataErasureRequests;
 
     IQueryable<OnboardingApplication>
         IOnboardingApplicationReadContext.OnboardingApplications =>

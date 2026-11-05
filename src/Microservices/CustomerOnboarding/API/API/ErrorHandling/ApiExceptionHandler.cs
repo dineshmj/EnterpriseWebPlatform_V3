@@ -36,6 +36,8 @@ public sealed class ApiExceptionHandler(
         var (status, title, detail) = exception switch
         {
             DomainRuleViolationException e => (StatusCodes.Status422UnprocessableEntity, "Domain rule violation", e.Message),
+            SeparationOfDutiesViolationException e => (StatusCodes.Status403Forbidden, "Not permitted", e.Message),
+            DomainConflictException e => (StatusCodes.Status409Conflict, "Not possible now", e.Message),
             ConcurrencyConflictException e => (StatusCodes.Status409Conflict, "Concurrency conflict", e.Message),
             DbUpdateConcurrencyException => (StatusCodes.Status409Conflict, "Concurrency conflict", "The resource was modified by another request. Reload and try again."),
             KeyNotFoundException => (StatusCodes.Status404NotFound, "Resource not found", null),
@@ -58,6 +60,10 @@ public sealed class ApiExceptionHandler(
             Instance = httpContext.Request.Path
         };
         problem.Extensions["traceId"] = traceId;
+
+        // A four-eyes refusal says so ("code"), so a caller can show it instead of a generic "not allowed".
+        if (exception is SeparationOfDutiesViolationException)
+            problem.Extensions["code"] = "separation_of_duties";
 
         return await problemDetails.TryWriteAsync(new ProblemDetailsContext
         {
