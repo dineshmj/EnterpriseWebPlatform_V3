@@ -72,7 +72,7 @@ Abbreviations: **S** spoofing, **T** tampering, **R** repudiation, **I** informa
 | S/I | Token theft through XSS | Tokens never reach the browser (BFF); HttpOnly `__Host-` cookies; hash-based CSP without `'unsafe-inline'` | [Shell README](../src/Shell/README.md) #1, #2, #5; each MFE BFF README |
 | T | Cross-site request forgery | Anti-forgery header on every BFF API call; SameSite=Lax; WebSocket origin check | Shell README #3, #4; KYC BFF README |
 | I | Hostile frame receives workspace context or notifications | postMessage accepted only from the loaded MFE's own origin; `frame-src` limited to MFEs and IDP; MFEs trust a static parent origin | Shell README #5, #7 |
-| T/E | Open redirect or injected parameters via sign-in `returnUrl` or a notification link | Allow-listed routes per BFF (exact shapes); one validated parameter in notification targets | Shell README #11; each BFF README ("allow-listed routes") |
+| T/E | Open redirect or injected parameters via sign-in `returnUrl` or a notification link | Allow-listed routes per BFF (exact shapes); one validated parameter in notification targets | Shell README #11; each BFF README ("allow-listed routes"); UT `Notifications.Api.Tests` / `NotificationRules_For_Edge_NoBroadcast` (an application number travels only in its exact shape) |
 | S | Session replay after sign-out | Server-side IDP sessions; back-channel logout ends every BFF session | IDP README #8, #10 |
 | D | Flooding a BFF | Per-caller rate limits | Shell README #10; each BFF README |
 
