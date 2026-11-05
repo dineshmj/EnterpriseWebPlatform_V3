@@ -16,7 +16,7 @@
 # │ Ref : doc/Containers.md | Features 2.3.3 | OWASP A05, A06, A08
 # └────────────────────────────────────────────────────────────────────────────────────────────────
 
-FROM node:24.22.1-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea AS build
+FROM node:24.22.1-trixie-slim@sha256:89c5244bc22a9bc3287d89ebc7e49b9cb5bb84cd40e6175ac3421d5a9f68b95a AS build
 ARG PNPM_VERSION=12.11.2
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm install --global --ignore-scripts "pnpm@${PNPM_VERSION}"
@@ -40,7 +40,7 @@ COPY src/Microservices/Operations/BFF.Web/ ./
 # The build cache is not needed to run the app.
 RUN pnpm run build && rm -rf .next/cache
 
-FROM node:24.22.1-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea AS deps
+FROM node:24.22.1-trixie-slim@sha256:89c5244bc22a9bc3287d89ebc7e49b9cb5bb84cd40e6175ac3421d5a9f68b95a AS deps
 ARG PNPM_VERSION=12.11.2
 RUN npm install --global --ignore-scripts "pnpm@${PNPM_VERSION}"
 WORKDIR /app/src/Microservices/Operations/BFF.Web
@@ -49,7 +49,7 @@ COPY src/Microservices/Operations/BFF.Web/package.json \
 # Production dependencies only: no compiler, bundler or type definitions in the running image.
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
-FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:a6c34457f6da4295807e051411c7783739c65b997a324fed14e4fa292615ae91 AS runtime
+FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:b8cec4b2f2126ff7bd034ec9ac207ffb3272667dfdc48376e3b035d3270549ba AS runtime
 # ┌─ SEC ────────────────────────────────────────────────────────────────────────────────────────────
 # │ Distroless Node: the Node runtime and the few Debian libraries it needs - no shell, no package
 # │ manager (no apt, npm, npx, corepack or yarn), like the chiseled .NET images. Nothing can be
