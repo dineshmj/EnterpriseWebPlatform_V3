@@ -422,7 +422,7 @@ Operations Journey API (NestJS)	https://operations-journey.dev.localhost:46382  
 		learns "sent" and settles: COMPLETED, paid once. Switch it to Down instead and the payment waits in CONFIRM_WITH_NETWORK,
 		funds reserved: after 2 minutes (Development; production 60) it is an alert - "Unconfirmed by network" on the Processing
 		Monitor, "Payment to reconcile" in the operators' bell, readiness Degraded. daniel.ops opens the payment and PROPOSES
-		"not sent" (or "sent" with the network's reference) with evidence of at least 10 characters; platform.admin (the second
+		"not sent" (or "sent" with the network's reference) with evidence of at least 10 characters; michael.pfadmin (the second
 		operations administrator) APPROVES it - the funds are released, FAILED - or rejects it. Nobody decides their own
 		proposal; the network's own answer, if it comes first, wins.
 

@@ -49,7 +49,7 @@ public sealed class PersonalDataErasure_Approve_Edge_KeyDestroyed
         _avaId = ava.Id;
         _avaNumber = ava.CustomerNumber.Value;
 
-        _database.Execute($"INSERT INTO staff_members (user_id, lan_id, updated_at) VALUES ('{Daniel}', 'daniel.ops', '2026-11-04'), ('{Platform}', 'platform.admin', '2026-11-04')");
+        _database.Execute($"INSERT INTO staff_members (user_id, lan_id, updated_at) VALUES ('{Daniel}', 'daniel.ops', '2026-11-04'), ('{Platform}', 'michael.pfadmin', '2026-11-04')");
     }
 
     [TearDown]
@@ -187,9 +187,11 @@ public sealed class PersonalDataErasure_Approve_Edge_KeyDestroyed
         payload.GetProperty("ReasonCode").GetString().Should().Be("CUSTOMER_REQUEST");
         payload.GetProperty("Status").GetString().Should().Be("ERASED");
         payload.GetProperty("DecisionByUserId").GetString().Should().Be(Platform);
-        payload.GetProperty("DecisionByLanId").GetString().Should().Be("platform.admin");
+        payload.GetProperty("DecisionByLanId").GetString().Should().Be("michael.pfadmin");
 
-        string.Concat(requested.GetRawText(), erased.GetRawText()).Should().NotContainAny("Ava", "Nguyen", "ava.nguyen", "412");
+        // The whole phone number (spaced and stored forms): a fragment such as "412" also occurs in random message IDs.
+        string.Concat(requested.GetRawText(), erased.GetRawText())
+            .Should().NotContainAny("Ava", "Nguyen", "ava.nguyen", "412 345 678", "412345678");
     }
 
     [Test]

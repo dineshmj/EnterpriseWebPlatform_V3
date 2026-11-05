@@ -9,7 +9,7 @@
     -   Emily: Payment Approvals;
     -   Sarah: Audit Trail only;
     -   Daniel: Platform Health, Simulator & Fault Controls and the Payment Processing Monitor;
-    -   platform.admin: Platform Health and Simulator & Fault Controls, with no business approval screens.
+    -   michael.pfadmin: Platform Health and Simulator & Fault Controls, with no business approval screens.
 3.  **Daniel → Platform Health: **every component should be**Healthy**. The page refreshes every 10 seconds and has no switch (read-only); the simulators show as Healthy.
 
 ### ST-2 — Onboarding happy path (Sophie → Ethan → Olivia → Jack)
@@ -73,16 +73,16 @@
     -   the balance is **$2,950**.
 4.  **Daniel:** set the Payment Network back to **Healthy**.
 
-### ST-9 — Simulator "Down" + four-eyes reconciliation (Daniel → Sophie → Daniel → platform.admin)
+### ST-9 — Simulator "Down" + four-eyes reconciliation (Daniel → Sophie → Daniel → michael.pfadmin)
 
 1.  **Daniel:** set **Payment Network → Down**.
 2.  **Sophie:** pay **$400**. The payment stays in **CONFIRM\_WITH\_NETWORK**, and the $400 stays held.
 3.  **After about 2 minutes:**
     -   Daniel's **Payment Processing Monitor** shows the **"Unconfirmed by network"** tile and badge;
     -   **Platform Health** shows the Payments API **Degraded**;
-    -   Daniel and platform.admin get a "payment to reconcile" notification.
+    -   Daniel and michael.pfadmin get a "payment to reconcile" notification.
 4.  **Daniel → payment details → Reconciliation:** propose **NOT\_SENT** with evidence text. Daniel's own **Approve** button should be disabled, with the reason shown.
-5.  **platform.admin:** approve the proposal.
+5.  **michael.pfadmin:** approve the proposal.
     -   **Expected:** **FAILED**, funds released, balance back to **$2,950**.
 6.  **Daniel:** set the Payment Network back to **Healthy**.
     -   The switch also reverts by itself after 15 minutes.

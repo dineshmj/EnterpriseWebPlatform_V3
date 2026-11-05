@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -102,6 +103,18 @@ public static class SubscriberServiceCollectionExtensions
         // └──────────────────────────────────────────────────────────────────────────────────────
         identityServer.AddStandardResilienceHandler(options => options.Retry.ShouldHandle = _ => ValueTask.FromResult(false));
         return identityServer;
+    }
+
+    /// <summary>
+    /// Registers the shared personal-data erasure forwarder: the worker then also takes
+    /// customer.personal-data.erasure (add it to its topics) and confirms on
+    /// customer.personal-data.erasure.confirmed. Needs AddCachedM2MTokenClient and AddKafkaSubscriber.
+    /// </summary>
+    public static IServiceCollection AddPersonalDataErasureForwarder(this IServiceCollection services)
+    {
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton<PersonalDataErasureForwarder>();
+        return services;
     }
 
     /// <summary>

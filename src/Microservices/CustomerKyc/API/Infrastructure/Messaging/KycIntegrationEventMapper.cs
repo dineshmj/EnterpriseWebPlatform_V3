@@ -56,6 +56,10 @@ internal static class KycIntegrationEventMapper
         string? LanOf(string? userId) => userId is not null && lanIds.TryGetValue(userId, out var lan) ? lan : null;
         var initiatedByLanId = LanOf(kycCase.InitiatedByUserId);
 
+        // A case with an event to publish is new or was just decided: never erased.
+        var applicant = kycCase.Applicant
+            ?? throw new InvalidOperationException($"KYC case {kycCase.Id} has no applicant to publish.");
+
         switch (domainEvent)
         {
             case KycCaseOpenedDomainEvent:
@@ -68,7 +72,7 @@ internal static class KycIntegrationEventMapper
                         kycCase.CustomerNumber,
                         kycCase.BranchCode.Value,
                         KycCaseStatus.PendingReview.ToCode(),
-                        kycCase.Applicant.FullName));
+                        applicant.FullName));
                 break;
 
             case VerificationStageDecidedDomainEvent stage:
@@ -110,15 +114,15 @@ internal static class KycIntegrationEventMapper
                         kycCase.IdentityVerification.DecidedByUserId,
                         kycCase.DocumentVerification.DecidedByUserId,
                         new ApplicantPayload(
-                            kycCase.Applicant.FirstName,
-                            kycCase.Applicant.LastName,
+                            applicant.FirstName,
+                            applicant.LastName,
                             new AddressPayload(
-                                kycCase.Applicant.AddressLine1,
-                                kycCase.Applicant.AddressLine2,
-                                kycCase.Applicant.City,
-                                kycCase.Applicant.State,
-                                kycCase.Applicant.PostalCode,
-                                kycCase.Applicant.CountryCode)),
+                                applicant.AddressLine1,
+                                applicant.AddressLine2,
+                                applicant.City,
+                                applicant.State,
+                                applicant.PostalCode,
+                                applicant.CountryCode)),
                         LanOf(decided.DecidedByUserId),
                         LanOf(kycCase.IdentityVerification.DecidedByUserId),
                         LanOf(kycCase.DocumentVerification.DecidedByUserId)));

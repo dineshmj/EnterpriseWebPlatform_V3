@@ -7,10 +7,11 @@ using EnterpriseWebPlatform.Compliance.Api.Application.Abstractions;
 using EnterpriseWebPlatform.Compliance.Api.Domain.Aggregates;
 using EnterpriseWebPlatform.Compliance.Api.Domain.ValueObjects;
 using EnterpriseWebPlatform.Compliance.Api.Infrastructure.Messaging;
+using EnterpriseWebPlatform.Compliance.Api.Infrastructure.Privacy;
 
 namespace EnterpriseWebPlatform.Compliance.Api.Infrastructure.Persistence;
 
-public sealed class ComplianceDbContext(DbContextOptions<ComplianceDbContext> options, TimeProvider clock)
+public sealed class ComplianceDbContext(DbContextOptions<ComplianceDbContext> options, TimeProvider clock, PersonalDataCipher cipher)
     : DbContext(options), IComplianceUnitOfWork, IInboxStore
 {
     public DbSet<ComplianceCase> ComplianceCases => Set<ComplianceCase>();
@@ -33,6 +34,10 @@ public sealed class ComplianceDbContext(DbContextOptions<ComplianceDbContext> op
             .Select(e => e.Entity)
             .Where(a => a.DomainEvents.Count > 0)
             .ToList();
+
+        // SEC: the applicant of a new case is encrypted before anything is written; an erased
+        //      case loses its customer's key in this same transaction (crypto-shredding).
+        await ComplianceCasePersonalData.ProtectAsync(this, cipher, cancellationToken);
 
         // 1. The aggregates (a new case gets its database ID here).
         await SaveTranslatingErrorsAsync(cancellationToken);
@@ -116,18 +121,11 @@ public sealed class ComplianceDbContext(DbContextOptions<ComplianceDbContext> op
             e.HasIndex(x => x.ApplicationRef).IsUnique().HasDatabaseName("uq_compliance_cases_application_ref");
             e.Property(x => x.ApplicationNumber).HasColumnName("application_number").HasMaxLength(30).IsRequired();
             e.Property(x => x.CustomerNumber).HasColumnName("customer_number").HasMaxLength(100).IsRequired();
-            e.ComplexProperty(x => x.Applicant, a =>
-            {
-                a.Property(x => x.FirstName).HasColumnName("applicant_first_name").HasMaxLength(Applicant.MaxNameLength).IsRequired();
-                a.Property(x => x.LastName).HasColumnName("applicant_last_name").HasMaxLength(Applicant.MaxNameLength).IsRequired();
-                a.Property(x => x.AddressLine1).HasColumnName("applicant_address_line1").HasMaxLength(200);
-                a.Property(x => x.AddressLine2).HasColumnName("applicant_address_line2").HasMaxLength(200);
-                a.Property(x => x.City).HasColumnName("applicant_city").HasMaxLength(100);
-                a.Property(x => x.State).HasColumnName("applicant_state").HasMaxLength(100);
-                a.Property(x => x.PostalCode).HasColumnName("applicant_postal_code").HasMaxLength(20);
-                a.Property(x => x.CountryCode).HasColumnName("applicant_country_code").HasMaxLength(2);
-                a.Ignore(x => x.FullName);
-            });
+            // SEC: the applicant is stored only encrypted, as one value (ComplianceCasePersonalData).
+            e.Ignore(x => x.Applicant);
+            e.Ignore(x => x.IsPersonalDataErased);
+            e.Property<string>(ComplianceCasePersonalData.ApplicantColumn).HasColumnName("applicant").IsRequired();
+            e.Property(x => x.PersonalDataErasedAt).HasColumnName("personal_data_erased_at").HasColumnType("timestamp with time zone");
             e.Property(x => x.KycCaseId).HasColumnName("kyc_case_id").IsRequired();
             e.Property(x => x.BranchCode).HasColumnName("branch_code").HasMaxLength(BranchCode.MaxLength)
                 .HasConversion(v => v.Value, v => BranchCode.Create(v)).IsRequired();
@@ -182,6 +180,15 @@ public sealed class ComplianceDbContext(DbContextOptions<ComplianceDbContext> op
             e.Property(x => x.AttemptCount).HasColumnName("attempt_count").IsRequired();
             e.Property(x => x.LastAttemptAt).HasColumnName("last_attempt_at");
             e.Property(x => x.LastError).HasColumnName("last_error");
+        });
+
+        modelBuilder.Entity<PersonalDataKey>(e =>
+        {
+            e.ToTable("personal_data_keys");
+            e.HasKey(x => x.CustomerNumber).HasName("pk_personal_data_keys");
+            e.Property(x => x.CustomerNumber).HasColumnName("customer_number").HasMaxLength(100);
+            e.Property(x => x.WrappedKey).HasColumnName("wrapped_key").IsRequired();
+            e.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone").IsRequired();
         });
 
         modelBuilder.Entity<StaffMember>(e =>

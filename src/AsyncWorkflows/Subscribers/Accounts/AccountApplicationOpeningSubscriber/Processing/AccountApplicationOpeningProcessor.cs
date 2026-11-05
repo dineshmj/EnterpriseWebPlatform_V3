@@ -19,10 +19,15 @@ namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.Accounts.AccountA
 public sealed class AccountApplicationOpeningProcessor(
     IHttpClientFactory httpClientFactory,
     CachedM2MTokenClient tokenClient,
-    ILogger<AccountApplicationOpeningProcessor> logger)
+    ILogger<AccountApplicationOpeningProcessor> logger,
+    PersonalDataErasureForwarder erasure)
     : IMessageProcessor
 {
     public const string HttpClientName = "AccountsApi";
+
+    // The erasure of a customer's personal data (crypto-shredding): this context's own copy.
+    private static readonly PersonalDataErasureTarget ErasureTarget =
+        new(HttpClientName, "/internal/v1/accounts/personal-data-erasures", "accounts");
 
     private const string ExpectedEventType = "ComplianceCaseApproved";
 
@@ -30,6 +35,10 @@ public sealed class AccountApplicationOpeningProcessor(
 
     public async Task<ProcessingOutcome> ProcessAsync(ConsumedMessage consumed, CancellationToken cancellationToken)
     {
+        // ARCH: an erasure decided in Customer Onboarding - erase this context's copy, then confirm.
+        if (PersonalDataErasureForwarder.Handles(consumed))
+            return await erasure.ForwardAsync(consumed, ErasureTarget, cancellationToken);
+
         Envelope? envelope;
         try
         {

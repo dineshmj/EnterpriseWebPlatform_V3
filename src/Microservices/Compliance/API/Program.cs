@@ -20,6 +20,7 @@ using EnterpriseWebPlatform.Compliance.Api.Application.Queries;
 using EnterpriseWebPlatform.Compliance.Api.Authorization;
 using EnterpriseWebPlatform.Compliance.Api.Infrastructure.Messaging;
 using EnterpriseWebPlatform.Compliance.Api.Infrastructure.Persistence;
+using EnterpriseWebPlatform.Compliance.Api.Infrastructure.Privacy;
 using EnterpriseWebPlatform.Compliance.Api.Infrastructure.Screening;
 
 // ┌─ :: ARCHITECTURE + SECURITY :: Compliance API: a resource server ──────────────────────────────
@@ -51,6 +52,18 @@ builder.Services.AddControllers();
 var connectionString = builder.Configuration.GetConnectionString("ComplianceDbConnection")
     ?? throw new InvalidOperationException("Connection string 'ComplianceDbConnection' was not configured.");
 builder.Services.AddDbContext<ComplianceDbContext>(o => o.UseNpgsql(DependencyOutage.FailFast(connectionString)));
+
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ Crypto-shredding of Compliance's own copy: the master key comes from configuration
+// │ "PersonalData" (Key Vault outside Development); a missing or short key stops the API at
+// │ start-up instead of writing an applicant unprotected.
+// └──────────────────────────────────────────────────────────────────────────────────────
+builder.Services.AddOptions<PersonalDataProtectionOptions>()
+    .BindConfiguration(PersonalDataProtectionOptions.SectionName)
+    .Validate(options => options.IsValid(), "PersonalData:MasterKey must be base64 of 32 random bytes.")
+    .ValidateOnStart();
+builder.Services.AddSingleton(sp => new PersonalDataCipher(sp.GetRequiredService<IOptions<PersonalDataProtectionOptions>>().Value));
+builder.Services.AddScoped<ComplianceCasePersonalData>();
 
 // ---------------------------------------------------------------- Authentication
 var authority = builder.Configuration["Authentication:Authority"]
@@ -202,6 +215,7 @@ builder.Services.AddScoped<IComplianceCaseQueries, ComplianceCaseQueries>();
 builder.Services.AddScoped<OpenComplianceCaseCommandHandler>();
 builder.Services.AddScoped<OfficerActionCommandHandler>();
 builder.Services.AddScoped<ScreenDueCaseCommandHandler>();
+builder.Services.AddScoped<ErasePersonalDataCommandHandler>();
 
 // ---------------------------------------------------------------- Screening provider (external)
 builder.Services.AddOptions<ScreeningProviderOptions>()

@@ -55,6 +55,13 @@ public sealed class DocumentRepository(DocumentsManagementDbContext dbContext)
             .Where(x => documentIds.Contains(x.Id))
             .ToListAsync(cancellationToken);
 
+    // The onboarding uploads are filed under the customer number (X-Business-Reference).
+    public async Task<IReadOnlyList<Document>> ListForErasureAsync(string customerNumber, CancellationToken cancellationToken) =>
+        await dbContext.Documents
+            .Where(x => x.BusinessReference == customerNumber)
+            .OrderBy(x => x.CreatedAt)
+            .ToListAsync(cancellationToken);
+
     public void Remove(Document document) => dbContext.Documents.Remove(document);
 
     public Task SaveChangesAsync(CancellationToken cancellationToken) =>

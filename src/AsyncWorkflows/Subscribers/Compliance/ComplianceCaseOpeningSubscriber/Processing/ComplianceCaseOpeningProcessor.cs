@@ -20,10 +20,15 @@ namespace EnterpriseWebPlatform.BSS.AsyncWorkflows.Subscribers.Compliance.Compli
 public sealed class ComplianceCaseOpeningProcessor(
     IHttpClientFactory httpClientFactory,
     CachedM2MTokenClient tokenClient,
-    ILogger<ComplianceCaseOpeningProcessor> logger)
+    ILogger<ComplianceCaseOpeningProcessor> logger,
+    PersonalDataErasureForwarder erasure)
     : IMessageProcessor
 {
     public const string HttpClientName = "ComplianceApi";
+
+    // The erasure of a customer's personal data (crypto-shredding): this context's own copy.
+    private static readonly PersonalDataErasureTarget ErasureTarget =
+        new(HttpClientName, "/internal/v1/compliance/personal-data-erasures", "compliance");
 
     private const string ExpectedEventType = "KycCaseApproved";
 
@@ -31,6 +36,10 @@ public sealed class ComplianceCaseOpeningProcessor(
 
     public async Task<ProcessingOutcome> ProcessAsync(ConsumedMessage consumed, CancellationToken cancellationToken)
     {
+        // ARCH: an erasure decided in Customer Onboarding - erase this context's copy, then confirm.
+        if (PersonalDataErasureForwarder.Handles(consumed))
+            return await erasure.ForwardAsync(consumed, ErasureTarget, cancellationToken);
+
         Envelope? envelope;
         try
         {

@@ -44,7 +44,8 @@ public sealed record KycCaseListItem(
     string? AssignedOfficerUserId,
     string CustomerName,
     ApplicantAddress ResidentialAddress,
-    StaffLanIds Staff);
+    StaffLanIds Staff,
+    bool PersonalDataErased);
 
 public sealed record PagedKycCasesResponse(
     IReadOnlyList<KycCaseListItem> Items,
@@ -77,7 +78,8 @@ public sealed record KycCaseDetail(
     ApplicantAddress ResidentialAddress,
     Guid IdentityProofDocumentId,
     Guid TaxProofDocumentId,
-    StaffLanIds Staff);
+    StaffLanIds Staff,
+    bool PersonalDataErased);
 
 /// <summary>The LAN IDs of the people on the case (null when not known to this context).</summary>
 public sealed record StaffLanIds(

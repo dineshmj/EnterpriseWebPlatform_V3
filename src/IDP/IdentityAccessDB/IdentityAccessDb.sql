@@ -464,7 +464,7 @@ VALUES
 ('2e486365-900b-4f46-ba7a-da64c0db5def','Emily','Carter','emily.payments@ewp.local','emily.payments','AQAAAAIAAYagAAAAELIL6rQum0qOZEaRh2RC+4sHRWoSGJaOn8pmHW7TE7UB4nxI5FPfDvK0J8uzCB7wXQ=='),
 ('fe982b55-3396-4eaa-b1be-90e75a8111ba','Daniel','Cooper','daniel.ops@ewp.local','daniel.ops','AQAAAAIAAYagAAAAEKqRcAtU8ubQvN0M2kH1pVEFj7W+VEvTNO2zEQSD6ScH1y8kz4sM8HnOFWiMBL+CLA=='),
 ('bbf5ec6a-1903-41eb-98c7-ca76b1d5a415','Sarah','Collins','sarah.audit@ewp.local','sarah.audit','AQAAAAIAAYagAAAAED8RxCLXVADbAjiHytlh6xfOD3F2J+l3DguFIe42jd677n9a4wH4+HwRdjoOzChhNw=='),
-('f77db41d-0eda-4291-a86e-7dd452254b1d','Michael','Turner','platform.admin@ewp.local','platform.admin','AQAAAAIAAYagAAAAECfATzS4UHKPpe6PWJ7voKLlapzMU22k1YdQpx7PayeDKBT/vSeYFJVI0O7nw7Pn1w=='),
+('f77db41d-0eda-4291-a86e-7dd452254b1d','Michael','Turner','michael.pfadmin@ewp.local','michael.pfadmin','AQAAAAIAAYagAAAAEPrSnXmQAUG5xZU/O2TAoyr8ZywMp3T5cu2Ut7gLf4n3tGxVTQd+aOKc5YAkUCoaKQ=='),
 ('7d7a42e5-8250-45c7-ba92-6b6d449007a3','Ethan','Parker','ethan.kyc@ewp.local','ethan.kyc','AQAAAAIAAYagAAAAEKRsMC96qN6pkuEwNtKRnAxFQ8dS6Da0/+RBkXoL8jNKVRM/3GcQqxKB27ClDVvqWg=='),
 ('0b583994-3e74-4b4b-b807-efae632351ce','Noah','Hughes','noah.kyc@ewp.local','noah.kyc','AQAAAAIAAYagAAAAEKi316gXNJpixuDi0xLAI8oh6s/FIhmH+cqKU2ktAIB7AInf9Nb0Z6y130jVEAZyKA=='),
 ('14ea7069-72fc-4dda-b70f-0580ce03e518','Mia','Robinson','mia.cs@ewp.local','mia.cs','AQAAAAIAAYagAAAAEGfsNE93UJWybUddYUydvOF9uHg/AjFhOcjxV3tAza3cKkMzRB71EZHAnCnDWeFaiw=='),
@@ -493,7 +493,7 @@ FROM (VALUES
     ('emily.payments','EMP-10046','emcar','PAYMENTS','SYD001','FULL_TIME',4),
     ('daniel.ops','EMP-10047','dacoo','OPERATIONS','BNE001','FULL_TIME',4),
     ('sarah.audit','EMP-10048','sacol','AUDIT','ADL001','FULL_TIME',5),
-    ('platform.admin','EMP-10049','mitur','IT','PER001','FULL_TIME',5),
+    ('michael.pfadmin','EMP-10049','mitur','IT','PER001','FULL_TIME',5),
     ('ethan.kyc','EMP-10050','etpar','KYC','SYD001','FULL_TIME',3),
     ('noah.kyc','EMP-10051','nohug','KYC','SYD001','FULL_TIME',3),
     ('mia.cs','EMP-10052','mirob','CUSTOMER_SERVICE','MEL001','FULL_TIME',2),
@@ -566,7 +566,7 @@ INSERT INTO user_roles (user_id, role_id)
 SELECT u.id, r.id
 FROM users u
 JOIN roles r ON r.code IN ('platform_administrator','operations_administrator')
-WHERE u.user_name = 'platform.admin';
+WHERE u.user_name = 'michael.pfadmin';
 
 -- =========================================================
 -- 17. ROLE PERMISSIONS
@@ -745,7 +745,7 @@ WHERE r.code = 'platform_administrator';
 -- emily.payments     -> payments_officer
 -- daniel.ops         -> operations_administrator
 -- sarah.audit        -> auditor
--- platform.admin     -> platform_administrator + operations_administrator
+-- michael.pfadmin     -> platform_administrator + operations_administrator
 
 SELECT
     u.id,

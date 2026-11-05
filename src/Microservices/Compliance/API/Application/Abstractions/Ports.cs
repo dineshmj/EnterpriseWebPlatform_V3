@@ -18,6 +18,9 @@ public interface IComplianceCaseRepository
     Task<ComplianceCase?> GetNextDueForScreeningAsync(DateTimeOffset now, CancellationToken cancellationToken);
 
     void Add(ComplianceCase complianceCase);
+
+    /// <summary>Every case of the customer, tracked, for the erasure of their personal data.</summary>
+    Task<IReadOnlyList<ComplianceCase>> ListForErasureAsync(string customerNumber, CancellationToken cancellationToken);
 }
 
 /// <summary>Workflow metadata of the command being handled (see the Event Catalogue).</summary>

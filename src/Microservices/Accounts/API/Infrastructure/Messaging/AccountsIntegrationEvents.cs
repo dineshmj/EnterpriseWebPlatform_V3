@@ -104,6 +104,10 @@ internal static class AccountsIntegrationEventMapper
         string payload;
         string? actedBy = null;
 
+        // An application with an event to publish is new or just changed by an officer: never erased.
+        var holder = application.HolderName
+            ?? throw new InvalidOperationException($"Account application {application.Id} has no holder name to publish.");
+
         switch (domainEvent)
         {
             case AccountApplicationCreatedDomainEvent created:
@@ -117,7 +121,7 @@ internal static class AccountsIntegrationEventMapper
                         application.BranchCode.Value,
                         application.ComplianceCaseId,
                         application.Status.ToCode(),
-                        application.HolderName.FullName));
+                        holder.FullName));
                 break;
 
             case AccountApplicationRejectedDomainEvent rejected:
@@ -135,7 +139,7 @@ internal static class AccountsIntegrationEventMapper
                         rejected.DecidedByUserId,
                         rejected.OccurredAt,
                         rejected.Remarks,
-                        application.HolderName.FullName,
+                        holder.FullName,
                         lanOf(rejected.DecidedByUserId)));
                 break;
 
@@ -154,7 +158,7 @@ internal static class AccountsIntegrationEventMapper
                         opened.Product.ToCode(),
                         application.DecisionByUserId ?? string.Empty,
                         opened.OccurredAt,
-                        application.HolderName.FullName,
+                        holder.FullName,
                         lanOf(application.DecisionByUserId)));
                 break;
 
@@ -170,7 +174,7 @@ internal static class AccountsIntegrationEventMapper
                         failed.Reason,
                         failed.Attempts,
                         failed.OccurredAt,
-                        application.HolderName.FullName));
+                        holder.FullName));
                 break;
 
             // Internal facts. Listed explicitly so that a NEW, unmapped event still fails loudly.

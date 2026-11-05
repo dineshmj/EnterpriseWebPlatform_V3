@@ -167,6 +167,11 @@ GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_kyc_api;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE DELETE ON TABLES FROM ewp_kyc_api;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE ON TABLES TO ewp_kyc_api;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ewp_kyc_api;
+-- SEC: the one DELETE - a customer's key in personal_data_keys, whose deletion IS the erasure of
+--      their personal data (crypto-shredding). Per table, so it is (re)applied by the database script too.
+DO $$ BEGIN
+    IF to_regclass('public.personal_data_keys') IS NOT NULL THEN GRANT DELETE ON personal_data_keys TO ewp_kyc_api; END IF;
+END $$;
 
 \connect EwpDocumentsManagementDb
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
@@ -198,6 +203,11 @@ GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_compliance_
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE DELETE ON TABLES FROM ewp_compliance_api;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE ON TABLES TO ewp_compliance_api;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ewp_compliance_api;
+-- SEC: the one DELETE - a customer's key in personal_data_keys, whose deletion IS the erasure of
+--      their personal data (crypto-shredding). Per table, so it is (re)applied by the database script too.
+DO $$ BEGIN
+    IF to_regclass('public.personal_data_keys') IS NOT NULL THEN GRANT DELETE ON personal_data_keys TO ewp_compliance_api; END IF;
+END $$;
 
 \connect EwpAccountsDb
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
@@ -213,6 +223,11 @@ GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ewp_accounts_ap
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE DELETE ON TABLES FROM ewp_accounts_api;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE ON TABLES TO ewp_accounts_api;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ewp_accounts_api;
+-- SEC: the one DELETE - a customer's key in personal_data_keys, whose deletion IS the erasure of
+--      their personal data (crypto-shredding). Per table, so it is (re)applied by the database script too.
+DO $$ BEGIN
+    IF to_regclass('public.personal_data_keys') IS NOT NULL THEN GRANT DELETE ON personal_data_keys TO ewp_accounts_api; END IF;
+END $$;
 
 \connect EwpNotificationsDb
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;

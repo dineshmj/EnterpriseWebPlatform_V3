@@ -109,7 +109,13 @@ The body remains the source of truth for consumers; headers are a copy for infra
 |---|---|---|---|---|---|
 | `PersonalDataErasureRequested` | `customer.personal-data.erasure` | Erasure request ID | `PENDING` (no decider yet) | Audit trail; Notifications (operations: "Erasure to approve") | Present |
 | `PersonalDataErasureRejected` | `customer.personal-data.erasure` | Erasure request ID | `REJECTED` (decider = the second person) | Audit trail; Notifications (the requester) | Present |
-| `CustomerPersonalDataErased` | `customer.personal-data.erasure` | Erasure request ID | `ERASED` (decider = the second person; the customer's key is already destroyed) | Audit trail; Notifications (the requester); next: KYC, Compliance, Accounts, Partner Products and Documents Management each shred their own copy and acknowledge | Present (audit); downstream planned |
+| `CustomerPersonalDataErased` | `customer.personal-data.erasure` | Erasure request ID | `ERASED` (decider = the second person; the customer's key is already destroyed) | Audit trail; Notifications (the requester); the KYC, Compliance, Account Application Opening and Document Invalidation subscribers (each erases its context's copy, then confirms) | Present |
+
+**Each context's confirmation** (producers: the KYC, Compliance, Account Application Opening and Document Invalidation subscribers - published only after their own API answered that the copy is erased, then the erasure message is committed; no Outbox needed, see [Crypto-Shredding.md](Crypto-Shredding.md)): `Source` names the context (`customer-kyc`, `compliance`, `accounts`, `documents-management`); the envelope keeps the erasure's workflow, its requester as initiator and the erasure message as causation; `MessageId` is derived from the erasure message and the context, so a redelivery is the same message.
+
+| Event type | Topic | Key | Payload | Consumers | Status |
+|---|---|---|---|---|---|
+| `PersonalDataCopyErased` | `customer.personal-data.erasure.confirmed` | Erasure request ID | `ErasureRequestId`, `CustomerNumber`, `Context`, `Status` (`ERASED`), `RecordsErased`, `RecordsHeld` (counts only - also sent when the context held nothing) | Audit trail | Present |
 
 ### 4.2 Customer KYC (producer: Customer KYC API, in-process Outbox relay)
 

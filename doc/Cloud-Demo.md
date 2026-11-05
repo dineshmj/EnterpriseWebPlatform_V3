@@ -124,7 +124,7 @@ Then the platform ([demo-platform.sh](../.github/scripts/demo-platform.sh)):
    run stops with the reason and the Partner pods' warnings). Its summary shows the start time, the
    gateway's address and `https://shell.<EWP domain>/`; sign in with the same demo users as on
    the laptop.
-4. **Observability** (when the run's input was on): `https://grafana.<EWP domain>/` signs in through EWP's IDP - as `daniel.ops` (Viewer) or `platform.admin` (Admin); every other demo user is refused. Folder **EWP**: *Platform health*, *Requests and errors*, *Messaging and payments*; **Explore** for logs (Loki) and traces (Tempo) - a log line's trace ID opens its trace, a span opens its logs.
+4. **Observability** (when the run's input was on): `https://grafana.<EWP domain>/` signs in through EWP's IDP - as `daniel.ops` (Viewer) or `michael.pfadmin` (Admin); every other demo user is refused. Folder **EWP**: *Platform health*, *Requests and errors*, *Messaging and payments*; **Explore** for logs (Loki) and traces (Tempo) - a log line's trace ID opens its trace, a span opens its logs.
 5. When finished: **Actions → Demo down → Run workflow**. No approval needed. It takes about
    10-15 minutes and ends with "rg-ewp-demo is empty". Before the teardown it prints every pod's
    recent warnings and errors into its log (step "The pods' warnings and errors"), so a fault seen

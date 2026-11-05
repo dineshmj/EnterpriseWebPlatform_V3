@@ -12,7 +12,8 @@ public sealed class DocumentInvalidationSubscriberOptions : ISubscriberSettings,
     /// Submitted attaches the evidence (retained); rejected invalidates it (compensation).
     /// </summary>
     public IReadOnlyList<string> Topics { get; } =
-        [KafkaTopicNames.OnboardingApplicationSubmitted, KafkaTopicNames.OnboardingApplicationRejected];
+        [KafkaTopicNames.OnboardingApplicationSubmitted, KafkaTopicNames.OnboardingApplicationRejected,
+         KafkaTopicNames.CustomerPersonalDataErasure];
 
     /// <summary>The Kafka ACLs grant this worker's user READ on this group only.</summary>
     public string GroupId { get; init; } = "documents-management.invalidation-subscriber";

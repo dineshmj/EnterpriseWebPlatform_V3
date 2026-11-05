@@ -46,6 +46,10 @@ public sealed class ScreenDueCaseCommandHandler(
         if (complianceCase is null)
             return ScreeningRunOutcome.NothingDue;
 
+        // Never due once erased (the repository skips those): a due case always has its applicant.
+        var applicant = complianceCase.Applicant
+            ?? throw new InvalidOperationException($"Compliance case {complianceCase.Id} has no applicant to screen.");
+
         ScreeningRunOutcome outcome;
         try
         {
@@ -54,13 +58,13 @@ public sealed class ScreenDueCaseCommandHandler(
                     complianceCase.CustomerNumber,
                     complianceCase.ApplicationNumber,
                     Guid.NewGuid(),
-                    complianceCase.Applicant.FirstName,
-                    complianceCase.Applicant.LastName,
-                    complianceCase.Applicant.AddressLine1,
-                    complianceCase.Applicant.City,
-                    complianceCase.Applicant.State,
-                    complianceCase.Applicant.PostalCode,
-                    complianceCase.Applicant.CountryCode),
+                    applicant.FirstName,
+                    applicant.LastName,
+                    applicant.AddressLine1,
+                    applicant.City,
+                    applicant.State,
+                    applicant.PostalCode,
+                    applicant.CountryCode),
                 cancellationToken);
 
             complianceCase.RecordScreeningResult(response.Outcome, response.Provider, response.Reference, clock.GetUtcNow());

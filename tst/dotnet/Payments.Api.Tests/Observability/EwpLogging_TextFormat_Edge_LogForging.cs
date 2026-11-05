@@ -54,7 +54,7 @@ public sealed class EwpLogging_TextFormat_Edge_LogForging
     public void Given_AReasonWithALineBreakAndAFakeEntry_When_ItIsLogged_Then_ItStaysOnTheSameLine()
     {
         // Given
-        const string reason = "checked with the customer\r\n[09:00:00 INF] Operations (platform.admin) approved payment PAY-1";
+        const string reason = "checked with the customer\r\n[09:00:00 INF] Operations (michael.pfadmin) approved payment PAY-1";
 
         // When
         using (var logger = TextLogger())
@@ -63,7 +63,7 @@ public sealed class EwpLogging_TextFormat_Edge_LogForging
         // Then
         var lines = _written.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
         lines.Should().ContainSingle();
-        lines[0].Should().Contain(@"checked with the customer\r\n[09:00:00 INF] Operations (platform.admin)");
+        lines[0].Should().Contain(@"checked with the customer\r\n[09:00:00 INF] Operations (michael.pfadmin)");
     }
 
     [Test]

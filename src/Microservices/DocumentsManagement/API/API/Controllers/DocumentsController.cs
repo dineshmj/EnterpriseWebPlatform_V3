@@ -70,6 +70,10 @@ public sealed class DocumentsController(
         if (document is null || !resourceAuthorization.CanAccess(document, User))
             return NotFound();
 
+        // The content went with the customer's personal data: say so, rather than "not found".
+        if (document.IsPersonalDataErased)
+            return Problem("The document's content was erased with the customer's personal data.", statusCode: StatusCodes.Status410Gone);
+
         var stream = await storage.OpenReadAsync(
             document.StorageReference,
             cancellationToken);

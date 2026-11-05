@@ -8,9 +8,11 @@ import { CustomersMfe, PersonalDataErasureMfe } from '../../../support/pages/mfe
 
 /**
  * Personal-data erasure (crypto-shredding), end to end: a prospect whose application KYC rejected
- * is erased at their request - Daniel asks, Michael (platform.admin) approves, never Daniel himself.
+ * is erased at their request - Daniel asks, Michael (michael.pfadmin) approves, never Daniel himself.
  * Then the branch sees "Personal data erased", the customer can be neither found by surname nor
- * onboarded, their key is gone, and the audit trail proves who asked and who decided.
+ * onboarded, their key is gone - in Customer Onboarding AND in each context that kept a copy (KYC's
+ * case, the scans in Documents Management) - and the audit trail proves who asked, who decided,
+ * and that KYC, Compliance, Accounts and Documents Management each confirmed their copy is gone.
  * The laptop has no retention period (PersonalData:Erasure:RetentionDays = 0), so a prospect made
  * a minute ago qualifies. Doc: doc/Crypto-Shredding.md.
  */
@@ -39,8 +41,8 @@ test.describe('Personal data erasure - four eyes', () => {
       await expect(daniel.pending(customerNumber).getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
     });
 
-    // Act 2: Michael (platform.admin, also an operations administrator) is told, and approves it.
-    const michaelShell = await signedInAs('platform.admin');
+    // Act 2: Michael (michael.pfadmin, also an operations administrator) is told, and approves it.
+    const michaelShell = await signedInAs('michael.pfadmin');
     const michael = new PersonalDataErasureMfe(michaelShell);
     await test.step('Michael: the bell says an erasure waits for him; he approves it', async () => {
       await expectNotification(michaelShell, `asks to erase the personal data of ${customerNumber}`);
@@ -75,15 +77,35 @@ test.describe('Personal data erasure - four eyes', () => {
           FROM customers c WHERE c.customer_number = ${literal(customerNumber)};`);
         expect(row).toBe('0|t|t|v1.');
       });
+
+      // The other contexts erase their own copies asynchronously (their subscribers): wait for them.
+      await test.step("Database: KYC's key is gone too, and the scans are blanked in Documents Management", async () => {
+        await expect(() => {
+          const [kyc] = psqlOk('EwpKycDb', `
+            SELECT (SELECT count(*) FROM personal_data_keys k WHERE k.customer_number = c.customer_number),
+                   c.personal_data_erased_at IS NOT NULL, left(c.applicant, 3)
+            FROM kyc_cases c WHERE c.customer_number = ${literal(customerNumber)};`);
+          expect(kyc).toBe('0|t|v1.');
+          const [documents] = psqlOk('EwpDocumentsManagementDb', `
+            SELECT count(*), count(*) FILTER (WHERE personal_data_erased_at IS NOT NULL AND file_name = 'personal-data-erased')
+            FROM documents WHERE business_reference = ${literal(customerNumber)};`);
+          expect(documents).toBe('2|2');
+        }).toPass({ timeout: 60_000, intervals: [1_000, 2_000, 5_000] });
+      });
     }
 
-    // Assert 3: the audit trail proves who asked and who decided (LAN IDs, no personal data).
-    await test.step('Sarah: the trail holds the request by Daniel and the erasure decided by Michael', async () => {
+    // Assert 3: the audit trail proves who asked, who decided, and that every copy went (LAN IDs, no personal data).
+    await test.step('Sarah: the trail holds the request by Daniel, the erasure decided by Michael, and four confirmations', async () => {
       const trail = new AuditTrail(await signedInAs('sarah.audit'));
       await trail.open();
       const entries = await trail.expectJourney(customerNumber, [
         { event: 'PersonalDataErasureRequested' },
-        { event: 'CustomerPersonalDataErased', decidedBy: lanIds['platform.admin'] },
+        { event: 'CustomerPersonalDataErased', decidedBy: lanIds['michael.pfadmin'] },
+        // KYC, Compliance, Accounts and Documents Management - each confirms, even with nothing held.
+        { event: 'PersonalDataCopyErased' },
+        { event: 'PersonalDataCopyErased' },
+        { event: 'PersonalDataCopyErased' },
+        { event: 'PersonalDataCopyErased' },
       ], ['PersonalDataErasureRejected']);
       const erased = entries.find(e => e.event === 'CustomerPersonalDataErased')!;
       expect(erased.initiatedBy, 'the requester stays the initiator').toContain(lanIds['daniel.ops']);

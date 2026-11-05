@@ -87,13 +87,16 @@ public sealed class Account
         if (string.IsNullOrWhiteSpace(accountNumber) || string.IsNullOrWhiteSpace(bsb) || string.IsNullOrWhiteSpace(coreBankingReference))
             throw new DomainRuleViolationException("An account needs its account number, BSB and core-banking reference.");
 
+        var holder = application.HolderName
+            ?? throw new DomainConflictException("The holder's personal data was erased: no account is opened from this application.");
+
         return new Account
         {
             AccountNumber = accountNumber.Trim(),
             Bsb = bsb.Trim(),
             CoreBankingReference = coreBankingReference.Trim(),
             CustomerNumber = application.CustomerNumber,
-            HolderName = HolderName.Create(application.HolderName.FirstName, application.HolderName.LastName),
+            HolderName = HolderName.Create(holder.FirstName, holder.LastName),
             ApplicationRef = application.ApplicationRef,
             BranchCode = application.BranchCode,
             Product = application.Product.Value,

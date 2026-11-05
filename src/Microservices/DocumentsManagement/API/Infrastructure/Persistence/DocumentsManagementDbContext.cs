@@ -100,6 +100,11 @@ public sealed class DocumentsManagementDbContext(DbContextOptions<DocumentsManag
             entity.Property(x => x.AttachedAt)
                 .HasColumnName("attached_at");
 
+            entity.Property(x => x.PersonalDataErasedAt)
+                .HasColumnName("personal_data_erased_at");
+
+            entity.Ignore(x => x.IsPersonalDataErased);
+
             entity.Property(x => x.AttachedTo)
                 .HasColumnName("attached_to")
                 .HasMaxLength(Document.MaxAttachedToLength);

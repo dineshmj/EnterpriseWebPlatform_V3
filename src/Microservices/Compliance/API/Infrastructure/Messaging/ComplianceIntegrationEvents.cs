@@ -109,6 +109,10 @@ internal static class ComplianceIntegrationEventMapper
         string payload;
         string? actedBy = null;
 
+        // A case with an event to publish is new, screened or just decided: never erased.
+        var applicant = complianceCase.Applicant
+            ?? throw new InvalidOperationException($"Compliance case {complianceCase.Id} has no applicant to publish.");
+
         switch (domainEvent)
         {
             case ComplianceCaseOpenedDomainEvent:
@@ -122,7 +126,7 @@ internal static class ComplianceIntegrationEventMapper
                         complianceCase.BranchCode.Value,
                         complianceCase.KycCaseId,
                         complianceCase.Status.ToCode(),
-                        complianceCase.Applicant.FullName));
+                        applicant.FullName));
                 break;
 
             case ComplianceCaseDecidedDomainEvent decided:
@@ -142,7 +146,7 @@ internal static class ComplianceIntegrationEventMapper
                         decided.DecidedByUserId,
                         decided.OccurredAt,
                         decided.Remarks,
-                        new ApplicantNamePayload(complianceCase.Applicant.FirstName, complianceCase.Applicant.LastName),
+                        new ApplicantNamePayload(applicant.FirstName, applicant.LastName),
                         lanOf(decided.DecidedByUserId)));
                 break;
 
@@ -159,7 +163,7 @@ internal static class ComplianceIntegrationEventMapper
                         screened.Outcome.ToCode(),
                         screened.Risk.ToCode(),
                         complianceCase.RequiredClearance,
-                        complianceCase.Applicant.FullName));
+                        applicant.FullName));
                 break;
 
             // Internal facts. Listed explicitly so that a NEW, unmapped event still fails loudly.

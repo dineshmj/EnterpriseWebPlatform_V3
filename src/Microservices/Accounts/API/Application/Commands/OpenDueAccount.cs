@@ -76,11 +76,15 @@ public sealed class OpenDueAccountCommandHandler(
         // └──────────────────────────────────────────────────────────────────────────────────────
         using var trace = openingTrace.Continue(application);
 
+        // Never due once erased (the repository skips those): a due application always has its holder.
+        var holder = application.HolderName
+            ?? throw new InvalidOperationException($"Account application {application.Id} has no holder name to open the account in.");
+
         OpeningRunOutcome outcome;
         try
         {
             var response = await coreBanking.OpenAccountAsync(
-                new OpenAccountRequest(application.ApplicationRef, application.CustomerNumber, application.HolderName.FullName, application.BranchCode.Value, application.Product!.Value),
+                new OpenAccountRequest(application.ApplicationRef, application.CustomerNumber, holder.FullName, application.BranchCode.Value, application.Product!.Value),
                 cancellationToken);
 
             var now = clock.GetUtcNow();

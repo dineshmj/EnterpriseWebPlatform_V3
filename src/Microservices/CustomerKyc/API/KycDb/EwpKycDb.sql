@@ -7,6 +7,7 @@ DROP TABLE IF EXISTS kyc_cases CASCADE;
 DROP TABLE IF EXISTS outbox_messages CASCADE;
 DROP TABLE IF EXISTS inbox_messages CASCADE;
 DROP TABLE IF EXISTS staff_members CASCADE;
+DROP TABLE IF EXISTS personal_data_keys CASCADE;
 
 CREATE TABLE IF NOT EXISTS kyc_cases (
     id BIGSERIAL PRIMARY KEY,
@@ -35,14 +36,17 @@ CREATE TABLE IF NOT EXISTS kyc_cases (
     -- The applicant AS SUBMITTED (snapshot from onboarding.application.submitted):
     -- the identity the officer verifies the evidence against. Never refreshed, so
     -- the case keeps showing what was verified. No contact details (not needed).
-    applicant_first_name VARCHAR(100) NOT NULL,
-    applicant_last_name VARCHAR(100) NOT NULL,
-    applicant_address_line1 VARCHAR(200) NULL,
-    applicant_address_line2 VARCHAR(200) NULL,
-    applicant_city VARCHAR(100) NULL,
-    applicant_state VARCHAR(100) NULL,
-    applicant_postal_code VARCHAR(20) NULL,
-    applicant_country_code CHAR(2) NULL,
+    -- ┌─ :: SECURITY :: The applicant is stored only encrypted (crypto-shredding) ─────────────────────
+    -- │ Why : When Customer Onboarding erases a customer, this copy and every backup of it must
+    -- │       become unreadable, while the case (outcome, people, evidence IDs) stays as the record.
+    -- │ How : "v1.<base64>": name and residential address as ONE value, AES-256-GCM under the
+    -- │       customer's own key in personal_data_keys (KYC's key, not Customer Onboarding's),
+    -- │       bound to the customer number. The erasure deletes the key and stamps
+    -- │       personal_data_erased_at; the ciphertext stays, unreadable.
+    -- │ Ref : doc/Crypto-Shredding.md | GDPR Art. 17, Art. 32 | OWASP A02
+    -- └────────────────────────────────────────────────────────────────────────────────────────────────
+    applicant TEXT NOT NULL,
+    personal_data_erased_at TIMESTAMPTZ NULL,
 
     -- Exactly the evidence submitted with THIS application (Documents Management
     -- IDs). The officer reviews these documents, never "the latest" of the customer.
@@ -93,6 +97,10 @@ CREATE TABLE IF NOT EXISTS kyc_cases (
 
     CONSTRAINT ck_kyc_cases_status
         CHECK (status IN ('PENDING_REVIEW','APPROVED','REJECTED')),
+
+    -- Never an applicant in clear.
+    CONSTRAINT ck_kyc_cases_applicant_protected
+        CHECK (applicant LIKE 'v1.%'),
 
     CONSTRAINT ck_kyc_identity_verification_status
         CHECK (
@@ -185,6 +193,17 @@ CREATE INDEX IF NOT EXISTS ix_kyc_cases_assigned_officer
 CREATE INDEX IF NOT EXISTS ix_kyc_cases_customer_number
     ON kyc_cases (customer_number);
 
+-- One data key per customer, wrapped by the KYC API's master key (12-byte nonce + 32-byte
+-- key + 16-byte tag). Deleting the row IS the erasure of that customer's applicant data.
+CREATE TABLE IF NOT EXISTS personal_data_keys (
+    customer_number VARCHAR(100) NOT NULL,
+    wrapped_key BYTEA NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT pk_personal_data_keys PRIMARY KEY (customer_number),
+    CONSTRAINT ck_personal_data_keys_wrapped_length CHECK (octet_length(wrapped_key) = 60)
+);
+
 CREATE TABLE IF NOT EXISTS outbox_messages (
     id UUID PRIMARY KEY,
 
@@ -264,5 +283,7 @@ DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ewp_kyc_api') THEN
         GRANT SELECT, INSERT, UPDATE ON inbox_messages, staff_members TO ewp_kyc_api;   -- no DELETE: nothing is ever deleted
+        -- SEC: the one DELETE - a customer's key, which is the erasure (crypto-shredding).
+        GRANT SELECT, INSERT, DELETE ON personal_data_keys TO ewp_kyc_api;
     END IF;
 END $$;

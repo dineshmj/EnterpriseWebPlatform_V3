@@ -8,11 +8,12 @@ using EnterpriseWebPlatform.Accounts.Api.Domain.Aggregates;
 using EnterpriseWebPlatform.Accounts.Api.Domain.Events;
 using EnterpriseWebPlatform.Accounts.Api.Domain.ValueObjects;
 using EnterpriseWebPlatform.Accounts.Api.Infrastructure.Messaging;
+using EnterpriseWebPlatform.Accounts.Api.Infrastructure.Privacy;
 using EnterpriseWebPlatform.Common.Observability;
 
 namespace EnterpriseWebPlatform.Accounts.Api.Infrastructure.Persistence;
 
-public sealed class AccountsDbContext(DbContextOptions<AccountsDbContext> options, TimeProvider clock)
+public sealed class AccountsDbContext(DbContextOptions<AccountsDbContext> options, TimeProvider clock, PersonalDataCipher cipher)
     : DbContext(options), IAccountsUnitOfWork, IInboxStore, IOpeningTrace
 {
     /// <summary>
@@ -65,6 +66,10 @@ public sealed class AccountsDbContext(DbContextOptions<AccountsDbContext> option
         // └──────────────────────────────────────────────────────────────────────────────────────
         foreach (var approved in changed.Where(a => a.DomainEvents.OfType<AccountApplicationApprovedDomainEvent>().Any()))
             Entry(approved).Property<string?>(OpeningTraceParent).CurrentValue = MessagingTelemetry.CurrentTraceParent();
+
+        // SEC: the holder of a new application is encrypted before anything is written; an erased
+        //      application loses its customer's key in this same transaction (crypto-shredding).
+        await AccountApplicationPersonalData.ProtectAsync(this, cipher, cancellationToken);
 
         // 1. The aggregates (a new application or account gets its database ID here).
         await SaveTranslatingErrorsAsync(cancellationToken);
@@ -180,12 +185,11 @@ public sealed class AccountsDbContext(DbContextOptions<AccountsDbContext> option
             e.HasIndex(x => x.ApplicationRef).IsUnique().HasDatabaseName("uq_account_applications_application_ref");
             e.Property(x => x.ApplicationNumber).HasColumnName("application_number").HasMaxLength(30).IsRequired();
             e.Property(x => x.CustomerNumber).HasColumnName("customer_number").HasMaxLength(100).IsRequired();
-            e.ComplexProperty(x => x.HolderName, h =>
-            {
-                h.Property(x => x.FirstName).HasColumnName("holder_first_name").HasMaxLength(HolderName.MaxLength).IsRequired();
-                h.Property(x => x.LastName).HasColumnName("holder_last_name").HasMaxLength(HolderName.MaxLength).IsRequired();
-                h.Ignore(x => x.FullName);
-            });
+            // SEC: the holder's name is stored only encrypted, as one value (AccountApplicationPersonalData).
+            e.Ignore(x => x.HolderName);
+            e.Ignore(x => x.IsPersonalDataErased);
+            e.Property<string>(AccountApplicationPersonalData.HolderNameColumn).HasColumnName("holder_name").IsRequired();
+            e.Property(x => x.PersonalDataErasedAt).HasColumnName("personal_data_erased_at").HasColumnType("timestamp with time zone");
             e.Property(x => x.ComplianceCaseId).HasColumnName("compliance_case_id").IsRequired();
             e.Property(x => x.BranchCode).HasColumnName("branch_code").HasMaxLength(BranchCode.MaxLength)
                 .HasConversion(v => v.Value, v => BranchCode.Create(v)).IsRequired();
@@ -319,6 +323,15 @@ public sealed class AccountsDbContext(DbContextOptions<AccountsDbContext> option
             e.Property(x => x.AttemptCount).HasColumnName("attempt_count").IsRequired();
             e.Property(x => x.LastAttemptAt).HasColumnName("last_attempt_at");
             e.Property(x => x.LastError).HasColumnName("last_error");
+        });
+
+        modelBuilder.Entity<PersonalDataKey>(e =>
+        {
+            e.ToTable("personal_data_keys");
+            e.HasKey(x => x.CustomerNumber).HasName("pk_personal_data_keys");
+            e.Property(x => x.CustomerNumber).HasColumnName("customer_number").HasMaxLength(100);
+            e.Property(x => x.WrappedKey).HasColumnName("wrapped_key").IsRequired();
+            e.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone").IsRequired();
         });
 
         modelBuilder.Entity<StaffMember>(e =>

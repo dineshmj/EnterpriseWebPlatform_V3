@@ -75,6 +75,17 @@ public sealed class Document : AggregateRoot
     public string? AttachedTo { get; private set; }
 
     /// <summary>
+    /// When Customer Onboarding's erasure reached this document: its file name is blanked and its
+    /// content deleted. Null while the customer's data is kept.
+    /// </summary>
+    public DateTimeOffset? PersonalDataErasedAt { get; private set; }
+
+    public bool IsPersonalDataErased => PersonalDataErasedAt is not null;
+
+    /// <summary>The file name an erased document shows in place of the one it was uploaded with.</summary>
+    public const string ErasedFileName = "personal-data-erased";
+
+    /// <summary>
     /// Only an AVAILABLE document may be removed (cleanup of an upload that never became
     /// part of a submitted application). Attached and invalidated documents are retained.
     /// </summary>
@@ -145,7 +156,7 @@ public sealed class Document : AggregateRoot
         if (string.IsNullOrWhiteSpace(attachedTo))
             throw new DomainRuleViolationException("What the document is attached to is required.");
 
-        if (Status != DocumentStatus.Available)
+        if (Status != DocumentStatus.Available || IsPersonalDataErased)
             return false;
 
         Status = DocumentStatus.Attached;
@@ -184,6 +195,25 @@ public sealed class Document : AggregateRoot
     }
 
     public const int MaxInvalidationReasonLength = 500;
+
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ The erasure was decided in Customer Onboarding (four eyes, eligibility); this document
+    // │ only obeys it. The file name goes (it may name the person); the record stays - type,
+    // │ size, SHA-256, status, branch - so the trail still shows what was submitted. The content
+    // │ itself is deleted from storage by the handler. Repeating it changes nothing.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    /// <summary>Forgets the file name (the handler deletes the content). False when already erased.</summary>
+    public bool ErasePersonalData(DateTimeOffset now)
+    {
+        if (IsPersonalDataErased)
+            return false;
+
+        FileName = FileName.Create(ErasedFileName);
+        PersonalDataErasedAt = now;
+        UpdatedAt = now;
+        Version++;
+        return true;
+    }
 
     public bool BelongsTo(BranchCode? branch) =>
         branch is not null && ResourceBranch is not null && ResourceBranch == branch;

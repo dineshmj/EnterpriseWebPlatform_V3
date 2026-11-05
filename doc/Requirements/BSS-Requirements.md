@@ -29,7 +29,7 @@ The scenarios use the demo users. Their role, department, branch and clearance l
 | `jack.accounts` | Jack Wilson | Account Officer | SYD001 | 3 |
 | `emily.payments` | Emily Carter | Payments Officer | SYD001 | 4 |
 | `daniel.ops` | Daniel Cooper | Operations Administrator | BNE001 | 4 |
-| `platform.admin` | Michael Turner | Platform Administrator + Operations Administrator | PER001 | 5 |
+| `michael.pfadmin` | Michael Turner | Platform Administrator + Operations Administrator | PER001 | 5 |
 | `sarah.audit` | Sarah Collins | Auditor | ADL001 | 5 |
 
 ### 1.2 Conventions
@@ -316,7 +316,7 @@ Feature: Onboarding a new customer
     Examples:
       | user           |
       | daniel.ops     |
-      | platform.admin |
+      | michael.pfadmin |
       | sarah.audit    |
 ```
 
@@ -824,7 +824,7 @@ Feature: Sending a payment through the payment network
     And Daniel checked the network's own records and found no such payment
     When Daniel proposes "NOT SENT" with his evidence
     Then Daniel cannot approve his own proposal
-    When Michael (platform.admin) approves the proposal
+    When Michael (michael.pfadmin) approves the proposal
     Then the reserved funds are released
     And the payment is FAILED
     And both steps appear on the payment's timeline and in the Audit Trail, with who did what

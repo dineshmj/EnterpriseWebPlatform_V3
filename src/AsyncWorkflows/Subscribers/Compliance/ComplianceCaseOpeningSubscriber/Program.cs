@@ -68,6 +68,9 @@ builder.Services
 // └──────────────────────────────────────────────────────────────────────────────────────
 builder.Services.AddHttpClient(ComplianceCaseOpeningProcessor.HttpClientName).AddDPoPMachineToken();
 
+// The erasure of a customer's personal data: erase this context's copy, then confirm (shared code).
+builder.Services.AddPersonalDataErasureForwarder();
+
 // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
 // │ Health endpoints for the orchestrator's probes (Health:Urls): live = the consume loop
 // │ runs; ready = joined the consumer group (Degraded while a message is retried).

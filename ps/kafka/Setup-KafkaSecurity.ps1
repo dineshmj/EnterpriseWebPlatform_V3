@@ -78,6 +78,7 @@ $Topics = @(
     'onboarding.application.status.changed',
     'onboarding.application.rejected',
     'customer.personal-data.erasure',
+    'customer.personal-data.erasure.confirmed',
     'kyc.case.created',
     'kyc.case.approved',
     'kyc.case.rejected',
@@ -372,6 +373,9 @@ switch ($Phase) {
     Grant 'ewp-kyc-case-opening-subscriber' '--operation Read --operation Describe --topic onboarding.application.submitted'
     Grant 'ewp-kyc-case-opening-subscriber' '--operation Read --group customer-kyc.case-opening-subscriber'
     Grant 'ewp-kyc-case-opening-subscriber' '--operation Write --operation Describe --topic customer-kyc.case-opening-subscriber.dlq'
+    # SEC: the erasure of a customer's personal data - read the decision, confirm KYC's copy is gone.
+    Grant 'ewp-kyc-case-opening-subscriber' '--operation Read --operation Describe --topic customer.personal-data.erasure'
+    Grant 'ewp-kyc-case-opening-subscriber' '--operation Write --operation Describe --topic customer.personal-data.erasure.confirmed'
 
     Write-Host 'OnboardingOutcomeSubscriber: read its topics and group; write its dead-letter topic' -ForegroundColor Cyan
     foreach ($t in 'kyc.case.created', 'kyc.case.approved', 'kyc.case.rejected', 'compliance.case.created', 'compliance.case.approved', 'compliance.case.rejected',
@@ -389,12 +393,18 @@ switch ($Phase) {
     Grant 'ewp-compliance-case-opening-subscriber' '--operation Read --operation Describe --topic kyc.case.approved'
     Grant 'ewp-compliance-case-opening-subscriber' '--operation Read --group compliance.case-opening-subscriber'
     Grant 'ewp-compliance-case-opening-subscriber' '--operation Write --operation Describe --topic compliance.case-opening-subscriber.dlq'
+    # SEC: the erasure of a customer's personal data - read the decision, confirm Compliance's copy is gone.
+    Grant 'ewp-compliance-case-opening-subscriber' '--operation Read --operation Describe --topic customer.personal-data.erasure'
+    Grant 'ewp-compliance-case-opening-subscriber' '--operation Write --operation Describe --topic customer.personal-data.erasure.confirmed'
 
     Write-Host 'DocumentInvalidationSubscriber: read onboarding.application.submitted / .rejected and its group; write its dead-letter topic' -ForegroundColor Cyan
     Grant 'ewp-dm-invalidation-subscriber' '--operation Read --operation Describe --topic onboarding.application.submitted'
     Grant 'ewp-dm-invalidation-subscriber' '--operation Read --operation Describe --topic onboarding.application.rejected'
     Grant 'ewp-dm-invalidation-subscriber' '--operation Read --group documents-management.invalidation-subscriber'
     Grant 'ewp-dm-invalidation-subscriber' '--operation Write --operation Describe --topic documents-management.invalidation-subscriber.dlq'
+    # SEC: the erasure of a customer's personal data - read the decision, confirm the documents are gone.
+    Grant 'ewp-dm-invalidation-subscriber' '--operation Read --operation Describe --topic customer.personal-data.erasure'
+    Grant 'ewp-dm-invalidation-subscriber' '--operation Write --operation Describe --topic customer.personal-data.erasure.confirmed'
 
     Write-Host 'Accounts API (in-process relay): write accounts.application.* and accounts.account.* only' -ForegroundColor Cyan
     Grant 'ewp-accounts-api' '--operation Write --operation Describe --resource-pattern-type prefixed --topic accounts.application.'
@@ -407,6 +417,9 @@ switch ($Phase) {
     Grant 'ewp-accounts-application-opening-subscriber' '--operation Read --operation Describe --topic compliance.case.approved'
     Grant 'ewp-accounts-application-opening-subscriber' '--operation Read --group accounts.application-opening-subscriber'
     Grant 'ewp-accounts-application-opening-subscriber' '--operation Write --operation Describe --topic accounts.application-opening-subscriber.dlq'
+    # SEC: the erasure of a customer's personal data - read the decision, confirm Accounts' copy is gone.
+    Grant 'ewp-accounts-application-opening-subscriber' '--operation Read --operation Describe --topic customer.personal-data.erasure'
+    Grant 'ewp-accounts-application-opening-subscriber' '--operation Write --operation Describe --topic customer.personal-data.erasure.confirmed'
 
     Write-Host 'AccountsCommandSubscriber: read accounts.commands and its group; write its dead-letter topic' -ForegroundColor Cyan
     Grant 'ewp-accounts-command-subscriber' '--operation Read --operation Describe --topic accounts.commands'
@@ -442,7 +455,7 @@ switch ($Phase) {
 
     Write-Host 'Audit API (in-process trail subscriber): READ every business event topic and its group; write its dead-letter topic; nothing else' -ForegroundColor Cyan
     foreach ($t in 'customer.created', 'onboarding.application.submitted', 'onboarding.application.status.changed', 'onboarding.application.rejected',
-                   'customer.personal-data.erasure',
+                   'customer.personal-data.erasure', 'customer.personal-data.erasure.confirmed',
                    'kyc.case.created', 'kyc.identity.verification.approved', 'kyc.identity.verification.rejected',
                    'kyc.document.verification.approved', 'kyc.document.verification.rejected', 'kyc.case.approved', 'kyc.case.rejected',
                    'compliance.case.created', 'compliance.case.screened', 'compliance.case.approved', 'compliance.case.rejected',
