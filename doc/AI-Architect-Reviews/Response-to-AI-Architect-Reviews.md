@@ -1,119 +1,108 @@
-# EWP V3 — Response to the AI architect reviews (rounds 1 to 4)
+# EWP V3 — Response to the AI architect reviews (rounds 1 to 5)
 
-Response dates: 14-OCT-2026 (rounds 1–3) and 21-OCT-2026 (round 4).
+Response dates: 14-OCT-2026 (rounds 1–3), 21-OCT-2026 (round 4) and 06-NOV-2026 (round 5, the closing review of V3).
 
-## Round 4 — the brief given to the reviewers
+## Round 5 — the brief given to the reviewers
 
-The answers to round 4 are in the section [Round 4 — 21-OCT-2026](#round-4--21-oct-2026) below.
+The answers to round 5 are in the section [Round 5 — 06-NOV-2026](#round-5--06-nov-2026) below.
 
-Round 4 covers **two repositories**:
+Round 5 is the **closing review of EWP V3**, before work on V4 starts. It covers the same **two repositories** as round 4:
 
-- **EWP V3** (this repository): the bank's staff platform.
-- **EWP V3 Partner Bank** (`EnterpriseWebPlatform_V3_PartnerBank`): a second, independent bank whose Digital Gold product EWP distributes at its branch counters.
+- **EWP V3** (this repository): the bank's staff platform for the branch counter (an assisted channel).
+- **EWP V3 Partner Bank** (`EnterpriseWebPlatform_V3_PartnerBank`): the second, independent bank whose Digital Gold product EWP distributes at its counters.
 
-The rest of this document answers rounds 1–3. Please do not raise those findings again unless the code now contradicts the answer given.
+The rest of this document answers rounds 1–4 (75 findings). Please do not raise those findings again unless the code now contradicts the answer given. The round-4 brief, which explains the three ways EWP deals with the Partner Bank, is still valid: it is kept under [Round 4](#round-4--the-brief-given-to-the-reviewers).
 
 ### Read these first
 
 1. This section.
-2. [Checklists](../Checklists/README.md), especially [15 — Workflow workers (Temporal)](../Checklists/15-Workflow-Workers-Temporal.md) and [12 — Kafka broker and ACLs](../Checklists/12-Kafka-Broker-and-ACLs.md).
-3. [Threat-Model.md](../Threat-Model.md): §7 residual risks, especially R-10 and R-14 to R-16.
-4. Partner Bank repository: `doc/Architecture.md` (decisions D1–D15) and `doc/Threat-Model.md` (T1–T28, residual risks R1–R10).
-5. [Partner Products requirements](../Requirements/PartnerProducts-Requirements.md), and the design conversations [Partner-Bank-mTLS-PAR-And-Signed-Instructions.md](../Arch-Design-Visualizations/Partner-Bank-mTLS-PAR-And-Signed-Instructions.md) and [Temporal-Digital-Gold-Purchase.md](../Arch-Design-Visualizations/Temporal-Digital-Gold-Purchase.md).
+2. [Architectural-And-Security-Features-Demoable-EWP-V3.md](../Architectural-And-Security-Features-Demoable-EWP-V3.md): every capability, where it is enforced, and how it is demonstrated.
+3. [Threat-Model.md](../Threat-Model.md): the abuse cases with their "Verified by" column, and §7 residual risks R-1 to R-21.
+4. [Crypto-Shredding.md](../Crypto-Shredding.md), [Authorization-Model.md](../Authorization-Model.md) and the [Checklists](../Checklists/README.md).
+5. [CI.md](../CI.md), [Containers.md](../Containers.md), [Kubernetes.md](../Kubernetes.md) and [Cloud-Demo.md](../Cloud-Demo.md).
+6. [tst/README.md](../../tst/README.md) (what each test project proves) and [tst/contracts/README.md](../../tst/contracts/README.md) (the Pact contracts).
+7. Partner Bank repository: `doc/Architecture.md` (decisions D1–D17), `doc/Threat-Model.md` (T1–T28, residual risks R1–R10), `doc/Containers.md` and `doc/Kubernetes.md`.
 
-### What changed since round 3 (14-OCT-2026)
+### What changed since round 4 (21-OCT-2026)
 
-| Area | Change | Commits |
+Pull requests are numbered `#n`; the earlier commits are given by hash.
+
+| Area | Change | Where |
 | --- | --- | --- |
-| Partner Products context (new) | Digital Gold at the counter. The stack is a Next.js SPA with a light BFF, a NestJS Journey API, and a .NET Domain API with PostgreSQL. The Domain API is also EWP's **adapter** to the Partner Bank: mutual TLS, a certificate-bound token, signed instructions. | `2c6d1136`, `bbaa5177`, `403403d6` |
-| Digital Gold purchase | A signed purchase instruction, then a payment through the Payments saga, made as the staff member. A Temporal workflow takes the purchase to ALLOCATED or CANCELLED, run by a new worker with its own machine identity. | `dccf4aa6` |
-| Purchase events (A1, A2) | Form VII and purchase changes go through a Transactional Outbox to `partner-products.digital-gold.events`, and from there into the audit trail. Payment outcomes wake the workflow with a data-less signal; polling every 5 minutes remains as the safety net. | `ff2f4b03`, `e3f6afb3` |
-| "View at the Partner Bank" | A read-only staff page at the Partner Bank, opened in a new tab through a one-time handoff (see pattern C below). | `1bb69891` |
-| Step-up without a pop-up | The authenticator code appears in an in-page overlay in the Shell. The IDP lets **only** the Shell frame **only** the step-up code page. | `1f6b3bf5` |
-| Kafka over TLS (B8) | SASL_SSL. Every client checks the broker's certificate and host name before it signs in with SCRAM. | `8a6271e1` |
-| Configuration per deployable (A4) | The shared `Common.Landscape` library is gone. Service URLs and client IDs come from each deployable's configuration and are checked at start-up. The IDP's `ClientIds` / `ClientBaseUrls` are the reference values. | `2344b75a` |
-| Also | Resend of parked Outbox messages for Accounts and Compliance; Shell session fixes; Node dependency audit clean; Playwright journeys (including Digital Gold). | `1319c490`, `497b10af`, `1ab6a596`, `a4d6a06b` |
-
-### Three ways EWP deals with the Partner Bank
-
-Please check each against its own purpose. Measuring all three against FAPI 2.0 for a customer-facing channel would produce false findings.
-
-**A. The customer's own sign-in at the Partner Bank: full PAR + JAR + RAR.**
-
-- The Partner Bank's authorization server (Duende 8) requires the following:
-  - **PAR (RFC 9126)**, on a separate mutual-TLS port;
-  - a **signed request object (JAR, RFC 9101)**, ES256, with EWP's request-signing key;
-  - **RAR (RFC 9396)** `authorization_details` with three types;
-  - **PKCE** and `prompt=login`;
-  - a consent page that shows the signed details;
-  - access tokens bound to EWP's certificate (**RFC 8705**, `cnf`).
-- The Partner Bank repository's `tools/HandshakeCheck` and `tools/JourneyCheck` exercise this end to end.
-- **EWP has no customer-facing channel that uses it yet.** That is the planned A7 + B1 (customer self-service, FAPI 2.0, including DPoP or certificate-bound tokens throughout). Its absence in EWP is known, not an oversight.
-
-**B. The counter (the distributor model): mutual TLS + EWP's own bound token + a signed instruction. No PAR.**
-
-- The customer is in the branch and signs a paper Form VII (account opening) or a transfer slip (purchase). They do not sign in anywhere.
-- The Partner Products API authenticates **EWP as an organisation**:
-  - mutual TLS with EWP's client certificate;
-  - a `client_credentials` token with scope `partner.distribution`, bound to that certificate;
-  - each instruction as an EWP-signed JWT (`typ partner-instruction+jwt`, ES256, `aud partner-api`, 5 minutes, unique `jti`, which the Partner Bank accepts once).
-- The staff member is the **actor** recorded on EWP's side (delegated token, branch, permission), not a party the Partner Bank authenticates.
-- The Partner Bank relies on EWP to have checked the customer and their signature (Partner Bank R9). That reliance is the distribution agreement, not a missing control.
-
-**C. "View at the Partner Bank": a PAR-style handoff, not RFC 9126 at the authorization server.**
-
-1. EWP pushes a signed `staff_account_view` instruction over mutual TLS.
-2. The Partner Bank returns a one-time `request_uri`, valid for 60 seconds.
-3. The staff member's browser opens the Partner Bank's read-only page in a new tab with no opener. The request is redeemed once, and only its SHA-256 is kept.
-
-There is no SSO federation between the banks: the Partner Bank trusts EWP's signed statement of who is looking (Partner Bank R10). Federation is described in the design conversation as the alternative.
+| FAPI 2.0, people | The Shell and every web app sign in with pushed authorization requests (PAR) and `private_key_jwt`, and get DPoP-bound tokens. The Journey APIs exchange them for DPoP-bound tokens too. | #52, #58, #59, #60 |
+| FAPI 2.0, machines | The Kafka subscribers, the Partner Products Worker and the Journey APIs hold no client secret: they prove themselves with a private key and get DPoP-bound tokens. Every API refuses a token without `cnf`, a person's or a machine's. | #67, #68 |
+| Crypto-shredding | Each customer's personal data is encrypted under the customer's own key, with blind indexes for exact search. Plain copies end after 7 days (Kafka retention, blanked Outbox payloads). Erasure has four eyes; approval deletes the key. KYC, Compliance, Accounts and Documents then erase their own copies and confirm to the audit trail, which records who asked, who decided and why, with nothing personal. | #72, #77, #78, #79 |
+| Tests | Pact contracts (the Payments saga's couriers and the Partner Products Worker against Payments and Accounts). WireMock.Net and Jest + WireMock adapter tests. Unit tests for KYC, Compliance, Customer Onboarding, Documents, IDP and Notifications. Playwright `40-security` tests that try to break the controls. Digital Gold deviation runs. | #69, `31f49fa3`, #39, #40, #36, `b24c641a`, #79, `a3c2a4cc`, #33 |
+| Containers and supply chain | An image per deployable: multi-stage builds, chiseled or distroless non-root runtimes, base images pinned by digest, Trivy scan before publishing. CI gates on every pull request (one required check, "CI result"). CodeQL, SonarQube Cloud and Snyk report but do not gate. Dependabot. | `5faf1a5b` … `5fb9b010`, `8f3f1cb2`, #34, #35, #53–#56, #70, #71 |
+| Kubernetes and the cloud demo | Helm charts for both banks, with a private CA and trust bundles. Egress NetworkPolicies: every pod reaches only what it calls. Azure bootstrap, Terraform, Demo up / Demo down with a teardown watchdog. Observability inside the cluster (Alloy, Prometheus, Loki, Tempo, Grafana with sign-in through EWP's IDP). Every business journey was verified there on 26-OCT-2026. | #6, #27, #8–#14, #18–#21, #42 |
+| Running as several instances | Services that can run behind one address as several instances; database outages handled. | #3, #4 |
+| Domain | BIAN `/v2` next to `/v1` on four APIs (PaymentOrderInitiation, CurrentAccount, PartyReferenceDataDirectory, DocumentDirectory) behind an anti-corruption mapper; callers stay on `/v1`. A fraud check at payment initiation with a latency budget and fallback rules. Feature flags through OpenFeature (a release toggle and a kill switch, never authorization). Cash deposit at the counter. Queue paging. | #28–#31, #41, #38, #17, #63, #65 |
+| Operations | Simulator & fault controls (Development / Test / UAT only). Resend of parked Partner Products Outbox messages and a health check for Digital Gold work that waits too long. Reset also wipes Temporal. | `2ff90ab6`, `3f593848`, #22 |
+| Partner Bank | Unit tests for once-only instructions and the staff view's one use. Images, a Helm chart, egress NetworkPolicies, and a start check that names the deployable that does not listen. | `b59de44`, `0d74601`, `c7b8cf9`, #9, #10 |
 
 ### Known and out of scope for this round
 
-- **Planned:**
-  - A7 + B1: the customer channel and FAPI 2.0;
-  - the D-series: containers, Terraform, GitHub Actions, CI gates, dashboards, gateway rate limits.
-- **Accepted for the PoC, recorded with their production answer:**
-  - R-10: development secrets in configuration;
-  - R-14: rate limits counted per instance;
-  - R-15: date of birth typed from Form VII;
-  - R-16: Temporal development server without TLS or an authorizer (production: service mesh or Temporal Cloud mTLS, plus an authorizer);
-  - the Kafka controller listener: PLAINTEXT, bound to localhost;
-  - Partner Bank R1–R10: no certificate revocation, keys in files, and others.
-- **Unit tests** cover Payments and Accounts only. The other contexts are covered by Playwright journeys.
+- **Accepted for the PoC, recorded with their production answer** in [Threat-Model.md](../Threat-Model.md) §7:
+  - R-6 (audit actor fields from producer envelopes);
+  - R-8 (anonymous `/metrics` and health endpoints);
+  - R-9 (mTLS between services, partly closed in the cluster);
+  - R-10 (development secrets in configuration);
+  - R-14 (rate limits counted per instance; there is no Redis in V3);
+  - R-15 and R-16 (Partner Products);
+  - R-17 (customer sign-in);
+  - R-18 to R-21 (the cloud demo);
+  - Partner Bank R1–R10.
+- **Decided, not missing:**
+  - EWP V3 is an assisted (branch) channel. The customer channel ("My EWP") stops at the IDP side: customer sign-in and registration exist, the web app does not.
+  - The erasure covers prospects only. Customers who have accounts or Digital Gold stay until closed customers exist.
+  - The payee's name on a payment is a third party's data and is out of the erasure.
+  - The SonarQube Cloud quality gate is not a required check ([CI.md](../CI.md)). Its duplication figure includes each squad's own scaffold: there is no central code shared by every API and web app, by design (squad autonomy).
+- **Not in V3:**
+  - a policy engine (aggregates keep their own invariants and decisions);
+  - distributed rate limits;
+  - a CoreWCF facade;
+  - ISO 20022;
+  - end-of-day reconciliation;
+  - CDR.
+- **Planned for V4:** lending (richer bounded contexts) and PayTo mandates.
 
 ### Where findings are most useful
 
-- **Partner Products authorization:**
-  - delegation pins (only the Journey API, for a person with the permission and branch);
-  - the worker's pinned machine identity on internal endpoints;
-  - branch scoping of every list and record.
-- **Signed instructions:** replay (`jti`, instruction id fixed at the first send), what happens when an answer is lost (the record stays SENT; resending uses the same id), and signing-key separation (TLS key ≠ signing key).
-- **The purchase workflow:**
-  - exactly one ending per purchase;
-  - idempotent activities;
-  - a forged or repeated `paymentSettled` signal (it carries no data; the workflow re-reads the payment);
-  - a worker restart mid-workflow.
-- **The step-up overlay:** the single framing exception on the IDP (`SecurityHeadersAttribute`), and what a forged "done" message could gain.
-- **A4:**
-  - any remaining compiled-in address or client ID;
-  - any start-up path that would still run with a missing pin.
-- **B8:** any Kafka client that still connects without TLS or without checking the host name.
+- **DPoP everywhere:**
+  - any client or path that still gets or accepts an unbound token;
+  - a proof reused across a retry or an address;
+  - a machine identity that could still use a secret.
+- **Crypto-shredding:** anything personal that survives an erasure in clear:
+  - logs, Kafka beyond 7 days, Outbox payloads, audit entries, notifications, document content;
+  - a downstream copy that is never erased;
+  - a redelivered erasure that does damage;
+  - a way round the four eyes.
+- **Contracts:**
+  - a field a courier reads, or a status it depends on, that no Pact contract pins;
+  - a provider check that does not run the real API.
+- **The cluster and the cloud demo:**
+  - a pod that can reach more than it calls;
+  - an image or chart that runs as root or keeps a shell;
+  - the deployment identity's reach beyond R-18 to R-21.
+- **BIAN `/v2`:** domain types leaking through the mapper, or a `/v2` answer that differs from `/v1`.
+- **Fraud check and feature flags:**
+  - a fallback that can decline or wave a payment through;
+  - a flag that changes who may do what.
 
-### How to file round 4
+### How to file round 5
 
-Please add one file per reviewer as `2026-10-2x-<Reviewer>-Architect-Verdict.md` in this folder. Give every finding:
+Please add one file per reviewer as `2026-11-xx-<Reviewer>-Architect-Verdict.md` in this folder. Give every finding:
 
-- an ID;
+- an ID (`R5-SEC-01`, `R5-ARCH-01`);
 - file and line evidence;
 - a severity;
 - whether it is a defect, a production requirement or a suggestion.
 
-The answers will follow in this document under "Round 4".
+Please also score architecture and security out of 10, and name up to three things that are sound. The answers will follow in this document under "Round 5".
 
 ## In short
 
-Three AI architects (Microsoft, Google and xAI) reviewed EWP V3 four times. This document answers every finding of all four rounds, with the outcome and the commit or code that backs it.
+Three AI architects (Microsoft, Google and xAI) reviewed EWP V3 five times. This document answers every finding of all five rounds, with the outcome and the commit or code that backs it.
 
 - **Round 1 (received 12-OCT-2026).**
   - The Microsoft and xAI findings were concrete. Microsoft's included real defects: a stale saga reply could be accepted, and payment initiation trusted the screen's branch filter.
@@ -130,39 +119,43 @@ Three AI architects (Microsoft, Google and xAI) reviewed EWP V3 four times. This
   - None of the three reviewers raised a finding. Each confirmed that the three Partner Bank interaction patterns match their stated purposes, and that the residual risks are as documented.
   - Their claims were checked against the code; the files and lines they cite exist and say what they report.
   - Microsoft added advice on what would take the scores to 9 or above: proving that the controls hold when things fail. Its suggestions are mapped below to the planned work.
+- **Round 5 (06-NOV-2026), the closing review of V3, across both repositories.**
+  - Again, none of the three reviewers raised a finding. All three now score 9 or above: Microsoft 9.1 / 9.0, xAI 9.2 / 9.0, Google 9.5 / 9.5.
+  - The files and lines they cite exist and say what they report. Two statements are made more precise below: the feature flags fall back to their declared defaults (not "fail closed"), and Google's SBOM suggestion is already in place.
+  - Their advice for higher scores is mostly production work already listed. It adds one production requirement (item 18: crypto-shredding keys that outlive backups), and names two things V3 does not do: more Pact consumers, and failure runs in the deployed cluster.
 
 ### The review files
 
-| Reviewer | Round 1 — 12-OCT-2026 | Round 2 — 13-OCT-2026 | Round 3 — 14-OCT-2026 | Round 4 — 21-OCT-2026 |
-| --- | --- | --- | --- | --- |
-| Microsoft | `2026-10-12-One-Microsoft-Way-Architect-Verdict.md` | `2026-10-13-One-Microsoft-Way-Architect-Verdict.md` | `2026-10-14-One-Microsoft-Way-Architect-Verdict.md` | `2026-10-21-One-Microsoft-Way-Architect-Verdict.md` |
-| Google | `2026-10-12-1600-Amphitheater-Architect-Verdict.md` | `2026-10-13-1600-Amphitheater-Architect-Verdict.md` | `2026-10-14-1600-Amphitheater-Architect-Verdict.md` | `2026-10-21-1600-Amphitheater-Architect-Verdict.md` |
-| xAI | `2026-10-12-Bastrop-Texas-Architect-Verdict.md` | `2026-10-13-Bastrop-Texas-Architect-Verdict.md` | `2026-10-14-Bastrop-Texas-Architect-Verdict.md` | `2026-10-21-Bastrop-Texas-Architect-Verdict.md` |
+| Reviewer | Round 1 — 12-OCT-2026 | Round 2 — 13-OCT-2026 | Round 3 — 14-OCT-2026 | Round 4 — 21-OCT-2026 | Round 5 — 06-NOV-2026 |
+| --- | --- | --- | --- | --- | --- |
+| Microsoft | `2026-10-12-One-Microsoft-Way-Architect-Verdict.md` | `2026-10-13-One-Microsoft-Way-Architect-Verdict.md` | `2026-10-14-One-Microsoft-Way-Architect-Verdict.md` | `2026-10-21-One-Microsoft-Way-Architect-Verdict.md` | `2026-11-06-One-Microsoft-Way-Architect-Verdict.md` |
+| Google | `2026-10-12-1600-Amphitheater-Architect-Verdict.md` | `2026-10-13-1600-Amphitheater-Architect-Verdict.md` | `2026-10-14-1600-Amphitheater-Architect-Verdict.md` | `2026-10-21-1600-Amphitheater-Architect-Verdict.md` | `2026-11-06-1600-Amphitheater-Architect-Verdict.md` |
+| xAI | `2026-10-12-Bastrop-Texas-Architect-Verdict.md` | `2026-10-13-Bastrop-Texas-Architect-Verdict.md` | `2026-10-14-Bastrop-Texas-Architect-Verdict.md` | `2026-10-21-Bastrop-Texas-Architect-Verdict.md` | `2026-11-06-Bastrop-Texas-Architect-Verdict.md` |
 
-All twelve files are kept exactly as received; only their names carry the date. Round 1 is dated by the day it was received and added to the repository (`bf49510`); Microsoft's own text dates its review 10-OCT-2026.
+All fifteen files are kept exactly as received; only their names carry the date. Round 1 is dated by the day it was received and added to the repository (`bf49510`); Microsoft's own text dates its review 10-OCT-2026.
 
 The earliest review, `2026-10-02-Claude-Architect-Review.md` (Claude, 02-OCT-2026, on the code before `7a4e4b8`), is the "previous review" that xAI's round 1 refers to. It is not answered again here: it carries its own remediation table, and xAI's round 1 confirmed its fixes (Outbox relay, Documents Management authorization, stored XSS, secrets in shared libraries, refresh-token reuse, `at+jwt`).
 
-### Ratings over the four rounds
+### Ratings over the five rounds
 
-| Reviewer | Round 1: Arch. | Round 1: Sec. | Round 2: Arch. | Round 2: Sec. | Round 3: Arch. | Round 3: Sec. | Round 4: Arch. | Round 4: Sec. |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Microsoft | 8 | 6.5 (production readiness 5.5) | 8.5 | 7.5 | 8.5 | 8 | **8.7** | **8.5** |
-| xAI | not scored ("one of the stronger architectural PoCs") | not scored | 8.5 | 8.5 | 8.7 | 8.5 | **9.0** | **8.8** |
-| Google | not scored | not scored | 7 | 7 | 8.5 | 8 | **9** | **9** |
+| Reviewer | Round 1: Arch. | Round 1: Sec. | Round 2: Arch. | Round 2: Sec. | Round 3: Arch. | Round 3: Sec. | Round 4: Arch. | Round 4: Sec. | Round 5: Arch. | Round 5: Sec. |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Microsoft | 8 | 6.5 (production readiness 5.5) | 8.5 | 7.5 | 8.5 | 8 | 8.7 | 8.5 | **9.1** | **9.0** |
+| xAI | not scored ("one of the stronger architectural PoCs") | not scored | 8.5 | 8.5 | 8.7 | 8.5 | 9.0 | 8.8 | **9.2** | **9.0** |
+| Google | not scored | not scored | 7 | 7 | 8.5 | 8 | 9 | 9 | **9.5** | **9.5** |
 
 ### Outcomes
 
-| Outcome | Round 1 | Round 2 | Round 3 | Round 4 | Total |
-| --- | --- | --- | --- | --- | --- |
-| Fixed after the review | 19 | 9 | 2 | — | 30 |
-| Already in place at the review (shown with evidence) | 3 | 1 | — | — | 4 |
-| Production requirement (cannot be closed in a PoC; recorded in `doc/Threat-Model.md` §7) | 8 | 3 | 4 | — | 15 |
-| Partly accepted | 3 | 2 | 1 | — | 6 |
-| Accepted as a deliberate design or PoC choice | 3 | — | — | — | 3 |
-| Clarified (the control existed; the review could not see its settings) | 1 | — | — | — | 1 |
-| Rejected with evidence | 7 | 5 | 4 | — | 16 |
-| **Findings answered** | **44** | **20** | **11** | **0** | **75** |
+| Outcome | Round 1 | Round 2 | Round 3 | Round 4 | Round 5 | Total |
+| --- | --- | --- | --- | --- | --- | --- |
+| Fixed after the review | 19 | 9 | 2 | — | — | 30 |
+| Already in place at the review (shown with evidence) | 3 | 1 | — | — | — | 4 |
+| Production requirement (cannot be closed in a PoC; recorded in `doc/Threat-Model.md` §7) | 8 | 3 | 4 | — | — | 15 |
+| Partly accepted | 3 | 2 | 1 | — | — | 6 |
+| Accepted as a deliberate design or PoC choice | 3 | — | — | — | — | 3 |
+| Clarified (the control existed; the review could not see its settings) | 1 | — | — | — | — | 1 |
+| Rejected with evidence | 7 | 5 | 4 | — | — | 16 |
+| **Findings answered** | **44** | **20** | **11** | **0** | **0** | **75** |
 
 None of the findings needs further work in the PoC. The open items are the production requirements collected at the end of this document.
 
@@ -517,6 +510,115 @@ Google's second, "nice-to-have" list is not counted as findings. Most of it desc
 
 ---
 
+## Round 4 — the brief given to the reviewers
+
+The answers to round 4 are in the section [Round 4 — 21-OCT-2026](#round-4--21-oct-2026) below.
+
+Round 4 covers **two repositories**:
+
+- **EWP V3** (this repository): the bank's staff platform.
+- **EWP V3 Partner Bank** (`EnterpriseWebPlatform_V3_PartnerBank`): a second, independent bank whose Digital Gold product EWP distributes at its branch counters.
+
+The answers to rounds 1–3 were already in this document at that time.
+
+### Read these first
+
+1. This section.
+2. [Checklists](../Checklists/README.md), especially [15 — Workflow workers (Temporal)](../Checklists/15-Workflow-Workers-Temporal.md) and [12 — Kafka broker and ACLs](../Checklists/12-Kafka-Broker-and-ACLs.md).
+3. [Threat-Model.md](../Threat-Model.md): §7 residual risks, especially R-10 and R-14 to R-16.
+4. Partner Bank repository: `doc/Architecture.md` (decisions D1–D15) and `doc/Threat-Model.md` (T1–T28, residual risks R1–R10).
+5. [Partner Products requirements](../Requirements/PartnerProducts-Requirements.md), and the design conversations [Partner-Bank-mTLS-PAR-And-Signed-Instructions.md](../Arch-Design-Visualizations/Partner-Bank-mTLS-PAR-And-Signed-Instructions.md) and [Temporal-Digital-Gold-Purchase.md](../Arch-Design-Visualizations/Temporal-Digital-Gold-Purchase.md).
+
+### What changed since round 3 (14-OCT-2026)
+
+| Area | Change | Commits |
+| --- | --- | --- |
+| Partner Products context (new) | Digital Gold at the counter. The stack is a Next.js SPA with a light BFF, a NestJS Journey API, and a .NET Domain API with PostgreSQL. The Domain API is also EWP's **adapter** to the Partner Bank: mutual TLS, a certificate-bound token, signed instructions. | `2c6d1136`, `bbaa5177`, `403403d6` |
+| Digital Gold purchase | A signed purchase instruction, then a payment through the Payments saga, made as the staff member. A Temporal workflow takes the purchase to ALLOCATED or CANCELLED, run by a new worker with its own machine identity. | `dccf4aa6` |
+| Purchase events (A1, A2) | Form VII and purchase changes go through a Transactional Outbox to `partner-products.digital-gold.events`, and from there into the audit trail. Payment outcomes wake the workflow with a data-less signal; polling every 5 minutes remains as the safety net. | `ff2f4b03`, `e3f6afb3` |
+| "View at the Partner Bank" | A read-only staff page at the Partner Bank, opened in a new tab through a one-time handoff (see pattern C below). | `1bb69891` |
+| Step-up without a pop-up | The authenticator code appears in an in-page overlay in the Shell. The IDP lets **only** the Shell frame **only** the step-up code page. | `1f6b3bf5` |
+| Kafka over TLS (B8) | SASL_SSL. Every client checks the broker's certificate and host name before it signs in with SCRAM. | `8a6271e1` |
+| Configuration per deployable (A4) | The shared `Common.Landscape` library is gone. Service URLs and client IDs come from each deployable's configuration and are checked at start-up. The IDP's `ClientIds` / `ClientBaseUrls` are the reference values. | `2344b75a` |
+| Also | Resend of parked Outbox messages for Accounts and Compliance; Shell session fixes; Node dependency audit clean; Playwright journeys (including Digital Gold). | `1319c490`, `497b10af`, `1ab6a596`, `a4d6a06b` |
+
+### Three ways EWP deals with the Partner Bank
+
+Please check each against its own purpose. Measuring all three against FAPI 2.0 for a customer-facing channel would produce false findings.
+
+**A. The customer's own sign-in at the Partner Bank: full PAR + JAR + RAR.**
+
+- The Partner Bank's authorization server (Duende 8) requires the following:
+  - **PAR (RFC 9126)**, on a separate mutual-TLS port;
+  - a **signed request object (JAR, RFC 9101)**, ES256, with EWP's request-signing key;
+  - **RAR (RFC 9396)** `authorization_details` with three types;
+  - **PKCE** and `prompt=login`;
+  - a consent page that shows the signed details;
+  - access tokens bound to EWP's certificate (**RFC 8705**, `cnf`).
+- The Partner Bank repository's `tools/HandshakeCheck` and `tools/JourneyCheck` exercise this end to end.
+- **EWP has no customer-facing channel that uses it yet.** That is the planned A7 + B1 (customer self-service, FAPI 2.0, including DPoP or certificate-bound tokens throughout). Its absence in EWP is known, not an oversight.
+
+**B. The counter (the distributor model): mutual TLS + EWP's own bound token + a signed instruction. No PAR.**
+
+- The customer is in the branch and signs a paper Form VII (account opening) or a transfer slip (purchase). They do not sign in anywhere.
+- The Partner Products API authenticates **EWP as an organisation**:
+  - mutual TLS with EWP's client certificate;
+  - a `client_credentials` token with scope `partner.distribution`, bound to that certificate;
+  - each instruction as an EWP-signed JWT (`typ partner-instruction+jwt`, ES256, `aud partner-api`, 5 minutes, unique `jti`, which the Partner Bank accepts once).
+- The staff member is the **actor** recorded on EWP's side (delegated token, branch, permission), not a party the Partner Bank authenticates.
+- The Partner Bank relies on EWP to have checked the customer and their signature (Partner Bank R9). That reliance is the distribution agreement, not a missing control.
+
+**C. "View at the Partner Bank": a PAR-style handoff, not RFC 9126 at the authorization server.**
+
+1. EWP pushes a signed `staff_account_view` instruction over mutual TLS.
+2. The Partner Bank returns a one-time `request_uri`, valid for 60 seconds.
+3. The staff member's browser opens the Partner Bank's read-only page in a new tab with no opener. The request is redeemed once, and only its SHA-256 is kept.
+
+There is no SSO federation between the banks: the Partner Bank trusts EWP's signed statement of who is looking (Partner Bank R10). Federation is described in the design conversation as the alternative.
+
+### Known and out of scope for this round
+
+- **Planned:**
+  - A7 + B1: the customer channel and FAPI 2.0;
+  - the D-series: containers, Terraform, GitHub Actions, CI gates, dashboards, gateway rate limits.
+- **Accepted for the PoC, recorded with their production answer:**
+  - R-10: development secrets in configuration;
+  - R-14: rate limits counted per instance;
+  - R-15: date of birth typed from Form VII;
+  - R-16: Temporal development server without TLS or an authorizer (production: service mesh or Temporal Cloud mTLS, plus an authorizer);
+  - the Kafka controller listener: PLAINTEXT, bound to localhost;
+  - Partner Bank R1–R10: no certificate revocation, keys in files, and others.
+- **Unit tests** cover Payments and Accounts only. The other contexts are covered by Playwright journeys.
+
+### Where findings are most useful
+
+- **Partner Products authorization:**
+  - delegation pins (only the Journey API, for a person with the permission and branch);
+  - the worker's pinned machine identity on internal endpoints;
+  - branch scoping of every list and record.
+- **Signed instructions:** replay (`jti`, instruction id fixed at the first send), what happens when an answer is lost (the record stays SENT; resending uses the same id), and signing-key separation (TLS key ≠ signing key).
+- **The purchase workflow:**
+  - exactly one ending per purchase;
+  - idempotent activities;
+  - a forged or repeated `paymentSettled` signal (it carries no data; the workflow re-reads the payment);
+  - a worker restart mid-workflow.
+- **The step-up overlay:** the single framing exception on the IDP (`SecurityHeadersAttribute`), and what a forged "done" message could gain.
+- **A4:**
+  - any remaining compiled-in address or client ID;
+  - any start-up path that would still run with a missing pin.
+- **B8:** any Kafka client that still connects without TLS or without checking the host name.
+
+### How to file round 4
+
+Please add one file per reviewer as `2026-10-2x-<Reviewer>-Architect-Verdict.md` in this folder. Give every finding:
+
+- an ID;
+- file and line evidence;
+- a severity;
+- whether it is a defect, a production requirement or a suggestion.
+
+The answers will follow in this document under "Round 4".
+
 ## Round 4 — 21-OCT-2026
 
 Review baseline: EWP V3 at `749b4ddf` (after B8 and A4) and the Partner Bank repository, both as of 21-OCT-2026. The reviewers were given the brief at the top of this document. In particular, they were asked not to raise items already recorded as known, accepted, planned or production requirements unless the code contradicts the documents.
@@ -570,9 +672,67 @@ Microsoft recommends no new patterns. Instead, it asks for **evidence that the c
 
 ---
 
+## Round 5 — 06-NOV-2026
+
+Review baseline: EWP V3 at `1b8999c8` and the Partner Bank repository at `f494a00`, both as of 06-NOV-2026. This is the closing review of V3. The reviewers were given the [round 5 brief](#round-5--the-brief-given-to-the-reviewers) at the top of this document, with the same rule as round 4: do not raise what is already recorded as known, accepted, decided, planned or a production requirement, unless the code contradicts the documents.
+
+**No reviewer raised a finding.** What each one reported as sound was checked against the code.
+
+### Microsoft (round 5)
+
+No new defect of any severity. Microsoft states the limits of its review itself: it read the source, but could not run the .NET or Node tests, the charts or the cloud deployment. The cloud-demo results are therefore "repository-reported evidence" to it.
+
+| Reported as sound | Checked |
+| --- | --- |
+| The Journey APIs' DPoP proof check: type and algorithm, method, address, issue time, token hash, key thumbprint, a `jti` used once; the replay cache refuses when it is full | `PartnerProducts/JourneyApi/src/auth/dpop-proof.verifier.ts` (the cache refuses at `MAX_REMEMBERED` rather than forget a live entry, line 103). The same verifier runs in the Audit and Operations Journey APIs. |
+| Each Journey API's own DPoP key: an encrypted PKCS#8 P-256 key, a new proof ID for each request | `dpop-key.service.ts`. |
+| Partner Products: client-ID pins required at start-up; customer reads branch-scoped in the query | `PartnerProducts/API/Program.cs`, `DigitalGoldController.cs`. |
+| The fraud fallback never declines; a new payee or a large amount goes to review | `Payments/API/Application/Fraud/FraudCheck.cs`. |
+| An Idempotency-Key is accepted again only for the same person and the same payment details | `InitiatePayment.cs` (round-1 fix R5). |
+| Crypto-shredding: AES-256-GCM under a per-customer key wrapped by a master key, the customer number as associated data, a blind index under its own HMAC key that is cleared on erasure | `CustomerOnboarding/API/Infrastructure/Privacy/PersonalDataCipher.cs`. |
+| Accounts and KYC erase in one transaction and delete their own key; Documents blanks the file name and deletes every file again on a retry | The three `ErasePersonalData` handlers; unit tests in `Accounts.Api.Tests`, `CustomerKyc.Api.Tests`, `DocumentsManagement.Api.Tests`. |
+| A flag can switch a feature off; it never grants a permission | `Common/WebUtilities/FeatureFlags/EwpFeatureFlags.cs`. |
+
+### xAI (round 5)
+
+No new finding; 9.2 / 9.0. Its statements were checked:
+
+| Reported as sound | Checked |
+| --- | --- |
+| PAR, `private_key_jwt` and DPoP on every path; every API refuses a token without `cnf`; machine clients hold no shared secret, except the Grafana client | IDP `ConfigRegistration/Clients`: every client uses `ClientKeyStore` (public keys only), except `ObservabilityGrafana.cs` (a secret, cloud demo only). The only other client without a key is `Bruno.cs`: a public client with PKCE and no secret at all, registered in Development only (`Config.cs`). The claim holds. |
+| Crypto-shredding fan-out with idempotent internal endpoints and `PersonalDataCopyErased` confirmations; the known limits (backups, ACTIVE customers, payee name) match the code | `doc/Crypto-Shredding.md`; the erasure forwarder in `Infrastructure/Subscribers` and its tests in `AsyncWorkflows.Infrastructure.Tests`. |
+| NetworkPolicies: default deny, ingress from declared callers, egress derived from what each pod calls; images non-root, pinned by digest, scanned by Trivy | `deploy/helm/ewp` (`global.egress`, K12 in `doc/Kubernetes.md`); `.github/workflows/container-images.yml`. |
+| BIAN `/v2` answers validated against BIAN's own schemas; no domain types leak | The `/v2` mapping tests in Payments, Accounts, Customer Onboarding and Documents Management. |
+| The Partner Bank: mTLS and certificate-bound tokens on the external port, the internal port isolated, PAR and PKCE for the window, signed instructions | Confirmed in round 4; unchanged since apart from images, charts and NetworkPolicies. |
+
+One correction: xAI calls the feature-flag gate "fail-closed when the source is unavailable". More precisely, a flag that cannot be read keeps the default its caller declares, which is today's behaviour (`EwpFeatureFlags.cs`, the box at line 24). The BIAN `/v2` release toggle therefore stays **on**, and the Digital Gold kill switch stays **off** (purchases go on). An unreadable flag source changes nothing, which is the intent: flags are never authorization.
+
+### Google (round 5)
+
+No finding; 9.5 / 9.5. As in round 4, it cites no files or lines, so this verdict again carries less weight than the other two. Its three sound points (BFF isolation, the Partner Bank trust boundaries, Outbox + Kafka + Temporal) match the code and earlier rounds.
+
+### What would raise the scores (all three reviewers)
+
+| Suggestion | Reviewer | Response |
+| --- | --- | --- |
+| Pact contracts for the remaining consumers, especially where a saga decision depends on an event field or a status | Microsoft, xAI | **Agreed; not in V3.** V3 shows the pattern on the two couriers of the Payments saga and the Partner Products Worker, against Payments and Accounts. `tst/contracts/README.md` says the others (the onboarding chain, Notifications, Audit, the web BFFs, the Journey APIs) "follow the same pattern when they are added". Considered for V4. |
+| Show recovery in the deployed multi-instance environment: database outages, worker restarts, broker outages, duplicate events, partial erasure | Microsoft | **Agreed; partly done.** The deviation runs (#33: Kafka down, worker restart, forged signals, a parked Outbox) and the database outage handling (#4) ran on the laptop. The cloud demo verified every business journey (26-OCT), but no failure run. Failure runs in the cluster belong with item 17's production-like environment. |
+| Keys in an HSM or key vault with rotation, immutable audit checkpoints, deployment-wide rate limits, a security-event stream, production service identity, full mTLS between services, a production secret store | Microsoft, xAI | **Already production requirements:** items 1, 2, 4, 5, 10 and 11 below (R-2, R-3, R-9, R-10, R-14). |
+| An independent penetration test of the deployed trust boundaries; a check that a deployment cannot start with missing pins, weak secrets, open network paths or relaxed authentication | Microsoft | **Already item 17.** What V3 already does: a missing pin or address stops the start-up (round-4 A4); the Helm charts refuse to render without their required values (K10 in `doc/Kubernetes.md`); NetworkPolicies are deny by default. |
+| Backup and key-destruction procedures for crypto-shredding | xAI | **Agreed: a production requirement, now item 18.** The gap is documented in `doc/Crypto-Shredding.md` ("Known limit"): a backup taken before an erasure still holds the customer's key. |
+| Monitoring and alerting on the audit-chain anchoring | xAI | **Partly in place, the rest is item 11.** A broken chain or a missing checkpoint already turns Audit readiness Degraded (`audit-tamper-evidence.spec.ts`). An alert on it is part of the security-event stream. |
+| Federation between the banks instead of the Partner Bank trusting EWP's signed statement of who is looking | xAI | **A recorded alternative** (Partner Bank R10), not V3 work. |
+| Distributed rate limits, end-of-day reconciliation, lending | xAI | Rate limits are item 10 (R-14; there is no Redis in V3). End-of-day reconciliation was dropped from V3 (it adds function, not a capability to demonstrate). Lending is V4. |
+| SBOM generation and dependency vulnerability enforcement in the CI gates | Google | **Already in place.** `ci.yml` fails a pull request on a HIGH or CRITICAL vulnerable .NET package, and on a HIGH production dependency in `pnpm audit --prod --audit-level high`. `container-images.yml` scans every image with Trivy (HIGH / CRITICAL) before publishing, and publishes it with an SBOM and SLSA provenance. Dependabot proposes updates weekly. |
+| Multi-region failover tests and chaos engineering in the Terraform / Helm definitions | Google | **Not in scope for a PoC.** The cloud demo runs in one region, chosen per run, and is torn down after each run. Faults are injected locally through Toxiproxy and the Operations simulator and fault controls, and in the Playwright `35-resilience` runs. |
+
+Microsoft's closing advice matches the plan: add no more patterns to V3. The next gains come from evidence and production controls, and V4 should keep the same bounded-context discipline as lending and PayTo arrive.
+
+---
+
 ## What remains for a production go-ahead
 
-These are the production requirements from all four rounds. Each is recorded in `doc/Threat-Model.md` §7 or in the component READMEs.
+These are the production requirements from all five rounds. Each is recorded in `doc/Threat-Model.md` §7 or in the component READMEs.
 
 **Keys, secrets and evidence**
 
@@ -603,9 +763,13 @@ These are the production requirements from all four rounds. Each is recorded in 
 
 **Tests**
 
-16. When automated tests resume:
-    - shared token fixtures for the .NET and NestJS stacks (R-11);
-    - authorization-matrix tests;
-    - CSRF and token-exchange abuse tests;
-    - .NET unit tests for the remaining contexts. **Done 28-OCT** for Customer Onboarding, KYC, Compliance and Documents Management (`tst/dotnet`, 449 tests in all); Audit remains.
-17. An independent penetration test of the trust boundaries and the financial workflows, and a check of the production configuration in a production-like environment (Microsoft, round 4).
+16. Automated tests (resumed 21-OCT-2026; what is still open is marked):
+    - shared token fixtures for the .NET and NestJS stacks (R-11). **Open**; today `40-security/api/token-parity.spec.ts` sends the same bad tokens to both stacks;
+    - authorization-matrix tests. **Partly**: `40-security/api/authorization-boundaries.spec.ts` and `out-of-branch-payment.spec.ts` check chosen cells (role, branch), not the whole matrix;
+    - CSRF and token-exchange abuse tests. Token exchange **done 22-OCT** (`token-exchange-allow-list.spec.ts`). CSRF **partly**: the anti-forgery cookie's attributes are tested (`session/bff-cookies.spec.ts`), a request without the token is not;
+    - .NET unit tests for the remaining contexts. **Done 28-OCT** for Customer Onboarding, KYC, Compliance and Documents Management (`tst/dotnet`, 449 tests in all); **Audit done 05-NOV** (#77) and **Notifications 06-NOV** (#79). `tst/dotnet` now holds 779 tests.
+17. An independent penetration test of the trust boundaries and the financial workflows, and a check of the production configuration in a production-like environment (Microsoft, round 4), including failure runs there (Microsoft, round 5).
+
+**Personal data**
+
+18. Crypto-shredding keys that outlive every data backup: the customers' keys in a separate key store with a short backup retention (a separate database, or an HSM / Key Vault with one key per customer), and a written key-destruction and restore procedure (xAI, round 5; `doc/Crypto-Shredding.md`, "Known limit").

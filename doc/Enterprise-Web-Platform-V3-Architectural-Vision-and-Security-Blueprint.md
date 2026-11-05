@@ -492,6 +492,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 | Deny by default | Present: every domain API through one helper (`MapEwpApiControllers` + an authenticated fallback policy); the Journey APIs refuse an endpoint without an access rule |
 | Calls to external systems | Present: addresses checked at start-up (outside Development https, `PermittedHosts`, no internal address), no redirects followed, API key, Idempotency-Key where a repeat could act twice |
 | Document encryption at rest | Present: envelope encryption (AES-256-GCM per document, rotatable key-encryption key, document ID bound in), fail closed; Target: keys in a key vault / HSM |
+| Personal data encryption and erasure (crypto-shredding) | Present: each customer's personal data under their own AES-256-GCM key (wrapped by a master key) in Customer Onboarding, KYC, Compliance and Accounts; exact search through HMAC blind indexes; clear copies end after 7 days (Kafka retention, blanked Outbox payloads); erasure with four eyes deletes the keys, each context erases its own copy and confirms, the audit trail proves it with nothing personal ([Crypto-Shredding.md](Crypto-Shredding.md)); Target: keys in a separate store with a short backup retention (Threat-Model R-22) |
 | Platform health dashboard | Present: Operations > Platform Health (every component's readiness, every 10 s; read-only) and, in Development and Test, Simulator & Fault Controls (the simulators' behaviour switch) |
 | Least-privilege database users | Present: one user per service, own database only, no DDL (`db/EwpServiceDbUsers.sql`); each BFF only its own schema of `EwpBffStateDb` (`db/EwpBffStateDb.sql`) |
 | Dependency vulnerability scanning | Present: CI gate on every pull request ([doc/CI.md](CI.md): NuGet `--vulnerable`, `pnpm audit --prod`, HIGH / CRITICAL fails; `main` takes changes only through pull requests with a green check); container images scanned by Trivy before they are published ([doc/Containers.md](Containers.md)); locally `ps/build/Scan-Dependencies.ps1`; Dependabot proposes NuGet, base image, action and Terraform provider updates weekly (a .NET runtime security fix has no package advisory, so only an update shows it) |
@@ -615,7 +616,7 @@ Context-specific controls (document security, IDP hardening, Shell browser contr
 - [x] Unknown network outcome: status enquiry, never a blind release (CONFIRM_WITH_NETWORK)
 - [x] Unconfirmed for long: alert, notification and four-eyes manual reconciliation
 - [x] Resend of parked Outbox messages (same message ID, reason, recent MFA)
-- [ ] Customer self-service channel, beneficiaries
+- [ ] Customer self-service channel, beneficiaries (not in V3, decided 27-OCT-2026: EWP is the assisted channel; customer sign-in exists at the IDP only)
 
 Details: [Saga plan §2](EWP-V3-Saga-Choreography-and-Orchestration-Plans.md#2-orchestration--payments), [Payments-Requirements.md](Requirements/Payments-Requirements.md).
 
@@ -650,10 +651,12 @@ Details: [Containers.md](Containers.md), [Kubernetes.md](Kubernetes.md), [Azure.
 - [x] Code scanning: CodeQL, SonarQube Cloud, Snyk - reported, triaged (gating: Target)
 - [x] Adapter tests with WireMock: WireMock.Net for the external systems, WireMock standalone + Jest for the Journey APIs (they found and fixed a non-JSON answer passing as a screening result, and Journey APIs following redirects with their tokens)
 - [x] Fraud check at payment capture within a latency budget, with a cautious fallback
+- [x] Consumer-driven contract tests (Pact) for the Payments saga's couriers and the Partner Products Worker against Payments and Accounts, no broker (4-NOV-2026; [tst/contracts/README.md](../tst/contracts/README.md))
+- [x] Crypto-shredding: personal data under each customer's own key, erasure with four eyes, each context erasing its own copy (5-NOV-2026; [Crypto-Shredding.md](Crypto-Shredding.md))
 - [ ] Observability in the cluster (built; to verify in the next cloud demo)
 - [x] FAPI 2.0 completion for the staff channel - part 1 done 29-OCT-2026: PAR required for the Shell and all web apps; part 2a done 29-OCT-2026: `private_key_jwt` for the Shell and all web apps (no client secret left in the staff channel); part 2b-1 done 3-NOV-2026: DPoP-bound tokens for the Shell and the four .NET web apps, enforced by every API; part 2b-2 done 3-NOV-2026: DPoP for the Node web apps and the Journey APIs, and a person's token without `cnf` refused by every API
 
-Details: [Architectural-And-Security-Features-Demoable-EWP-V3.md](Architectural-And-Security-Features-Demoable-EWP-V3.md) (1.2.5, 1.6.7, 1.7.3, 1.8.2, 1.9.4, 2.5.2).
+Details: [Architectural-And-Security-Features-Demoable-EWP-V3.md](Architectural-And-Security-Features-Demoable-EWP-V3.md) (1.2.5, 1.6.7, 1.7.3, 1.8.2, 1.8.3, 1.9.4, 2.4.11, 2.5.2).
 
 ---
 
