@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 using Duende.AspNetCore.Authentication.JwtBearer.DPoP;
@@ -18,6 +19,7 @@ using EnterpriseWebPlatform.Common.WebUtilities.Security;
 using EnterpriseWebPlatform.CustomerOnboarding.API.Authorization;
 using EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Persistence;
 using EnterpriseWebPlatform.CustomerOnboarding.Application;
+using EnterpriseWebPlatform.CustomerOnboarding.Application.Customers.PersonalDataErasure;
 using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Monitoring;
 using EnterpriseWebPlatform.CustomerOnboarding.Infrastructure.Persistence;
 
@@ -39,7 +41,8 @@ var builder = WebApplication.CreateBuilder(args);
 // └──────────────────────────────────────────────────────────────────────────────────────
 var clientIds = ClientIds.From(builder.Configuration).Require(
     nameof(ClientIds.OnboardingOutcomeSubscriber),
-    nameof(ClientIds.IdpCustomerDirectory));
+    nameof(ClientIds.IdpCustomerDirectory),
+    nameof(ClientIds.OperationsJourneyApi));
 builder.Services.AddSingleton(clientIds);
 
 // ┌─ OBS ────────────────────────────────────────────────────────────────────────────────
@@ -273,7 +276,52 @@ builder.Services.AddAuthorization(options =>
         policy.RequireClaim("scope", "customer-onboarding.online-identity");
         policy.RequireClaim("client_id", clientIds.IdpCustomerDirectory);
     });
+
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Personal-data erasure: only through the Operations Journey API, acting for an operator
+    // │ (delegated token, act = that API) - never a branch screen, a machine or the operator's
+    // │ own token. Seeing the requests needs either erasure permission; requesting needs
+    // │ personal-data.erasure.request, deciding personal-data.erasure.approve - both with a
+    // │ recent MFA sign-in. Four eyes (the requester never decides) is the aggregate's rule.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    options.AddPolicy("PersonalDataErasureView", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireClaim("scope", "customer-onboarding.read");
+        policy.RequireClaim("permission", "personal-data.erasure.request", "personal-data.erasure.approve");
+        policy.RequireDelegationBy(clientIds.OperationsJourneyApi);
+    });
+    options.AddPolicy("PersonalDataErasureRequest", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireClaim("scope", "customer-onboarding.write");
+        policy.RequireClaim("permission", "personal-data.erasure.request");
+        policy.RequireDelegationBy(clientIds.OperationsJourneyApi);
+        policy.RequireMfa();
+    });
+    options.AddPolicy("PersonalDataErasureDecide", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireClaim("scope", "customer-onboarding.write");
+        policy.RequireClaim("permission", "personal-data.erasure.approve");
+        policy.RequireDelegationBy(clientIds.OperationsJourneyApi);
+        policy.RequireMfa();
+    });
 });
+builder.Services.AddEwpMfaStepUp();   // the step-up requirement and its clear 403 ("mfa_required")
+builder.RequireMfaOutsideDevelopment();   // fail closed: MFA can be off on a developer's machine only
+
+// ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+// │ The retention period and the request's life are required settings: a missing or
+// │ out-of-range value stops the API, rather than silently allowing (or blocking) erasure.
+// └──────────────────────────────────────────────────────────────────────────────────────
+builder.Services.AddOptions<PersonalDataErasureOptions>()
+    .BindConfiguration(PersonalDataErasureOptions.SectionName)
+    .Validate(o => o.IsValid(),
+        "PersonalData:Erasure:RetentionDays (0-36500) and RequestValidDays (1-30) are required.")
+    .ValidateOnStart();
+builder.Services.AddSingleton(provider =>
+    provider.GetRequiredService<IOptions<PersonalDataErasureOptions>>().Value.ToPolicy());
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<EnterpriseWebPlatform.CustomerOnboarding.API.ErrorHandling.ApiExceptionHandler>();

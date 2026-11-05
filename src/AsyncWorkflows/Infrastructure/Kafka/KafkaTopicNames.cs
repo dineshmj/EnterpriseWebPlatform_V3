@@ -31,6 +31,13 @@ public static class KafkaTopicNames
     public const string OnboardingApplicationRejected =
         "onboarding.application.rejected";
 
+    /// <summary>
+    /// The erasure of a customer's personal data (crypto-shredding): requested, rejected, or done
+    /// (CustomerPersonalDataErased - each context then shreds its own copy). Identifiers only.
+    /// </summary>
+    public const string CustomerPersonalDataErasure =
+        "customer.personal-data.erasure";
+
     public const string KycCaseCreated = "kyc.case.created";
 
     public const string KycCaseApproved = "kyc.case.approved";

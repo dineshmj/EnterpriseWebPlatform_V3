@@ -22,6 +22,8 @@ internal sealed class CustomerIntegrationEventMapper(CustomerDbContext db, Perso
 {
     private const string Source = "customer-onboarding";
 
+    private const string ErasureAggregateType = "PersonalDataErasureRequest";
+
     /// <summary>Contract version of the published payloads (additive changes keep it).</summary>
     private const int SchemaVersion = 1;
 
@@ -183,6 +185,30 @@ internal sealed class CustomerIntegrationEventMapper(CustomerDbContext db, Perso
                     break;
                 }
 
+                case PersonalDataErasureRequestedDomainEvent requested:
+                {
+                    var request = (PersonalDataErasureRequest)aggregate;
+                    messages.Add(await ErasureEnvelopeAsync(
+                        "PersonalDataErasureRequested", request.Id, requested.CustomerId, requested.CustomerNumber,
+                        requested.Reason, "PENDING", requested.RequestedByUserId, null, requested.OccurredAt,
+                        requestContext, cancellationToken));
+                    break;
+                }
+
+                case PersonalDataErasureRejectedDomainEvent rejectedErasure:
+                    messages.Add(await ErasureEnvelopeAsync(
+                        "PersonalDataErasureRejected", rejectedErasure.ErasureRequestId, rejectedErasure.CustomerId,
+                        rejectedErasure.CustomerNumber, rejectedErasure.Reason, "REJECTED", rejectedErasure.RequestedByUserId,
+                        rejectedErasure.DecidedByUserId, rejectedErasure.OccurredAt, requestContext, cancellationToken));
+                    break;
+
+                case CustomerPersonalDataErasedDomainEvent erased:
+                    messages.Add(await ErasureEnvelopeAsync(
+                        "CustomerPersonalDataErased", erased.ErasureRequestId, erased.CustomerId, erased.CustomerNumber,
+                        erased.Reason, "ERASED", erased.RequestedByUserId, erased.DecidedByUserId, erased.OccurredAt,
+                        requestContext, cancellationToken));
+                    break;
+
                 // Internal facts with no published contract yet (no topic, no consumer).
                 // Listed explicitly so that a NEW, unmapped domain event still fails loudly.
                 case CustomerStatusChangedDomainEvent:
@@ -200,6 +226,54 @@ internal sealed class CustomerIntegrationEventMapper(CustomerDbContext db, Perso
 
     private string? _initiatedByLanId;
 
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ An erasure's events name BOTH people for the audit trail: the envelope's initiator is
+    // │ always the requester (also on the decision, made by someone else), DecisionBy* the
+    // │ second person - each with the LAN ID this context's staff directory holds for them.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    private async Task<OutboxMessage> ErasureEnvelopeAsync(
+        string eventType,
+        long erasureRequestId,
+        long customerId,
+        string customerNumber,
+        Domain.Enums.PersonalDataErasureReason reason,
+        string status,
+        string requestedByUserId,
+        string? decidedByUserId,
+        DateTimeOffset occurredAt,
+        WorkflowRequestContext requestContext,
+        CancellationToken cancellationToken)
+    {
+        var people = new[] { requestedByUserId, decidedByUserId }.OfType<string>().ToList();
+        var lanIds = await db.StaffMembers.AsNoTracking()
+            .Where(x => people.Contains(x.UserId))
+            .ToDictionaryAsync(x => x.UserId, x => x.LanId, StringComparer.OrdinalIgnoreCase, cancellationToken);
+
+        var integrationEvent = new PersonalDataErasureIntegrationEvent(
+            erasureRequestId,
+            customerId,
+            customerNumber,
+            reason.ToCode(),
+            status,
+            decidedByUserId,
+            decidedByUserId is not null && lanIds.TryGetValue(decidedByUserId, out var deciderLanId) ? deciderLanId : null);
+
+        // One workflow per erasure request: the decision continues the request's workflow and is caused by it.
+        var requestMessage = await db.OutboxMessages.AsNoTracking()
+            .Where(x => x.AggregateType == ErasureAggregateType && x.AggregateId == erasureRequestId.ToString())
+            .OrderBy(x => x.Sequence)
+            .Select(x => new WorkflowLookup(x.WorkflowId, x.CorrelationId, x.Id))
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return Envelope(
+            Guid.NewGuid(), ErasureAggregateType, erasureRequestId, eventType, integrationEvent, occurredAt,
+            requestContext.WorkflowId ?? requestMessage?.WorkflowId ?? Guid.NewGuid(),
+            requestContext.CorrelationId ?? requestMessage?.CorrelationId ?? Guid.NewGuid(),
+            requestContext.CausationId ?? requestMessage?.MessageId,
+            Guid.TryParse(requestedByUserId, out var requester) ? requester : null,
+            lanIds.TryGetValue(requestedByUserId, out var requesterLanId) ? requesterLanId : null);
+    }
+
     private OutboxMessage Envelope<TEvent>(
         Guid messageId,
         string aggregateType,
@@ -210,7 +284,8 @@ internal sealed class CustomerIntegrationEventMapper(CustomerDbContext db, Perso
         Guid? workflowId,
         Guid? correlationId,
         Guid? causationId,
-        Guid? initiatedByUserId)
+        Guid? initiatedByUserId,
+        string? initiatedByLanId = null)
     {
         var envelope = new IntegrationEventEnvelope<TEvent>(
             messageId,
@@ -223,7 +298,7 @@ internal sealed class CustomerIntegrationEventMapper(CustomerDbContext db, Perso
             causationId,
             initiatedByUserId?.ToString(),
             integrationEvent,
-            _initiatedByLanId);
+            initiatedByLanId ?? _initiatedByLanId);
 
         return OutboxMessage.Create(
             messageId,

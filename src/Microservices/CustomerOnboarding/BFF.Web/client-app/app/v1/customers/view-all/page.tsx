@@ -22,6 +22,8 @@ interface Customer {
   status: string;
   /** The customer's most recent onboarding application, if any. */
   latestApplication: { applicationNumber: string; status: string; updatedAt: string } | null;
+  /** True once the customer's key was destroyed: name and e-mail are empty, and nothing can be done. */
+  personalDataErased: boolean;
 }
 
 /** "Last application APP-… rejected 14 Oct" - only for a prospect whose last attempt ended without an account. */
@@ -35,8 +37,9 @@ function lastAttempt(c: Customer): string | null {
 }
 
 /** Only a prospect can start onboarding: the Customer Onboarding API enforces it; the grid only reflects it. */
-function onboardingState(status: string): 'can-start' | 'in-progress' | 'onboarded' | 'unavailable' {
-  switch (status.toUpperCase()) {
+function onboardingState(c: Customer): 'can-start' | 'in-progress' | 'onboarded' | 'unavailable' {
+  if (c.personalDataErased) return 'unavailable';
+  switch (c.status.toUpperCase()) {
     case 'PROSPECT': return 'can-start';
     case 'ONBOARDING': return 'in-progress';
     case 'ACTIVE': return 'onboarded';
@@ -99,7 +102,7 @@ export default function CustomersPage() {
   }
 
   function startOnboarding(customer: Customer) {
-    if (onboardingState(customer.status) !== 'can-start') return;
+    if (onboardingState(customer) !== 'can-start') return;
 
     const previousContext = workspaceContextRef.current;
 
@@ -192,25 +195,32 @@ export default function CustomersPage() {
               {data.items.map(c => (
                 <tr key={c.customerId} className="hover:bg-subtle/70">
                   <Td className="font-mono text-[13px] font-medium">{c.customerNumber}</Td>
-                  <Td className="font-medium">{c.firstName} {c.lastName}</Td>
-                  <Td className="text-ink-muted">{c.email}</Td>
+                  {/* SEC: an erased customer's key is gone - there is nothing to show, and it says so. */}
+                  {c.personalDataErased ? (
+                    <Td colSpan={2} className="italic text-ink-muted">Personal data erased</Td>
+                  ) : (
+                    <>
+                      <Td className="font-medium">{c.firstName} {c.lastName}</Td>
+                      <Td className="text-ink-muted">{c.email}</Td>
+                    </>
+                  )}
                   <Td>
                     <StatusBadge status={c.status} />
                     {lastAttempt(c) && <p className="mt-1 text-[12px] text-ink-muted">{lastAttempt(c)}</p>}
                   </Td>
                   <Td className="text-right">
-                    {onboardingState(c.status) === 'can-start' && (
+                    {onboardingState(c) === 'can-start' && (
                       <Button variant="secondary" size="sm" onClick={() => startOnboarding(c)}>
                         Start onboarding<ArrowRight aria-hidden="true" />
                       </Button>
                     )}
-                    {onboardingState(c.status) === 'in-progress' && (
+                    {onboardingState(c) === 'in-progress' && (
                       <span className="inline-flex items-center gap-1.5 text-[13px] text-ink-muted"><Hourglass className="size-4" aria-hidden="true" />Application in progress</span>
                     )}
-                    {onboardingState(c.status) === 'onboarded' && (
+                    {onboardingState(c) === 'onboarded' && (
                       <span className="inline-flex items-center gap-1.5 text-[13px] text-success-700"><CheckCircle2 className="size-4" aria-hidden="true" />Onboarded</span>
                     )}
-                    {onboardingState(c.status) === 'unavailable' && <span className="text-[13px] text-ink-faint">—</span>}
+                    {onboardingState(c) === 'unavailable' && <span className="text-[13px] text-ink-faint">—</span>}
                   </Td>
                 </tr>
               ))}

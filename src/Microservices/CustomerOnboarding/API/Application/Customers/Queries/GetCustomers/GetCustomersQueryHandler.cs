@@ -92,7 +92,8 @@ public sealed class GetCustomersQueryHandler
                 x.Status.ToString().ToUpperInvariant(),
                 latestApplications.TryGetValue(x.Id, out var latest)
                     ? new LatestApplicationDto(latest.ApplicationNumber, latest.Status.ToString(), latest.UpdatedAt)
-                    : null))
+                    : null,
+                people[x.Id].Erased))
             .ToList();
 
         return new PagedResult<CustomerListItemDto>(
@@ -113,7 +114,9 @@ public sealed record CustomerListItemDto(
     // PROSPECT / ONBOARDING / ACTIVE / SUSPENDED / CLOSED: tells the UI whether onboarding can start.
     string Status,
     // The customer's most recent onboarding application (null: none yet).
-    LatestApplicationDto? LatestApplication);
+    LatestApplicationDto? LatestApplication,
+    // True once the customer's key was destroyed: name and e-mail are then empty.
+    bool PersonalDataErased);
 
 /// <summary>The outcome of a customer's most recent onboarding application, for the customer list.</summary>
 public sealed record LatestApplicationDto(string ApplicationNumber, string Status, DateTimeOffset UpdatedAt);

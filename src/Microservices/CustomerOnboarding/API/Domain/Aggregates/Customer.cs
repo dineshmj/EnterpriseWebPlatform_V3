@@ -29,6 +29,9 @@ namespace EnterpriseWebPlatform.CustomerOnboarding.Domain.Aggregates;
 ///    PROSPECT. Contact details can change before and after onboarding, never during it.
 ///  - Every customer has exactly one managing agent (ReBAC "manages" relationship,
 ///    owned by this context, not by the IDP).
+///  - Personal data is erased only for a PROSPECT untouched for the retention period, and
+///    only through an erasure request a second person approved; an erased customer is
+///    never written or onboarded again.
 /// </summary>
 public sealed class Customer : AggregateRoot
 {
@@ -93,6 +96,11 @@ public sealed class Customer : AggregateRoot
     public DateTimeOffset UpdatedAt { get; private set; }
 
     public long Version { get; private set; }
+
+    /// <summary>When the customer's personal data was erased (their key destroyed); null while it exists.</summary>
+    public DateTimeOffset? PersonalDataErasedAt { get; private set; }
+
+    public bool IsPersonalDataErased => PersonalDataErasedAt is not null;
 
     public IReadOnlyCollection<CustomerAddress> Addresses =>
         _addresses.AsReadOnly();
@@ -266,8 +274,48 @@ public sealed class Customer : AggregateRoot
         Touch(now);
     }
 
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ Erasure only where no law still requires the record: a PROSPECT (never onboarded, no
+    // │ application in progress - starting one makes them ONBOARDING) whose record has not
+    // │ changed for the retention period. ACTIVE and SUSPENDED customers have accounts the
+    // │ bank must keep; CLOSED will qualify once a closing action exists.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    /// <summary>Throws unless this customer's personal data may be erased now.</summary>
+    public void EnsureErasable(PersonalDataErasurePolicy policy, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+
+        if (IsPersonalDataErased)
+            throw new DomainConflictException("The customer's personal data was already erased.");
+
+        if (Status != CustomerStatus.Prospect)
+            throw new DomainRuleViolationException(
+                $"Only a prospect's personal data can be erased: this customer is {Status.ToString().ToUpperInvariant()}, so the bank must keep the record.");
+
+        var keepUntil = UpdatedAt + policy.RetentionPeriod;
+        if (now < keepUntil)
+            throw new DomainRuleViolationException(
+                $"The record must be kept until {keepUntil:yyyy-MM-dd} (the retention period runs from its last change on {UpdatedAt:yyyy-MM-dd}).");
+    }
+
+    /// <summary>
+    /// Marks the customer's personal data as erased. Persistence destroys their data key and
+    /// clears the search indexes in the same transaction; from then on nothing can read, change
+    /// or onboard them. Called only through an approved <see cref="PersonalDataErasureRequest"/>.
+    /// </summary>
+    internal void ErasePersonalData(PersonalDataErasurePolicy policy, DateTimeOffset now)
+    {
+        EnsureErasable(policy, now);
+
+        PersonalDataErasedAt = now;
+        Touch(now);
+    }
+
     public void StartOnboarding(DateTimeOffset now)
     {
+        if (IsPersonalDataErased)
+            throw new DomainRuleViolationException("The customer's personal data was erased: they cannot be onboarded.");
+
         var refusal = Status switch
         {
             CustomerStatus.Prospect => null,

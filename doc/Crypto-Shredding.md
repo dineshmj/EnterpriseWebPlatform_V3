@@ -16,7 +16,7 @@ A bank has two duties that pull against each other:
 | `personal_data_keys` | each customer's data key, **wrapped** by the master key | the row is deleted: that is the erasure |
 | Kafka topics | events; `OnboardingApplicationSubmitted` carries the applicant's name and address in clear | every topic keeps a message **7 days** (stated, not a default) |
 | Customer Onboarding Outbox | the published payloads | the relay **blanks** a payload 7 days after publishing; the row stays |
-| Audit trail | IDs, people's IDs, outcome, SHA-256 of the message | holds no personal data: nothing to erase, and its chain still verifies |
+| Audit trail | IDs, people's IDs, outcome, SHA-256 of the message | holds no personal data: nothing to erase, and its chain still verifies; it records each erasure (who asked, who decided, the reason code) |
 | KYC, Compliance, Accounts, Partner Products, Documents | their own copies | **next PR:** each context's own key, shredded on the erasure event |
 
 ## How the encryption works
@@ -63,12 +63,21 @@ In this PoC, `personal_data_keys` sits in `EwpCustomerDb`, next to the data. A b
 
 The master key alone does not help here: it decrypts every wrapped key in the backup.
 
-## Next: the erasure itself
+## The erasure itself: one operator asks, another decides
 
-The next PR adds:
+Code: [PersonalDataErasureRequest.cs](../src/Microservices/CustomerOnboarding/API/Domain/Aggregates/PersonalDataErasureRequest.cs); screen: Operations → Privacy → **Personal Data Erasure**.
 
-- **The erasure workflow.** An Operations user requests it and a second person approves it. It is refused while retention still runs (only PROSPECT or CLOSED customers, unchanged for the retention period).
-- **The shredding itself:** the key row and the blind indexes are deleted.
-- **A `CustomerPersonalDataErased` event.** Each context shreds its own copy and acknowledges, and the audit trail records the request and every acknowledgement (IDs only).
+1. **Request.** An operations administrator enters the customer number and a reason **code**: *the customer asked to be forgotten* (`CUSTOMER_REQUEST`) or *the retention period has ended* (`RETENTION_ENDED`). Free text is never asked for, so no personal data reaches the events or the audit trail. The request is refused at once unless the customer qualifies:
+   - a **PROSPECT** only: never onboarded, no application in progress. ACTIVE and SUSPENDED customers have accounts the bank must keep; CLOSED will qualify once a closing action exists;
+   - **unchanged for the retention period**: `PersonalData:Erasure:RetentionDays`, 2557 days (7 years) in production, 0 on the laptop so the demo can erase a prospect made a minute ago.
 
-After that, screens show "Personal data erased", and the customer number, accounts, amounts and audit entries all stay.
+   One request per customer may wait at a time; it expires after `RequestValidDays` (7) if nobody decides.
+2. **Decision, by ANOTHER person.** A second operations administrator approves (behind an "Erase for good" confirmation) or rejects with remarks. The requester can never decide their own request: the aggregate refuses it, and so does a database constraint (`ck_personal_data_erasure_requests_four_eyes`). Each step needs `personal-data.erasure.request` / `.approve`, comes only through the Operations Journey API, and needs a recent authenticator code.
+3. **The shredding.** Approval checks eligibility **again**, then in **one transaction**: deletes the customer's `personal_data_keys` row, clears both blind indexes, marks the customer `personal_data_erased_at`, and writes `CustomerPersonalDataErased` to the Outbox. The ciphertext stays where it is - without the key it is unreadable.
+4. **Proof.** The three events (`PersonalDataErasureRequested`, `PersonalDataErasureRejected`, `CustomerPersonalDataErased`, topic `customer.personal-data.erasure`) name the requester as initiator and the second person as decider, with the reason code. The audit trail records them like any decision; the decider's remarks stay in Customer Onboarding.
+
+After that, the branch sees **"Personal data erased"** in place of the name and e-mail, the customer is found by number only, and cannot be changed or onboarded. The customer number, applications and audit entries all stay.
+
+## Next: the other contexts
+
+KYC, Compliance, Accounts, Partner Products and Documents Management each keep their own copy (decision 2a), encrypted under their own key. Each will subscribe to `CustomerPersonalDataErased`, destroy its key for that customer and acknowledge; the audit trail then records every acknowledgement (IDs only).

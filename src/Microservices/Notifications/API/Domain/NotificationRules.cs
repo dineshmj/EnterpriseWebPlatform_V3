@@ -34,6 +34,9 @@ namespace EnterpriseWebPlatform.Notifications.Api.Domain;
 ///     PaymentUnconfirmedByNetwork        → staff:operations_administrator:* (new work: reconcile)
 ///     PaymentNetworkResolutionProposed   → staff:operations_administrator:* (new work: a second person decides)
 ///     PaymentNetworkResolutionRejected   → staff:operations_administrator:* (new work: propose again)
+///   personal-data erasure (four eyes; the target opens the erasure screen)
+///     PersonalDataErasureRequested       → staff:operations_administrator:* (new work: a second person decides)
+///     CustomerPersonalDataErased / PersonalDataErasureRejected → user:{initiator} (the requester)
 /// </summary>
 public static partial class NotificationRules
 {
@@ -53,6 +56,9 @@ public static partial class NotificationRules
 
         if (eventType.StartsWith("Payment", StringComparison.Ordinal))
             return ForPayment(eventType, p, Progress, NewWork);
+
+        if (ErasureEvents.Contains(eventType))
+            return ForErasure(eventType, envelope, p, Progress);
 
         var draft = eventType switch
         {
@@ -189,6 +195,47 @@ public static partial class NotificationRules
 
         return drafts.Where(d => d is not null).Select(d => d!).ToList();
     }
+
+    private static readonly HashSet<string> ErasureEvents =
+        new(StringComparer.Ordinal) { "PersonalDataErasureRequested", "PersonalDataErasureRejected", "CustomerPersonalDataErased" };
+
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ The personal-data erasure (four eyes): a request is new work for the operations desk
+    // │ (every operations administrator - one of them, never the requester, must decide; the
+    // │ requester is told it waits for another person); the decision goes back to the
+    // │ requester. Customer number, reason and LAN IDs only - the events carry nothing
+    // │ personal, and neither do the notifications. A click opens the erasure screen.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    private static List<NotificationDraft> ForErasure(
+        string eventType, JsonElement envelope, JsonElement p,
+        Func<string, string, string?, NotificationDraft?> progress)
+    {
+        var customer = Str(p, "CustomerNumber") ?? "a customer";
+        var why = Str(p, "ReasonCode") == "RETENTION_ENDED" ? "the retention period has ended" : "the customer asked to be forgotten";
+        var target = JsonSerializer.Serialize(new { mfe = "operations", path = ErasurePage });
+
+        NotificationDraft? draft = eventType switch
+        {
+            "PersonalDataErasureRequested" => new NotificationDraft(
+                NotificationAudiences.ForStaffInAllBranches("operations_administrator"), NotificationCategory.NewWork,
+                "Erasure to approve",
+                $"{Str(envelope, "InitiatedByLanId") ?? "An operator"} asks to erase the personal data of {customer} ({why}). Another operator must approve or reject it.",
+                target),
+            "CustomerPersonalDataErased" => progress(
+                "Erasure approved",
+                $"{By(p, "DecisionByLanId")} approved your request: the personal data of {customer} is erased.",
+                target),
+            "PersonalDataErasureRejected" => progress(
+                "Erasure rejected",
+                $"{By(p, "DecisionByLanId")} rejected your request to erase {customer}. Nothing was erased; the reason is on the erasure screen.",
+                target),
+            _ => null
+        };
+
+        return draft is null ? [] : [draft];
+    }
+
+    private const string ErasurePage = "/v1/operations/privacy/erasure";
 
     private static string Amount(JsonElement p) =>
         p.ValueKind == JsonValueKind.Object && p.TryGetProperty("Amount", out var a) && a.ValueKind == JsonValueKind.Number && a.TryGetDecimal(out var amount)

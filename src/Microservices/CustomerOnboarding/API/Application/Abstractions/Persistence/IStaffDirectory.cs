@@ -8,4 +8,7 @@ namespace EnterpriseWebPlatform.CustomerOnboarding.Application.Abstractions.Pers
 public interface IStaffDirectory
 {
     Task RememberAsync(string? userId, string? lanId, CancellationToken cancellationToken);
+
+    /// <summary>The LAN IDs of these staff members, where known (a label for screens; never for a decision).</summary>
+    Task<IReadOnlyDictionary<string, string>> LanIdsOfAsync(IReadOnlyCollection<string> userIds, CancellationToken cancellationToken);
 }

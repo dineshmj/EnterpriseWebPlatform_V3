@@ -61,4 +61,17 @@ public sealed class StaffDirectory(CustomerDbContext db, TimeProvider clock) : I
 
         Known[id] = lan;
     }
+
+    public async Task<IReadOnlyDictionary<string, string>> LanIdsOfAsync(
+        IReadOnlyCollection<string> userIds,
+        CancellationToken cancellationToken)
+    {
+        if (userIds.Count == 0)
+            return new Dictionary<string, string>();
+
+        return await db.StaffMembers
+            .AsNoTracking()
+            .Where(x => userIds.Contains(x.UserId))
+            .ToDictionaryAsync(x => x.UserId, x => x.LanId, StringComparer.OrdinalIgnoreCase, cancellationToken);
+    }
 }

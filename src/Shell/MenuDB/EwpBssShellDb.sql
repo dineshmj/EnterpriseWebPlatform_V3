@@ -252,6 +252,11 @@ VALUES
         (SELECT id FROM microservices WHERE name = 'Operations')
     ),
     (
+        'Privacy',
+        'Erase a customer''s personal data when the law allows it: one operator requests, another decides.',
+        (SELECT id FROM microservices WHERE name = 'Operations')
+    ),
+    (
         'Partner Products',
         'Products of the Partner Bank that EWP distributes at its counters: the customer signs the paper form, EWP records it.',
         (SELECT id FROM microservices WHERE name = 'Partner Products')
@@ -488,6 +493,16 @@ VALUES
         'fa-flask',
         (SELECT id FROM management_areas
          WHERE name = 'Platform'
+           AND microservice_id =
+               (SELECT id FROM microservices
+                WHERE name = 'Operations'))
+    ),
+    (
+        'Personal Data Erasure',
+        '/v1/operations/privacy/erasure',
+        'fa-user-slash',
+        (SELECT id FROM management_areas
+         WHERE name = 'Privacy'
            AND microservice_id =
                (SELECT id FROM microservices
                 WHERE name = 'Operations'))
@@ -747,6 +762,21 @@ CROSS JOIN
         ('operations_administrator')
 ) AS r(role_short_name)
 WHERE mi.task_name = 'Simulator & Fault Controls';
+
+-- ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+-- │ Personal Data Erasure: the operations administrator (personal-data.erasure.request /
+-- │ .approve). Every step needs a recent authenticator code, and the requester can never
+-- │ decide their own request - the Customer Onboarding API enforces both.
+-- └──────────────────────────────────────────────────────────────────────────────────────
+INSERT INTO menu_items_and_roles (menu_item_id, role_short_name)
+SELECT mi.id, r.role_short_name
+FROM menu_items mi
+CROSS JOIN
+(
+    VALUES
+        ('operations_administrator')
+) AS r(role_short_name)
+WHERE mi.task_name = 'Personal Data Erasure';
 
 -- Digital Gold: customer service agents at the counter (partner.gold.view / partner.gold.order).
 INSERT INTO menu_items_and_roles (menu_item_id, role_short_name)

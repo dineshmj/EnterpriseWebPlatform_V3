@@ -47,7 +47,11 @@ public sealed class CustomerOutboxPublisher(
             ["CustomerCreated"] = KafkaTopicNames.CustomerCreated,
             ["OnboardingApplicationSubmitted"] = KafkaTopicNames.OnboardingApplicationSubmitted,
             ["OnboardingApplicationStatusChanged"] = KafkaTopicNames.OnboardingApplicationStatusChanged,
-            ["OnboardingApplicationRejected"] = KafkaTopicNames.OnboardingApplicationRejected
+            ["OnboardingApplicationRejected"] = KafkaTopicNames.OnboardingApplicationRejected,
+            // The erasure workflow: three event types, one topic (one erasure request = one workflow).
+            ["PersonalDataErasureRequested"] = KafkaTopicNames.CustomerPersonalDataErasure,
+            ["PersonalDataErasureRejected"] = KafkaTopicNames.CustomerPersonalDataErasure,
+            ["CustomerPersonalDataErased"] = KafkaTopicNames.CustomerPersonalDataErasure
         };
 
     private const int MaxCyclesPerPoll = 10;

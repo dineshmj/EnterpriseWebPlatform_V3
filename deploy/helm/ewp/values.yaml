@@ -497,6 +497,8 @@ components:
   customer-onboarding-api:
     stack: dotnet
     role: web
+    # SEC: step-up for the personal-data erasure (request and decision need a recent authenticator code).
+    mfa: true
     featureFlags: true
     allowFrom: [idp, customer-onboarding-bff-web, onboarding-outcome-subscriber, partner-products-journey-api]
     platformHealth: {name: Customer Onboarding API, group: Domain APIs}
@@ -693,6 +695,7 @@ components:
       OPERATIONS_JOURNEY_ACCOUNTS_API: '{{ include "ewp.internal" (list . "accounts-api") }}'
       OPERATIONS_JOURNEY_COMPLIANCE_API: '{{ include "ewp.internal" (list . "compliance-api") }}'
       OPERATIONS_JOURNEY_PARTNER_PRODUCTS_API: '{{ include "ewp.internal" (list . "partner-products-api") }}'
+      OPERATIONS_JOURNEY_CUSTOMER_ONBOARDING_API: '{{ include "ewp.internal" (list . "customer-onboarding-api") }}'
       OPERATIONS_JOURNEY_PLATFORM_FILE: /etc/ewp/platform/platform.json
       # SEC: the simulator switch only where the Journey API allows it (Development, Test).
       OPERATIONS_SIMULATOR_CONTROLS_ENABLED: '{{ and .Values.global.simulators.enabled (eq .Values.global.environment "Test") }}'

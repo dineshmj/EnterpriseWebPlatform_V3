@@ -31,6 +31,8 @@ interface CustomerDetails {
   branchId: number | null;
   version: number;
   residentialAddress: CustomerAddress | null;
+  /** True once the customer's key was destroyed: the personal fields are empty. */
+  personalDataErased: boolean;
 }
 
 interface CustomerAddress {
@@ -102,6 +104,7 @@ function getCustomerId(context: WorkspaceContext): number | null {
  * The Customer Onboarding API enforces the rule; this only explains it up front.
  */
 function onboardingBlockedReason(customer: CustomerDetails): string | null {
+  if (customer.personalDataErased) return `${customer.customerNumber}'s personal data was erased: they cannot be onboarded.`;
   switch (String(customer.status).toUpperCase()) {
     case 'PROSPECT': return null;
     case 'ONBOARDING': return `${customer.customerNumber} already has an onboarding application in progress.`;

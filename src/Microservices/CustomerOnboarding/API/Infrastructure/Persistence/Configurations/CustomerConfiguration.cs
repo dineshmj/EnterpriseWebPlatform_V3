@@ -67,15 +67,19 @@ public sealed class CustomerConfiguration : IEntityTypeConfiguration<Customer>
             .HasColumnName("phone_number")
             .IsRequired();
 
-        builder.Property<string>(PersonalDataColumns.EmailIndex)
+        // SEC: the blind indexes are cleared (NULL) when the personal data is erased - on their own
+        // they would still confirm a guessed e-mail address or surname.
+        builder.Property<string?>(PersonalDataColumns.EmailIndex)
             .HasColumnName("email_index")
-            .HasColumnType("character(64)")
-            .IsRequired();
+            .HasColumnType("character(64)");
 
-        builder.Property<string>(PersonalDataColumns.LastNameIndex)
+        builder.Property<string?>(PersonalDataColumns.LastNameIndex)
             .HasColumnName("last_name_index")
-            .HasColumnType("character(64)")
-            .IsRequired();
+            .HasColumnType("character(64)");
+
+        builder.Property(x => x.PersonalDataErasedAt)
+            .HasColumnName("personal_data_erased_at")
+            .HasColumnType("timestamp with time zone");
 
         builder.Property(x => x.CustomerType)
             .HasColumnName("customer_type")

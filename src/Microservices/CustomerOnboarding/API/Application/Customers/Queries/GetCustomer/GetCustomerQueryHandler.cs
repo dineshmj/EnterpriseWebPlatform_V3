@@ -62,7 +62,8 @@ public sealed class GetCustomerQueryHandler
                     address.State,
                     address.PostalCode,
                     address.CountryCode),
-            row.CreatedAt);
+            row.CreatedAt,
+            person.Erased);
     }
 }
 
@@ -81,7 +82,9 @@ public sealed record CustomerDetailsDto(
     // The primary residential address: shown read-only when onboarding an existing customer.
     CustomerAddressDto? ResidentialAddress,
     // When the customer was registered (BIAN /v2: the directory entry's OpenDate).
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    // True once the customer's key was destroyed: the personal fields above are then empty.
+    bool PersonalDataErased);
 
 public sealed record CustomerAddressDto(
     string AddressLine1,

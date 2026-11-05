@@ -48,6 +48,7 @@ kafka:
     - onboarding.application.submitted
     - onboarding.application.status.changed
     - onboarding.application.rejected
+    - customer.personal-data.erasure
     - kyc.case.created
     - kyc.case.approved
     - kyc.case.rejected
@@ -86,7 +87,8 @@ kafka:
   # Everything else is denied. Kafka UI and the admin user exist on the laptop only.
   users:
     ewp-co-outbox-relay:
-      write: [customer.created, onboarding.application.submitted, onboarding.application.status.changed, onboarding.application.rejected]
+      write: [customer.created, onboarding.application.submitted, onboarding.application.status.changed, onboarding.application.rejected,
+              customer.personal-data.erasure]
     ewp-kyc-api:
       writePrefix: [kyc.]
     ewp-kyc-case-opening-subscriber:
@@ -133,11 +135,12 @@ kafka:
     ewp-notifications-subscriber:
       read: [kyc.case.created, kyc.case.approved, kyc.case.rejected, compliance.case.screened, compliance.case.approved, compliance.case.rejected,
              accounts.application.created, accounts.application.rejected, accounts.account.opened, accounts.account.opening.failed,
-             payments.payment.events]
+             payments.payment.events, customer.personal-data.erasure]
       group: notifications.subscriber
       write: [notifications.subscriber.dlq]
     ewp-audit-api:
       read: [customer.created, onboarding.application.submitted, onboarding.application.status.changed, onboarding.application.rejected,
+             customer.personal-data.erasure,
              kyc.case.created, kyc.identity.verification.approved, kyc.identity.verification.rejected,
              kyc.document.verification.approved, kyc.document.verification.rejected, kyc.case.approved, kyc.case.rejected,
              compliance.case.created, compliance.case.screened, compliance.case.approved, compliance.case.rejected,

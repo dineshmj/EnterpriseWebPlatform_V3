@@ -34,6 +34,24 @@ public sealed class CustomerPersonalData(CustomerDbContext db, PersonalDataCiphe
         {
             var customer = entry.Entity;
             var customerNumber = customer.CustomerNumber.Value;
+
+            // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+            // │ The erasure itself (an approved request just marked the customer erased): destroy
+            // │ the customer's key and clear the blind indexes in this same transaction. The
+            // │ ciphertext stays where it is - without the key it is unreadable, here and in every
+            // │ backup taken from now on. Nothing personal is encrypted or written after this.
+            // └──────────────────────────────────────────────────────────────────────────────────────
+            if (customer.IsPersonalDataErased && entry.Property(nameof(Customer.PersonalDataErasedAt)).IsModified)
+            {
+                var key = await db.Set<PersonalDataKey>().FindAsync([customerNumber], cancellationToken);
+                if (key is not null)
+                    db.Set<PersonalDataKey>().Remove(key);
+
+                entry.Property(PersonalDataColumns.EmailIndex).CurrentValue = null;
+                entry.Property(PersonalDataColumns.LastNameIndex).CurrentValue = null;
+                continue;
+            }
+
             var wrappedKey = await KeyOfAsync(db, customerNumber, cancellationToken);
 
             if (wrappedKey is null && entry.State == EntityState.Added)
