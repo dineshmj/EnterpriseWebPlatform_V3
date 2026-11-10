@@ -29,6 +29,21 @@
 {{- if and (eq .stack "dotnet") (eq .role "worker") -}}http{{- else -}}https{{- end -}}
 {{- end -}}
 
+{{/*
+┌─ :: SECURITY :: NetworkPolicies name the listener's NUMBER, never its name ─────────────────────
+│ Why : An egress rule's named port is resolved against every pod in the cluster. Another chart
+│       naming a different port "https" (cert-manager's webhook: 10250) makes the name ambiguous;
+│       Cilium then skips the rule ("duplicate named ports") and drops all EWP pod-to-pod traffic.
+│       Seen in the Azure demo, 10-NOV-2026; kind and the laptop have no such clash.
+│ How : One number per listener, used by the container's port and by both directions of the
+│       NetworkPolicies. Services and probes keep the name (resolved per pod, never ambiguous).
+│ Ref : doc/Kubernetes.md K6 | Cilium: named ports in egress rules
+└────────────────────────────────────────────────────────────────────────────────────────────────
+*/}}
+{{- define "ewp.listenerPort" -}}
+{{- if eq (include "ewp.listener" .) "https" -}}8443{{- else -}}8080{{- end -}}
+{{- end -}}
+
 {{/* The browser's address of a public component: (list $ "shell") -> https://shell.<domain> */}}
 {{- define "ewp.public" -}}
 {{- $root := index . 0 -}}

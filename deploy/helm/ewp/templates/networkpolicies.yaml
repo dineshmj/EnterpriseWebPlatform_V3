@@ -53,7 +53,8 @@ spec:
   policyTypes: {{ if $egress }}["Ingress", "Egress"]{{ else }}["Ingress"]{{ end }}
 {{- range $name, $c := $enabled }}
 {{- $ctx := dict "root" $root "name" $name }}
-{{- $listener := include "ewp.listener" $c }}
+{{- /* SEC: the listener's number, not its name - see ewp.listenerPort in _helpers.tpl. */}}
+{{- $listener := include "ewp.listenerPort" $c }}
 {{- $callers := $c.allowFrom | default list }}
 {{- if and (hasKey $enabled "operations-journey-api") (ne $name "operations-journey-api") }}
 {{- $callers = append $callers "operations-journey-api" }}
@@ -121,7 +122,7 @@ spec:
             matchLabels:
               {{- include "ewp.selector" (dict "root" $root "name" .) | nindent 14 }}
       ports:
-        - port: {{ include "ewp.listener" (index $enabled .) }}
+        - port: {{ include "ewp.listenerPort" (index $enabled .) }}
     {{- end }}
     {{- if $postgres }}
     - to:
