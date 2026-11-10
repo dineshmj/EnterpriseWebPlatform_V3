@@ -3,7 +3,7 @@
 {{- range $name, $c := (include "ewp.enabled" . | fromYaml) }}
 {{- $ctx := dict "root" $root "name" $name -}}
 {{- $listener := include "ewp.listener" $c -}}
-{{- $port := ternary 8443 8080 (eq $listener "https") -}}
+{{- $port := include "ewp.listenerPort" $c -}}
 {{- $uid := ternary 1654 65532 (eq $c.stack "dotnet") -}}
 {{- $probeHost := $name -}}
 {{- if $c.public }}{{ $probeHost = include "ewp.publicHost" (list $root $name) }}{{ end -}}
