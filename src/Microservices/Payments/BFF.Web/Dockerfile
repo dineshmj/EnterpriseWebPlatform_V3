@@ -15,7 +15,7 @@
 # │ Ref : doc/Containers.md | Features 2.3.3, 2.4.5 | OWASP A05, A08
 # └────────────────────────────────────────────────────────────────────────────────────────────────
 
-FROM node:24.22.1-trixie-slim@sha256:89c5244bc22a9bc3287d89ebc7e49b9cb5bb84cd40e6175ac3421d5a9f68b95a AS client
+FROM node:24.22.2-trixie-slim@sha256:0820eaa85e07d0490446dd01d14707e17e6108a36988cf374899cd057eb3812d AS client
 ARG PNPM_VERSION=12.11.2
 
 # ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────────────────
@@ -42,7 +42,7 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY src/Microservices/Payments/BFF.Web/client-app/ ./
 RUN pnpm run build
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0.403-noble@sha256:de4fe90a98845d75910b9769662465c84de1a934665c431279d1382b2bddc02b AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.404-noble@sha256:fe0fd4e93bd2fbb47c883b7a6369e5c8d3db8bf01cdc5981f6ee35fbdf3ff4fb AS build
 WORKDIR /src
 
 # Restore from the project files alone (layer reused until a project file changes).
@@ -61,7 +61,7 @@ RUN dotnet publish src/Microservices/Payments/BFF.Web/EnterpriseWebPlatform.Paym
         --configuration Release --runtime linux-x64 --self-contained false --no-restore \
         --output /app -p:UseAppHost=false
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.14-noble-chiseled-extra@sha256:9b755ea799ae649141a073e30d8b62d8095a5465af2b7694d17866e8c05131d8 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.15-noble-chiseled-extra@sha256:cae5b962bfb786606def03d250c6a645cc98839095c89e806e4bd8978a68115b AS runtime
 WORKDIR /app
 
 # Owned by root: the "app" user reads and runs the files but cannot change them.

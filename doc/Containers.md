@@ -186,7 +186,7 @@ Closed 2026-10-25 by the Helm chart: TLS between pods (the BFFs require https AP
 | Gap | Effect | Planned fix |
 |---|---|---|
 | The Dockerfile front end (`# syntax=docker/dockerfile:1.7`) is pinned by tag only | A re-pushed front-end tag could change how a Dockerfile is read | Pin it by digest too, once Dependabot (or a weekly check) can move that pin |
-| The distroless runtime's Node patch level is set by its digest, the build stages' by their tag (`24.22.1`) | Build and runtime can be one Node patch apart for a week | Accepted: same major and Debian release; the smoke check loads the native modules in the runtime |
+| The distroless runtime's Node patch level is set by its digest, the build stages' by their tag (`24.22.2`) | Build and runtime can be one Node patch apart for a week | Accepted: same major and Debian release; the smoke check loads the native modules in the runtime |
 | The Partner Products Worker's Kafka client uses a prebuilt librdkafka binding fetched at install; CI loads it (and Temporal's native core) in the image, but the image has not yet connected to Kafka or Temporal | A TLS or SASL problem inside the container would show only at start-up | First deployment: start the worker image against Kafka and Temporal |
 | The Notifications API pushes over SignalR without a backplane | With several instances, a push reaches only the browsers connected to the instance that received the event | Run ONE replica until a backplane (Redis, or Azure SignalR Service) is added; every other service may run several (the IDP's replay cache, the BFF sessions and Data Protection keys, the Outbox relays and workers are shared or locked in PostgreSQL) |
 
