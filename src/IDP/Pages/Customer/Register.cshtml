@@ -18,13 +18,16 @@
 
         <div class="field">
             <label asp-for="Input.CustomerNumber">Customer number</label>
+            @* NOTE: the first empty field takes the focus; Enter sends the code. *@
             <input class="input" asp-for="Input.CustomerNumber" placeholder="e.g. CUST-100001"
-                   autocomplete="username" autocapitalize="characters" spellcheck="false" />
+                   autocomplete="username" autocapitalize="characters" spellcheck="false"
+                   autofocus="@(string.IsNullOrEmpty(Model.Input.CustomerNumber) ? "autofocus" : null)" />
         </div>
 
         <div class="field">
             <label asp-for="Input.Email">E-mail address</label>
-            <input class="input" type="email" asp-for="Input.Email" autocomplete="email" autocapitalize="none" spellcheck="false" />
+            <input class="input" type="email" asp-for="Input.Email" autocomplete="email" autocapitalize="none" spellcheck="false"
+                   autofocus="@(string.IsNullOrEmpty(Model.Input.CustomerNumber) ? null : "autofocus")" />
         </div>
 
         <div class="actions">
