@@ -49,3 +49,13 @@ global:
     tokenEndpoint: https://partner-auth.demo.ewp.example:47411/connect/token
     apiBaseUrl: https://partner-api.demo.ewp.example:47403
     staffViewUrl: https://partner-products.demo.ewp.example:47402/StaffView
+
+components:
+  customer-onboarding-api:
+    env:
+      # ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+      # │ DEMO ONLY: no retention period, so a prospect made during the demo can be erased.
+      # │ Production keeps the record 7 years (appsettings.json, 2557 days, AML/CTF); the
+      # │ Operations erasure screen warns whenever the period is shorter than the law's.
+      # └──────────────────────────────────────────────────────────────────────────────────────
+      PersonalData__Erasure__RetentionDays: "0"

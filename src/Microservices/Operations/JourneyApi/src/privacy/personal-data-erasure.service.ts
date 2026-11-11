@@ -23,6 +23,13 @@ export interface ErasureRequest {
   mayDecide: boolean;
 }
 
+/** The retention the Customer Onboarding API applies, and the law's (days). */
+export interface ErasurePolicy {
+  retentionDays: number;
+  legalRetentionDays: number;
+  isShorterThanLegal: boolean;
+}
+
 export interface ErasureResult {
   erasureRequestId: number;
   customerNumber: string;
@@ -51,6 +58,11 @@ export class PersonalDataErasureService {
   async list(subjectToken: string): Promise<ErasureRequest[]> {
     const token = await this.exchange.exchange(subjectToken, 'customer-onboarding.read');
     return (await this.call(token, 'GET', '')) as ErasureRequest[];
+  }
+
+  async policy(subjectToken: string): Promise<ErasurePolicy> {
+    const token = await this.exchange.exchange(subjectToken, 'customer-onboarding.read');
+    return (await this.call(token, 'GET', '/policy')) as ErasurePolicy;
   }
 
   async request(subjectToken: string, customerNumber: string, reasonCode: ErasureReason): Promise<ErasureResult> {

@@ -72,6 +72,21 @@ describe('PersonalDataErasureService - the IDP and the Customer Onboarding API p
     expect(call.headers.DPoP).toBeDefined();
   });
 
+  it('Given a shortened retention, when the policy is read, then the Customer Onboarding API is asked with a READ token and its answer passes through', async () => {
+    // Given
+    await idpExchangesPerScope();
+    const policy = { retentionDays: 0, legalRetentionDays: 2557, isShorterThanLegal: true };
+    await answers('GET', `${ERASURES}/policy`, 200, policy);
+
+    // When
+    const result = await service.policy(OPERATOR_TOKEN);
+
+    // Then
+    expect(result).toEqual(policy);
+    const [call] = await received('GET', `${ERASURES}/policy`);
+    expect(call.headers.Authorization).toBe('DPoP for-customer-onboarding.read');
+  });
+
   it('Given a customer number and a reason code, when an erasure is requested, then only those two go out, with a WRITE token', async () => {
     // Given
     await idpExchangesPerScope();
