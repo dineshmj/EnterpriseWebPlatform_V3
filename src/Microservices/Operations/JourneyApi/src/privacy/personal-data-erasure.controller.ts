@@ -20,6 +20,12 @@ export class PersonalDataErasureController {
     return this.erasure.list(request.delegation!.subjectToken);
   }
 
+  @Get('policy')
+  @Requires(VIEW)
+  policy(@Req() request: DelegatedRequest) {
+    return this.erasure.policy(request.delegation!.subjectToken);
+  }
+
   @Post()
   @Requires(REQUEST)
   create(@Req() request: DelegatedRequest, @Body() body: { customerNumber?: unknown; reasonCode?: unknown }) {

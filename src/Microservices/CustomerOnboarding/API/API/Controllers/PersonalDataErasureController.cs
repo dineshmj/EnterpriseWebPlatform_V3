@@ -14,6 +14,9 @@ public sealed record RequestPersonalDataErasureRequest(string? CustomerNumber, s
 /// <summary>The second person's remarks: required to reject, ignored to approve.</summary>
 public sealed record PersonalDataErasureDecisionRequest(string? Remarks);
 
+/// <summary>The retention in force and the law's, in whole days (no personal data).</summary>
+public sealed record PersonalDataErasurePolicyResponse(int RetentionDays, int LegalRetentionDays, bool IsShorterThanLegal);
+
 // ┌─ :: SECURITY :: Personal-data erasure endpoints (operations, four eyes) ───────────────────────
 // │ Why : Erasure cannot be undone; it must be asked for by one operator and decided by another,
 // │       each acting through the Operations app with a recent authenticator code.
@@ -26,9 +29,19 @@ public sealed record PersonalDataErasureDecisionRequest(string? Remarks);
 [Route("v1/customers/personal-data-erasures")]
 public sealed class PersonalDataErasureController(
     PersonalDataErasureCommandHandler commands,
-    GetPersonalDataErasureRequestsQueryHandler queries) : ControllerBase
+    GetPersonalDataErasureRequestsQueryHandler queries,
+    PersonalDataErasurePolicy policy) : ControllerBase
 {
     private const int MaxCustomerNumberLength = 30;
+
+    // ARCH: the API owns the retention setting, so the screen asks it instead of keeping a copy.
+    [HttpGet("policy")]
+    [Authorize(Policy = "PersonalDataErasureView")]
+    public ActionResult<PersonalDataErasurePolicyResponse> Policy() =>
+        Ok(new PersonalDataErasurePolicyResponse(
+            (int)policy.RetentionPeriod.TotalDays,
+            (int)PersonalDataErasurePolicy.LegalRetentionPeriod.TotalDays,
+            policy.IsShorterThanLegal));
 
     [HttpGet]
     [Authorize(Policy = "PersonalDataErasureView")]

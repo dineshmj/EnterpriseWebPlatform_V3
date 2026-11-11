@@ -7,7 +7,7 @@ import { exchangeForJourneyApi, freshAccessToken } from '@/lib/server/oidc';
 import { readSession, updateSession } from '@/lib/server/session-store';
 import { isDependencyUnavailable, OUTAGE_MESSAGE } from '@/lib/server/outage';
 import {
-  BEHAVIOURS, ERASURE_REASONS, ROUTE_STATES, type ActionResult, type Behaviour, type ContextParkedMessages, type ErasureReason, type ErasureRequest,
+  BEHAVIOURS, ERASURE_REASONS, ROUTE_STATES, type ActionResult, type Behaviour, type ContextParkedMessages, type ErasurePolicy, type ErasureReason, type ErasureRequest,
   type FaultRoute, type PlatformHealth, type RouteState, type SimulatorState,
 } from '@/lib/operations-types';
 
@@ -69,6 +69,10 @@ export async function resendParkedMessage(context: string, messageId: string, re
 
 export async function loadErasureRequests(): Promise<ActionResult<ErasureRequest[]>> {
   return callJourney<ErasureRequest[]>('operations-journey.read', 'GET', '/v1/journeys/operations/personal-data-erasures');
+}
+
+export async function loadErasurePolicy(): Promise<ActionResult<ErasurePolicy>> {
+  return callJourney<ErasurePolicy>('operations-journey.read', 'GET', '/v1/journeys/operations/personal-data-erasures/policy');
 }
 
 // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────

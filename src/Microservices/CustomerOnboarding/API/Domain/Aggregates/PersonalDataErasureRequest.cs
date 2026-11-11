@@ -9,7 +9,17 @@ namespace EnterpriseWebPlatform.CustomerOnboarding.Domain.Aggregates;
 /// How long the record must be kept before it may be erased, and how long a request waits for a
 /// second person. Configuration (PersonalData:Erasure), passed in by the handlers.
 /// </summary>
-public sealed record PersonalDataErasurePolicy(TimeSpan RetentionPeriod, TimeSpan RequestValidFor);
+public sealed record PersonalDataErasurePolicy(TimeSpan RetentionPeriod, TimeSpan RequestValidFor)
+{
+    /// <summary>The AML/CTF record-keeping period (7 years = 2557 days) production must use.</summary>
+    public static readonly TimeSpan LegalRetentionPeriod = TimeSpan.FromDays(2557);
+
+    // ┌─ SEC ────────────────────────────────────────────────────────────────────────────────
+    // │ A shorter period than the law's is a demonstration setting (laptop, cloud demo): the
+    // │ Operations screen says so to whoever erases, instead of pretending it is production.
+    // └──────────────────────────────────────────────────────────────────────────────────────
+    public bool IsShorterThanLegal => RetentionPeriod < LegalRetentionPeriod;
+}
 
 // ┌─ :: SECURITY :: Erasing a person: four eyes, and never while the record must be kept ──────────
 // │ Why : Erasure cannot be undone. One operator alone - mistaken, coerced or compromised - must not

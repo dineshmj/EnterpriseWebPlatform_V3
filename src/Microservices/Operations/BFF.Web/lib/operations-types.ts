@@ -91,6 +91,13 @@ export interface ErasureRequest {
   mayDecide: boolean;
 }
 
+/** The retention the Customer Onboarding API applies before a prospect may be erased, and the law's (days). */
+export interface ErasurePolicy {
+  retentionDays: number;
+  legalRetentionDays: number;
+  isShorterThanLegal: boolean;
+}
+
 export type ActionResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string; signedOut?: boolean; stepUp?: boolean; notAvailable?: boolean };

@@ -9,9 +9,16 @@ import { ConfirmDialog } from '@/app/components/ui/confirm-dialog';
 import { Table, Td, Th } from '@/app/components/ui/data';
 import { Alert, Badge, EmptyState } from '@/app/components/ui/feedback';
 import { Field, Input, Select, Textarea } from '@/app/components/ui/form';
-import { ERASURE_REASONS, type ActionResult, type ErasureReason, type ErasureRequest } from '@/lib/operations-types';
+import { ERASURE_REASONS, type ActionResult, type ErasurePolicy, type ErasureReason, type ErasureRequest } from '@/lib/operations-types';
 import { confirmWithAuthenticator, NOT_CONFIRMED } from '@/lib/step-up';
-import { decideErasure, loadErasureRequests, requestErasure } from '../../actions';
+import { decideErasure, loadErasurePolicy, loadErasureRequests, requestErasure } from '../../actions';
+
+/** "7 years" from 2557 days; whole days below a year. */
+function describeDays(days: number): string {
+  if (days < 365) return `${days} day${days === 1 ? '' : 's'}`;
+  const years = Math.round(days / 365.25);
+  return `${years} year${years === 1 ? '' : 's'}`;
+}
 
 const REASON_LABEL: Record<ErasureReason, string> = {
   CUSTOMER_REQUEST: 'The customer asked to be forgotten',
@@ -59,6 +66,12 @@ export default function PersonalDataErasurePage() {
   const [approving, setApproving] = useState<ErasureRequest | null>(null);
   const [rejecting, setRejecting] = useState<ErasureRequest | null>(null);
   const [remarks, setRemarks] = useState('');
+  const [policy, setPolicy] = useState<ErasurePolicy | null>(null);
+
+  // No banner if the policy cannot be read: the API still enforces whatever retention it has.
+  useEffect(() => {
+    void loadErasurePolicy().then((result) => { if (result.ok) setPolicy(result.data); });
+  }, []);
 
   const refresh = useCallback(async () => {
     const result = await loadErasureRequests();
@@ -129,6 +142,14 @@ export default function PersonalDataErasurePage() {
       <div className="space-y-6">
         {error && <Alert tone="danger">{error}</Alert>}
         {notice && <Alert tone="success">{notice}</Alert>}
+        {policy?.isShorterThanLegal && (
+          // SEC: say plainly that this is not production behaviour, before anyone erases.
+          <Alert tone="warning" title="Proof of concept: retention shortened">
+            A bank must keep a prospect&apos;s record for {describeDays(policy.legalRetentionDays)} after its last
+            change (AML/CTF record keeping) before it may be erased. Here it is
+            {' '}{describeDays(policy.retentionDays)}, so that erasure can be demonstrated.
+          </Alert>
+        )}
 
         <Card>
           <CardHeader
