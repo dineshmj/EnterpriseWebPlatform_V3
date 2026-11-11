@@ -39,20 +39,21 @@
         <header class="card-head">
             <p class="eyebrow">Two-step sign-in</p>
             <h1 class="card-title" id="setup-title">Save your recovery codes</h1>
-            <p class="card-lead">Google Authenticator is set up. If you lose your phone, each of these codes signs you in <strong>once</strong>. They are shown only now - keep them somewhere safe.</p>
+            <p class="card-lead" id="recovery-codes-lead">Google Authenticator is set up. If you lose your phone, each of these codes signs you in <strong>once</strong>. They are shown only now - keep them somewhere safe.</p>
         </header>
 
-        <ul class="mfa-codes">
+        <ul class="mfa-codes" id="recovery-codes">
             @foreach (var code in Model.RecoveryCodes)
             {
                 <li>@code</li>
             }
         </ul>
 
-        @* NOTE: this screen has no field, so the button takes the focus: Enter continues (no script, CSP unchanged). *@
+        @* NOTE: this screen has no field, so the button takes the focus: Enter continues (no script, CSP unchanged).
+           aria-describedby makes a screen reader read the explanation AND the codes with the button - none is skipped. *@
         <form method="post" asp-page-handler="Continue">
             <div class="actions">
-                <button class="btn btn-primary btn-block" autofocus>I have saved them - continue</button>
+                <button class="btn btn-primary btn-block" autofocus aria-describedby="recovery-codes-lead recovery-codes">I have saved them - continue</button>
             </div>
         </form>
     }

@@ -10,13 +10,14 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
         </span>
         <h1 class="card-title" id="logout-title">Sign out?</h1>
-        <p class="card-lead">You will be signed out of every Four Walls workspace on this device.</p>
+        <p class="card-lead" id="logout-lead">You will be signed out of every Four Walls workspace on this device.</p>
     </header>
 
     <form method="post">
         <input type="hidden" asp-for="Input.LogoutId" />
         <div class="actions">
-            <button class="btn btn-primary btn-block" autofocus>Yes, sign me out</button>
+            @* NOTE: the one action takes the focus (Enter signs out); the screen reader reads the page's sentence with it. *@
+            <button class="btn btn-primary btn-block" autofocus aria-describedby="logout-lead">Yes, sign me out</button>
         </div>
     </form>
 </section>

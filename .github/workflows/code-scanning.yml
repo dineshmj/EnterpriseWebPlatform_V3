@@ -196,6 +196,12 @@ jobs:
       # │ demo-up.yml. Its Gateway check calls http:// ON PURPOSE, to prove the gateway answers it
       # │ with a 301 to https. The Actions analyser does not read NOSONAR in run scripts, so the
       # │ exception is named here; S5332 still runs on every other workflow and file.
+      # │ A second rule is switched off for the IDP's own pages only: Web:S9379 (autofocus). Each
+      # │ of those pages does ONE thing (sign in, enter a code, confirm), so the focus goes to its
+      # │ field or button and Enter submits (#86). A screen reader still announces the field's label;
+      # │ a focused button is described by its page's text (aria-describedby), so nothing is
+      # │ skipped. Razor (.cshtml) has no comment the HTML analyser reads as NOSONAR, so the
+      # │ exception is named here; S9379 still runs on every other page and app.
       # └────────────────────────────────────────────────────────────────────────────────────────────
       - name: Build, test and analyse
         if: env.SONAR_TOKEN != ''
@@ -210,9 +216,11 @@ jobs:
             /d:sonar.cs.opencover.reportsPaths="$RUNNER_TEMP/coverage/**/coverage.opencover.xml" \
             /d:sonar.javascript.lcov.reportPaths="$LCOV_REPORTS" \
             /d:sonar.coverage.exclusions='**/Program.cs,src/Microservices/*/JourneyApi/src/main.ts,src/Microservices/*/BFF.Web/**,src/Shell/**,src/Simulators/**,tst/**,ps/**,deploy/**,.github/**' \
-            /d:sonar.issue.ignore.multicriteria=gatewayhttp \
+            /d:sonar.issue.ignore.multicriteria=gatewayhttp,idpautofocus \
             /d:sonar.issue.ignore.multicriteria.gatewayhttp.ruleKey=githubactions:S5332 \
-            /d:sonar.issue.ignore.multicriteria.gatewayhttp.resourceKey=.github/workflows/demo-up.yml
+            /d:sonar.issue.ignore.multicriteria.gatewayhttp.resourceKey=.github/workflows/demo-up.yml \
+            /d:sonar.issue.ignore.multicriteria.idpautofocus.ruleKey=Web:S9379 \
+            /d:sonar.issue.ignore.multicriteria.idpautofocus.resourceKey='src/IDP/Pages/**/*.cshtml'
           dotnet build EnterpriseWebPlatform.BSS.slnx --configuration Release
           dotnet test tst/dotnet/EwpTests.slnx --configuration Release \
             --collect:"XPlat Code Coverage" --results-directory "$RUNNER_TEMP/coverage" \
