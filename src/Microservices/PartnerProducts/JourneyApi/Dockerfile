@@ -14,7 +14,7 @@
 # │ Ref : doc/Containers.md | OWASP A05, A06, A08
 # └────────────────────────────────────────────────────────────────────────────────────────────────
 
-FROM node:24.22.1-trixie-slim@sha256:89c5244bc22a9bc3287d89ebc7e49b9cb5bb84cd40e6175ac3421d5a9f68b95a AS build
+FROM node:24.22.2-trixie-slim@sha256:0820eaa85e07d0490446dd01d14707e17e6108a36988cf374899cd057eb3812d AS build
 ARG PNPM_VERSION=12.11.2
 RUN npm install --global --ignore-scripts "pnpm@${PNPM_VERSION}"
 WORKDIR /app/src/Microservices/PartnerProducts/JourneyApi
@@ -30,7 +30,7 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY src/Microservices/PartnerProducts/JourneyApi/ ./
 RUN pnpm run build
 
-FROM node:24.22.1-trixie-slim@sha256:89c5244bc22a9bc3287d89ebc7e49b9cb5bb84cd40e6175ac3421d5a9f68b95a AS deps
+FROM node:24.22.2-trixie-slim@sha256:0820eaa85e07d0490446dd01d14707e17e6108a36988cf374899cd057eb3812d AS deps
 ARG PNPM_VERSION=12.11.2
 RUN npm install --global --ignore-scripts "pnpm@${PNPM_VERSION}"
 WORKDIR /app/src/Microservices/PartnerProducts/JourneyApi
@@ -40,7 +40,7 @@ COPY src/Microservices/PartnerProducts/JourneyApi/package.json \
 # Production dependencies only: no compiler or type definitions in the running image.
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
-FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:b8cec4b2f2126ff7bd034ec9ac207ffb3272667dfdc48376e3b035d3270549ba AS runtime
+FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:088a01637f22908632ba09018be2e0b516f2fa6f7869c191d29491139db43c78 AS runtime
 # ┌─ SEC ────────────────────────────────────────────────────────────────────────────────────────────
 # │ Distroless Node: the Node runtime and the few Debian libraries it needs - no shell, no package
 # │ manager (no apt, npm, npx, corepack or yarn), like the chiseled .NET images. Nothing can be

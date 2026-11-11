@@ -289,9 +289,13 @@ const namespaces = {
 };
 
 if (process.argv.includes('--list')) {
+  const lines = [];
   for (const [ns, secrets] of Object.entries(namespaces))
     for (const [secret, keys] of Object.entries(secrets))
-      for (const key of Object.keys(keys)) console.log(`${ns} ${secret} ${key}`);
+      for (const key of Object.keys(keys)) lines.push(`${ns} ${secret} ${key}`);
+  // RESIL: one synchronous write - console.log to a pipe is asynchronous, so process.exit could cut
+  // the list short and the chart contract check (check-contracts.mjs) would fail at random.
+  writeFileSync(1, `${lines.join('\n')}\n`);
   process.exit(0);
 }
 
