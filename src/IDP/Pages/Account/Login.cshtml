@@ -25,13 +25,16 @@
 
         <div class="field">
             <label asp-for="Input.Username">Username</label>
+            @* NOTE: the first empty field takes the focus (the username after a wrong password); Enter signs in. *@
             <input class="input" asp-for="Input.Username" placeholder="e.g. sophie.cs"
-                   autocomplete="username" autocapitalize="none" spellcheck="false" />
+                   autocomplete="username" autocapitalize="none" spellcheck="false"
+                   autofocus="@(string.IsNullOrEmpty(Model.Input.Username) ? "autofocus" : null)" />
         </div>
 
         <div class="field">
             <label asp-for="Input.Password">Password</label>
-            <input class="input" type="password" asp-for="Input.Password" autocomplete="current-password" />
+            <input class="input" type="password" asp-for="Input.Password" autocomplete="current-password"
+                   autofocus="@(string.IsNullOrEmpty(Model.Input.Username) ? null : "autofocus")" />
         </div>
 
         <label class="check">
