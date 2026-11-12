@@ -103,7 +103,7 @@ with constant path segments; `[JsonRequired]` on the values a request must carry
 `crypto.randomInt` for the BFFs' session clean-up; cookies deleted with `HttpOnly`; request
 cancellation passed to response writes; `await app.RunAsync()`; namespaces for the simulators'
 types and the IDP's `Config`; fixed log templates; backtracking-free regular expressions; `[[ ]]`
-in the bash scripts; `autofocus` removed from the IDP's pages. Marked `NOSONAR` with the reason on
+in the bash scripts. Marked `NOSONAR` with the reason on
 the line (deliberate, and reviewed): the upload size limits for identity documents, the Shell's
 menu query (placeholders only), tools found on `PATH` in CI and test scripts, Key Vault purge
 protection off in the demo (Demo down deletes everything), `http://` in the OIDC
@@ -113,7 +113,12 @@ inside an EF query (it becomes SQL `UPPER`; Roslyn findings ignore `NOSONAR`), a
 `githubactions:S5332` (clear-text http) off for `demo-up.yml` only
 (`sonar.issue.ignore.multicriteria` in [code-scanning.yml](../.github/workflows/code-scanning.yml)) -
 its Gateway check calls `http://` on purpose to prove the 301 to https, and the Actions analyser
-does not read `NOSONAR` in run scripts. Turned off: CA1873 (logging arguments are plain
+does not read `NOSONAR` in run scripts. Likewise `Web:S9379` (autofocus) is off for the IDP's
+pages only (`src/IDP/Pages/**/*.cshtml`, #87): each does one thing - sign in, enter a code,
+confirm - so its field or button takes the focus and Enter submits; a focused button is
+described by its page's text (`aria-describedby`), and Razor has no comment the HTML analyser
+reads as `NOSONAR`. The apps' screens set the focus from script instead (#95), which the rule
+does not flag. Turned off: CA1873 (logging arguments are plain
 values - see [.editorconfig](../.editorconfig)). Excluded: `**/*.sql` (SonarQube Cloud reads T-SQL and
 PostgreSQL as Oracle PL/SQL). **Duplication stays by design**: each micro front end and its BFF is
 its squad's own deployable, so their start-up code is not shared through a central project.
@@ -123,7 +128,11 @@ The look-alike scaffold files are therefore left out of SonarQube Cloud's duplic
 each web app's `components/ui/` folder (its copy of the design system's primitives: button, card,
 feedback, pager ...), `lib/server/oidc.ts`, `lib/server/session-store.ts`, and the DPoP / token
 plumbing (`lib/server/dpop.ts`, `src/auth/dpop-key.service.ts`, `src/auth/dpop-proof.verifier.ts`,
-`src/auth/delegated-token.guard.ts`, `src/services/token-exchange.service.ts`). All other rules
+`src/auth/delegated-token.guard.ts`, `src/services/token-exchange.service.ts`). Crypto-shredding is
+per service too - each API encrypts its own copy of a person's data under its own key and erases
+it itself - so `PersonalDataCipher.cs`, the `*PersonalData.cs` mappers and
+`InternalPersonalDataErasuresController.cs` are left out as well, with the simulator
+registrations (`CoreBankingRegistration.cs`, `ScreeningProviderRegistration.cs`) (#98). All other rules
 still run on them, and copy-paste anywhere else - the screens included - still counts. A comment cannot do this: `NOSONAR`
 and `#pragma` silence issues, not duplication. Start-up stays inline in each `Program.cs` (no
 `builder.AddXxx()` helpers) so a reader sees the whole pipeline in one file.
@@ -131,7 +140,10 @@ and `#pragma` silence issues, not duplication. Start-up stays inline in each `Pr
 **SonarQube Cloud's quality gate is not required.** The free plan allows only the built-in "Sonar
 way" gate (80 % test coverage and at most 3 % duplication on new code, no new issues). The check
 is not required (the branch rule asks only for **CI result**), so it never blocks a merge; bugs,
-vulnerabilities and hotspots are still reported on each pull request.
+vulnerabilities and hotspots are still reported on each pull request. It is kept green all the
+same (since 12-NOV-2026, #97 and #98: 0 open issues, 80.9 % coverage and 0.5 % duplication on new
+code): every change brings the unit tests that keep new code at 80 % or more, and a pull request's
+own gate is checked before it is merged.
 
 **Test coverage for SonarQube Cloud (since 29-OCT-2026).** The SonarQube Cloud job runs the unit
 tests a second time, for coverage only: the .NET tests (`tst/dotnet/EwpTests.slnx`) inside the
