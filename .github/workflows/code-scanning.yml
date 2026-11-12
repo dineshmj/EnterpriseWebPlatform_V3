@@ -183,6 +183,10 @@ jobs:
       # │ that list for the same reason,
       # │ and so is each web app's components/ui folder: its copy of the design system's primitives
       # │ (button, card, feedback, pager ...). The screens that use them still count.
+      # │ Crypto-shredding is per service too: each API encrypts its own copy of a person's data
+      # │ under its own key and erases it itself (doc/Crypto-Shredding.md), so PersonalDataCipher,
+      # │ the *PersonalData mappers and InternalPersonalDataErasuresController exist once per API;
+      # │ so do the simulator registrations (Core Banking, Screening). Their domain code still counts.
       # │ (NOSONAR and #pragma cannot do this: they silence issues, not duplication.)
       # ├─ ARCH ─────────────────────────────────────────────────────────────────────────────────────
       # │ Coverage: the .NET unit tests (tst/dotnet/EwpTests.slnx) run INSIDE begin/end with
@@ -212,7 +216,7 @@ jobs:
             /k:"$SONAR_PROJECT_KEY" /o:"$SONAR_ORGANIZATION" \
             /d:sonar.host.url=https://sonarcloud.io /d:sonar.token="$SONAR_TOKEN" \
             /d:sonar.exclusions='**/node_modules/**,**/.next/**,**/wwwroot/lib/**,test-results/**,db/**,**/*.sql,**/coverage/**' \
-            /d:sonar.cpd.exclusions='**/Program.cs,**/AuthController.cs,**/*DbContext.cs,**/*OutboxPublisher.cs,**/MfeShell.tsx,**/components/ui/**,**/lib/server/oidc.ts,**/lib/server/session-store.ts,**/lib/server/dpop.ts,**/src/auth/dpop-key.service.ts,**/src/auth/client-key.service.ts,**/src/auth/dpop-proof.verifier.ts,**/src/auth/delegated-token.guard.ts,**/src/services/token-exchange.service.ts' \
+            /d:sonar.cpd.exclusions='**/Program.cs,**/AuthController.cs,**/*DbContext.cs,**/*OutboxPublisher.cs,**/MfeShell.tsx,**/components/ui/**,**/lib/server/oidc.ts,**/lib/server/session-store.ts,**/lib/server/dpop.ts,**/src/auth/dpop-key.service.ts,**/src/auth/client-key.service.ts,**/src/auth/dpop-proof.verifier.ts,**/src/auth/delegated-token.guard.ts,**/src/services/token-exchange.service.ts,**/Infrastructure/Privacy/PersonalDataCipher.cs,**/Infrastructure/Privacy/*PersonalData.cs,**/Controllers/InternalPersonalDataErasuresController.cs,**/Infrastructure/CoreBanking/CoreBankingRegistration.cs,**/Infrastructure/Screening/ScreeningProviderRegistration.cs' \
             /d:sonar.cs.opencover.reportsPaths="$RUNNER_TEMP/coverage/**/coverage.opencover.xml" \
             /d:sonar.javascript.lcov.reportPaths="$LCOV_REPORTS" \
             /d:sonar.coverage.exclusions='**/Program.cs,src/Microservices/*/JourneyApi/src/main.ts,src/Microservices/*/BFF.Web/**,src/Shell/**,src/Simulators/**,tst/**,ps/**,deploy/**,.github/**' \
