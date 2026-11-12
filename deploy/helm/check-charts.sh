@@ -84,7 +84,7 @@ echo "refused an unknown certificate issuer (as it must)"
 
 # CONTRACT: the public certificate must name every public host of the EWP chart, or a browser
 # meets a certificate error on the host it lacks.
-ewp_hosts="$(sed -n 's/^ *public: *{host: *\([a-z0-9-]*\)}.*/\1/p' "$here/ewp/values.yaml" | sort | tr '\n' ' ')"
+ewp_hosts="$(sed -n 's/^ *public: *{host: *\([a-z0-9-]*\)[,}].*/\1/p' "$here/ewp/values.yaml" | sort | tr '\n' ' ')"   # other keys may follow the host (e.g. streamPaths)
 gateway_hosts="$(sed -n '/^hosts:/,/^[a-z]/s/^  - *\([a-z0-9-]*\)$/\1/p' "$here/ewp-gateway/values.yaml" | sort | tr '\n' ' ')"
 if [[ -z "$ewp_hosts" ]] || [[ "$ewp_hosts" != "$gateway_hosts" ]]; then
   echo "::error::ewp-gateway hosts ($gateway_hosts) differ from the ewp chart's public hosts ($ewp_hosts)."

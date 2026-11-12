@@ -9,7 +9,7 @@ namespace EnterpriseWebPlatform.IdentityServer.ConfigRegistration.Clients;
 // ┌─ :: ARCHITECTURE + SECURITY :: Grafana signs in through EWP's IDP ─────────────────────────────
 // │ Why : The cloud demo's Grafana (deploy/helm/ewp-observability) is public; a second login of its
 // │       own would be one more password outside the IDP's MFA, lockout and audit.
-// │ How : A confidential client (Authorization Code + PKCE) asking for the person's roles only;
+// │ How : A confidential client (Authorization Code + PKCE) asking for the person's e-mail and roles;
 // │       Grafana admits operations_administrator (Viewer) and platform_administrator (Admin) and
 // │       refuses everyone else (role_attribute_strict). Registered ONLY where Grafana exists:
 // │       when ClientBaseUrls:Grafana is set (the cloud demo with observability on) - a laptop
@@ -45,10 +45,13 @@ public sealed class ObservabilityGrafana
             // Grafana reads the roles from the ID token (role_attribute_path).
             AlwaysIncludeUserClaimsInIdToken = true,
 
+            // NOTE: Grafana needs the e-mail claim: without it, it asks <api_url>/emails (a GitHub-only
+            // address) and the sign-in fails - seen in the Azure demo, 12-NOV-2026.
             AllowedScopes =
             {
                 IdentityServerConstants.StandardScopes.OpenId,
                 IdentityServerConstants.StandardScopes.Profile,
+                IdentityServerConstants.StandardScopes.Email,
                 "roles"
             }
         };

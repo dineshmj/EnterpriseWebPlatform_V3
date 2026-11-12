@@ -31,6 +31,24 @@ spec:
   hostnames:
     - {{ include "ewp.publicHost" (list $root $name) }}
   rules:
+    {{- /*
+    ┌─ RESIL ────────────────────────────────────────────────────────────────────────────────
+    │ A long-lived stream (public.streamPaths: the Shell's notification hub) gets no request
+    │ timeout. Envoy's default ends EVERY response after 15 s - a SignalR event stream too, so
+    │ live updates reconnected every 15 s and a notification sent in the gap never reached the
+    │ open page (Azure demo, 12-NOV-2026: response flag UT at exactly 15000 ms). "0s" disables
+    │ it (Gateway API); every other path keeps the Gateway's default.
+    └────────────────────────────────────────────────────────────────────────────────────────
+    */}}
+    {{- range ($c.public.streamPaths | default list) }}
+    - matches:
+        - path: {type: PathPrefix, value: {{ . }}}
+      timeouts:
+        request: "0s"
+      backendRefs:
+        - name: {{ $name }}
+          port: 443
+    {{- end }}
     - backendRefs:
         - name: {{ $name }}
           port: 443
