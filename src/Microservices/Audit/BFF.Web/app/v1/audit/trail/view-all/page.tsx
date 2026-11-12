@@ -8,6 +8,7 @@ import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/app/components/ui/card';
 import { Table, Td, Th } from '@/app/components/ui/data';
 import { Alert, Badge, EmptyState } from '@/app/components/ui/feedback';
+import { useFocusFirstField } from '@/app/components/ui/focus';
 import { Field, Input, Select } from '@/app/components/ui/form';
 import type { AuditPage, IntegrityResult, SearchInput } from '@/lib/audit-types';
 import { searchTrail, verifyIntegrity } from '../../actions';
@@ -63,6 +64,8 @@ export default function AuditTrailPage() {
   const update = (name: keyof SearchInput) => (event: { target: { value: string } }) =>
     setForm((f) => ({ ...f, [name]: event.target.value }));
 
+  const searchFormRef = useFocusFirstField();
+
   return (
     <MfeShell title="Audit Trail">
       <div className="space-y-6">
@@ -78,7 +81,7 @@ export default function AuditTrailPage() {
             }
           />
           <CardContent>
-            <form onSubmit={submit} className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+            <form ref={searchFormRef} onSubmit={submit} className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
               <Field label="Record or customer" htmlFor="record" hint="PAY-…, APP-…, DGA-…, DGP-…, CUST-…">
                 <Input id="record" value={form.record ?? ''} onChange={update('record')} maxLength={100} />
               </Field>

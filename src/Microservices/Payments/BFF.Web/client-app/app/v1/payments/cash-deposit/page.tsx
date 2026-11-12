@@ -7,6 +7,7 @@ import { Button } from '../../../components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '../../../components/ui/card';
 import { cn } from '../../../components/ui/cn';
 import { Alert } from '../../../components/ui/feedback';
+import { useFocusFirstField } from '../../../components/ui/focus';
 import { Field, Input } from '../../../components/ui/form';
 import { getJson, postJson } from '../../../lib/api';
 import {
@@ -81,7 +82,7 @@ export default function CashDepositPage() {
   ].filter(Boolean) as string[], [account, amountValid, counted]);
 
   const deposit = async () => {
-    if (!account || blockers.length > 0) return;
+    if (!account || blockers.length > 0 || submitting) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -111,6 +112,9 @@ export default function CashDepositPage() {
     setError(null);
   };
 
+  // The customer search first; once an account is chosen, the next empty field. Not on the receipt.
+  const formRef = useFocusFirstField(receipt ? null : (account?.accountNumber ?? 'no account'));
+
   if (receipt) {
     return (
       <MfeShell title="Cash deposit" subtitle="Payments">
@@ -137,7 +141,9 @@ export default function CashDepositPage() {
 
   return (
     <MfeShell title="Cash deposit" subtitle="Payments">
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+      {/* Enter records the deposit only when nothing is missing: the submit button is disabled until then. */}
+      <form ref={formRef} onSubmit={e => { e.preventDefault(); void deposit(); }} noValidate
+        className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="flex flex-col gap-6">
           {/* 1 - Customer */}
           <Card>
@@ -222,12 +228,12 @@ export default function CashDepositPage() {
             )}
           </CardContent>
           <CardFooter>
-            <Button className="w-full" size="lg" onClick={() => void deposit()} disabled={blockers.length > 0 || submitting}>
+            <Button type="submit" className="w-full" size="lg" disabled={blockers.length > 0 || submitting}>
               {submitting ? 'Recording the deposit…' : 'Deposit'}
             </Button>
           </CardFooter>
         </Card>
-      </div>
+      </form>
     </MfeShell>
   );
 }

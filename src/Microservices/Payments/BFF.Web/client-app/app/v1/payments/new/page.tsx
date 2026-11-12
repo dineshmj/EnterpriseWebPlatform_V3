@@ -8,6 +8,7 @@ import { Button } from '../../../components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '../../../components/ui/card';
 import { cn } from '../../../components/ui/cn';
 import { Alert } from '../../../components/ui/feedback';
+import { useFocusFirstField } from '../../../components/ui/focus';
 import { Field, Input } from '../../../components/ui/form';
 import { getJson, postJson } from '../../../lib/api';
 import {
@@ -148,8 +149,11 @@ export default function NewPaymentPage() {
     !referenceValid && 'The reference is too long.',
   ].filter(Boolean) as string[], [payer, bsbInfo, accountValid, payeeName, sameAccount, payeeConfirmed, amountValid, insufficient, referenceValid]);
 
+  // The customer search first; once a customer is chosen, the next empty field (the payee's BSB).
+  const formRef = useFocusFirstField(payer?.accountNumber ?? 'no payer');
+
   const transfer = async () => {
-    if (!payer || blockers.length > 0) return;
+    if (!payer || blockers.length > 0 || submitting) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -174,7 +178,9 @@ export default function NewPaymentPage() {
 
   return (
     <MfeShell title="New payment" subtitle="Payments">
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+      {/* Enter transfers only when nothing is missing: the submit button is disabled until then. */}
+      <form ref={formRef} onSubmit={e => { e.preventDefault(); void transfer(); }} noValidate
+        className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="flex flex-col gap-6">
           {/* 1 - From */}
           <Card>
@@ -335,12 +341,12 @@ export default function NewPaymentPage() {
             )}
           </CardContent>
           <CardFooter>
-            <Button className="w-full" size="lg" onClick={() => void transfer()} disabled={blockers.length > 0 || submitting}>
+            <Button type="submit" className="w-full" size="lg" disabled={blockers.length > 0 || submitting}>
               {submitting ? 'Starting the payment…' : 'Transfer'}
             </Button>
           </CardFooter>
         </Card>
-      </div>
+      </form>
     </MfeShell>
   );
 }

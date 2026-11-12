@@ -7,6 +7,7 @@ import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/app/components/ui/card';
 import { DescriptionList, Table, Td, Th } from '@/app/components/ui/data';
 import { Alert, Badge, EmptyState } from '@/app/components/ui/feedback';
+import { useFocusFirstField } from '@/app/components/ui/focus';
 import { Field, Input, Select } from '@/app/components/ui/form';
 import type { ActionResult, CustomerAtCounter, CustomerMatch, GoldApplication, GoldPurchase } from '@/lib/partner-products-types';
 import { buyGold, loadApplications, loadCustomer, loadPurchases, openPartnerView, recordFormVii, recordTransferSlip, searchCustomers, sendFormVii } from '../../actions';
@@ -131,6 +132,8 @@ export default function DigitalGoldPage() {
     return stop;
   }, [customer, following]);
 
+  const searchFormRef = useFocusFirstField();
+
   return (
     <MfeShell title="Digital Gold">
       <div className="flex flex-col gap-6">
@@ -146,7 +149,7 @@ export default function DigitalGoldPage() {
         <Card>
           <CardHeader title="Find the customer" description="Customers of your branch, by name or customer number." icon={<Search />} />
           <CardContent className="p-6">
-            <form onSubmit={find} className="flex flex-wrap items-end gap-3">
+            <form ref={searchFormRef} onSubmit={find} className="flex flex-wrap items-end gap-3">
               <Field label="Name or customer number" htmlFor="search" className="min-w-72 flex-1">
                 <Input id="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="e.g. Camilla or CUST-100009" maxLength={100} />
               </Field>
@@ -431,6 +434,8 @@ function FormViiCard({ customer, onRecorded, onError }: {
   const blocked = !customer.kycVerified
     ? 'Only a customer whose onboarding (KYC) is complete can apply.'
     : !customer.mobileEnding ? 'The customer\'s phone number on record is not an Australian mobile: correct the customer\'s record first.' : null;
+  // The form's first empty field (the form number) once a customer who may apply is chosen.
+  const formRef = useFocusFirstField(blocked ? null : customer.customerId);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -451,7 +456,7 @@ function FormViiCard({ customer, onRecorded, onError }: {
       <CardHeader title="Open a Digital Gold account - Form VII" description="The Partner Bank's application, signed by the customer at this counter." icon={<FileSignature />} />
       <CardContent className="p-6">
         {blocked ? <Alert tone="warning">{blocked}</Alert> : (
-          <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <form ref={formRef} onSubmit={submit} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <Field label="Form VII number" htmlFor="formNumber" required hint="As printed on the form.">
               <Input id="formNumber" name="formNumber" required maxLength={32} pattern="[A-Za-z0-9][A-Za-z0-9\-]{3,31}" />
             </Field>
@@ -482,6 +487,8 @@ function TransferSlipCard({ customer, onRecorded, onError }: {
   onError: (message: string | null) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  // The slip's first empty field (the slip number) once the customer's paying accounts are shown.
+  const formRef = useFocusFirstField(customer.accountsAvailable && customer.accounts.length > 0 ? customer.customerId : null);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -503,7 +510,7 @@ function TransferSlipCard({ customer, onRecorded, onError }: {
         {!customer.accountsAvailable || customer.accounts.length === 0
           ? <Alert tone="warning">No paying account can be shown for this customer now.</Alert>
           : (
-            <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <form ref={formRef} onSubmit={submit} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <Field label="Slip number" htmlFor="slipNumber" required>
                 <Input id="slipNumber" name="slipNumber" required maxLength={32} pattern="[A-Za-z0-9][A-Za-z0-9\-]{3,31}" />
               </Field>

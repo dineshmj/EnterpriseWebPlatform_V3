@@ -10,6 +10,7 @@ import { Button, buttonVariants } from '../../../components/ui/button';
 import { Card, CardHeader } from '../../../components/ui/card';
 import { Table, Td, Th } from '../../../components/ui/data';
 import { Alert, EmptyState, StatusBadge } from '../../../components/ui/feedback';
+import { useFocusFirstField } from '../../../components/ui/focus';
 import { Input } from '../../../components/ui/form';
 
 interface Customer {
@@ -135,6 +136,8 @@ export default function CustomersPage() {
     router.push('/v1/onboarding/applications/new');
   }
 
+  const searchFormRef = useFocusFirstField();
+
   return (
     <MfeShell title="Customers" subtitle="Customer Onboarding">
       <Card>
@@ -149,7 +152,7 @@ export default function CustomersPage() {
           }
         />
 
-        <form role="search" onSubmit={submitSearch} className="flex flex-wrap items-center gap-2 border-b border-line px-6 py-4">
+        <form ref={searchFormRef} role="search" onSubmit={submitSearch} className="flex flex-wrap items-center gap-2 border-b border-line px-6 py-4">
           <label htmlFor="customer-search" className="sr-only">Search customers</label>
           <Input
             id="customer-search"
