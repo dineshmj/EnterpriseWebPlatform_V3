@@ -159,8 +159,9 @@ spec:
                 secretKeyRef:
                   name: {{ $gr.oidc.secret }}
                   key: client-secret
+            # NOTE: email is required - without the claim Grafana falls back to <api_url>/emails (GitHub only).
             - name: GF_AUTH_GENERIC_OAUTH_SCOPES
-              value: openid profile roles
+              value: openid profile email roles
             - name: GF_AUTH_GENERIC_OAUTH_AUTH_URL
               value: {{ $idp }}/connect/authorize
             - name: GF_AUTH_GENERIC_OAUTH_TOKEN_URL

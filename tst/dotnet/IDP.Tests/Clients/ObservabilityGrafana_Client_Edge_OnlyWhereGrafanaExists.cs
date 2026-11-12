@@ -60,7 +60,8 @@ public sealed class ObservabilityGrafana_Client_Edge_OnlyWhereGrafanaExists
         client.RequirePkce.Should().BeTrue();
         client.AllowOfflineAccess.Should().BeFalse();
         client.RedirectUris.Should().Equal("https://grafana.demo.ewp.example/login/generic_oauth");
-        client.AllowedScopes.Should().BeEquivalentTo("openid", "profile", "roles");
+        // email: Grafana refuses a sign-in without it (it would ask a GitHub-only /emails address).
+        client.AllowedScopes.Should().BeEquivalentTo("openid", "profile", "email", "roles");
         client.ClientSecrets.Should().ContainSingle();
     }
 

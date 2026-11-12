@@ -288,7 +288,8 @@ components:
   shell:
     stack: dotnet
     role: web
-    public: {host: shell}
+    # RESIL: /hubs is the notification hub (SignalR) - a stream that stays open, so no request timeout.
+    public: {host: shell, streamPaths: [/hubs]}
     dataProtection: true
     platformHealth: {name: Shell, group: Front ends}
     env:

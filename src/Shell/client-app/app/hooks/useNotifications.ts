@@ -39,12 +39,28 @@ export function useNotifications(onLive?: (notification: ShellNotification) => v
   onLiveRef.current = onLive;
   const itemsRef = useRef(items);
   itemsRef.current = items;
+  /** The newest notification already seen (loaded or live); null until the first load. */
+  const newestSeenRef = useRef<number | null>(null);
 
   const reload = useCallback(async () => {
     try {
       const page = await fetchNotifications();
       setItems(page.items);
       setUnreadCount(page.unreadCount);
+      // ┌─ RESIL ──────────────────────────────────────────────────────────────────────────────
+      // │ What arrived while the connection was down is newer than anything seen: hand it on
+      // │ like a live one (oldest first) - the page in the frame refreshes and the person gets
+      // │ the toast. Without this, a gap (a reconnect) lost the update: the bell had it, the
+      // │ open page did not (Azure demo, 12-NOV-2026). The first load only sets the baseline.
+      // └──────────────────────────────────────────────────────────────────────────────────────
+      const newestSeen = newestSeenRef.current;
+      const newest = Math.max(newestSeen ?? 0, ...page.items.map(x => x.id));
+      newestSeenRef.current = newest;
+      if (newestSeen === null) return;
+      const missed = page.items.filter(x => x.id > newestSeen && !x.read).sort((a, b) => a.id - b.id);
+      if (missed.length === 0) return;
+      setToasts(previous => [...previous, ...missed].slice(-MAX_TOASTS));
+      for (const notification of missed) onLiveRef.current?.(notification);
     } catch {
       // The bell keeps what it has; the next reconnect or reload tries again.
     }
@@ -78,6 +94,7 @@ export function useNotifications(onLive?: (notification: ShellNotification) => v
     };
 
     connection.on('notification', (notification: ShellNotification) => {
+      newestSeenRef.current = Math.max(newestSeenRef.current ?? 0, notification.id);
       setItems(previous => [notification, ...previous.filter(x => x.id !== notification.id)].slice(0, MAX_ITEMS));
       setUnreadCount(count => count + 1);
       setToasts(previous => [...previous, notification].slice(-MAX_TOASTS));
