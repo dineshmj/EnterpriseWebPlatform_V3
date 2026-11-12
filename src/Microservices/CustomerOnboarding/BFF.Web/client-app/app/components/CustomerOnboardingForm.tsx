@@ -8,6 +8,7 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardHeader } from './ui/card';
 import { cn } from './ui/cn';
 import { Alert, Badge } from './ui/feedback';
+import { useFocusFirstField } from './ui/focus';
 import { Field, Input, Select } from './ui/form';
 
 interface Result {
@@ -302,6 +303,9 @@ export function CustomerOnboardingForm({
     }
   }
 
+  // The first empty field once a returning customer's details have loaded (read-only ones are skipped).
+  const formRef = useFocusFirstField(loadingCustomer ? null : 'ready');
+
   const checklist = [
     { label: 'Customer details', done: detailsComplete },
     { label: 'Residential address', done: addressComplete },
@@ -311,7 +315,7 @@ export function CustomerOnboardingForm({
   const readyToSubmit = checklist.every(item => item.done);
 
   return (
-    <form onSubmit={submit} className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+    <form ref={formRef} onSubmit={submit} className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
       <div className="flex min-w-0 flex-col gap-6">
         {error && <Alert tone="danger" title="Submission failed">{error}</Alert>}
 

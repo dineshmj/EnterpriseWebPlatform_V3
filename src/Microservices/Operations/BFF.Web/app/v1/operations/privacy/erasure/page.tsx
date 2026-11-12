@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader } from '@/app/components/ui/card';
 import { ConfirmDialog } from '@/app/components/ui/confirm-dialog';
 import { Table, Td, Th } from '@/app/components/ui/data';
 import { Alert, Badge, EmptyState } from '@/app/components/ui/feedback';
+import { useFocusFirstField } from '@/app/components/ui/focus';
 import { Field, Input, Select, Textarea } from '@/app/components/ui/form';
 import { ERASURE_REASONS, type ActionResult, type ErasurePolicy, type ErasureReason, type ErasureRequest } from '@/lib/operations-types';
 import { confirmWithAuthenticator, NOT_CONFIRMED } from '@/lib/step-up';
@@ -136,6 +137,7 @@ export default function PersonalDataErasurePage() {
 
   const pending = requests?.filter((r) => r.status === 'PENDING') ?? [];
   const history = requests?.filter((r) => r.status !== 'PENDING') ?? [];
+  const requestFormRef = useFocusFirstField();
 
   return (
     <MfeShell title="Personal data erasure">
@@ -159,6 +161,7 @@ export default function PersonalDataErasurePage() {
           />
           <CardContent>
             <form
+              ref={requestFormRef}
               className="grid gap-4 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)_auto] sm:items-end"
               onSubmit={(event) => { event.preventDefault(); void submitRequest(); }}
             >
