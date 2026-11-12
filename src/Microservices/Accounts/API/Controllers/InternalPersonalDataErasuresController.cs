@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,7 +11,7 @@ namespace EnterpriseWebPlatform.Accounts.Api.Controllers;
 /// <summary>The erasure decided in Customer Onboarding, as relayed by Accounts' subscriber.</summary>
 public sealed record ErasePersonalDataRequest(
     string? CustomerNumber,
-    Guid CausationId,
+    [property: JsonRequired] Guid CausationId,
     Guid? WorkflowId,
     Guid? CorrelationId);
 
