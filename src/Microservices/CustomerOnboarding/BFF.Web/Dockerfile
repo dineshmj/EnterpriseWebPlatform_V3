@@ -15,7 +15,7 @@
 # │ Ref : doc/Containers.md | Features 2.3.3, 2.4.5 | OWASP A05, A08
 # └────────────────────────────────────────────────────────────────────────────────────────────────
 
-FROM node:24.22.2-trixie-slim@sha256:0820eaa85e07d0490446dd01d14707e17e6108a36988cf374899cd057eb3812d AS client
+FROM node:24.22.3-trixie-slim@sha256:af02d57b57719b9657a45199a79264a9437940cd55b3c7b3fc99615654f124a0 AS client
 ARG PNPM_VERSION=12.11.2
 
 # ┌─ ARCH ───────────────────────────────────────────────────────────────────────────────────────────
@@ -42,7 +42,7 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY src/Microservices/CustomerOnboarding/BFF.Web/client-app/ ./
 RUN pnpm run build
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0.404-noble@sha256:fe0fd4e93bd2fbb47c883b7a6369e5c8d3db8bf01cdc5981f6ee35fbdf3ff4fb AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.404-noble@sha256:bef136a371963aaa46ec97882845ef6f54dec15728bb4b128b1c2a400ffbc9b4 AS build
 WORKDIR /src
 
 # Restore from the project files alone (layer reused until a project file changes).

@@ -15,7 +15,7 @@
 # │ Ref : doc/Containers.md | OWASP A05, A06, A08
 # └────────────────────────────────────────────────────────────────────────────────────────────────
 
-FROM node:24.22.2-trixie-slim@sha256:0820eaa85e07d0490446dd01d14707e17e6108a36988cf374899cd057eb3812d AS build
+FROM node:24.22.3-trixie-slim@sha256:af02d57b57719b9657a45199a79264a9437940cd55b3c7b3fc99615654f124a0 AS build
 ARG PNPM_VERSION=12.11.2
 RUN npm install --global --ignore-scripts "pnpm@${PNPM_VERSION}"
 WORKDIR /app/src/Microservices/PartnerProducts/Worker
@@ -31,7 +31,7 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY src/Microservices/PartnerProducts/Worker/ ./
 RUN pnpm run build
 
-FROM node:24.22.2-trixie-slim@sha256:0820eaa85e07d0490446dd01d14707e17e6108a36988cf374899cd057eb3812d AS deps
+FROM node:24.22.3-trixie-slim@sha256:af02d57b57719b9657a45199a79264a9437940cd55b3c7b3fc99615654f124a0 AS deps
 ARG PNPM_VERSION=12.11.2
 RUN npm install --global --ignore-scripts "pnpm@${PNPM_VERSION}"
 WORKDIR /app/src/Microservices/PartnerProducts/Worker
@@ -46,7 +46,7 @@ RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 # └──────────────────────────────────────────────────────────────────────────────────────────────────
 RUN pnpm rebuild @confluentinc/kafka-javascript
 
-FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:9fc11f6ee65993285c0fe3c4c9bbc4fd275fd4470572f58834ce490df91056e3 AS runtime
+FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:6abfcb367ebc291572c774c1592a986be2ab26a2486f73093401327495a5962a AS runtime
 # ┌─ SEC ────────────────────────────────────────────────────────────────────────────────────────────
 # │ Distroless Node: the Node runtime and the few Debian libraries it needs - no shell, no package
 # │ manager (no apt, npm, npx, corepack or yarn), like the chiseled .NET images. Nothing can be
